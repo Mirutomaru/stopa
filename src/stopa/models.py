@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -84,6 +84,20 @@ class ProcessingProfile(BaseModel):
     flag_bad_extensions: bool = True  # rozpor signatura × přípona
     deduplicate: bool = True  # duplikáty podle hash
     match_hash_sets: bool = True  # porovnání s known-bad hash sety
+    extract_artifacts: bool = True  # AXIOM-style artifact extraktoři (SQLite, …)
+
+
+class Artifact(BaseModel):
+    """Extrahovaný forenzní artefakt — AXIOM-style záznam (browser history, chat, call log…)."""
+
+    id: str = Field(default_factory=lambda: new_id("art"))
+    source_id: str | None = None  # pipeline doplní po extrakci (extraktor nezná kontext)
+    file_id: str | None = None  # FileRecord.id, pokud artifact pochází ze souboru
+    rel_path: str | None = None  # denormalizováno pro zobrazení v timeline
+    artifact_type: str  # např. "browser_history", "chat_message", "sqlite_database"
+    timestamp: datetime | None = None
+    title: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProcessResult(BaseModel):
@@ -99,4 +113,5 @@ class ProcessResult(BaseModel):
     bad_extensions: int = 0
     duplicates: int = 0
     hash_set_hits: int = 0
+    artifacts_extracted: int = 0
     errors: list[str] = Field(default_factory=list)

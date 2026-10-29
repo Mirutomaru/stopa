@@ -6,10 +6,11 @@ Jedna DB na případ: cases, sources, files tabulky. Všechny operace idempotent
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
-from stopa.models import Case, EvidenceSource, FileRecord
+from stopa.models import Artifact, Case, EvidenceSource, FileRecord
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cases (
@@ -43,6 +44,18 @@ CREATE TABLE IF NOT EXISTS files (
 );
 CREATE INDEX IF NOT EXISTS idx_files_source ON files(source_id);
 CREATE INDEX IF NOT EXISTS idx_files_sha256 ON files(sha256);
+CREATE TABLE IF NOT EXISTS artifacts (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    file_id TEXT REFERENCES files(id),
+    rel_path TEXT,
+    artifact_type TEXT NOT NULL,
+    timestamp TEXT,
+    title TEXT,
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_artifacts_source ON artifacts(source_id);
+CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifacts(timestamp);
 """
 
 
@@ -215,6 +228,74 @@ class CaseDB:
         ).fetchone()
         return {k: int(row[k] or 0) for k in ("files", "bytes", "bad_ext", "dups", "signed")}
 
+    # ── artifacts (AXIOM-style) ──────────────────────────────
+    def replace_artifacts_for_file(self, file_id: str, arts: list[Artifact]) -> int:
+        """Idempotentní výměna artifactů jednoho souboru (re-ingest → čisté data)."""
+        self.conn.execute("DELETE FROM artifacts WHERE file_id = ?", (file_id,))
+        for a in arts:
+            if a.source_id is None:
+                raise ValueError(f"Artifact {a.id} nemá source_id")
+            self.conn.execute(
+                "INSERT INTO artifacts (id, source_id, file_id, rel_path,"
+                " artifact_type, timestamp, title, details_json)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    a.id,
+                    a.source_id,
+                    a.file_id,
+                    a.rel_path,
+                    a.artifact_type,
+                    _iso(a.timestamp),
+                    a.title,
+                    json.dumps(a.details, ensure_ascii=False),
+                ),
+            )
+        self.conn.commit()
+        return len(arts)
+
+    def list_artifacts(
+        self,
+        source_id: str | None = None,
+        artifact_type: str | None = None,
+        rel_path_like: str | None = None,
+        limit: int | None = None,
+    ) -> list[Artifact]:
+        """Timeline dotaz — chronologicky (None timestamps na konec)."""
+        q = "SELECT * FROM artifacts"
+        where: list[str] = []
+        args: list[object] = []
+        if source_id is not None:
+            where.append("source_id = ?")
+            args.append(source_id)
+        if artifact_type is not None:
+            where.append("artifact_type = ?")
+            args.append(artifact_type)
+        if rel_path_like is not None:
+            where.append("rel_path LIKE ?")
+            args.append(f"%{rel_path_like}%")
+        if where:
+            q += " WHERE " + " AND ".join(where)
+        q += " ORDER BY (timestamp IS NULL), timestamp, id"
+        if limit is not None:
+            q += f" LIMIT {int(limit)}"
+        rows = self.conn.execute(q, args).fetchall()
+        return [_row_to_artifact(r) for r in rows]
+
+    def artifact_stats(self, source_id: str | None = None) -> dict[str, int]:
+        where = "WHERE source_id = ?" if source_id else ""
+        args = (source_id,) if source_id else ()
+        row = self.conn.execute(
+            f"SELECT COUNT(*) AS total FROM artifacts {where}", args
+        ).fetchone()
+        by_type: dict[str, int] = {}
+        for r in self.conn.execute(
+            f"SELECT artifact_type, COUNT(*) AS n FROM artifacts {where}"
+            " GROUP BY artifact_type ORDER BY n DESC",
+            args,
+        ):
+            by_type[r["artifact_type"]] = int(r["n"])
+        return {"total": int(row["total"] or 0), **by_type}
+
     def close(self) -> None:
         self.conn.close()
 
@@ -251,4 +332,19 @@ def _row_to_record(r: sqlite3.Row) -> FileRecord:
         bad_extension=bool(r["bad_extension"]),
         is_duplicate_of=r["is_duplicate_of"],
         hash_set_hit=r["hash_set_hit"],
+    )
+
+
+def _row_to_artifact(r: sqlite3.Row) -> Artifact:
+    from datetime import datetime
+
+    return Artifact(
+        id=r["id"],
+        source_id=r["source_id"],
+        file_id=r["file_id"],
+        rel_path=r["rel_path"],
+        artifact_type=r["artifact_type"],
+        timestamp=datetime.fromisoformat(r["timestamp"]) if r["timestamp"] else None,
+        title=r["title"],
+        details=json.loads(r["details_json"]),
     )

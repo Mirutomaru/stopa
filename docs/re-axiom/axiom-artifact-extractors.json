@@ -1,0 +1,950 @@
+[
+ {
+  "dll": "Magnet.Artifacts.Api.dll",
+  "type": "Magnet.Artifacts.Api.IArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Api.dll",
+  "type": "Magnet.Artifacts.Api.ICloudArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Api.dll",
+  "type": "Magnet.Artifacts.Api.ICustomArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Api.dll",
+  "type": "Magnet.Artifacts.Api.Reference.Metadata.SimpleArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Api.dll",
+  "type": "Magnet.Artifacts.Api.Loader.Heuristics.WorldMap.Legacy.IWorldMapArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Api.dll",
+  "type": "WorldMapArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Api.dll",
+  "type": "Magnet.Artifacts.Api.Custom.ICustomXmlArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.Utilities.Helpers.BinaryTextExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.FileFormats.Xml.AttachmentExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.FileFormats.Xml.IAttachmentExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.Extractors.DocumentMetadataExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.Extractors.MediaMetadataExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.Cryptography.Windows.DPAPI.Helpers.ILsaRegistryExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.Cryptography.Windows.DPAPI.Helpers.LsaRegistryExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.Container.IContainerEnabledArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Common.dll",
+  "type": "Magnet.Artifacts.Common.ArtifactIntelligence.MappedArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.Custom.Xml.dll",
+  "type": "Magnet.Artifacts.Custom.Xml.XmlArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.CallbacksArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.DllArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.DriversArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.ExecutiveObjectCallbacksArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.MftArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.NetworkConnectionsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.OpenHandlesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.ProcessesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.ScheduledTasksArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.SidsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WindowsMemory.UserSidsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.WiFiLocations.WiFiLocationsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.VoiceMail.Ios.VoiceMailArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.UnifiedLogs.IUnifiedLogsExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.SIM.CardImage.Helpers.ITpduDataExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.SIM.CardImage.Helpers.TpduDataExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.RebuiltDesktops.Windows.Parsers.IconExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.ParkedCarLocations.ParkedCarLocationsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.OpenOffice.OpenOfficeBaseArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Office.OfficeArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.MSN.MSNArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.ApiHooksArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.ClipboardArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.CmdScanArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.ConnscanArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.DllArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.FileScanArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.GetsidsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.HandlesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.ImageInfoArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.MalfindArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.MemoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.ModScanArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.NetScanArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.OpenConnectionsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.ProcessListArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.ProcessScanArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.PsxViewArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.SocketsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.SockscanArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Memory.Artifacts.TimelineArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.MailRu.MailRuChatArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.MailRu.MailRuContactArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.MailRu.MailRuGroupArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Limewire.LimerunnerArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Limewire.LimewireArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Limewire.LuckywireArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Legacy.Schemas.MappedLegacyEmailArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Legacy.Models.DbArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Legacy.Models.ILegacyArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Legacy.Models.LegacyArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Legacy.Capabilities.WorldMap.IWorldMapArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Legacy.Capabilities.WorldMap.WorldMapArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Kik.Android.Helpers.KikLocalUserExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.JumpLists.JumpListsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Infotainment.Common.Ford.FdpLogs.Extractors.EventExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Infotainment.Common.Ford.DebugLogs.Parsers.EventExtractor"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.GoogleTalk.GoogleTalkArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.GooglePlusChat.GooglePlusChatArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.GoogleBar.GoogleBarArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Gmail.OfflineGmailArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.EdgeIE.InternetExplorer.IeTypedUrlArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.DuckDuckGo.CurrentTabs.CurrentTabsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.DuckDuckGo.Cookies.DuckDuckGoCookiesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.DuckDuckGo.AllowlistedWebsites.AllowlistedWebSitesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Custom.CustomArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.CloudAccountsInfoArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.CloudArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.WhatsApp.CloudWhatsAppBackupsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.WhatsApp.CloudWhatsAppChatsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Twitter.CloudTwitterDirectMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Twitter.CloudTwitterPostsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Twitter.CloudTwitterPostsPublicArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Twitter.CloudTwitterUsersArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Twitter.CloudTwitterUsersPublicArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Twitter.WarrantReturn.CloudTwitterWarrantReturnDirectMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Twitter.WarrantReturn.CloudTwitterWarrantReturnPostsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Twitter.WarrantReturn.CloudTwitterWarrantReturnUsersArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Snapchat.WarrantReturn.SnapchatAccountInformationArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Snapchat.WarrantReturn.SnapchatFriendsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Snapchat.WarrantReturn.IpHistory.SnapchatIpHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Snapchat.WarrantReturn.GroupChatMessages.SnapchatGroupChatMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Snapchat.WarrantReturn.GeoLocations.SnapchatGeolocationArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Snapchat.WarrantReturn.ChatMessages.SnapchatMessagesWarrantReturnArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Skype.WarrantReturn.Contacts.SkypeWarrantReturnContactsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Skype.WarrantReturn.ConnectionHistory.SkypeWarrantReturnConnectionHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Skype.WarrantReturn.ChatHistory.SkypeWarrantReturnChatHistoryRecordsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Skype.WarrantReturn.AccountDetails.SkypeWarrantReturnAccountDetailsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Samsung.Backups.CallLogsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Samsung.Backups.DevicesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Samsung.Backups.SamsungConnectionsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Samsung.Backups.SamsungContactArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Samsung.Backups.SamsungMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Samsung.Backups.SamsungVoiceRecordingArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Microsoft.CloudMicrosoftContactsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Microsoft.CloudMicrosoftMailPstArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Microsoft.CloudOneDriveFileArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Microsoft.CloudOneDriveFileVersionArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Microsoft.CloudOutlookCalendarArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Microsoft.CloudSharePointContentArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Microsoft.CloudSharePointDocumentsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Microsoft.CloudSharePointSitePagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.MicrosoftTeams.CloudMicrosoftTeamsConversationsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.MicrosoftTeams.CloudMicrosoftTeamsTeamsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.MicrosoftTeams.MicrosoftTeamsMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.MicrosoftTeams.MicrosoftTeamsMessagesBaseArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.MicrosoftTeams.MicrosoftTeamsMessagesComputerArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Mega.CloudMegaFilesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.CloudInstagramDirectMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.CloudInstagramPostsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.CloudInstagramPostsAxiom2Pt1Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.WarrantReturn.InstagramAccountActionsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.WarrantReturn.InstagramArchivedStoriesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.WarrantReturn.InstagramCommentsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.WarrantReturn.InstagramDirectSharesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.WarrantReturn.InstagramDirectStoriesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.WarrantReturn.InstagramFollowersAndFollowingArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.WarrantReturn.InstagramPhotosArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.DownloadYourData.InstagramAccountHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.DownloadYourData.InstagramCommentsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.DownloadYourData.InstagramMediaArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Instagram.DownloadYourData.InstagramMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudConnectedAppsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudDriveFileArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudDriveFileVersionArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudGmailMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudGoogleActivityArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudGoogleCalendarEventsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudGoogleCalendarEventsTakeoutArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudGoogleContactsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudGoogleKeepArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudGooglePhotosArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudGooglePhotosAxiom2Pt8Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudGoogleTasksArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudPasswordsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudRecentDevicesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.CloudTimelineArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.CloudGoogleChatsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleAccountInfoArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleBrowsingHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleDevicesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleLoginHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleMapsActivityArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GooglePhotosArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleSearchHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.LocationHistory.GoogleLocationHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.Hangouts.GoogleHangoutsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleVoiceTexts.GoogleVoiceTexts2025Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleVoiceSubscriberInformation.GoogleVoiceSubscriberInformation2026Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleVoiceMail.GoogleVoicemail2025Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleVoiceContactsMetadata.GoogleVoiceContactsMetadata2026Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleMapsLabeledPlaces.GoogleMapsLabeledPlacesWarrantReturnArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleMailMessageInformation.GoogleMailMessageInformationArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleExportSummary.GoogleExportSummaryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleChromeHistory.GoogleChromeHistoryWarrantReturnArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleChromeBookmarks.GoogleChromeBookmarksWarrantReturnArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleChromeAddresses.GoogleChromeAutofillWarrantReturnArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleChromeAddresses.GoogleChromeContactInfoWarrantReturnArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleCalls.GoogleCalls2025Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleAggregatedActivitiesServiceAccessSummary.GoogleAggregatedActivitiesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleAggregatedActivitiesIdentitySessions.GoogleAggregatedActivitiesIdentitySessionsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.GoogleAccountChangeHistory.GoogleAccountChangeHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.Gmail.CloudGmailMessagesWarrantReturnArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.Contacts.GoogleContactsWarrantReturnArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.AccountTargetAssociation.GoogleAccountTargetAssociation2025Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.WarrantReturn.AccessLogActivity.GoogleAccessLogDevices2025Artifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Takeout.SemanticLocationHistory.CloudGoogleSemanticLocationHistoryActivitySegmentArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Takeout.SemanticLocationHistory.CloudGoogleSemanticLocationHistoryPlaceVisitArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Takeout.LocationHistory.CloudGoogleLocationHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.TakeoutWarrantReturn.GoogleChat.GoogleChatArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Hangouts.CloudHangoutsMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.GSuite.AuditDriveEventsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.GSuite.AuditLoginEventsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.GSuite.DriveActivityArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.GoogleChats.Spaces.CloudGoogleChatSpacesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.GoogleChats.Messages.CloudGoogleChatArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Chrome.CloudGoogleChromeAutofillArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Chrome.CloudGoogleChromeBookmarksArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Chrome.CloudGoogleChromeBrowserHistoryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Chrome.CloudGoogleChromeExtensionsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Chrome.CloudGoogleChromeExtensionSettingsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Chrome.CloudGoogleChromeSearchEnginesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Chrome.CloudGoogleChromeSyncSettingsAppsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Chrome.CloudGoogleChromeSyncSettingsAppSettingsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.Chrome.CloudGoogleChromeSyncSettingsPreferencesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Google.AndroidBackups.CloudAndroidBackupsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Facebook.CloudFacebookFriendsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Facebook.CloudFacebookMessengerMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Facebook.CloudFacebookMobileTimelineArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Facebook.CloudFacebookProfileInfoArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Facebook.CloudFacebookTimelineArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Facebook.DownloadYourData.CloudFacebookInstagramMessagesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Email.CloudMboxEmailArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Dropbox.CloudDropboxEntryArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Discord.WarrantReturn.ChannelArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Discord.WarrantReturn.MessageArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Discord.WarrantReturn.ServerArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Discord.WarrantReturn.UserArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Box.CloudBoxEnterpriseEventArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Box.CloudBoxFilesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Box.CloudBoxUserEventArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Azure.CloudAzureVirtualMachineSnapshotArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Apple.CloudAppleBackupArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Apple.CloudAppleContactsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Apple.CloudAppleDriveArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Apple.CloudAppleKeychainArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Apple.CloudAppleMailArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Apple.IMessage.AppleIMessageArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Apple.CloudIMessage.CloudAppleIMessageArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Apple.ApplePhotos.CloudApplePhotosArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Amazon.CloudAmazonCloudTrailEventsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Amazon.CloudAmazonCloudTrailInsightsArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Amazon.CloudAmazonEC2InstanceArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Cloud.Amazon.CloudAmazonS3FilesArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Chatroulette.ChatrouletteArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.CaseAmendingTestArtifact.CaseAmendingTestArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Bitcoin.LabelArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.BingBar.MapArtifact"
+ },
+ {
+  "dll": "Magnet.Artifacts.dll",
+  "type": "Magnet.Artifacts.Bebo.BeboArtifact"
+ }
+]

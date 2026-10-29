@@ -15,6 +15,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
 from stopa.data.db import CaseDB
 from stopa.data.ingest import walk_source
 from stopa.domain.bad_extension import extension_of, is_bad_extension
@@ -149,7 +150,18 @@ def process_source(
                 if rec.hash_set_hit:
                     break
 
-        db.upsert_file(rec)
+        db.upsert_file(rec)  # nejdřív soubor — FK pro artifacts níže
+
+        # ── artifact extraktoři (AXIOM-style) ────────────────
+        if profile.extract_artifacts and rec.signature_type == "sqlite":
+            arts = extract_sqlite_artifacts(abs_path)
+            for a in arts:
+                a.source_id = source_id
+                a.file_id = rec.id
+                a.rel_path = wf.rel_path
+            db.replace_artifacts_for_file(rec.id, arts)
+            result.artifacts_extracted += len(arts)
+
         if progress is not None and ((i + 1) % 10 == 0 or i + 1 == total):
             progress(i + 1, total)
 

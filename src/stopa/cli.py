@@ -4,6 +4,7 @@ Použití:
   stopa case new "Karel Novák" --examiner "JUDr. M. Matúš"
   stopa add <case_id> /cesta/ke/zdroji [--profile forensic] [--hash-set bad.txt]
   stopa files <case_id> [--bad-ext] [--dups] [--family image] [--limit 50]
+  stopa timeline <case_id> [--type browser_history] [--path text] [-v]
   stopa stats <case_id>
   stopa profiles
 
@@ -86,6 +87,8 @@ def cmd_add(args: argparse.Namespace) -> int:
             f"bad ext: {result.bad_extensions}, duplikáty: {result.duplicates}, "
             f"hash-set trefy: {result.hash_set_hits}"
         )
+        if result.artifacts_extracted:
+            print(f"    artifacty extrahovány: {result.artifacts_extracted}")
         for err in result.errors[:5]:
             print(f"    ! {err}", file=sys.stderr)
     db.close()
@@ -141,6 +144,31 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_timeline(args: argparse.Namespace) -> int:
+    """AXIOM-style timeline — chronologický přehled extrahovaných artifactů."""
+    db = _open_db(args.case_id)
+    arts = db.list_artifacts(
+        source_id=args.source,
+        artifact_type=args.type,
+        rel_path_like=args.path,
+        limit=args.limit,
+    )
+    if not arts:
+        print("(žádné artifacty — použij profil s extract_artifacts)")
+        return 0
+    for a in arts:
+        ts = a.timestamp.strftime("%Y-%m-%d %H:%M") if a.timestamp else "—" * 16
+        title = (a.title or "")[:80]
+        print(f"{ts}  [{a.artifact_type}] {title}")
+        if args.verbose and a.rel_path:
+            print(f"          └─ {a.rel_path}")
+    stats = db.artifact_stats(args.source)
+    by_type = ", ".join(f"{k}: {v}" for k, v in sorted(stats.items()) if k != "total")
+    print(f"\nCELKEM: {stats['total']} artifactů ({by_type})")
+    db.close()
+    return 0
+
+
 def cmd_profiles(_args: argparse.Namespace) -> int:
     print("Dostupné processing profily:")
     for name, p in sorted(PROFILES.items()):
@@ -186,6 +214,15 @@ def build_parser() -> argparse.ArgumentParser:
     stats_p = sub.add_parser("stats", help="shrnutí případu")
     stats_p.add_argument("case_id")
     stats_p.set_defaults(func=cmd_stats)
+
+    tl_p = sub.add_parser("timeline", help="AXIOM-style timeline extrahovaných artifactů")
+    tl_p.add_argument("case_id")
+    tl_p.add_argument("--source", help="filtr podle evidence source ID")
+    tl_p.add_argument("--type", dest="type", help="filtr podle typu artifactu (např. browser_history)")
+    tl_p.add_argument("--path", help="filtr — cesta obsahuje text (LIKE %text%)")
+    tl_p.add_argument("--limit", type=int, default=100)
+    tl_p.add_argument("-v", "--verbose", action="store_true", help="zobrazit i zdrojové cesty")
+    tl_p.set_defaults(func=cmd_timeline)
 
     prof_p = sub.add_parser("profiles", help="seznam processing profilů")
     prof_p.set_defaults(func=cmd_profiles)

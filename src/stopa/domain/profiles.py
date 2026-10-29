@@ -21,6 +21,7 @@ FORENSIC = ProcessingProfile(
     flag_bad_extensions=True,
     deduplicate=True,
     match_hash_sets=True,
+    extract_artifacts=True,  # AXIOM-style: plná artifact extrakce
 )
 
 EDISCOVERY = ProcessingProfile(
@@ -32,6 +33,7 @@ EDISCOVERY = ProcessingProfile(
     flag_bad_extensions=True,
     deduplicate=True,
     match_hash_sets=True,
+    extract_artifacts=False,  # eDiscovery — jen soubory + hashy, bez hluboké extrakce
 )
 
 QUICK = ProcessingProfile(
@@ -43,6 +45,7 @@ QUICK = ProcessingProfile(
     flag_bad_extensions=False,
     deduplicate=False,
     match_hash_sets=False,
+    extract_artifacts=False,  # quick scan — jen signatury a hash
 )
 
 PROFILES: dict[str, ProcessingProfile] = {p.name: p for p in (FORENSIC, EDISCOVERY, QUICK)}
