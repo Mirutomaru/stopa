@@ -172,3 +172,113 @@ class TestSpa:
     def test_static_js_css(self, client):
         assert client.get("/static/app.js").status_code == 200
         assert client.get("/static/style.css").status_code == 200
+
+
+class TestFileInspectorApi:
+    """Nové GUI endpointy — File Inspector (detail, flags, hex dump, export)."""
+
+    def _ingest(self, client, evidence) -> tuple[str, dict]:
+        cid = _make_case(client)["id"]
+        client.post(f"/api/cases/{cid}/sources", json={"path": str(evidence)})
+        files = client.get(f"/api/cases/{cid}/files").json()
+        return cid, next(f for f in files if f["name"] == "poznamky.txt")
+
+    def test_file_detail(self, client, evidence):
+        cid, rec = self._ingest(client, evidence)
+        r = client.get(f"/api/cases/{cid}/files/{rec['id']}")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["name"] == "poznamky.txt"
+        assert body["sha256"]
+        assert body["flags"] == []
+
+    def test_file_detail_404(self, client):
+        cid = _make_case(client)["id"]
+        assert client.get(f"/api/cases/{cid}/files/file-neexistuje").status_code == 404
+
+    def test_flag_evidence_toggle(self, client, evidence):
+        _cid, rec = self._ingest(client, evidence)
+        fid = rec["id"]
+
+        r = client.post(f"/api/files/{fid}/flag?flag=evidence&on=true")
+        assert r.status_code == 200, r.text
+        assert r.json()["flags"] == ["evidence"]
+
+        # toggle off
+        r = client.post(f"/api/files/{fid}/flag?flag=evidence&on=false")
+        assert r.json()["flags"] == []
+
+    def test_flag_both_and_list(self, client, evidence):
+        cid, rec = self._ingest(client, evidence)
+        fid = rec["id"]
+        client.post(f"/api/files/{fid}/flag?flag=evidence&on=true")
+        client.post(f"/api/files/{fid}/flag?flag=report&on=true")
+
+        body = client.get(f"/api/cases/{cid}/files/{fid}").json()
+        assert set(body["flags"]) == {"evidence", "report"}
+
+        marked = client.get(f"/api/cases/{cid}/marked").json()
+        assert len(marked) == 1
+        assert marked[0]["rel_path"] == "poznamky.txt"
+        assert set(marked[0]["flags"]) == {"evidence", "report"}
+
+    def test_flag_invalid_name(self, client, evidence):
+        _cid, rec = self._ingest(client, evidence)
+        r = client.post(f"/api/files/{rec['id']}/flag?flag=xyz&on=true")
+        assert r.status_code == 400
+
+    def test_hex_dump(self, client, evidence):
+        cid, rec = self._ingest(client, evidence)
+        r = client.get(
+            f"/api/cases/{cid}/files/{rec['id']}/hex", params={"offset": 0, "length": 16}
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["offset"] == 0
+        # „forenzní“ → f o r e n z … (UTF-8: c3 b9 u „forenzn“)
+        first_line = body["hex"][0] if body["hex"] else ""
+        assert "66" in first_line.lower() or "c3" in first_line.lower()
+
+    def test_hex_dump_offset(self, client, evidence):
+        cid, rec = self._ingest(client, evidence)
+        r = client.get(
+            f"/api/cases/{cid}/files/{rec['id']}/hex", params={"offset": 4, "length": 8}
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["offset"] == 4
+
+    def test_export_file(self, client, evidence):
+        cid, rec = self._ingest(client, evidence)
+        expected = (evidence / "poznamky.txt").read_bytes()
+        r = client.get(f"/api/cases/{cid}/files/{rec['id']}/export")
+        assert r.status_code == 200
+        assert r.content == expected
+        assert "poznamky.txt" in r.headers["content-disposition"]
+
+    def test_partition_map_empty(self, client):
+        cid = _make_case(client)["id"]
+        r = client.get(f"/api/cases/{cid}/partition-map")
+        assert r.status_code == 200
+        assert r.json() == []
+
+    def test_files_source_filter(self, client, evidence):
+        """Filtr ?source= — jen soubory z daného zdroje (GUI moduly)."""
+        cid = _make_case(client)["id"]
+        client.post(f"/api/cases/{cid}/sources", json={"path": str(evidence)})
+        srcs = client.get(f"/api/cases/{cid}").json()["sources"]
+        assert len(srcs) == 1
+        all_files = client.get(f"/api/cases/{cid}/files").json()
+        filtered = client.get(
+            f"/api/cases/{cid}/files", params={"source": srcs[0]["id"]}
+        ).json()
+        assert {f["id"] for f in filtered} == {f["id"] for f in all_files}
+
+    def test_report_contains_marked_files(self, client, evidence):
+        """„Add to Report“ → soubor v sekci reportu."""
+        cid, rec = self._ingest(client, evidence)
+        client.post(f"/api/files/{rec['id']}/flag?flag=report&on=true")
+        r = client.get(f"/api/cases/{cid}/report", params={"format": "html"})
+        assert r.status_code == 200
+        assert "Ručně označené soubory" in r.text
+        assert "poznamky.txt" in r.text

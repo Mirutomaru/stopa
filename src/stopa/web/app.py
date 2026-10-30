@@ -156,11 +156,13 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         bad_ext: bool = False,
         dups: bool = False,
         family: str | None = None,
+        source: str | None = None,
         limit: int = 500,
     ) -> list[dict]:
         db = open_db(case_id)
         try:
             recs = db.list_files(
+                source_id=source,
                 bad_extensions_only=bad_ext,
                 duplicates_only=dups,
                 signature_family=family,
@@ -189,6 +191,117 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         try:
             arts = db.list_artifacts(artifact_type=type, limit=limit)
             return [a.model_dump(mode="json") for a in arts]
+        finally:
+            db.close()
+
+    # ── partition map (GUI File System & Carving — vizuální mapa) ────────────
+    @app.get("/api/cases/{case_id}/partition-map")
+    def partition_map(case_id: str) -> list[dict]:
+        """Partition mapy všech diskových obrazů v případu."""
+        db = open_db(case_id)
+        try:
+            arts = db.list_artifacts(artifact_type="disk_image")
+            out: list[dict] = []
+            for a in arts:
+                d = a.details or {}
+                pm = d.get("partition_map") or []
+                if not pm and d.get("partitions"):
+                    # starší artifact bez strukturované mapy — jen textový popis
+                    pm = [{"desc": d["partitions"], "fstype": None,
+                           "offset_sectors": 0, "size_sectors": 0}]
+                out.append({
+                    "source_id": a.source_id,
+                    "image_name": a.rel_path,
+                    "description": d.get("description"),
+                    "files_total": d.get("files_total", 0),
+                    "partitions": pm,
+                })
+            return out
+        finally:
+            db.close()
+
+    # ── file inspector (GUI pravý panel) ───────────────────────
+    @app.get("/api/cases/{case_id}/files/{file_id}")
+    def get_file(case_id: str, file_id: str) -> dict:
+        """Detail jednoho souboru + flagy (File Inspector)."""
+        db = open_db(case_id)
+        try:
+            rec = db.get_file(file_id)
+            if rec is None or rec.source_id not in {s.id for s in db.list_sources(case_id)}:
+                raise HTTPException(404, f"soubor {file_id} nenalezen")
+            source = db.get_source(rec.source_id)
+            return {
+                **rec.model_dump(mode="json"),
+                "flags": list(db.get_file_flags(file_id)),
+                "source_path": source.path if source else None,
+                "in_image": bool(rec.meta_addr),  # soubor v diskovém obrazu (TSK)
+            }
+        finally:
+            db.close()
+
+    @app.post("/api/files/{file_id}/flag")
+    def set_flag(file_id: str, flag: str = "evidence", on: bool = True) -> dict:
+        """Přepne flag souboru — „Mark as Evidence“ / „Add to Report“."""
+        if flag not in ("evidence", "report"):
+            raise HTTPException(400, f"neznámý flag: {flag}")
+        # flag je globální (file_id je unikátní napříč case DB) — najdi správnou DB
+        for path in sorted(base.glob("case-*.db")):
+            db = CaseDB(path)
+            try:
+                if db.get_file(file_id) is None:
+                    continue
+                db.set_file_flag(file_id, flag, on)
+                return {"file_id": file_id, "flag": flag, "on": on,
+                        "flags": list(db.get_file_flags(file_id))}
+            finally:
+                db.close()
+        raise HTTPException(404, f"soubor {file_id} nenalezen")
+
+    @app.get("/api/cases/{case_id}/marked")
+    def marked(case_id: str, flag: str | None = None) -> list[dict]:
+        """Označené soubory (Evidence / Report modul)."""
+        db = open_db(case_id)
+        try:
+            out = []
+            for rec, flags in db.list_marked():
+                if flag and flag not in flags:
+                    continue
+                out.append({**rec.model_dump(mode="json"), "flags": list(flags)})
+            return out
+        finally:
+            db.close()
+
+    @app.get("/api/cases/{case_id}/files/{file_id}/hex")
+    def file_hex(case_id: str, file_id: str, offset: int = 0, length: int = 256) -> dict:
+        """Hex dump úryvku souboru (File Inspector — hex grid)."""
+        db = open_db(case_id)
+        try:
+            rec = db.get_file(file_id)
+            if rec is None:
+                raise HTTPException(404, f"soubor {file_id} nenalezen")
+            data = _read_file_bytes(db, rec, offset=offset, length=length)
+            return {"file_id": file_id, "offset": offset, "length": len(data),
+                    "hex": _hex_dump(data)}
+        finally:
+            db.close()
+
+    @app.get("/api/cases/{case_id}/files/{file_id}/export")
+    def export_file(case_id: str, file_id: str):
+        """Stáhnout obsah souboru (Export File)."""
+        from fastapi import Response
+
+        db = open_db(case_id)
+        try:
+            rec = db.get_file(file_id)
+            if rec is None:
+                raise HTTPException(404, f"soubor {file_id} nenalezen")
+            data = _read_file_bytes(db, rec, offset=0, length=None)
+            return Response(
+                content=data,
+                media_type="application/octet-stream",
+                headers={"Content-Disposition":
+                         f'attachment; filename="{rec.name}"'},
+            )
         finally:
             db.close()
 
@@ -245,6 +358,66 @@ def build_report_data_safe(db: CaseDB, case_id: str):
         return build_report_data(db, case_id)
     except ValueError as e:
         raise HTTPException(404, str(e)) from e
+
+
+def _read_file_bytes(db: CaseDB, rec, offset: int = 0, length: int | None = None) -> bytes:
+    """Obsah souboru — z disku (folder/file zdroj) nebo TSK icat (diskový obraz).
+
+    ``length=None`` → celý obsah; jinak úryvek [offset : offset+length].
+    """
+    from pathlib import Path as _P
+
+    source = db.get_source(rec.source_id)
+    if source is None:
+        raise HTTPException(404, "zdroj souboru neexistuje")
+    root = _P(source.path).expanduser()
+
+    if rec.meta_addr:
+        # soubor v diskovém obrazu → TSK icat (partice z partition mapy)
+        from stopa.data.tsk import Partition, TskError, extract_file
+
+        parts: list[Partition] = []
+        for a in db.list_artifacts(source_id=rec.source_id, artifact_type="disk_image"):
+            pm = (a.details or {}).get("partition_map") or []
+            for p in pm:
+                if p.get("fstype"):
+                    parts.append(
+                        Partition(
+                            index=p["index"],
+                            offset_sectors=p["offset_sectors"],
+                            size_sectors=p["size_sectors"],
+                            desc=p["desc"],
+                            fstype=p["fstype"],
+                        )
+                    )
+        data: bytes | None = None
+        for part in ([None] if not parts else parts):
+            try:
+                data = extract_file(root, rec.meta_addr, partition=part)
+                break
+            except TskError:
+                continue  # jiná partice / obraz bez TSK — zkus další
+        if data is None:
+            raise HTTPException(502, "TSK icat se nedaří přečíst soubor z obrazu")
+    else:
+        p = root / rec.rel_path if not root.is_file() else root
+        if not p.exists():
+            raise HTTPException(404, f"soubor na disku neexistuje: {p}")
+        data = p.read_bytes()
+
+    end = len(data) if length is None else min(len(data), offset + length)
+    return data[offset:end]
+
+
+def _hex_dump(data: bytes) -> list[str]:
+    """Hex dump řádky (16 B/řádek): ``0000  48 53 ... |HS...|``."""
+    lines: list[str] = []
+    for i in range(0, len(data), 16):
+        chunk = data[i : i + 16]
+        hexpart = " ".join(f"{b:02x}" for b in chunk)
+        asc = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
+        lines.append(f"{i:04x}  {hexpart:<47}  |{asc}|")
+    return lines
 
 
 app = create_app()

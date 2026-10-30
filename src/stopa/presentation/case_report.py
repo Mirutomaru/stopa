@@ -14,7 +14,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from stopa.data.db import CaseDB
-from stopa.domain.report import CustodyItem, FlaggedFile, ReportData, SourceInfo, build_html
+from stopa.domain.report import (
+    CustodyItem,
+    FlaggedFile,
+    MarkedFile,
+    ReportData,
+    SourceInfo,
+    build_html,
+)
 
 log = logging.getLogger("stopa.presentation.report")
 
@@ -71,6 +78,17 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
         if flags:
             flagged.append(FlaggedFile(rel_path=r["rel_path"], flags=flags, sha256=r["sha256"]))
 
+    # ručně označené soubory (GUI File Inspector → „Mark as Evidence“ / „Add to Report“)
+    marked = tuple(
+        MarkedFile(
+            rel_path=rec.rel_path,
+            flags=flags,
+            size_bytes=int(rec.size_bytes or 0),
+            sha256=rec.sha256,
+        )
+        for rec, flags in db.list_marked()
+    )
+
     return ReportData(
         case_id=case.id,
         case_name=case.name,
@@ -83,6 +101,7 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
         artifact_counts=artifact_counts,
         custody_items=tuple(custody),
         flagged_files=tuple(flagged),
+        marked_files=marked,
     )
 
 

@@ -3,89 +3,146 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>STOPA — forenzní workbench</title>
+<title>STOPA Forensic — unifikovaná forenzní workbench</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <div class="brand"><span class="logo">◉</span> STOPA <small>unifikovaná forenzní workbench</small></div>
-  <nav id="tabs">
-    <button data-tab="cases" class="active">Případy</button>
-    <button data-tab="files">Soubory</button>
-    <button data-tab="search">Hledání</button>
-    <button data-tab="timeline">Timeline</button>
+
+<!-- ══════════ LEVÁ NAVIGACE (moduly) ══════════ -->
+<aside id="sidebar">
+  <div class="brand">
+    <span class="logo">◉</span>
+    <div><b>STOPA</b><small>FORENSIC WORKBENCH</small></div>
+  </div>
+
+  <div class="case-picker">
+    <label>Případ</label>
+    <select id="case-select"></select>
+    <button id="btn-new-case" title="Nový případ">＋</button>
+  </div>
+
+  <form id="new-case-form" class="hidden">
+    <input id="nc-name" placeholder="Název případu">
+    <input id="nc-examiner" placeholder="Znalec">
+    <div class="row">
+      <button type="submit" class="primary small-btn">Vytvořit</button>
+      <button type="button" id="nc-cancel" class="small-btn">Zrušit</button>
+    </div>
+  </form>
+
+  <nav id="module-nav">
+    <button data-module="dashboard" class="active"><span class="ico">▦</span> Dashboard</button>
+    <button data-module="disk-image"><span class="ico">◫</span> Disk Image</button>
+    <button data-module="file-system"><span class="ico">🗀</span> File System</button>
+    <button data-module="partition-map"><span class="ico">▤</span> Partition Map</button>
+    <button data-module="system-recovery"><span class="ico">⚙</span> System Recovery</button>
+    <button data-module="sql-recovery"><span class="ico">∞</span> SQL Recovery</button>
+    <button data-module="messaging-chat"><span class="ico">✉</span> Messaging Chat</button>
+    <button data-module="deletion-check"><span class="ico">⌫</span> Deletion Check</button>
+    <button data-module="artifacts"><span class="ico">◈</span> Artifacts</button>
+    <button data-module="reporting"><span class="ico">▤</span> Reporting</button>
   </nav>
-</header>
 
-<main>
-  <!-- ── PŘÍPADOVÉ PANELY ─────────────────────────────── -->
-  <section id="tab-cases" class="panel active">
-    <div class="toolbar">
-      <h2>Případy</h2>
-      <button id="btn-new-case" class="primary">+ Nový případ</button>
-    </div>
+  <div id="sidebar-footer" class="muted small"></div>
+</aside>
 
-    <div id="case-form" class="card hidden">
-      <label>Název <input id="cf-name" placeholder="např. Karel Novák — notebook"></label>
-      <label>Znalec <input id="cf-examiner" placeholder="Mgr. Miroslav Matúš DiS"></label>
-      <div class="row">
-        <button id="cf-save" class="primary">Vytvořit</button>
-        <button id="cf-cancel">Zrušit</button>
-      </div>
-    </div>
+<!-- ══════════ STŘEDNÍ PANEL (modul) ══════════ -->
+<main id="center">
+  <header id="module-header">
+    <h1 id="module-title">DASHBOARD</h1>
+    <span id="module-sub" class="muted"></span>
+  </header>
 
-    <table id="cases-table">
-      <thead><tr><th>Název</th><th>Znalec</th><th>Soubory</th><th>Velikost</th><th>Bad-ext</th><th>Duplikáty</th><th>Artifacty</th><th></th></tr></thead>
+  <!-- ── DASHBOARD ─────────────────────────────── -->
+  <section id="mod-dashboard" class="module active">
+    <div id="stat-cards" class="stat-grid"></div>
+    <h2>Evidence sources</h2>
+    <table id="sources-table">
+      <thead><tr><th>Zdroj</th><th>Typ</th><th>Přidáno (UTC)</th></tr></thead>
       <tbody></tbody>
     </table>
-
-    <div id="case-detail" class="card hidden">
-      <h3 id="cd-title"></h3>
-      <p id="cd-meta" class="muted"></p>
+    <div class="card" id="add-source-card">
+      <h3>Zpracovat nový zdroj</h3>
       <div class="toolbar">
-        <label>Zdroj (složka/soubor) <input id="src-path" placeholder="/cesta/ke/dukazum"></label>
-        <select id="src-profile"><option value="forensic">forensic</option><option value="ediscovery">ediscovery</option><option value="quick">quick</option></select>
-        <button id="btn-add-source" class="primary">Zpracovat zdroj</button>
+        <input id="src-path" placeholder="/cesta/ke/dukazum (složka, soubor nebo diskový obraz)">
+        <select id="src-profile">
+          <option value="forensic">forensic</option>
+          <option value="ediscovery">ediscovery</option>
+          <option value="quick">quick</option>
+        </select>
+        <button id="btn-add-source" class="primary">Zpracovat</button>
       </div>
       <pre id="src-result" class="muted hidden"></pre>
     </div>
+    <h2>Artifacty podle typu</h2>
+    <div id="artifact-bars"></div>
   </section>
 
-  <!-- ── SOUBORY ─────────────────────────────────────── -->
-  <section id="tab-files" class="panel">
+  <!-- ── DISK IMAGE ────────────────────────────── -->
+  <section id="mod-disk-image" class="module">
+    <div id="disk-images"></div>
+  </section>
+
+  <!-- ── FILE SYSTEM & CARVING ─────────────────── -->
+  <section id="mod-file-system" class="module">
     <div class="toolbar">
-      <h2>Soubory</h2>
-      <select id="f-case"></select>
       <label><input type="checkbox" id="f-badext"> bad-ext</label>
       <label><input type="checkbox" id="f-dups"> duplikáty</label>
+      <select id="f-family"><option value="">všechny signatury</option></select>
       <button id="btn-files" class="primary">Filtrovat</button>
     </div>
     <table id="files-table">
-      <thead><tr><th>Soubor</th><th>Velikost</th><th>Signatura</th><th>SHA-256</th><th>Flagy</th></tr></thead>
+      <thead><tr>
+        <th>Time</th><th>Date</th><th>File</th><th>Size</th>
+        <th>Sector/Offset</th><th>Carve signature</th>
+      </tr></thead>
       <tbody></tbody>
     </table>
   </section>
 
-  <!-- ── HLEDÁNÍ ─────────────────────────────────────── -->
-  <section id="tab-search" class="panel">
-    <div class="toolbar">
-      <h2>Hledání (FTS5)</h2>
-      <select id="s-case"></select>
-      <input id="s-q" placeholder='fráze, prefix*, AND/OR/NOT — např. "dokumentace.pdf" OR pdf'>
-      <button id="btn-search" class="primary">Hledat</button>
-    </div>
-    <table id="search-table">
-      <thead><tr><th>Soubor</th><th>Velikost</th><th>Signatura</th><th>SHA-256</th></tr></thead>
+  <!-- ── PARTITION MAP ─────────────────────────── -->
+  <section id="mod-partition-map" class="module">
+    <div id="partition-maps"></div>
+  </section>
+
+  <!-- ── SYSTEM RECOVERY (registry / plist) ────── -->
+  <section id="mod-system-recovery" class="module">
+    <p class="muted small">Registry hive klíče a iOS property list datumy — obnovené z obrazu.</p>
+    <table id="sysrec-table">
+      <thead><tr><th>Čas (UTC)</th><th>Typ</th><th>Název</th></tr></thead>
       <tbody></tbody>
     </table>
   </section>
 
-  <!-- ── TIMELINE ────────────────────────────────────── -->
-  <section id="tab-timeline" class="panel">
+  <!-- ── SQL RECOVERY ──────────────────────────── -->
+  <section id="mod-sql-recovery" class="module">
+    <p class="muted small">SQLite databáze + smazané řádky obnovené carvingem (WAL &amp; freelist).</p>
+    <table id="sqlrec-table">
+      <thead><tr><th>Čas (UTC)</th><th>Typ</th><th>Název</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- ── MESSAGING CHAT ────────────────────────── -->
+  <section id="mod-messaging-chat" class="module">
+    <p class="muted small">SMS, iMessage, WhatsApp a hovory — chronologický chat view.</p>
+    <div id="chat-view"></div>
+  </section>
+
+  <!-- ── DELETION CHECK ────────────────────────── -->
+  <section id="mod-deletion-check" class="module">
+    <h2>Soubory s rozpornou příponou (bad-ext)</h2>
+    <table id="dc-badext"><thead><tr><th>File</th><th>Detekováno</th><th>Příp.</th><th>Size</th></tr></thead><tbody></tbody></table>
+    <h2>Duplikáty (de-duplication)</h2>
+    <table id="dc-dups"><thead><tr><th>File</th><th>Duplikát of</th><th>Size</th></tr></thead><tbody></tbody></table>
+    <h2>Smazané řádky (SQLite carving)</h2>
+    <div id="dc-deleted"></div>
+  </section>
+
+  <!-- ── ARTIFACTS (timeline) ──────────────────── -->
+  <section id="mod-artifacts" class="module">
     <div class="toolbar">
-      <h2>Timeline</h2>
-      <select id="t-case"></select>
-      <input id="t-type" placeholder="typ (volitelné, např. browser_history)">
+      <select id="a-type"><option value="">všechny typy</option></select>
       <button id="btn-timeline" class="primary">Zobrazit</button>
     </div>
     <table id="timeline-table">
@@ -94,13 +151,43 @@
     </table>
   </section>
 
-  <!-- ── REPORT ──────────────────────────────────────── -->
-  <div id="report-bar" class="toolbar hidden">
-    <span>Případ: <b id="rb-case"></b></span>
-    <button id="btn-report-html" class="primary">⬇ HTML report</button>
-    <button id="btn-report-pdf">⬇ PDF report</button>
-  </div>
+  <!-- ── REPORTING ─────────────────────────────── -->
+  <section id="mod-reporting" class="module">
+    <div class="toolbar">
+      <button id="btn-report-html" class="primary">⬇ HTML report</button>
+      <button id="btn-report-pdf">⬇ PDF report</button>
+    </div>
+    <h2>Ručně označené soubory (Evidence / Report)</h2>
+    <table id="marked-table">
+      <thead><tr><th>Soubor</th><th>Označení</th><th>Size</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
 </main>
+
+<!-- ══════════ PRAVÝ PANEL (FILE INSPECTOR) ══════════ -->
+<aside id="inspector">
+  <header><b>FILE INSPECTOR</b></header>
+  <div id="insp-empty" class="muted small center-block">Vyberte soubor v tabulce<br>k zobrazení detailu a hex dumpu.</div>
+
+  <div id="insp-body" class="hidden">
+    <h2 id="insp-name"></h2>
+    <dl class="kv">
+      <dt>Velikost</dt><dd id="insp-size"></dd>
+      <dt>SHA-256</dt><dd id="insp-sha" class="mono small"></dd>
+      <dt>Původ</dt><dd id="insp-origin" class="small"></dd>
+    </dl>
+
+    <h3>HEX DUMP</h3>
+    <pre id="insp-hex" class="hexgrid mono"></pre>
+
+    <div class="insp-actions">
+      <button id="btn-mark-evidence" class="primary">★ Mark as Evidence</button>
+      <button id="btn-export-file">⬇ Export File</button>
+      <button id="btn-add-report">＋ Add to Report</button>
+    </div>
+  </div>
+</aside>
 
 <div id="toast" class="hidden"></div>
 <script src="/static/app.js"></script>

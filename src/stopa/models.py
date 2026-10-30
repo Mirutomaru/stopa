@@ -71,6 +71,7 @@ class FileRecord(BaseModel):
     bad_extension: bool = False  # FTK Flag Bad Extensions
     is_duplicate_of: str | None = None  # FTK Advanced De-duplication
     hash_set_hit: str | None = None  # název known-bad hash setu, pokud hash sedí (FTK)
+    meta_addr: str | None = None  # TSK metadata adresa (icat) — pro soubory v diskovém obrazu
 
 
 class ProcessingProfile(BaseModel):

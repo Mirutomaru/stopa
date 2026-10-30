@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS files (
     bad_extension INTEGER NOT NULL DEFAULT 0,
     is_duplicate_of TEXT,
     hash_set_hit TEXT,
+    meta_addr TEXT,
     UNIQUE (source_id, rel_path)
 );
 CREATE INDEX IF NOT EXISTS idx_files_source ON files(source_id);
@@ -61,6 +62,13 @@ CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifacts(timestamp);
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT
+);
+
+-- GUI: ručně označené soubory (File Inspector → „Mark as Evidence“ / „Add to Report“)
+CREATE TABLE IF NOT EXISTS evidence_marks (
+    file_id TEXT PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+    marked_at TEXT NOT NULL,
+    flags TEXT  -- komou oddělené flagy: "evidence", "report"
 );
 
 -- FÁZE 3: full-text search (FTS5) — external content nad `files` + sync triggery.
@@ -96,6 +104,16 @@ class CaseDB:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
+        # Migrace: stará case DB bez sloupce meta_addr (GUI hex dump přes TSK icat).
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(files)").fetchall()}
+        if "meta_addr" not in cols:
+            self.conn.execute("ALTER TABLE files ADD COLUMN meta_addr TEXT")
+            self.conn.commit()
+        # Migrace: stará evidence_marks bez sloupce flags (GUI „Add to Report“).
+        em_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(evidence_marks)").fetchall()}
+        if "flags" not in em_cols:
+            self.conn.execute("ALTER TABLE evidence_marks ADD COLUMN flags TEXT")
+            self.conn.commit()
         # FÁZE 3 backfill: staré case DB (bez FTS indexu) — jednou doindexovat existující řádky.
         # 'rebuild' u external-content FTS5 přečte obsah přímo z tabulky `files`.
         # Meta-flaga je spolehlivější než COUNT(*) (external-content stíny po delete).
@@ -207,8 +225,8 @@ class CaseDB:
         self.conn.execute(
             "INSERT INTO files (id, source_id, rel_path, name, size_bytes,"
             " mtime, ctime, atime, sha256, md5, signature_type, extension,"
-            " bad_extension, is_duplicate_of, hash_set_hit)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            " bad_extension, is_duplicate_of, hash_set_hit, meta_addr)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             " ON CONFLICT (source_id, rel_path) DO UPDATE SET"
             " name = excluded.name,"
             " size_bytes = excluded.size_bytes,"
@@ -217,7 +235,8 @@ class CaseDB:
             " signature_type = excluded.signature_type, extension = excluded.extension,"
             " bad_extension = excluded.bad_extension,"
             " is_duplicate_of = excluded.is_duplicate_of,"
-            " hash_set_hit = excluded.hash_set_hit",
+            " hash_set_hit = excluded.hash_set_hit,"
+            " meta_addr = excluded.meta_addr",
             (
                 rec.id,
                 rec.source_id,
@@ -234,6 +253,7 @@ class CaseDB:
                 int(rec.bad_extension),
                 rec.is_duplicate_of,
                 rec.hash_set_hit,
+                rec.meta_addr,
             ),
         )
 
@@ -274,6 +294,47 @@ class CaseDB:
             q += f" LIMIT {int(limit)}"
         rows = self.conn.execute(q, args).fetchall()
         return [_row_to_record(r) for r in rows]
+
+    def get_file(self, file_id: str) -> FileRecord | None:
+        """Jeden soubor podle ID (File Inspector v GUI)."""
+        row = self.conn.execute("SELECT * FROM files WHERE id = ?", (file_id,)).fetchone()
+        return _row_to_record(row) if row else None
+
+    # ── file flags (GUI File Inspector: „Mark as Evidence“ / „Add to Report“) ──
+    def set_file_flag(self, file_id: str, flag: str, on: bool) -> None:
+        """Přepne flag souboru („evidence“ / „report“). Idempotentní."""
+        flags = self.get_file_flags(file_id)
+        new = (flags + (flag,)) if (on and flag not in flags) else tuple(f for f in flags if f != flag)
+        from datetime import datetime, timezone
+
+        if new:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO evidence_marks (file_id, marked_at, flags)"
+                " VALUES (?, ?, ?)",
+                (file_id, datetime.now(timezone.utc).isoformat(), ",".join(new)),
+            )
+        else:
+            self.conn.execute("DELETE FROM evidence_marks WHERE file_id = ?", (file_id,))
+        self.conn.commit()
+
+    def get_file_flags(self, file_id: str) -> tuple[str, ...]:
+        row = self.conn.execute(
+            "SELECT flags FROM evidence_marks WHERE file_id = ?", (file_id,)
+        ).fetchone()
+        return tuple(row["flags"].split(",")) if row and row["flags"] else ()
+
+    def list_marked(self) -> list[tuple[FileRecord, tuple[str, ...]]]:
+        """Všechny označené soubory (pro report / Evidence modul)."""
+        rows = self.conn.execute(
+            "SELECT f.*, e.flags FROM evidence_marks e JOIN files f ON f.id = e.file_id"
+            " ORDER BY e.marked_at DESC"
+        ).fetchall()
+        out: list[tuple[FileRecord, tuple[str, ...]]] = []
+        for r in rows:
+            rec = _row_to_record(r)
+            flags = tuple(r["flags"].split(",")) if r["flags"] else ()
+            out.append((rec, flags))
+        return out
 
     def search(
         self,
@@ -453,6 +514,7 @@ def _row_to_record(r: sqlite3.Row) -> FileRecord:
         bad_extension=bool(r["bad_extension"]),
         is_duplicate_of=r["is_duplicate_of"],
         hash_set_hit=r["hash_set_hit"],
+        meta_addr=r["meta_addr"] if "meta_addr" in r else None,  # noqa: SIM401 (Row bez .get)
     )
 
 

@@ -51,6 +51,16 @@ class FlaggedFile:
 
 
 @dataclass(frozen=True)
+class MarkedFile:
+    """Soubor ručně označený v GUI (Evidence / Add to Report)."""
+
+    rel_path: str
+    flags: tuple[str, ...]  # ("evidence", "report")
+    size_bytes: int = 0
+    sha256: str | None = None
+
+
+@dataclass(frozen=True)
 class ReportData:
     """Všechny údaje pro report — presentation vrstva naplní z case DB."""
 
@@ -66,6 +76,7 @@ class ReportData:
     artifact_counts: dict[str, int] = field(default_factory=dict)
     custody_items: tuple[CustodyItem, ...] = ()
     flagged_files: tuple[FlaggedFile, ...] = ()
+    marked_files: tuple[MarkedFile, ...] = ()  # ručně označené v GUI (Evidence/Report)
 
 
 def _esc(v: object) -> str:
@@ -217,8 +228,31 @@ def build_html(data: ReportData) -> str:
     else:
         parts.append("<p class='small'>Žádné flagované soubory (bad-ext / duplikáty / hash sets).</p>")
 
+    # ── ručně označené soubory (GUI File Inspector) ────────────
+    parts.append("<h2>5. Ručně označené soubory (Evidence / Report)</h2>")
+    if data.marked_files:
+        parts.append(
+            "<table><tr><th>Soubor</th><th>Označení</th><th>Velikost</th>"
+            "<th>SHA-256</th></tr>"
+        )
+        for m in data.marked_files[:500]:
+            labels = " ".join(
+                f"<span class='flag'>{_esc('EVIDENCE' if x == 'evidence' else 'REPORT')}</span>"
+                for x in m.flags
+            )
+            sha = (
+                f"<td class='mono'>{_esc(m.sha256)}</td>" if m.sha256 else "<td>—</td>"
+            )
+            parts.append(
+                f"<tr><td class='mono'>{_esc(m.rel_path)}</td><td>{labels}</td>"
+                f"<td>{m.size_bytes:,}</td>{sha}</tr>"
+            )
+        parts.append("</table>")
+    else:
+        parts.append("<p class='small'>Žádné ručně označené soubory.</p>")
+
     # ── hash manifest (důkaz integrity) ────────────────────────
-    parts.append("<h2>5. Hash manifest — SHA-256</h2>")
+    parts.append("<h2>6. Hash manifest — SHA-256</h2>")
     if data.custody_items:
         parts.append(
             "<table><tr><th>Soubor</th><th>Velikost</th><th>SHA-256</th></tr>"

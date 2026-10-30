@@ -136,6 +136,7 @@ def process_disk_image(
                 size_bytes=size,
                 signature_type=sig_type,
                 extension=os.path.splitext(name)[1].lstrip(".").lower() or None,
+                meta_addr=f.meta_addr,  # GUI File Inspector: hex dump přes icat
             )
             db.upsert_file(rec)
             summary.files_total += 1
@@ -143,7 +144,7 @@ def process_disk_image(
             if sig_type:
                 summary.signatures_detected += 1
 
-    # 4) artifact disk_image (timeline přehled)
+    # 4) artifact disk_image (timeline přehled + GUI partition map)
     part_desc = "; ".join(
         f"[{p.index}] {p.desc} @ sektor {p.offset_sectors}" for p in summary.partitions
     ) or "bez particí"
@@ -156,6 +157,17 @@ def process_disk_image(
             "image_type": summary.image_type,
             "description": summary.description,
             "partitions": part_desc,
+            # strukturovaná partition mapa pro GUI (vizuální mapa + legendy)
+            "partition_map": [
+                {
+                    "index": p.index,
+                    "offset_sectors": p.offset_sectors,
+                    "size_sectors": p.size_sectors,
+                    "desc": p.desc,
+                    "fstype": p.fstype,
+                }
+                for p in summary.partitions
+            ],
             "files_total": summary.files_total,
             "bytes_total": summary.bytes_total,
             "signatures_detected": summary.signatures_detected,

@@ -26,6 +26,14 @@ class TskError(RuntimeError):
     """TSK nástroj chybí nebo vrátil chybu."""
 
 
+def _tsk_available() -> bool:
+    try:
+        tsk_bin_dir()
+        return True
+    except TskError:
+        return False
+
+
 def tsk_bin_dir() -> str:
     """Vrátí cestu ke složce s TSK binárkami (None-safe)."""
     env = os.environ.get("STOPA_TSK_BIN")
@@ -41,6 +49,10 @@ def tsk_bin_dir() -> str:
     raise TskError(
         "TSK nástroje nenalezeny — nastav STOPA_TSK_BIN nebo nainstaluj do ~/tsk-install/bin"
     )
+
+
+#: Dostupnost TSK binárek (fls/icat/…) — False = disk image pipeline nesežene.
+TSK_AVAILABLE = _tsk_available()
 
 
 def _tool(name: str) -> str:
