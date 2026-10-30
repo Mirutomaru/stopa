@@ -56,6 +56,33 @@ CREATE TABLE IF NOT EXISTS artifacts (
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_source ON artifacts(source_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifacts(timestamp);
+
+-- Meta (verze schématu, stav FTS indexu…)
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+
+-- FÁZE 3: full-text search (FTS5) — external content nad `files` + sync triggery.
+-- Idempotentní i pro staré case DB z FÁZE 1 (IF NOT EXISTS).
+CREATE VIRTUAL TABLE IF NOT EXISTS files_fts USING fts5(
+    rel_path, name, signature_type, hash_set_hit,
+    content='files', content_rowid='rowid'
+);
+CREATE TRIGGER IF NOT EXISTS files_ai AFTER INSERT ON files BEGIN
+    INSERT INTO files_fts(rowid, rel_path, name, signature_type, hash_set_hit)
+    VALUES (new.rowid, new.rel_path, new.name, new.signature_type, new.hash_set_hit);
+END;
+CREATE TRIGGER IF NOT EXISTS files_ad AFTER DELETE ON files BEGIN
+    INSERT INTO files_fts(files_fts, rowid, rel_path, name, signature_type, hash_set_hit)
+    VALUES ('delete', old.rowid, old.rel_path, old.name, old.signature_type, old.hash_set_hit);
+END;
+CREATE TRIGGER IF NOT EXISTS files_au AFTER UPDATE ON files BEGIN
+    INSERT INTO files_fts(files_fts, rowid, rel_path, name, signature_type, hash_set_hit)
+    VALUES ('delete', old.rowid, old.rel_path, old.name, old.signature_type, old.hash_set_hit);
+    INSERT INTO files_fts(rowid, rel_path, name, signature_type, hash_set_hit)
+    VALUES (new.rowid, new.rel_path, new.name, new.signature_type, new.hash_set_hit);
+END;
 """
 
 
@@ -69,6 +96,21 @@ class CaseDB:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
+        # FÁZE 3 backfill: staré case DB (bez FTS indexu) — jednou doindexovat existující řádky.
+        # 'rebuild' u external-content FTS5 přečte obsah přímo z tabulky `files`.
+        # Meta-flaga je spolehlivější než COUNT(*) (external-content stíny po delete).
+        already = self.conn.execute(
+            "SELECT value FROM meta WHERE key = 'fts_backfilled'"
+        ).fetchone()
+        if already is None:
+            n_files = self.conn.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+            if n_files:
+                self.conn.execute("INSERT INTO files_fts(files_fts) VALUES ('rebuild')")
+            # flaga vždy — buď jsme rebuild udělali, nebo bylo prázdné (triviálně indexováno)
+            self.conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('fts_backfilled', '1')"
+            )
+            self.conn.commit()
 
     # ── cases ────────────────────────────────────────────────
     def add_case(self, case: Case) -> None:
@@ -150,6 +192,7 @@ class CaseDB:
             " bad_extension, is_duplicate_of, hash_set_hit)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             " ON CONFLICT (source_id, rel_path) DO UPDATE SET"
+            " name = excluded.name,"
             " size_bytes = excluded.size_bytes,"
             " mtime = excluded.mtime, ctime = excluded.ctime, atime = excluded.atime,"
             " sha256 = excluded.sha256, md5 = excluded.md5,"
@@ -209,6 +252,37 @@ class CaseDB:
         if where:
             q += " WHERE " + " AND ".join(where)
         q += " ORDER BY rel_path"
+        if limit is not None:
+            q += f" LIMIT {int(limit)}"
+        rows = self.conn.execute(q, args).fetchall()
+        return [_row_to_record(r) for r in rows]
+
+    def search(
+        self,
+        query: str,
+        source_id: str | None = None,
+        limit: int | None = 100,
+    ) -> list[FileRecord]:
+        """Full-text search (FTS5) přes cesty, názvy, signatury a hash-set trefy.
+
+        `query` — FTS5 syntaxe: `"dokumentace.pdf"` (fráze), `*.jpg` (prefix),
+        `pdf OR docx`. Neznámé znaky se escapují do frází pro bezpečnost.
+        Výsledek je řazen podle relevance (bm25) a omezen na existující soubory.
+        """
+        if not query.strip():
+            return []
+        # FTS5 MATCH bere výraz — zabalíme celou dotaz do frází, pokud neobsahuje operátory
+        expr = _fts_query(query)
+        q = (
+            "SELECT f.* FROM files_fts"
+            " JOIN files f ON f.rowid = files_fts.rowid"
+            " WHERE files_fts MATCH ?"
+        )
+        args: list[object] = [expr]
+        if source_id is not None:
+            q += " AND f.source_id = ?"
+            args.append(source_id)
+        q += " ORDER BY bm25(files_fts)"
         if limit is not None:
             q += f" LIMIT {int(limit)}"
         rows = self.conn.execute(q, args).fetchall()
@@ -348,3 +422,21 @@ def _row_to_artifact(r: sqlite3.Row) -> Artifact:
         title=r["title"],
         details=json.loads(r["details_json"]),
     )
+
+
+_FTS5_OPS = {"AND", "OR", "NOT", "NEAR"}
+
+
+def _fts_query(query: str) -> str:
+    """Normalizace uživatelského dotazu na bezpečný FTS5 výraz.
+
+    - obsahuje operátor/úvodky/* → raw FTS5 syntaxe (power user)
+    - jinak: každé slovo jako fráze, implicitní AND (bezpečné i pro `.` a `-`)
+    """
+    q = query.strip()
+    has_ops = any(ch in q for ch in ('"', "*", "(", ")")) or any(
+        w.upper() in _FTS5_OPS for w in q.split()
+    )
+    if has_ops:
+        return q
+    return " ".join(f'"{w}"' for w in q.split())

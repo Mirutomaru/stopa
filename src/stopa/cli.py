@@ -4,6 +4,7 @@ Použití:
   stopa case new "Karel Novák" --examiner "JUDr. M. Matúš"
   stopa add <case_id> /cesta/ke/zdroji [--profile forensic] [--hash-set bad.txt]
   stopa files <case_id> [--bad-ext] [--dups] [--family image] [--limit 50]
+  stopa search <case_id> "dotaz" [--source ID]   # full-text (FTS5)
   stopa timeline <case_id> [--type browser_history] [--path text] [-v]
   stopa stats <case_id>
   stopa profiles
@@ -144,6 +145,29 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_search(args: argparse.Namespace) -> int:
+    """Full-text search (FTS5) — AXIOM-style vyhledávání napříč případem."""
+    db = _open_db(args.case_id)
+    records = db.search(args.query, source_id=args.source, limit=args.limit)
+    if not records:
+        print(f"(žádné soubory neodpovídají dotazu: {args.query!r})")
+        return 0
+    for r in records:
+        flags = []
+        if r.bad_extension:
+            flags.append("BAD-EXT")
+        if r.is_duplicate_of:
+            flags.append(f"DUP→{r.is_duplicate_of}")
+        if r.hash_set_hit:
+            flags.append(f"HASHSET:{r.hash_set_hit}")
+        flag_str = f"  [{' '.join(flags)}]" if flags else ""
+        sig = r.signature_type or "?"
+        print(f"{r.rel_path}  [{sig}] {r.size_bytes:,} B{flag_str}")
+    print(f"\nCELKEM: {len(records)} souborů (dotaz: {args.query!r})")
+    db.close()
+    return 0
+
+
 def cmd_timeline(args: argparse.Namespace) -> int:
     """AXIOM-style timeline — chronologický přehled extrahovaných artifactů."""
     db = _open_db(args.case_id)
@@ -210,6 +234,16 @@ def build_parser() -> argparse.ArgumentParser:
                          help="filtr podle rodiny signatury")
     files_p.add_argument("--limit", type=int, default=100)
     files_p.set_defaults(func=cmd_files)
+
+    search_p = sub.add_parser("search", help="full-text search (FTS5) napříč případem")
+    search_p.add_argument("case_id")
+    search_p.add_argument(
+        "query",
+        help='dotaz — FTS5 syntaxe: "fráze", *.jpg, pdf OR docx; jinak implicitní AND',
+    )
+    search_p.add_argument("--source", help="filtr podle evidence source ID")
+    search_p.add_argument("--limit", type=int, default=100)
+    search_p.set_defaults(func=cmd_search)
 
     stats_p = sub.add_parser("stats", help="shrnutí případu")
     stats_p.add_argument("case_id")
