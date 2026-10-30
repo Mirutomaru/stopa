@@ -6,7 +6,8 @@ Použití:
   stopa files <case_id> [--bad-ext] [--dups] [--family image] [--limit 50]
   stopa search <case_id> "dotaz" [--source ID]   # full-text (FTS5)
   stopa timeline <case_id> [--type browser_history] [--path text] [-v]
-  stopa image <case_id> /cesta/ke/obrazu.img [--no-carve]   # disk image (TSK)
+  stopa image <case_id> /cesta/ke/obrazu.img       # disk image (TSK) [+ --no-carve]
+  stopa mobile <case_id> /obraz.img [--password HESLO]  # mobilní FDE/FBE unlock + TSK
   stopa stats <case_id>
   stopa report <case_id> [--format html|pdf] [--out DIR]    # court-ready report + chain of custody
   stopa serve [--port 8473]                                 # web GUI (FastAPI)
@@ -228,6 +229,42 @@ def cmd_image(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mobile(args: argparse.Namespace) -> int:
+    """Mobilní physical obraz (FÁZE 6b) — FDE/FBE unlock + TSK."""
+    from stopa.data.image_pipeline import process_mobile_image
+    from stopa.domain.profiles import get_profile
+
+    db = _open_db(args.case_id)
+    profile = get_profile(args.profile)
+    img_path = Path(args.path).expanduser()
+    if not img_path.exists():
+        print(f"Obraz neexistuje: {img_path}", file=sys.stderr)
+        return 2
+
+    source = EvidenceSource(case_id=args.case_id, kind="file", path=str(img_path))
+    db.add_source(source)
+    summary = process_mobile_image(
+        db, source.id, img_path, profile,
+        password=args.password, carve_free=not args.no_carve,
+    )
+    if summary.fde_unlocked:
+        print(f"Mobilní FDE obraz: {summary.description}")
+    else:
+        print(f"Mobilní obraz: {summary.image_type or 'neznámý'} — {summary.description or '?'}")
+    for p in summary.partitions:
+        print(f"  partice #{p.index}: {p.fstype} @ sektor {p.offset_sectors}")
+    print(
+        f"  soubory: {summary.files_total}, bajty: {summary.bytes_total / 1e6:.2f} MB, "
+        f"signatury: {summary.signatures_detected}"
+    )
+    if summary.carved_candidates:
+        print(f"  carving kandidáti (nealokovaný prostor): {summary.carved_candidates}")
+    for err in summary.errors[:5]:
+        print(f"  ! {err}", file=sys.stderr)
+    db.close()
+    return 0
+
+
 def cmd_profiles(_args: argparse.Namespace) -> int:
     print("Dostupné processing profily:")
     for name, p in sorted(PROFILES.items()):
@@ -342,6 +379,17 @@ def build_parser() -> argparse.ArgumentParser:
     img_p.add_argument("--no-carve", action="store_true",
                        help="přeskočit carving nealokovaného prostoru")
     img_p.set_defaults(func=cmd_image)
+
+    mob_p = sub.add_parser("mobile", help="mobilní physical obraz — FDE/FBE unlock + TSK")
+    mob_p.add_argument("case_id")
+    mob_p.add_argument("path", help="cesta k mobilnímu obrazu (.img/.dd, volitelně FDE)")
+    mob_p.add_argument("--password", metavar="HESLO", default=None,
+                       help="FDE/FBE heslo (pokud je obraz šifrovaný)")
+    mob_p.add_argument("--profile", default="forensic", choices=sorted(PROFILES),
+                       help="processing profil (default: forensic)")
+    mob_p.add_argument("--no-carve", action="store_true",
+                       help="přeskočit carving nealokovaného prostoru")
+    mob_p.set_defaults(func=cmd_mobile)
 
     prof_p = sub.add_parser("profiles", help="seznam processing profilů")
     prof_p.set_defaults(func=cmd_profiles)

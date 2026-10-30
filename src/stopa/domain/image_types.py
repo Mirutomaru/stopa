@@ -60,3 +60,23 @@ def detect_image_type(data: bytes) -> tuple[str, str] | None:
 def is_container(typ: str | None) -> bool:
     """True pro kontejnery s vlastní strukturou (E01/AFF4), False pro RAW."""
     return typ in ("e01", "aff4")
+
+
+# podkladový FS → TSK fstype pro ``fls -f`` (fallback bez partition table)
+_FS_TO_TSK: dict[str, str] = {
+    "ext": "ext2",  # TSK čte ext2/3/4 pod jedním typem
+    "fat": "fat",
+    "ntfs": "ntfs",
+    "hfsplus": "hfs+",
+}
+
+
+def filesystem_fstype(data: bytes) -> str | None:
+    """TSK fstype pro RAW obraz s FS na offsetu 0 (fallback bez MBR).
+
+    Využije se, když ``mmls`` nenajde žádnou partici (čistý ext4/FAT/NTFS
+    oddíl bez obálky) — celý obraz pak zpracujeme jako jednu syntetickou
+    partici na offsetu 0. Vrátí None pro MBR/neznámé (partice řeší mmls).
+    """
+    fs = _detect_filesystem(data)
+    return _FS_TO_TSK.get(fs or "")

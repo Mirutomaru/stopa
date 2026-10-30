@@ -51,17 +51,24 @@ def _tool(name: str) -> str:
     return str(p)
 
 
-def _run(tool: str, args: list[str], timeout: int = 120) -> str:
-    """Spustí TSK nástroj a vrátí stdout; při chybě TskError."""
+def _run(tool: str, args: list[str], timeout: int = 120, binary: bool = False) -> str | bytes:
+    """Spustí TSK nástroj a vrátí stdout; při chybě TskError.
+
+    ``binary=True`` — stdout jako raw bajty (pro icat s binárním obsahem);
+    jinak text (UTF-8).
+    """
     exe = _tool(tool)
     try:
-        r = subprocess.run([exe, *args], check=False, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(
+            [exe, *args], check=False, capture_output=True,
+            text=not binary, timeout=timeout,
+        )
     except FileNotFoundError as e:
         raise TskError(f"TSK nástroj se nedaří spustit: {e}") from e
     except subprocess.TimeoutExpired as e:
         raise TskError(f"TSK nástroj {tool} přetekl (>{timeout}s)") from e
     if r.returncode != 0:
-        err = (r.stderr or r.stdout).strip().splitlines()
+        err = ((r.stderr or b"") if binary else (r.stderr or r.stdout)).strip().splitlines()
         raise TskError(f"{tool} exit {r.returncode}: {err[-1] if err else 'bez zprávy'}")
     return r.stdout
 
@@ -212,12 +219,12 @@ def _parse_fls_line(line: str) -> ImageFile | None:
 
 
 def extract_file(image_path: Path, meta_addr: str, partition: Partition | None = None) -> bytes:
-    """Obsah souboru podle metadata adresy (icat)."""
+    """Obsah souboru podle metadata adresy (icat). Raw bajty (binární obsah)."""
     args = [str(image_path), meta_addr]
     if partition is not None:
         args = ["-f", partition.fstype or "fat", "-o", str(partition.offset_sectors)] + args
-    out = _run("icat", args)
-    return out.encode("latin-1")
+    out = _run("icat", args, binary=True)
+    return out if isinstance(out, bytes) else out.encode("utf-8")
 
 
 def free_blocks(image_path: Path, partition: Partition | None = None) -> list[str]:
