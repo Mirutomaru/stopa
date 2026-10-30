@@ -15,6 +15,10 @@ Odhad velikosti z INTERNÍCH STRUKTUR (ne jen pevné patičky):
 - MP4/MOV (ISO BMFF): chůze po boxech (size+type, largesize==1 → 64b);
   konec = první nevalidní box za posledním validním.
 - PDF: poslední %%EOF v omezeném okně + validace přes ``startxref`` offset.
+- ZIP/OOXML/APK (docx/xlsx/pptx): EOCD (End Of Central Directory) na konci —
+  validace přes offset Central Directory (musí ukazovat na PK\x01\x02 a CD musí
+  končit přesně na pozici EOCD) → bezchybný rozsah archivu; ZIP64 podporováno.
+- RAR5/RAR4: chůze po blocích až po END_ARCHIVE / ENDARC markeru → přesný konec.
 
 Streaming pro velké obrazy:
 - ``carve_file()`` — mmap + klouzavé okno (window/overlap), takže hlavičky na
@@ -191,6 +195,170 @@ def _pdf_size(buf: bytes) -> int | None:
     return size
 
 
+# ── ZIP / OOXML / APK — přesný rozsah přes EOCD (End Of Central Directory) ──
+
+def _zip_size(buf: bytes) -> int | None:
+    """Přesná velikost ZIP archivu validací End Of Central Directory.
+
+    Strategie: najít první EOCD (PK\\x05\\x06), jehož Central Directory
+    strukturně sedí — ``cd_offset + cd_size == pozice_EOCD`` a na
+    ``cd_offset`` musí být signatura central directory entry (PK\\x01\\x02).
+    Tím se vyloučí cizí EOCD z jiného archivu v obrazu. ZIP64: pokud klasická
+    validace selže, zkusí se ZIP64 EOCD locator (PK\\x06\\x07) + record
+    (PK\\x06\\x06) s 64bitovými offsety.
+
+    Vrací velikost archivu (začátek → konec EOCD včetně commentu), nebo None.
+    """
+    n = len(buf)
+    if n < 22:
+        return None
+    pos = buf.find(b"PK\x05\x06")
+    for _ in range(4096):  # omezený počet EOCD kandidátů (velké obrazy)
+        if pos == -1:
+            return None
+        eocd_end = pos + 22
+        if eocd_end > n:
+            return None
+        comment_len = int.from_bytes(buf[pos + 20 : pos + 22], "little")
+        total = eocd_end + comment_len
+        if total > n:
+            return None
+        cd_size = int.from_bytes(buf[pos + 12 : pos + 16], "little")
+        cd_off = int.from_bytes(buf[pos + 16 : pos + 20], "little")
+        # strukturní validace: CD musí končit přesně na EOCD a začínat PK\x01\x02
+        if (
+            cd_size > 0
+            and cd_off + cd_size == pos
+            and buf[cd_off : cd_off + 4] == b"PK\x01\x02"
+        ):
+            return total
+        # ZIP64: locator PK\x06\x07 těsně před EOCD → 64bitový EOCD record
+        loc = pos - 20
+        if loc >= 4 and buf[loc : loc + 4] == b"PK\x06\x07":
+            z64_off = int.from_bytes(buf[loc + 8 : loc + 16], "little")
+            if (
+                z64_off + 56 <= n
+                and buf[z64_off : z64_off + 4] == b"PK\x06\x06"
+            ):
+                cd_size64 = int.from_bytes(buf[z64_off + 40 : z64_off + 48], "little")
+                cd_off64 = int.from_bytes(buf[z64_off + 48 : z64_off + 56], "little")
+                if (
+                    cd_size64 > 0
+                    and cd_off64 + cd_size64 == z64_off
+                    and buf[cd_off64 : cd_off64 + 4] == b"PK\x01\x02"
+                ):
+                    return total
+        pos = buf.find(b"PK\x05\x06", pos + 4)
+    return None
+
+
+# ── RAR — chůze po blocích až po END markeru ───────────────────────────────
+
+def _rar_varint(buf: bytes, i: int) -> tuple[int | None, int]:
+    """RAR5 VarInt: 7bitové skupiny, MSB = pokračování. Vrací (hodnota, konec)."""
+    value = 0
+    shift = 0
+    n = len(buf)
+    while i < n and shift <= 63:
+        b = buf[i]
+        value |= (b & 0x7F) << shift
+        i += 1
+        if not (b & 0x80):
+            return value, i
+        shift += 7
+    return None, i
+
+
+def _rar5_size(buf: bytes) -> int | None:
+    """RAR5: chůze po blocích; konec = End of archive header (type 5).
+
+    Marker je 8 B ``Rar!\\x1a\\x07\\x01\\x00`` (dle 7-Zip kMarker). Blok dle specu
+    rarlab.com/technote.htm: CRC32(4) + HeaderSize(vint), pak tělo o HeaderSize
+    bajtech začínající HeaderType(vint) + Flags(vint); DataSize(vint) jen pokud je
+    flag 0x0002 (data area následuje za tělem). RAR nic nečte za END headerem.
+    Jakákoli nevalidní struktura → None (fallback na neznámou velikost).
+    """
+    n = len(buf)
+    if buf[:8] != b"Rar!\x1a\x07\x01\x00":
+        return None
+    i = 8
+    for _ in range(8192):  # sanity limit počtu bloků
+        if i + 4 > n:
+            return None
+        hs, j = _rar_varint(buf, i + 4)  # HeaderSize — tělo začíná na j
+        if hs is None or hs < 2 or j + hs > n:
+            return None
+        body_end = j + hs
+        htype, k = _rar_varint(buf, j)  # HeaderType (první pole těla)
+        flags, m = _rar_varint(buf, k)
+        if htype is None or flags is None or m > body_end:
+            return None
+        pos = m
+        if flags & 0x0001:  # Extra area size — přeskočit (DataSize za ním)
+            _eas, pos2 = _rar_varint(buf, pos)
+            if _eas is None or pos2 > body_end:
+                return None
+            pos = pos2
+        data_size = 0
+        if flags & 0x0002:  # Data area size — data následují za tělem hlavičky
+            ds, p = _rar_varint(buf, pos)
+            if ds is None or p > body_end:
+                return None
+            data_size = ds
+        end = body_end + data_size
+        if htype == 5:  # End of archive — RAR nic nečte za tímto blokem
+            return end if end <= n else None
+        i = end
+    return None
+
+
+def _rar4_size(buf: bytes) -> int | None:
+    """RAR4: chůze po blocích; konec = ENDARC blok (type 0x72).
+
+    Marker je 7 B ``Rar!\\x1a\\x07\\x00``. Blok dle technote: HEAD_CRC(2) + Type(1)
+    + Flags(2) + HeadSize(2); AddSize(4) jen pokud je flag 0x8000 (u souborových
+    bloků vždy — pak AddSize == PackSize a celá velikost bloku = HeadSize + AddSize).
+    Konzervativní sanity checky — pochybnost → None (fallback).
+    """
+    n = len(buf)
+    if buf[:7] != b"Rar!\x1a\x07\x00":
+        return None
+    i = 7  # za marker blokem (signatura je samostatně ověřena výše)
+    for _ in range(8192):
+        if i + 7 > n:
+            return None
+        btype = buf[i + 2]
+        flags = int.from_bytes(buf[i + 3 : i + 5], "little")
+        head_size = int.from_bytes(buf[i + 5 : i + 7], "little")
+        add_size = 0
+        if flags & 0x8000:
+            if i + 11 > n:
+                return None
+            add_size = int.from_bytes(buf[i + 7 : i + 11], "little")
+        total = head_size + add_size
+        if total < 7 or i + total > n:
+            return None
+        if btype == 0x72:  # ENDARC — konec archivu za tímto blokem
+            return i + total
+        i += total
+    return None
+
+
+def _rar_size(buf: bytes) -> int | None:
+    """RAR (v4/v5) — přesný rozsah podle verze signatury.
+
+    RAR5 marker má 8 B (``...\\x01\\x00``), RAR4 jen 7 B (``...\\x00``); rozlišení
+    podle byte na pozici 6 (0x01 = v5, 0x00 = v4).
+    """
+    if len(buf) > 7 and buf[6] == 0x01:
+        return _rar5_size(buf)
+    return _rar4_size(buf)
+
+
+# Typy vzniklé zip refine (docx/xlsx/...) sdílejí ZIP strukturu.
+_ZIP_TYPES = {"zip", "docx", "xlsx", "pptx", "ooxml", "apk"}
+
+
 def _estimate_size(data: bytes, offset: int, sig_type: str) -> int | None:
     """Odhad velikosti vykarvaného souboru podle interních struktur.
 
@@ -210,6 +378,10 @@ def _estimate_size(data: bytes, offset: int, sig_type: str) -> int | None:
         return _mp4_size(data)
     elif sig_type == "pdf":
         return _pdf_size(data)
+    if sig_type in _ZIP_TYPES:  # zip/docx/xlsx/pptx/ooxml/apk — EOCD validace
+        return _zip_size(data)
+    if sig_type == "rar":
+        return _rar_size(data)
     return None
 
 
