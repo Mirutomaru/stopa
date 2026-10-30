@@ -22,6 +22,8 @@ SIGNATURES: list[tuple[int, bytes, str, str]] = [
     (0, b"PK\x03\x04", "zip", "archive"),  # zip/docx/xlsx/pptx/jar/apk — refine níže
     (0, b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", "ole2", "compound"),  # doc/xls/ppt/mdb/msi
     (0, b"SQLite format 3\x00", "sqlite", "database"),
+    (0, b"regf", "registry_hive", "registry"),  # Windows registry hive (NT)
+    (0, b"bplist00", "plist", "propertylist"),  # Apple binary plist
     (0, b"\x7fELF", "elf", "executable"),
     (0, b"\xfe\xed\xfa\xce", "macho64", "executable"),
     (0, b"\xca\xfe\xba\xbe", "macho32", "executable"),  # kolize s .class — akceptovatelné
@@ -47,6 +49,12 @@ def _refine_zip(data: bytes) -> tuple[str, str] | None:
     if b"META-INF/ANDROID" in head or b"classes.dex" in head:
         return "apk", "package"
     return None
+
+
+def _is_xml_plist(data: bytes) -> bool:
+    """Apple XML plist — `<plist>` / `<!DOCTYPE plist` v hlavičce (binární je magic výše)."""
+    head = data[:4096]
+    return b"<plist" in head or b"<!DOCTYPE plist" in head
 
 
 def _is_pe(data: bytes) -> bool:
@@ -83,6 +91,9 @@ def detect_signature(data: bytes) -> tuple[str, str] | None:
                     return refined
                 return ("zip", "archive")
             return (typ, family)
+    # Apple XML plist (binární je magic bplist00 výše) — kontrola hlavičky
+    if _is_xml_plist(data):
+        return ("plist", "propertylist")
     # RIFF podtypy (WEBP/WAV/AVI) — kontrola na offsetu 8
     if data[:4] == b"RIFF" and len(data) >= 12:
         sub = _RIFF_SUBTYPES.get(data[8:12])

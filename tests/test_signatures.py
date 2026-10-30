@@ -20,6 +20,8 @@ from stopa.domain.signatures import detect_signature, signature_family
         (b"PK\x03\x04" + b"\x00" * 64, "zip"),
         (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"x", "ole2"),
         (b"SQLite format 3\x00" + b"x", "sqlite"),
+        (b"regf" + b"\x00" * 20, "registry_hive"),
+        (b"bplist00" + b"\x00" * 16, "plist"),
         (b"\x7fELF\x02\x01\x01" + b"x", "elf"),
         (b"7z\xbc\xaf\x27\x1c" + b"x", "7zip"),
         (b"Rar!\x1a\x07" + b"x", "rar"),
@@ -97,8 +99,20 @@ def test_short_data_no_crash():
     assert detect_signature(b"\x89P") is None
 
 
+def test_xml_plist_detection():
+    xml = (
+        b'<?xml version="1.0" encoding="UTF-8"?>\n'
+        b'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+        b'"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+        b'<plist version="1.0"><dict></dict></plist>'
+    )
+    assert detect_signature(xml) == ("plist", "propertylist")
+
+
 def test_family_lookup():
     assert signature_family("png") == "image"
     assert signature_family("pdf") == "document"
     assert signature_family("docx") == "document"  # refined typ
+    assert signature_family("registry_hive") == "registry"
+    assert signature_family("plist") == "propertylist"
     assert signature_family(None) is None

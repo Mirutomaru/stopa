@@ -41,6 +41,22 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 
 > RE podklad: `docs/re-axiom/` — 237 artifact extraktorů vyjmenovaných z `Magnet.Artifacts.dll` (dnfile).
 
+## Co umí (FÁZE 4b — registry hives + Apple plists, hotovo)
+
+| Funkce | Z jakého nástroje | Stav |
+|---|---|---|
+| Windows registry hive extraktor (`regf`, přes regipy) | AXIOM Registry / Belkasoft X | ✅ |
+| Persistence klíče: `Run`/`RunOnce` (co se spouští při startu) | AXIOM persistence artifact | ✅ |
+| USB zařízení: `MountedDevices` (připojená removable média) | AXIOM / UFED device artifact | ✅ |
+| Identita uživatele: `User Name`, `Environment` proměnné | Belkasoft X user profile | ✅ |
+| Triage artifact pro celou hive (počet klíčů + top-level) | AXIOM triage | ✅ |
+| Apple property list extraktor (`bplist00` i XML, plistlib) | AXIOM Apple artifacts | ✅ |
+| Datová pole plists → timeline artifacty s cestou klíče | AXIOM date extraction | ✅ |
+| Signatura `registry_hive` (regf) + `plist` (binární i XML) | FTK / X-Ways type detection | ✅ |
+
+> Dispatch je čistá mapa `signatura → extraktor` (`pipeline.ARTIFACT_EXTRACTORS`) — nový typ = nový řádek.
+> Čisté matchery testujeme nad fake objekty bez IO; IO wrappery jsou defenzivní (poškozený soubor → `[]`, ne výjimka).
+
 ## Rychlý start
 
 ```bash
@@ -52,14 +68,14 @@ export STOPA_DB_DIR=~/stopa_cases   # kde se ukládají case DB (default: ./case
 .venv/bin/stopa add <case_id> /cesta/ke/dukazum --profile forensic --hash-set bad.txt
 .venv/bin/stopa files <case_id> [--bad-ext | --dups | --family image]
 .venv/bin/stopa search <case_id> "dotaz" [--source ID]   # full-text (FTS5)
-.venv/bin/stopa timeline <case_id> [--type browser_history] [--path text] [-v]
+.venv/bin/stopa timeline <case_id> [--type browser_history|registry_persistence] [--path text] [-v]
 .venv/bin/stopa stats <case_id>
 ```
 
 ## Testy & lint
 
 ```bash
-.venv/bin/pytest -q        # 119 testů, plně offline (syntetické magic bytes + SQLite DB + FTS5)
+.venv/bin/pytest -q        # 148 testů, plně offline (syntetické magic bytes + SQLite DB + FTS5 + registry/plist)
 .venv/bin/ruff check src tests
 ```
 
@@ -76,7 +92,9 @@ src/stopa/
 │   ├── profiles.py        # FTK-style processing profily
 │   └── times.py           # forenzní časové konverze (unix/FILETIME/chrome µs + detekce)
 ├── artifacts/       # AXIOM-style artifact extraktoři (IO jen v entrypointech)
-│   └── sqlite_extract.py  # Chrome/Edge/Firefox history + triage neznámých DB
+│   ├── sqlite_extract.py    # Chrome/Edge/Firefox history + triage neznámých DB
+│   ├── registry_extract.py  # Windows registry hives (regf, regipy): Run/MountedDevices/User
+│   └── plist_extract.py     # Apple property lists (binární i XML, plistlib) + date artifacty
 ├── data/              # IO vrstva
 │   ├── db.py                # SQLite case DB (cases/sources/files/artifacts + FTS5 search, idempotentní upserty)
 │   └── ingest.py            # walk zdroje → WalkedFile záznamy
@@ -88,7 +106,8 @@ src/stopa/
 
 - **FÁZE 2**: Web GUI (FastAPI + React/htmx) — case přehled, file browser s filtry, progress
 - **FÁZE 3**: ✅ Full-text search (SQLite FTS5) — `stopa search`, backfill starých DB
-- **FÁZE 4a**: ✅ SQLite extraktoři + timeline; dále: registry hives, plist, chaty podle `docs/re-axiom/`
+- **FÁZE 4a**: ✅ SQLite extraktoři + timeline CLI
+- **FÁZE 4b**: ✅ Registry hives (regf/regipy: Run/MountedDevices/User/Environment) + Apple plists (binární i XML, date artifacty); dispatch `signatura → extraktor`
 - **FÁZE 5**: Disk images (E01/RAW, file systems přes The Sleuth Kit / apfs) + carving
 - **FÁZE 6**: Mobilní extrakce (UFED-style: physical/file system/logical, FDE/FBE unlock)
 - **FÁZE 7**: Reporty (HTML/PDF court-ready, chain of custody — Belkasoft/FTK style)

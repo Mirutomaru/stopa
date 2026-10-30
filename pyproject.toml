@@ -9,6 +9,7 @@ description = "STOPA — unifikovaná forenzní workbench (AXIOM + UFED/Inseyets
 requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.5",
+    "regipy>=6",  # Windows registry hive parser (FÁZE 4b)
 ]
 
 [project.optional-dependencies]

@@ -15,6 +15,8 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from stopa.artifacts.plist_extract import extract_plist_artifacts
+from stopa.artifacts.registry_extract import extract_registry_artifacts
 from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
 from stopa.data.db import CaseDB
 from stopa.data.ingest import walk_source
@@ -28,6 +30,14 @@ from stopa.models import FileRecord, ProcessResult
 log = logging.getLogger("stopa.pipeline")
 
 SIGNATURE_HEAD_BYTES = 65536  # stačí pro všechny signatury v hlavičce
+
+
+# signatura → extraktor (AXIOM-style artifact engine). Nový typ = nový řádek.
+ARTIFACT_EXTRACTORS: dict[str, Callable[[Path], list]] = {
+    "sqlite": extract_sqlite_artifacts,
+    "registry_hive": extract_registry_artifacts,
+    "plist": extract_plist_artifacts,
+}
 
 
 def _read_head(path: Path) -> bytes:
@@ -152,9 +162,9 @@ def process_source(
 
         db.upsert_file(rec)  # nejdřív soubor — FK pro artifacts níže
 
-        # ── artifact extraktoři (AXIOM-style) ────────────────
-        if profile.extract_artifacts and rec.signature_type == "sqlite":
-            arts = extract_sqlite_artifacts(abs_path)
+        # ── artifact extraktoři (AXIOM-style) — signatura → extraktor ──
+        if profile.extract_artifacts and rec.signature_type in ARTIFACT_EXTRACTORS:
+            arts = ARTIFACT_EXTRACTORS[rec.signature_type](abs_path)
             for a in arts:
                 a.source_id = source_id
                 a.file_id = rec.id
