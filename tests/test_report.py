@@ -95,6 +95,18 @@ class TestBuildHtml:
         html_doc = build_html(data)
         assert "2026-10-30 14:00:00 UTC" in html_doc
 
+    def test_footer_no_unrendered_format(self):
+        """Patička — žádný nevyhodnocený f-string placeholder (regrese)."""
+        data = ReportData(
+            case_id="case-foot",
+            case_name="Foot",
+            examiner=None,
+            created_at=TS,
+        )
+        html_doc = build_html(data)
+        assert "{_esc" not in html_doc  # nevyhodnocený placeholder by byl vidět v reportu
+        assert "case-foot" in html_doc.split("STOPA report — případ")[-1]
+
 
 # ── IO wrapper — reálná case DB ────────────────────────────────
 

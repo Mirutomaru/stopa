@@ -9,6 +9,7 @@ Použití:
   stopa image <case_id> /cesta/ke/obrazu.img [--no-carve]   # disk image (TSK)
   stopa stats <case_id>
   stopa report <case_id> [--format html|pdf] [--out DIR]    # court-ready report + chain of custody
+  stopa serve [--port 8473]                                 # web GUI (FastAPI)
   stopa profiles
 
 DB: cases/<case_id>.db (přesaditelné přes STOPA_DB_DIR).
@@ -263,6 +264,22 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Web GUI (FÁZE web) — FastAPI nad analyze(), uvicorn server."""
+    try:
+        import uvicorn
+    except ImportError:
+        print("Chybí uvicorn — nainstalujte: pip install 'uvicorn[standard]'", file=sys.stderr)
+        return 2
+
+    from stopa.web.app import create_app
+
+    app = create_app()
+    print(f"STOPA web GUI → http://127.0.0.1:{args.port} (Ctrl+C pro ukončení)")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stopa", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -336,6 +353,11 @@ def build_parser() -> argparse.ArgumentParser:
     rep_p.add_argument("--out", metavar="DIR",
                        help="výstupní složka (default: reports/ vedle case DB)")
     rep_p.set_defaults(func=cmd_report)
+
+    srv_p = sub.add_parser("serve", help="web GUI (FastAPI nad analyze())")
+    srv_p.add_argument("--host", default="127.0.0.1")
+    srv_p.add_argument("--port", type=int, default=8473)
+    srv_p.set_defaults(func=cmd_serve)
 
     return parser
 

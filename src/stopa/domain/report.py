@@ -241,7 +241,7 @@ def build_html(data: ReportData) -> str:
     # ── patička ────────────────────────────────────────────────
     parts.append(
         f"<p class='small' style='margin-top:2em;border-top:1px solid #999;"
-        "padding-top:6px'>STOPA report — případ <b>{_esc(data.case_id)}</b>, "
+        f"padding-top:6px'>STOPA report — případ <b>{_esc(data.case_id)}</b>, "
         f"vygenerován {_fmt_dt(generated)}. Hash manifest slouží jako důkaz integrity "
         "(SHA-256); re-ingest je idempotentní podle (source, rel_path).</p>"
     )

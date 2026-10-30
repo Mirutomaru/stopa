@@ -120,6 +120,24 @@ class CaseDB:
         )
         self.conn.commit()
 
+    def list_cases(self) -> list[Case]:
+        """Všechny případy v case DB (pro web GUI přehled)."""
+        rows = self.conn.execute("SELECT * FROM cases ORDER BY created_at DESC").fetchall()
+        out: list[Case] = []
+        for r in rows:
+            c = Case(
+                id=r["id"], name=r["name"], examiner=r["examiner"], notes=r["notes"]
+            )
+            if r["created_at"]:
+                from datetime import datetime
+
+                try:
+                    c.created_at = datetime.fromisoformat(r["created_at"])
+                except ValueError:
+                    pass
+            out.append(c)
+        return out
+
     def get_case(self, case_id: str) -> Case | None:
         row = self.conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
         if row is None:

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STOPA — forenzní workbench</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">◉</span> STOPA <small>unifikovaná forenzní workbench</small></div>
+  <nav id="tabs">
+    <button data-tab="cases" class="active">Případy</button>
+    <button data-tab="files">Soubory</button>
+    <button data-tab="search">Hledání</button>
+    <button data-tab="timeline">Timeline</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ── PŘÍPADOVÉ PANELY ─────────────────────────────── -->
+  <section id="tab-cases" class="panel active">
+    <div class="toolbar">
+      <h2>Případy</h2>
+      <button id="btn-new-case" class="primary">+ Nový případ</button>
+    </div>
+
+    <div id="case-form" class="card hidden">
+      <label>Název <input id="cf-name" placeholder="např. Karel Novák — notebook"></label>
+      <label>Znalec <input id="cf-examiner" placeholder="Mgr. Miroslav Matúš DiS"></label>
+      <div class="row">
+        <button id="cf-save" class="primary">Vytvořit</button>
+        <button id="cf-cancel">Zrušit</button>
+      </div>
+    </div>
+
+    <table id="cases-table">
+      <thead><tr><th>Název</th><th>Znalec</th><th>Soubory</th><th>Velikost</th><th>Bad-ext</th><th>Duplikáty</th><th>Artifacty</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="case-detail" class="card hidden">
+      <h3 id="cd-title"></h3>
+      <p id="cd-meta" class="muted"></p>
+      <div class="toolbar">
+        <label>Zdroj (složka/soubor) <input id="src-path" placeholder="/cesta/ke/dukazum"></label>
+        <select id="src-profile"><option value="forensic">forensic</option><option value="ediscovery">ediscovery</option><option value="quick">quick</option></select>
+        <button id="btn-add-source" class="primary">Zpracovat zdroj</button>
+      </div>
+      <pre id="src-result" class="muted hidden"></pre>
+    </div>
+  </section>
+
+  <!-- ── SOUBORY ─────────────────────────────────────── -->
+  <section id="tab-files" class="panel">
+    <div class="toolbar">
+      <h2>Soubory</h2>
+      <select id="f-case"></select>
+      <label><input type="checkbox" id="f-badext"> bad-ext</label>
+      <label><input type="checkbox" id="f-dups"> duplikáty</label>
+      <button id="btn-files" class="primary">Filtrovat</button>
+    </div>
+    <table id="files-table">
+      <thead><tr><th>Soubor</th><th>Velikost</th><th>Signatura</th><th>SHA-256</th><th>Flagy</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- ── HLEDÁNÍ ─────────────────────────────────────── -->
+  <section id="tab-search" class="panel">
+    <div class="toolbar">
+      <h2>Hledání (FTS5)</h2>
+      <select id="s-case"></select>
+      <input id="s-q" placeholder='fráze, prefix*, AND/OR/NOT — např. "dokumentace.pdf" OR pdf'>
+      <button id="btn-search" class="primary">Hledat</button>
+    </div>
+    <table id="search-table">
+      <thead><tr><th>Soubor</th><th>Velikost</th><th>Signatura</th><th>SHA-256</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- ── TIMELINE ────────────────────────────────────── -->
+  <section id="tab-timeline" class="panel">
+    <div class="toolbar">
+      <h2>Timeline</h2>
+      <select id="t-case"></select>
+      <input id="t-type" placeholder="typ (volitelné, např. browser_history)">
+      <button id="btn-timeline" class="primary">Zobrazit</button>
+    </div>
+    <table id="timeline-table">
+      <thead><tr><th>Čas (UTC)</th><th>Typ</th><th>Název</th><th>Soubor</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- ── REPORT ──────────────────────────────────────── -->
+  <div id="report-bar" class="toolbar hidden">
+    <span>Případ: <b id="rb-case"></b></span>
+    <button id="btn-report-html" class="primary">⬇ HTML report</button>
+    <button id="btn-report-pdf">⬇ PDF report</button>
+  </div>
+</main>
+
+<div id="toast" class="hidden"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
