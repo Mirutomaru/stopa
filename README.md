@@ -69,6 +69,23 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 
 > Chaty jsou SQLite → režírováno stejným dispatchem `signatura → extraktor`; schémata se detekují podle tabulek/sloupců (AXIOM-style), ne podle názvu souboru.
 
+## Co umí (FÁZE 5 — disk images: file systems + carving, hotovo)
+
+| Funkce | Z jakého nástroje | Stav |
+|---|---|---|
+| Detekce typu obrazu (E01/AFF4/RAW-DD + podkladový FS: NTFS/FAT/ext/HFS+/MBR) | X-Ways image type detection | ✅ |
+| Partice tabulka přes TSK `mmls` (offset, typ, velikost) | X-Ways / FTK partition table | ✅ |
+| Seznam souborů z file systemu (TSK `fls -r -l -p`, včetně smazaných) | X-Ways file listing | ✅ |
+| Extrakce obsahu souboru (TSK `icat`) | X-Ways / FTK extract | ✅ |
+| Volné bloky pro carving (TSK `blkls`) | X-Ways unallocated space | ✅ |
+| Carving engine — magic bytes v bufferu + odhady velikosti (PNG/JPEG/PDF) | X-Ways / FTK carving (foremost-style) | ✅ |
+| Soubory z obrazu → case DB (`files` tabulka, signatury, idempotentní upsert) | AXIOM evidence model | ✅ |
+| `disk_image` artifact s přehledem (partice + počty) do timeline | AXIOM image artifact | ✅ |
+| CLI `stopa image <case_id> <obraz>` [--no-carve] | — | ✅ |
+
+> The Sleuth Kit 4.12 se staví ze zdroje do `~/tsk-install` (bez sudo); cesta se nastavuje přes `STOPA_TSK_BIN`.
+> Čisté moduly (`domain/image_types.py`, `domain/carving.py`) běží bez TSK — IO vrstva je defenzivní (`TskError`).
+
 ## Rychlý start
 
 ```bash
@@ -81,13 +98,14 @@ export STOPA_DB_DIR=~/stopa_cases   # kde se ukládají case DB (default: ./case
 .venv/bin/stopa files <case_id> [--bad-ext | --dups | --family image]
 .venv/bin/stopa search <case_id> "dotaz" [--source ID]   # full-text (FTS5)
 .venv/bin/stopa timeline <case_id> [--type browser_history|imessage|sms_message|call_log] [--path text] [-v]
+.venv/bin/stopa image <case_id> /cesta/ke/obrazu.img [--no-carve]   # disk image (TSK)
 .venv/bin/stopa stats <case_id>
 ```
 
 ## Testy & lint
 
 ```bash
-.venv/bin/pytest -q        # 159 testů, plně offline (syntetické magic bytes + SQLite DB + FTS5 + registry/plist + messaging)
+.venv/bin/pytest -q        # 200 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving)
 .venv/bin/ruff check src tests
 ```
 
@@ -102,16 +120,20 @@ src/stopa/
 │   ├── dedupe.py          # FTK Advanced De-duplication (+ inkrementální Deduper)
 │   ├── hashing.py         # chunked multi-hash v jednom read loopu
 │   ├── profiles.py        # FTK-style processing profily
-│   └── times.py           # forenzní časové konverze (unix/FILETIME/chrome µs/apple CFAbsoluteTime + detekce)
+│   ├── times.py           # forenzní časové konverze (unix/FILETIME/chrome µs/apple CFAbsoluteTime + detekce)
+│   ├── image_types.py     # detekce typu disk obrazu (E01/AFF4/RAW-DD + podkladový FS: NTFS/FAT/ext/HFS+/MBR)
+│   └── carving.py         # carving engine — magic bytes v bufferu + odhady velikosti (PNG/JPEG/PDF)
 ├── artifacts/       # AXIOM-style artifact extraktoři (IO jen v entrypointech)
 │   ├── sqlite_extract.py    # browser history (Chrome/Firefox) + messaging (iMessage/SMS/call logy) + triage DB
 │   ├── registry_extract.py  # Windows registry hives (regf, regipy): Run/MountedDevices/User
 │   └── plist_extract.py     # Apple property lists (binární i XML, plistlib) + date artifacty
 ├── data/              # IO vrstva
 │   ├── db.py                # SQLite case DB (cases/sources/files/artifacts + FTS5 search, idempotentní upserty)
-│   └── ingest.py            # walk zdroje → WalkedFile záznamy
+│   ├── ingest.py            # walk zdroje → WalkedFile záznamy
+│   ├── tsk.py               # The Sleuth Kit CLI wrapper (mmls/fls/icat/blkls/img_stat), STOPA_TSK_BIN
+│   └── image_pipeline.py    # disk image pipeline: detekce → partice → soubory → case DB + carving
 ├── pipeline.py        # jediný analyze() entrypoint sdílený CLI i budoucím web GUI
-└── cli.py             # argparse subpříkazy (case/add/files/search/timeline/stats/profiles)
+└── cli.py             # argparse subpříkazy (case/add/files/search/timeline/image/stats/profiles)
 ```
 
 ## Plán — zbývající fáze
@@ -121,6 +143,6 @@ src/stopa/
 - **FÁZE 4a**: ✅ SQLite extraktoři + timeline CLI
 - **FÁZE 4b**: ✅ Registry hives (regf/regipy: Run/MountedDevices/User/Environment) + Apple plists (binární i XML, date artifacty); dispatch `signatura → extraktor`
 - **FÁZE 4c**: ✅ Messaging — Apple iMessage (`chat.db`, CFAbsoluteTime), Android SMS/MMS (`mmssms.db`), call logy (`calls`)
-- **FÁZE 5**: Disk images (E01/RAW, file systems přes The Sleuth Kit / apfs) + carving
+- **FÁZE 5**: ✅ Disk images — detekce typu (E01/AFF4/RAW-DD + FS), partice (TSK mmls), soubory (fls/icat), carving engine, CLI `stopa image`; TSK 4.12 ze zdroje do `~/tsk-install`
 - **FÁZE 6**: Mobilní extrakce (UFED-style: physical/file system/logical, FDE/FBE unlock)
 - **FÁZE 7**: Reporty (HTML/PDF court-ready, chain of custody — Belkasoft/FTK style)

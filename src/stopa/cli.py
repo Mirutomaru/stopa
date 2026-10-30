@@ -6,6 +6,7 @@ Použití:
   stopa files <case_id> [--bad-ext] [--dups] [--family image] [--limit 50]
   stopa search <case_id> "dotaz" [--source ID]   # full-text (FTS5)
   stopa timeline <case_id> [--type browser_history] [--path text] [-v]
+  stopa image <case_id> /cesta/ke/obrazu.img [--no-carve]   # disk image (TSK)
   stopa stats <case_id>
   stopa profiles
 
@@ -193,6 +194,38 @@ def cmd_timeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_image(args: argparse.Namespace) -> int:
+    """Disk image processing (FÁZE 5) — TSK file systems + carving."""
+    from stopa.data.image_pipeline import process_disk_image
+    from stopa.domain.profiles import get_profile
+
+    db = _open_db(args.case_id)
+    profile = get_profile(args.profile)
+    img_path = Path(args.path).expanduser()
+    if not img_path.exists():
+        print(f"Obraz neexistuje: {img_path}", file=sys.stderr)
+        return 2
+
+    source = EvidenceSource(case_id=args.case_id, kind="file", path=str(img_path))
+    db.add_source(source)
+    summary = process_disk_image(
+        db, source.id, img_path, profile, carve_free=not args.no_carve
+    )
+    print(f"Disk image: {summary.image_type or 'neznámý'} — {summary.description or '?'}")
+    for p in summary.partitions:
+        print(f"  partice #{p.index}: {p.fstype} @ sektor {p.offset_sectors}")
+    print(
+        f"  soubory: {summary.files_total}, bajty: {summary.bytes_total / 1e6:.2f} MB, "
+        f"signatury: {summary.signatures_detected}"
+    )
+    if summary.carved_candidates:
+        print(f"  carving kandidáti (nealokovaný prostor): {summary.carved_candidates}")
+    for err in summary.errors[:5]:
+        print(f"  ! {err}", file=sys.stderr)
+    db.close()
+    return 0
+
+
 def cmd_profiles(_args: argparse.Namespace) -> int:
     print("Dostupné processing profily:")
     for name, p in sorted(PROFILES.items()):
@@ -257,6 +290,15 @@ def build_parser() -> argparse.ArgumentParser:
     tl_p.add_argument("--limit", type=int, default=100)
     tl_p.add_argument("-v", "--verbose", action="store_true", help="zobrazit i zdrojové cesty")
     tl_p.set_defaults(func=cmd_timeline)
+
+    img_p = sub.add_parser("image", help="disk image (RAW/E01) — TSK file systems + carving")
+    img_p.add_argument("case_id")
+    img_p.add_argument("path", help="cesta k diskovému obrazu (.img/.dd/.raw/.e01)")
+    img_p.add_argument("--profile", default="forensic", choices=sorted(PROFILES),
+                       help="processing profil (default: forensic)")
+    img_p.add_argument("--no-carve", action="store_true",
+                       help="přeskočit carving nealokovaného prostoru")
+    img_p.set_defaults(func=cmd_image)
 
     prof_p = sub.add_parser("profiles", help="seznam processing profilů")
     prof_p.set_defaults(func=cmd_profiles)

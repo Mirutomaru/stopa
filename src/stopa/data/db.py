@@ -303,6 +303,35 @@ class CaseDB:
         return {k: int(row[k] or 0) for k in ("files", "bytes", "bad_ext", "dups", "signed")}
 
     # ── artifacts (AXIOM-style) ──────────────────────────────
+    def upsert_artifact(self, art: Artifact) -> None:
+        """Idempotentní upsert artifactu podle (source_id, artifact_type, rel_path).
+
+        Pro artefakty bez file_id (např. disk_image přehled obrazu) — re-ingest
+        stejného zdroje nahradí starý záznam místo duplikace.
+        """
+        if art.source_id is None:
+            raise ValueError(f"Artifact {art.id} nemá source_id")
+        self.conn.execute(
+            "DELETE FROM artifacts WHERE source_id = ? AND artifact_type = ? AND rel_path IS ?",
+            (art.source_id, art.artifact_type, art.rel_path),
+        )
+        self.conn.execute(
+            "INSERT INTO artifacts (id, source_id, file_id, rel_path,"
+            " artifact_type, timestamp, title, details_json)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                art.id,
+                art.source_id,
+                art.file_id,
+                art.rel_path,
+                art.artifact_type,
+                _iso(art.timestamp),
+                art.title,
+                json.dumps(art.details, ensure_ascii=False),
+            ),
+        )
+        self.conn.commit()
+
     def replace_artifacts_for_file(self, file_id: str, arts: list[Artifact]) -> int:
         """Idempotentní výměna artifactů jednoho souboru (re-ingest → čisté data)."""
         self.conn.execute("DELETE FROM artifacts WHERE file_id = ?", (file_id,))
