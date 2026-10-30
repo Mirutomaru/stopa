@@ -1,6 +1,6 @@
 # STOPA — plán vylepšení (2026-10-30)
 
-**Status:** `main @ e048f4b` · 315 testů zelených · ruff clean
+**Status:** `main @ 6614d91` · 315 testů zelených · ruff clean
 **Zdroj zadání:** detailní spec uživatele + vizuál `image_2.png` (Apple-style GUI)
 **Cíl:** technologická špička — neporazitelný produkt
 
@@ -12,13 +12,14 @@
 
 ## A. Architektura a kód (refactoring & závislosti)
 
-### A1. Rozbití `domain/sqlite_recover.py` (~515 řádků, největší modul)
-Rozdělit na logické celky:
-- **`sqlite_parser.py`** — čtení binárních stránek, b-tree struktur, freelistu
-- **`sqlite_carver.py`** — hledání smazaných SQLite stránek mimo soubory (raw scan)
-- **`sqlite_formatter.py`** — převod a mapování na pydantic modely / case DB
+### A1. Rozbití `domain/sqlite_recover.py` (~515 řádků, největší modul) ✅ (`6614d91`)
+Rozděleno na logické celky:
+- **`sqlite_parser.py`** — čtení binárních stránek, b-tree struktur, freelistu (header, varint, record decoding, WAL frames)
+- **`sqlite_carver.py`** — obnova smazaných řádků (freeblock scan, freelist/unallocated stránky, WAL recovery)
+- **`sqlite_formatter.py`** — převod `RecoveredRow` na Pydantic modely / Artifacty
 
-Požadavek: stávající 13 domain + 8 IO testů zůstane zelených; testy se přesunou k novým modulům.
+`sqlite_recover.py` je teď tenký re-export shim zachovávající původní public API.
+Všechny 13 domain + 8 IO testů zůstalo zelených bez změny importů.
 
 ### A2. Izolace externích TSK binárek (Sleuthkit)
 Aktuálně: `~/tsk-install/bin/`, flag `TSK_AVAILABLE` v `data/tsk.py`.
@@ -94,8 +95,8 @@ Aktuálně: `~/tsk-install/bin/`, flag `TSK_AVAILABLE` v `data/tsk.py`.
 | # | Položka | Stav |
 |---|---------|------|
 | 1 | **B1 ZIP/OOXML/RAR carving** | ✅ `e048f4b` |
-| 2 | **D Apple GUI + C1 Store + C2 pagination** | ✅ tento commit |
-| 3 | **A1 rozbití sqlite_recover.py** | ⏳ refactoring při zelených testech (nízké riziko) |
+| 2 | **D Apple GUI + C1 Store + C2 pagination** | ✅ `dcd139d` |
+| 3 | **A1 rozbití sqlite_recover.py** | ✅ `6614d91` (parser/carver/formatter + shim) |
 | 4 | **CoC audit v reportu** | ⏳ rychlá verifikace — report už má sekci Chain of Custody (FÁZE 7), audit ji doplní/ověří |
 | 5 | **A2 pytsk3 / Docker TSK** | ⏳ onboarding, neblokující |
 | 6 | **B2 LUKS + Android FBE** | ⏳ produkční FDE, největší rozsah |
