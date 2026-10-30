@@ -1,12 +1,14 @@
 # STOPA — plán vylepšení (2026-10-30)
 
-**Status:** `main @ 6614d91` · 315 testů zelených · ruff clean
+**Status:** `main @ 27d242e` · 318 testů zelených · ruff clean
 **Zdroj zadání:** detailní spec uživatele + vizuál `image_2.png` (Apple-style GUI)
 **Cíl:** technologická špička — neporazitelný produkt
 
 ## Hotové ✅
 - **B1 ZIP/OOXML/RAR carving** (`e048f4b`) — EOCD validace + RAR4/5 block walking, 13 testů
-- **D Apple-style GUI + C1 Store + C2 pagination** (tento commit) — viz níže
+- **D Apple-style GUI + C1 Store + C2 pagination** (`dcd139d`) — viz níže
+- **A1 rozbití sqlite_recover.py** (`6614d91`) — parser/carver/formatter + shim
+- **CoC audit v reportu** (`27d242e`) — MD5 + zdroj v hash manifestu, verze nástroje v hlavičce
 
 ---
 
@@ -40,6 +42,13 @@ Aktuálně: `~/tsk-install/bin/`, flag `TSK_AVAILABLE` v `data/tsk.py`.
 - `STOPAFDE` = proprietární testovací/cvičný formát → **ponechat**.
 - Přidat: **LUKS/dm-crypt** + **Android FDE/FBE** (File-Based Encryption, AES-XTS / hardware-backed klíče).
 - Možnost importovat extrahovaný klíč/passphrase.
+
+### B3. CoC audit v reportu ✅ (`27d242e`)
+Audit Chain of Custody odhalil 3 mezery — všechny doplněny:
+1. **MD5 chyběl v manifestu** — `compute_md5=True` se sbíral, ale tiskl se jen SHA-256 → manifest má teď sloupec MD5 (dual-hash = silnější důkaz integrity).
+2. **Manifest neuváděl zdroj** — při více evidence sources nelze rozlišit původ souboru → nový sloupec „Zdroj" (cesta evidence boxu, `CustodyItem.source_id` → `EvidenceSource.path`).
+3. **Chyběla verze nástroje** — court-ready report musí být reprodukovatelný → hlavička uvádí `STOPA v0.1.0`.
+- +3 regresní testy (`test_hash_manifest_contains_md5`, `test_hash_manifest_shows_source`, `test_tool_version_in_header`).
 
 ---
 
@@ -97,7 +106,7 @@ Aktuálně: `~/tsk-install/bin/`, flag `TSK_AVAILABLE` v `data/tsk.py`.
 | 1 | **B1 ZIP/OOXML/RAR carving** | ✅ `e048f4b` |
 | 2 | **D Apple GUI + C1 Store + C2 pagination** | ✅ `dcd139d` |
 | 3 | **A1 rozbití sqlite_recover.py** | ✅ `6614d91` (parser/carver/formatter + shim) |
-| 4 | **CoC audit v reportu** | ⏳ rychlá verifikace — report už má sekci Chain of Custody (FÁZE 7), audit ji doplní/ověří |
+| 4 | **CoC audit v reportu** | ✅ `27d242e` (MD5 + zdroj v manifestu, verze nástroje) |
 | 5 | **A2 pytsk3 / Docker TSK** | ⏳ onboarding, neblokující |
 | 6 | **B2 LUKS + Android FBE** | ⏳ produkční FDE, největší rozsah |
 
@@ -110,4 +119,4 @@ Aktuálně: `~/tsk-install/bin/`, flag `TSK_AVAILABLE` v `data/tsk.py`.
 - Pagination: `list_files(offset)` + `/files?offset=` a `/timeline?offset=`; nový endpoint `/families` (DISTINCT signatury pro filtr).
 - Frontend: modulární vanilla JS — `app.js` (tenký orchestrátor) + `js/state.js` (Store) + `js/api.js` + `js/components/{sidebar,files,inspector,search,modules}.js`.
 - TSK binárky: `~/tsk-install/bin/`, `TSK_AVAILABLE` flag v `data/tsk.py`.
-- Testy: 315 (z toho 29 web), ruff clean.
+- Testy: 318 (z toho 29 web), ruff clean.
