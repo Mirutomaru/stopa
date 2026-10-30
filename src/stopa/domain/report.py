@@ -5,7 +5,7 @@
 
 Obsah reportu (Belkasoft/FTK style):
 - hlavička případu (název, ID, znalec, datum vytvoření, generování)
-- **chain of custody** — evidence items: zdroj + každý soubor s SHA-256
+- **chain of custody** — evidence items: zdroj + každý soubor s SHA-256/MD5
   (hash manifest = důkaz integrity; re-ingest je idempotentní podle rel_path)
 - processing summary (soubory, bajty, signatury, bad-ext, duplikáty, hash sets)
 - přehled artifactů podle typu
@@ -105,6 +105,8 @@ def _fmt_bytes(n: float) -> str:
 
 def build_html(data: ReportData) -> str:
     """Vygeneruje celý HTML dokument reportu (inline CSS, print-friendly)."""
+    from stopa import __version__  # lazy — verze nástroje pro court-ready hlavičku
+
     generated = data.generated_at or datetime.now()
     from datetime import timezone
 
@@ -144,7 +146,7 @@ def build_html(data: ReportData) -> str:
         ("Datum vytvoření případu", _fmt_dt(data.created_at)),
         ("Poznámky", data.notes or "—"),
         ("Report vygenerován", _fmt_dt(generated)),
-        ("Nástroj", "STOPA (unifikovaná forenzní workbench)"),
+        ("Nástroj", f"STOPA v{__version__} (unifikovaná forenzní workbench)"),
     ]
     for k, v in rows:
         parts.append(f"<tr><td>{_esc(k)}</td><td>{_esc(v)}</td></tr>")
@@ -252,16 +254,20 @@ def build_html(data: ReportData) -> str:
         parts.append("<p class='small'>Žádné ručně označené soubory.</p>")
 
     # ── hash manifest (důkaz integrity) ────────────────────────
-    parts.append("<h2>6. Hash manifest — SHA-256</h2>")
+    parts.append("<h2>6. Hash manifest — SHA-256 / MD5</h2>")
     if data.custody_items:
+        src_path = {s.id: s.path for s in data.sources}  # zdrojová úroveň CoC
         parts.append(
-            "<table><tr><th>Soubor</th><th>Velikost</th><th>SHA-256</th></tr>"
+            "<table><tr><th>Zdroj</th><th>Soubor</th><th>Velikost</th>"
+            "<th>SHA-256</th><th>MD5</th></tr>"
         )
         for c in data.custody_items[:5000]:  # limit — manifest může být velký
             sha = f"<td class='mono'>{_esc(c.sha256)}</td>" if c.sha256 else "<td>—</td>"
+            md5 = f"<td class='mono'>{_esc(c.md5)}</td>" if c.md5 else "<td>—</td>"
             parts.append(
-                f"<tr><td class='mono'>{_esc(c.rel_path)}</td>"
-                f"<td>{c.size_bytes:,}</td>{sha}</tr>"
+                f"<tr><td class='mono'>{_esc(src_path.get(c.source_id, c.source_id))}</td>"
+                f"<td class='mono'>{_esc(c.rel_path)}</td>"
+                f"<td>{c.size_bytes:,}</td>{sha}{md5}</tr>"
             )
         parts.append("</table>")
         if len(data.custody_items) > 5000:
@@ -277,7 +283,7 @@ def build_html(data: ReportData) -> str:
         f"<p class='small' style='margin-top:2em;border-top:1px solid #999;"
         f"padding-top:6px'>STOPA report — případ <b>{_esc(data.case_id)}</b>, "
         f"vygenerován {_fmt_dt(generated)}. Hash manifest slouží jako důkaz integrity "
-        "(SHA-256); re-ingest je idempotentní podle (source, rel_path).</p>"
+        "(SHA-256 + MD5); re-ingest je idempotentní podle (source, rel_path).</p>"
     )
     parts.append("</body></html>")
     return "\n".join(parts)

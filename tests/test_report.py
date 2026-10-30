@@ -34,7 +34,10 @@ def sample_data() -> ReportData:
         totals={"files": 2, "bytes": 3072, "bad_ext": 1, "dups": 1, "signed": 1},
         artifact_counts={"browser_history": 4, "sms_message": 2},
         custody_items=(
-            CustodyItem(source_id="src-1", rel_path="a.txt", size_bytes=1024, sha256="ab" * 32),
+            CustodyItem(
+                source_id="src-1", rel_path="a.txt", size_bytes=1024,
+                sha256="ab" * 32, md5="cd" * 16,
+            ),
             CustodyItem(source_id="src-1", rel_path="b.bin", size_bytes=2048, sha256=None),
         ),
         flagged_files=(
@@ -61,6 +64,24 @@ class TestBuildHtml:
         assert "ab" * 32 in html_doc
         # soubor bez hashu → pomlčka
         assert "b.bin" in html_doc
+
+    def test_hash_manifest_contains_md5(self, sample_data):
+        """CoC audit — MD5 se sbírá (compute_md5=True), musí být i v manifestu."""
+        html_doc = build_html(sample_data)
+        assert "MD5" in html_doc  # hlavička sloupce
+        assert "cd" * 16 in html_doc  # hodnota MD5
+
+    def test_hash_manifest_shows_source(self, sample_data):
+        """CoC audit — manifest uvádí zdroj (zdrojová úroveň chain of custody)."""
+        html_doc = build_html(sample_data)
+        assert "/evidence/phone" in html_doc  # cesta zdroje v manifestu
+
+    def test_tool_version_in_header(self, sample_data):
+        """CoC audit — court-ready report uvádí verzi nástroje (reprodukovatelnost)."""
+        from stopa import __version__
+
+        html_doc = build_html(sample_data)
+        assert f"STOPA v{__version__}" in html_doc
 
     def test_flagged_files_section(self, sample_data):
         html_doc = build_html(sample_data)
