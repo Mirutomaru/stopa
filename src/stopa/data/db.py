@@ -267,6 +267,7 @@ class CaseDB:
         duplicates_only: bool = False,
         signature_family: str | None = None,
         limit: int | None = None,
+        offset: int | None = None,
     ) -> list[FileRecord]:
         q = "SELECT * FROM files"
         where: list[str] = []
@@ -292,6 +293,8 @@ class CaseDB:
         q += " ORDER BY rel_path"
         if limit is not None:
             q += f" LIMIT {int(limit)}"
+        if offset:
+            q += f" OFFSET {int(offset)}"
         rows = self.conn.execute(q, args).fetchall()
         return [_row_to_record(r) for r in rows]
 
@@ -441,6 +444,7 @@ class CaseDB:
         artifact_type: str | None = None,
         rel_path_like: str | None = None,
         limit: int | None = None,
+        offset: int | None = None,
     ) -> list[Artifact]:
         """Timeline dotaz — chronologicky (None timestamps na konec)."""
         q = "SELECT * FROM artifacts"
@@ -460,6 +464,8 @@ class CaseDB:
         q += " ORDER BY (timestamp IS NULL), timestamp, id"
         if limit is not None:
             q += f" LIMIT {int(limit)}"
+        if offset:
+            q += f" OFFSET {int(offset)}"
         rows = self.conn.execute(q, args).fetchall()
         return [_row_to_artifact(r) for r in rows]
 

@@ -158,6 +158,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         family: str | None = None,
         source: str | None = None,
         limit: int = 500,
+        offset: int = 0,
     ) -> list[dict]:
         db = open_db(case_id)
         try:
@@ -167,8 +168,23 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 duplicates_only=dups,
                 signature_family=family,
                 limit=limit,
+                offset=offset,
             )
             return [r.model_dump(mode="json") for r in recs]
+        finally:
+            db.close()
+
+    @app.get("/api/cases/{case_id}/families")
+    def families(case_id: str) -> list[str]:
+        """DISTINCT detekované signatury — pro filtr v File System gridu."""
+        db = open_db(case_id)
+        try:
+            rows = db.conn.execute(
+                "SELECT DISTINCT signature_type FROM files"
+                " WHERE signature_type IS NOT NULL AND signature_type != ''"
+                " ORDER BY 1"
+            ).fetchall()
+            return [r[0] for r in rows]
         finally:
             db.close()
 
@@ -185,11 +201,11 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
 
     @app.get("/api/cases/{case_id}/timeline")
     def timeline(
-        case_id: str, type: str | None = None, limit: int = 500
+        case_id: str, type: str | None = None, limit: int = 500, offset: int = 0
     ) -> list[dict]:
         db = open_db(case_id)
         try:
-            arts = db.list_artifacts(artifact_type=type, limit=limit)
+            arts = db.list_artifacts(artifact_type=type, limit=limit, offset=offset)
             return [a.model_dump(mode="json") for a in arts]
         finally:
             db.close()

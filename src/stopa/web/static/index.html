@@ -8,13 +8,20 @@
 </head>
 <body>
 
-<!-- ══════════ LEVÁ NAVIGACE (moduly) ══════════ -->
-<aside id="sidebar">
-  <div class="brand">
-    <span class="logo">◉</span>
-    <div><b>STOPA</b><small>FORENSIC WORKBENCH</small></div>
-  </div>
+<!-- ══════════ STATUS BAR (nahoře, vpravo „Analyzing…“) ══════════ -->
+<header id="topbar">
+  <div class="brand-mini"><span class="logo">◉</span> STOPA <small>FORENSIC</small></div>
+  <button id="btn-cmdk" title="Hledat (Cmd+K)">
+    <span class="cmdk-ico">⌕</span> Search &amp; Query FTS5
+    <kbd>⌘K</kbd>
+  </button>
+  <div id="status-bar"><span class="spinner"></span><span id="status-label">Analyzing…</span></div>
+</header>
 
+<div id="layout">
+
+<!-- ══════════ LEVÁ NAVIGACE (sidebar 240px) ══════════ -->
+<aside id="sidebar">
   <div class="case-picker">
     <label>Případ</label>
     <select id="case-select"></select>
@@ -30,18 +37,12 @@
     </div>
   </form>
 
-  <nav id="module-nav">
-    <button data-module="dashboard" class="active"><span class="ico">▦</span> Dashboard</button>
-    <button data-module="disk-image"><span class="ico">◫</span> Disk Image</button>
-    <button data-module="file-system"><span class="ico">🗀</span> File System</button>
-    <button data-module="partition-map"><span class="ico">▤</span> Partition Map</button>
-    <button data-module="system-recovery"><span class="ico">⚙</span> System Recovery</button>
-    <button data-module="sql-recovery"><span class="ico">∞</span> SQL Recovery</button>
-    <button data-module="messaging-chat"><span class="ico">✉</span> Messaging Chat</button>
-    <button data-module="deletion-check"><span class="ico">⌫</span> Deletion Check</button>
-    <button data-module="artifacts"><span class="ico">◈</span> Artifacts</button>
-    <button data-module="reporting"><span class="ico">▤</span> Reporting</button>
-  </nav>
+  <nav id="module-nav"></nav>
+
+  <div class="case-files">
+    <h4>Case Files</h4>
+    <div id="case-files"><p class="muted small">Žádné zdroje</p></div>
+  </div>
 
   <div id="sidebar-footer" class="muted small"></div>
 </aside>
@@ -83,21 +84,29 @@
     <div id="disk-images"></div>
   </section>
 
-  <!-- ── FILE SYSTEM & CARVING ─────────────────── -->
+  <!-- ── FILE SYSTEM & CARVING (data grid) ─────── -->
   <section id="mod-file-system" class="module">
+    <div id="fs-pmap"></div>
     <div class="toolbar">
       <label><input type="checkbox" id="f-badext"> bad-ext</label>
       <label><input type="checkbox" id="f-dups"> duplikáty</label>
       <select id="f-family"><option value="">všechny signatury</option></select>
-      <button id="btn-files" class="primary">Filtrovat</button>
+    </div>
+    <div id="sel-bar" class="hidden">
+      <span id="sel-count"></span>
+      <button id="btn-sel-evidence" class="small-btn primary">★ Evidence</button>
+      <button id="btn-sel-report" class="small-btn">＋ Report</button>
+      <button id="btn-sel-export" class="small-btn">⬇ Export</button>
     </div>
     <table id="files-table">
       <thead><tr>
+        <th class="cb"><input type="checkbox" id="f-select-all"></th>
         <th>Time</th><th>Date</th><th>File</th><th>Size</th>
         <th>Sector/Offset</th><th>Carve signature</th>
       </tr></thead>
       <tbody></tbody>
     </table>
+    <div id="files-more" class="muted small center-block hidden">Načítám další…</div>
   </section>
 
   <!-- ── PARTITION MAP ─────────────────────────── -->
@@ -143,7 +152,6 @@
   <section id="mod-artifacts" class="module">
     <div class="toolbar">
       <select id="a-type"><option value="">všechny typy</option></select>
-      <button id="btn-timeline" class="primary">Zobrazit</button>
     </div>
     <table id="timeline-table">
       <thead><tr><th>Čas (UTC)</th><th>Typ</th><th>Název</th><th>Soubor</th></tr></thead>
@@ -165,7 +173,7 @@
   </section>
 </main>
 
-<!-- ══════════ PRAVÝ PANEL (FILE INSPECTOR) ══════════ -->
+<!-- ══════════ PRAVÝ PANEL (FILE INSPECTOR drawer 360px) ══════════ -->
 <aside id="inspector">
   <header><b>FILE INSPECTOR</b></header>
   <div id="insp-empty" class="muted small center-block">Vyberte soubor v tabulce<br>k zobrazení detailu a hex dumpu.</div>
@@ -189,7 +197,27 @@
   </div>
 </aside>
 
+</div><!-- /layout -->
+
+<!-- ══════════ CMD+K SPOTLIGHT SEARCH MODAL ══════════ -->
+<div id="cmdk" class="hidden">
+  <div class="cmdk-panel">
+    <input id="cmdk-input" placeholder="Search & Query FTS5 — operátory AND, OR, NOT…" autocomplete="off">
+    <p class="muted small">FTS5 full-text: „slovo1 AND slovo2“, „A OR B“, „NOT C“</p>
+    <div id="cmdk-results"></div>
+  </div>
+</div>
+
 <div id="toast" class="hidden"></div>
+
+<!-- moduly (pořadí = závislosti) -->
+<script src="/static/js/state.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/components/sidebar.js"></script>
+<script src="/static/js/components/files.js"></script>
+<script src="/static/js/components/inspector.js"></script>
+<script src="/static/js/components/search.js"></script>
+<script src="/static/js/components/modules.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

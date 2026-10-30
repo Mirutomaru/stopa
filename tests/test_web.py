@@ -101,6 +101,21 @@ class TestIngestApi:
         # filtr je podmnožina celku
         assert {f["id"] for f in bad} <= {f["id"] for f in all_files}
 
+    def test_families_endpoint(self, client, evidence):
+        cid = _make_case(client)["id"]
+        client.post(f"/api/cases/{cid}/sources", json={"path": str(evidence)})
+        r = client.get(f"/api/cases/{cid}/families")
+        assert r.status_code == 200
+        fams = r.json()
+        # PNG soubor z evidence fixture → "png" v seznamu rodin
+        assert "png" in fams
+
+    def test_families_empty_case(self, client):
+        cid = _make_case(client)["id"]
+        r = client.get(f"/api/cases/{cid}/families")
+        assert r.status_code == 200
+        assert r.json() == []
+
 
 class TestSearchApi:
     def test_search_finds_file(self, client, evidence):
