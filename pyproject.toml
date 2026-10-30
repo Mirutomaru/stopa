@@ -14,6 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.4"]
+pdf = ["weasyprint>=62"]  # FÁZE 7 — PDF reporty (volitelné; HTML vždy funguje)
 
 [project.scripts]
 stopa = "stopa.cli:main"

@@ -8,6 +8,7 @@ Použití:
   stopa timeline <case_id> [--type browser_history] [--path text] [-v]
   stopa image <case_id> /cesta/ke/obrazu.img [--no-carve]   # disk image (TSK)
   stopa stats <case_id>
+  stopa report <case_id> [--format html|pdf] [--out DIR]    # court-ready report + chain of custody
   stopa profiles
 
 DB: cases/<case_id>.db (přesaditelné přes STOPA_DB_DIR).
@@ -237,6 +238,31 @@ def cmd_profiles(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    """Forenzní report (FÁZE 7) — court-ready HTML/PDF + chain of custody."""
+    from stopa.presentation.case_report import (
+        default_report_name,
+        generate_html_report,
+        generate_pdf_report,
+    )
+
+    db = _open_db(args.case_id)
+    out_dir = Path(args.out).expanduser() if args.out else _db_dir().parent / "reports"
+    fmt = args.format
+    try:
+        if fmt == "pdf":
+            path = generate_pdf_report(db, args.case_id, out_dir / default_report_name(args.case_id, "pdf"))
+        else:
+            path = generate_html_report(db, args.case_id, out_dir / default_report_name(args.case_id, "html"))
+    except RuntimeError as e:
+        print(f"Report selhal: {e}", file=sys.stderr)
+        db.close()
+        return 2
+    db.close()
+    print(f"Report vygenerován ({fmt.upper()}): {path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stopa", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -302,6 +328,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     prof_p = sub.add_parser("profiles", help="seznam processing profilů")
     prof_p.set_defaults(func=cmd_profiles)
+
+    rep_p = sub.add_parser("report", help="forenzní report (HTML/PDF) + chain of custody")
+    rep_p.add_argument("case_id")
+    rep_p.add_argument("--format", choices=["html", "pdf"], default="html",
+                       help="výstupní formát (default: html; pdf vyžaduje weasyprint)")
+    rep_p.add_argument("--out", metavar="DIR",
+                       help="výstupní složka (default: reports/ vedle case DB)")
+    rep_p.set_defaults(func=cmd_report)
 
     return parser
 
