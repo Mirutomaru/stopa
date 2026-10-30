@@ -8,7 +8,8 @@ Orchestrace nad IO vrstvou ``data/tsk.py`` a čistou logikou
 3. Soubory v každé partici přes TSK ``fls -r -l -p`` → upsert do case DB jako
    FileRecord (rel_path = cesta v obrazu) + signatura z extrahovaného obsahu.
 4. Jeden artifact ``disk_image`` s přehledem particí a počtem souborů (timeline).
-5. Volitelné carving nealokovaného prostoru (čistý engine nad celým obrazem).
+5. Volitelné carving nealokovaného prostoru — STREAMING přes mmap (sliding window,
+   odhady velikosti z interních struktur JPEG/MP4/PDF).
 
 Vše defenzivní: chybějící TSK / neplatný obraz → chyby v ``errors``, ne traceback.
 """
@@ -27,7 +28,7 @@ from stopa.data.tsk import (
     image_partitions,
     list_files,
 )
-from stopa.domain.carving import carve
+from stopa.domain.carving import carve_file
 from stopa.domain.image_types import detect_image_type
 from stopa.domain.signatures import detect_signature
 from stopa.models import Artifact, FileRecord, ProcessingProfile
@@ -145,11 +146,10 @@ def process_disk_image(
     )
     db.upsert_artifact(art)  # file_id=None → jen source (idempotentní upsert)
 
-    # 5) carving (čistý engine nad celým obrazem)
+    # 5) carving — STREAMING přes mmap (sliding window), ne read_bytes() celého obrazu
     if carve_free:
         try:
-            data = image_path.read_bytes()
-            summary.carved_candidates = len(carve(data))
+            summary.carved_candidates = len(carve_file(image_path))
         except OSError as e:
             summary.errors.append(f"carving čtení: {e}")
 
