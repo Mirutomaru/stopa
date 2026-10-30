@@ -18,6 +18,7 @@ from pathlib import Path
 from stopa.artifacts.plist_extract import extract_plist_artifacts
 from stopa.artifacts.registry_extract import extract_registry_artifacts
 from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
+from stopa.artifacts.sqlite_recover import recover_deleted_rows
 from stopa.data.db import CaseDB
 from stopa.data.ingest import walk_source
 from stopa.domain.bad_extension import extension_of, is_bad_extension
@@ -25,16 +26,29 @@ from stopa.domain.dedupe import Deduper
 from stopa.domain.hashing import hash_bytes, hash_file
 from stopa.domain.profiles import get_profile
 from stopa.domain.signatures import detect_signature
-from stopa.models import FileRecord, ProcessResult
+from stopa.models import Artifact, FileRecord, ProcessResult
 
 log = logging.getLogger("stopa.pipeline")
 
 SIGNATURE_HEAD_BYTES = 65536  # stačí pro všechny signatury v hlavičce
 
 
+def _extract_sqlite_all(path: Path) -> list[Artifact]:
+    """SQLite — aktivní řádky (schema matchery) + carving smazaných (.db + .wal).
+
+    Obě cesty jsou nezávislé; jedna selže → log + prázdný výsledek, druhá běží dál.
+    """
+    arts = extract_sqlite_artifacts(path)
+    try:
+        arts.extend(recover_deleted_rows(path))
+    except Exception as e:  # noqa: BLE001 — carving je bonus, nesmí potopit extrakci
+        log.warning("SQLite recover %s: %s", path, e)
+    return arts
+
+
 # signatura → extraktor (AXIOM-style artifact engine). Nový typ = nový řádek.
 ARTIFACT_EXTRACTORS: dict[str, Callable[[Path], list]] = {
-    "sqlite": extract_sqlite_artifacts,
+    "sqlite": _extract_sqlite_all,
     "registry_hive": extract_registry_artifacts,
     "plist": extract_plist_artifacts,
 }
