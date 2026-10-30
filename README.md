@@ -57,6 +57,18 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 > Dispatch je čistá mapa `signatura → extraktor` (`pipeline.ARTIFACT_EXTRACTORS`) — nový typ = nový řádek.
 > Čisté matchery testujeme nad fake objekty bez IO; IO wrappery jsou defenzivní (poškozený soubor → `[]`, ne výjimka).
 
+## Co umí (FÁZE 4c — messaging: iMessage / SMS / call logy, hotovo)
+
+| Funkce | Z jakého nástroje | Stav |
+|---|---|---|
+| Apple iMessage extraktor (`chat.db`, `message`+`handle`) | AXIOM AppleIMessageArtifact | ✅ |
+| Android SMS/MMS extraktor (`mmssms.db`, tabulka `sms`) | AXIOM / UFED messaging | ✅ |
+| Call logy extraktor (tabulka `calls`: číslo, délka, směr) | AXIOM CallLogsArtifact | ✅ |
+| Apple CFAbsoluteTime konverze (epocha 2001-01-01) | X-Ways / AXIOM time handling | ✅ |
+| Defenzivní parsing: chybějící sloupce/neplatné časy → přeskočeno, ne výjimka | — | ✅ |
+
+> Chaty jsou SQLite → režírováno stejným dispatchem `signatura → extraktor`; schémata se detekují podle tabulek/sloupců (AXIOM-style), ne podle názvu souboru.
+
 ## Rychlý start
 
 ```bash
@@ -68,14 +80,14 @@ export STOPA_DB_DIR=~/stopa_cases   # kde se ukládají case DB (default: ./case
 .venv/bin/stopa add <case_id> /cesta/ke/dukazum --profile forensic --hash-set bad.txt
 .venv/bin/stopa files <case_id> [--bad-ext | --dups | --family image]
 .venv/bin/stopa search <case_id> "dotaz" [--source ID]   # full-text (FTS5)
-.venv/bin/stopa timeline <case_id> [--type browser_history|registry_persistence] [--path text] [-v]
+.venv/bin/stopa timeline <case_id> [--type browser_history|imessage|sms_message|call_log] [--path text] [-v]
 .venv/bin/stopa stats <case_id>
 ```
 
 ## Testy & lint
 
 ```bash
-.venv/bin/pytest -q        # 148 testů, plně offline (syntetické magic bytes + SQLite DB + FTS5 + registry/plist)
+.venv/bin/pytest -q        # 159 testů, plně offline (syntetické magic bytes + SQLite DB + FTS5 + registry/plist + messaging)
 .venv/bin/ruff check src tests
 ```
 
@@ -90,9 +102,9 @@ src/stopa/
 │   ├── dedupe.py          # FTK Advanced De-duplication (+ inkrementální Deduper)
 │   ├── hashing.py         # chunked multi-hash v jednom read loopu
 │   ├── profiles.py        # FTK-style processing profily
-│   └── times.py           # forenzní časové konverze (unix/FILETIME/chrome µs + detekce)
+│   └── times.py           # forenzní časové konverze (unix/FILETIME/chrome µs/apple CFAbsoluteTime + detekce)
 ├── artifacts/       # AXIOM-style artifact extraktoři (IO jen v entrypointech)
-│   ├── sqlite_extract.py    # Chrome/Edge/Firefox history + triage neznámých DB
+│   ├── sqlite_extract.py    # browser history (Chrome/Firefox) + messaging (iMessage/SMS/call logy) + triage DB
 │   ├── registry_extract.py  # Windows registry hives (regf, regipy): Run/MountedDevices/User
 │   └── plist_extract.py     # Apple property lists (binární i XML, plistlib) + date artifacty
 ├── data/              # IO vrstva
@@ -108,6 +120,7 @@ src/stopa/
 - **FÁZE 3**: ✅ Full-text search (SQLite FTS5) — `stopa search`, backfill starých DB
 - **FÁZE 4a**: ✅ SQLite extraktoři + timeline CLI
 - **FÁZE 4b**: ✅ Registry hives (regf/regipy: Run/MountedDevices/User/Environment) + Apple plists (binární i XML, date artifacty); dispatch `signatura → extraktor`
+- **FÁZE 4c**: ✅ Messaging — Apple iMessage (`chat.db`, CFAbsoluteTime), Android SMS/MMS (`mmssms.db`), call logy (`calls`)
 - **FÁZE 5**: Disk images (E01/RAW, file systems přes The Sleuth Kit / apfs) + carving
 - **FÁZE 6**: Mobilní extrakce (UFED-style: physical/file system/logical, FDE/FBE unlock)
 - **FÁZE 7**: Reporty (HTML/PDF court-ready, chain of custody — Belkasoft/FTK style)

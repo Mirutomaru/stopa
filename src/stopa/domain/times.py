@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 UNIX_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 WINDOWS_EPOCH = datetime(1601, 1, 1, tzinfo=timezone.utc)
+APPLE_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)  # CFAbsoluteTime (iMessage chat.db)
 
 
 def from_unix(value: float) -> datetime:
@@ -45,6 +46,13 @@ def from_chrome_micros(value: int) -> datetime:
     if value <= 0:
         raise ValueError(f"Chrome čas musí být kladný, dostal {value}")
     return WINDOWS_EPOCH + timedelta(microseconds=int(value))
+
+
+def from_apple_absolute(value: float) -> datetime:
+    """Apple CFAbsoluteTime — sekundy od 2001-01-01 UTC (iMessage chat.db TEXT_MESSAGE)."""
+    if value < 0:
+        raise ValueError(f"Apple absolutní čas musí být ≥ 0, dostal {value}")
+    return APPLE_EPOCH + timedelta(seconds=float(value))
 
 
 def detect_and_convert(value: float) -> datetime:

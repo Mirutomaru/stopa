@@ -1,8 +1,11 @@
-"""SQLite artifact extraktor — browser history (Chrome/Edge/Firefox) + triage DB.
+"""SQLite artifact extraktor — browser history + messaging (iMessage/SMS/call logy) + triage DB.
 
 AXIOM-style: každý soubor se SQLite signaturou projde schema detektorem.
 - Chrome/Edge/Opera: tabulky `urls` + `visits`, čas = µs od Windows epochy (1601)
 - Firefox: `moz_places`, last_visit_date = ms od Unix epochy (1970)
+- Apple iMessage chat.db: `message`(text, date=CFAbsoluteTime od 2001) + `handle`
+- Android mmssms.db: `sms`(address, body, date=unix ms)
+- Android calllog.db: `calls`(number, date=unix ms, duration, type)
 - ostatní SQLite DB: jeden triage artifact se seznamem tabulek a počty řádků
 
 IO je jen v `extract_sqlite_artifacts()`; schema matchery jsou čisté funkce.
@@ -14,7 +17,7 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from stopa.domain.times import from_chrome_micros, from_unix
+from stopa.domain.times import from_apple_absolute, from_chrome_micros, from_unix
 from stopa.models import Artifact
 
 log = logging.getLogger("stopa.artifacts.sqlite")
@@ -103,6 +106,119 @@ def _extract_firefox_history(conn: sqlite3.Connection) -> list[Artifact]:
     return out
 
 
+def _is_imessage(conn: sqlite3.Connection) -> bool:
+    """Apple iMessage chat.db: `message`(text,date=CFAbsoluteTime) + volitelně `handle`."""
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "message" not in tables:
+        return False
+    cols = _table_columns(conn, "message")
+    return {"text", "date"} <= cols
+
+
+def _extract_imessage(conn: sqlite3.Connection) -> list[Artifact]:
+    """Každá iMessage zpráva → artifact s textem, odesílatelem a časem (CFAbsoluteTime)."""
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    has_handle = "handle" in tables and {"_id", "address"} <= _table_columns(conn, "handle")
+    if has_handle:
+        sql = (
+            "SELECT m.text, m.date, h.address AS handle"
+            " FROM message m LEFT JOIN handle h ON h._id = m.handle_id"
+            " WHERE m.text IS NOT NULL AND m.date > 0"
+        )
+    else:
+        sql = "SELECT text, date, NULL AS handle FROM message WHERE text IS NOT NULL AND date > 0"
+    rows = conn.execute(sql).fetchall()
+    out: list[Artifact] = []
+    for r in rows:
+        try:
+            ts = from_apple_absolute(r["date"])
+        except ValueError as e:
+            log.debug("imessage %s: %s", r["date"], e)
+            continue
+        text = (r["text"] or "").strip()
+        out.append(
+            Artifact(
+                artifact_type="imessage",
+                timestamp=ts,
+                title=text[:300] or "(prázdná zpráva)",
+                details={"handle": r["handle"], "engine": "apple_imessage"},
+            )
+        )
+    return out
+
+
+def _is_android_sms(conn: sqlite3.Connection) -> bool:
+    """Android mmssms.db: `sms`(address,body,date=unix ms)."""
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "sms" not in tables:
+        return False
+    cols = _table_columns(conn, "sms")
+    return {"address", "body", "date"} <= cols
+
+
+def _extract_android_sms(conn: sqlite3.Connection) -> list[Artifact]:
+    """Každá SMS → artifact s textem, číslem a časem (unix ms)."""
+    rows = conn.execute(
+        "SELECT address, body, date FROM sms WHERE body IS NOT NULL AND date > 0"
+    ).fetchall()
+    out: list[Artifact] = []
+    for r in rows:
+        try:
+            ts = from_unix(r["date"] / 1000.0)  # ms → s
+        except ValueError as e:
+            log.debug("sms %s: %s", r["date"], e)
+            continue
+        text = (r["body"] or "").strip()
+        out.append(
+            Artifact(
+                artifact_type="sms_message",
+                timestamp=ts,
+                title=text[:300] or "(prázdná SMS)",
+                details={"address": r["address"], "engine": "android_sms"},
+            )
+        )
+    return out
+
+
+def _is_call_log(conn: sqlite3.Connection) -> bool:
+    """Android calllog.db / contacts2: `calls`(number,date=unix ms)."""
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "calls" not in tables:
+        return False
+    cols = _table_columns(conn, "calls")
+    return {"number", "date"} <= cols
+
+
+def _extract_call_log(conn: sqlite3.Connection) -> list[Artifact]:
+    """Každý hovor → artifact s číslem, délkou a typem (unix ms)."""
+    cols = _table_columns(conn, "calls")
+    extra_dur = ", duration" if "duration" in cols else ", NULL AS duration"
+    extra_type = ", type" if "type" in cols else ", NULL AS type"
+    rows = conn.execute(
+        f"SELECT number, date{extra_dur}{extra_type} FROM calls WHERE date > 0"
+    ).fetchall()
+    out: list[Artifact] = []
+    for r in rows:
+        try:
+            ts = from_unix(r["date"] / 1000.0)  # ms → s
+        except ValueError as e:
+            log.debug("call %s: %s", r["date"], e)
+            continue
+        out.append(
+            Artifact(
+                artifact_type="call_log",
+                timestamp=ts,
+                title=f"Hovor — {r['number']}",
+                details={
+                    "duration_s": r["duration"],
+                    "direction": r["type"],
+                    "engine": "android_calllog",
+                },
+            )
+        )
+    return out
+
+
 def _extract_generic_sqlite(conn: sqlite3.Connection) -> list[Artifact]:
     """Triage artifact pro neznámou SQLite DB — tabulky + počty řádků."""
     tables = [
@@ -145,6 +261,12 @@ def extract_sqlite_artifacts(path: Path) -> list[Artifact]:
             arts = _extract_chrome_history(conn)
         elif _is_firefox_history(conn):
             arts = _extract_firefox_history(conn)
+        elif _is_imessage(conn):
+            arts = _extract_imessage(conn)
+        elif _is_android_sms(conn):
+            arts = _extract_android_sms(conn)
+        elif _is_call_log(conn):
+            arts = _extract_call_log(conn)
         else:
             arts = _extract_generic_sqlite(conn)
         return arts
