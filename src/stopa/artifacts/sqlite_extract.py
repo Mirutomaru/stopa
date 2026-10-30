@@ -268,7 +268,11 @@ def extract_sqlite_artifacts(path: Path) -> list[Artifact]:
         elif _is_call_log(conn):
             arts = _extract_call_log(conn)
         else:
-            arts = _extract_generic_sqlite(conn)
+            # FÁZE 6a — mobilní logická extrakce (kontakty/WhatsApp/iOS Safari),
+            # jinak generic triage (tabulky + počty řádků)
+            from stopa.artifacts.mobile_extract import extract_mobile_artifacts
+
+            arts = extract_mobile_artifacts(conn) or _extract_generic_sqlite(conn)
         return arts
     except sqlite3.Error as e:
         log.warning("SQLite extract %s: %s", path, e)
