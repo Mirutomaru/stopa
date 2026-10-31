@@ -14,14 +14,16 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from stopa.data.db import CaseDB
+from stopa.domain.times import to_local_iso
 from stopa.models import Case, EvidenceSource
 from stopa.pipeline import process_source
 
@@ -201,12 +203,74 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
 
     @app.get("/api/cases/{case_id}/timeline")
     def timeline(
-        case_id: str, type: str | None = None, limit: int = 500, offset: int = 0
+        case_id: str,
+        type: str | None = Query(None),
+        source: str | None = Query(None),
+        from_ts: datetime | None = Query(None),
+        to_ts: datetime | None = Query(None),
+        anomalies_only: bool = Query(False),
+        limit: int = 500,
+        offset: int = 0,
     ) -> list[dict]:
+        """Timeline (E2) — chronologické události s UTC i lokálním časem.
+
+        Primárně čte materializovanou ``timeline_events``; prázdná (starý case
+        bez re-ingestu) → fallback na ``artifacts``. Lokální čas počítáme přes
+        case ``timezone_name`` (default Europe/Prague). Backward-kompatibilní:
+        staré GUI konzumuje ``timestamp`` / ``artifact_type`` / ``title``.
+        """
         db = open_db(case_id)
         try:
-            arts = db.list_artifacts(artifact_type=type, limit=limit, offset=offset)
-            return [a.model_dump(mode="json") for a in arts]
+            tz_name = "Europe/Prague"
+            case = db.get_case(case_id)
+            if case is not None and case.timezone_name:
+                tz_name = case.timezone_name
+
+            events = db.list_timeline_events(
+                source_id=source,
+                event_type=type,
+                from_ts=from_ts,
+                to_ts=to_ts,
+                anomalies_only=anomalies_only,
+                limit=limit,
+                offset=offset,
+            )
+            if events:
+                out = []
+                for e in events:
+                    # lokální čas pro zobrazení (UTC zůstává kanonický)
+                    local_iso = to_local_iso(
+                        datetime.fromisoformat(e["ts_utc"])
+                        if e["ts_utc"] else None,
+                        tz_name,
+                    )
+                    row = {**e, "ts_local": local_iso}
+                    # backward-kompatibilní aliasy pro staré GUI (artifact_type/timestamp)
+                    row["artifact_type"] = e.get("event_type")
+                    row["timestamp"] = e.get("ts_utc")
+                    out.append(row)
+                return out
+
+            # fallback: starý case bez materializované timeline → artifacts
+            arts = db.list_artifacts(
+                source_id=source,
+                artifact_type=type,
+                from_ts=from_ts,
+                to_ts=to_ts,
+                anomalies_only=anomalies_only,
+                limit=limit,
+                offset=offset,
+            )
+            out = []
+            for a in arts:
+                d = a.model_dump(mode="json")
+                local_iso = to_local_iso(a.timestamp, tz_name) if a.timestamp else None
+                # backward-kompatibilní pole pro staré GUI (timestamp/artifact_type/title)
+                d["ts_utc"] = d.get("timestamp")
+                d["ts_local"] = local_iso
+                d["anomaly_flags"] = list(a.anomaly_flags or ())
+                out.append(d)
+            return out
         finally:
             db.close()
 

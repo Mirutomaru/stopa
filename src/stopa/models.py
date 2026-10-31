@@ -40,6 +40,8 @@ class Case(BaseModel):
     created_at: datetime = Field(default_factory=_utcnow)
     examiner: str | None = None
     notes: str | None = None
+    # E2 Timeline Engine: lokální časové pásmo pro zobrazení timeline (default Praha).
+    timezone_name: str = "Europe/Prague"
 
 
 class EvidenceSource(BaseModel):
@@ -99,6 +101,11 @@ class Artifact(BaseModel):
     timestamp: datetime | None = None
     title: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
+    # E2 Timeline Engine — provenience + důvěryhodnost (reprodukovatelnost analýzy):
+    confidence: float | None = None  # 0.0–1.0 — jak moc lze timestampu/resultu věřit
+    parser_version: str | None = None  # verze extraktoru, který artifact vygeneroval
+    extracted_at: datetime | None = None  # kdy byl artifact extrahován (UTC) — odliší se od event time
+    anomaly_flags: list[str] = Field(default_factory=list)  # E2: detekované nesrovnalosti (kanonické flagy)
 
 
 class ProcessResult(BaseModel):

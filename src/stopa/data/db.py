@@ -11,11 +11,11 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from stopa.models import Artifact, Case, EvidenceSource, FileRecord
+from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS cases (
     name TEXT NOT NULL,
     created_at TEXT NOT NULL,
     examiner TEXT,
-    notes TEXT
+    notes TEXT,
+    timezone_name TEXT DEFAULT 'Europe/Prague'  -- E2: lokální TZ pro zobrazení timeline
 );
 CREATE TABLE IF NOT EXISTS sources (
     id TEXT PRIMARY KEY,
@@ -64,12 +65,38 @@ CREATE TABLE IF NOT EXISTS artifacts (
     artifact_type TEXT NOT NULL,
     timestamp TEXT,
     title TEXT,
-    details_json TEXT NOT NULL DEFAULT '{}'
+    details_json TEXT NOT NULL DEFAULT '{}',
+    -- E2 Timeline Engine: provenience + důvěryhodnost (reprodukovatelnost analýzy)
+    confidence REAL,
+    parser_version TEXT,
+    extracted_at TEXT,
+    anomaly_flags TEXT  -- komou oddělené kanonické flagy nesrovnalostí
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_source ON artifacts(source_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifacts(timestamp);
 -- name-based fallback (iCloud Messages) volá replace pro KAŽDÝ soubor → DELETE WHERE file_id=?
 CREATE INDEX IF NOT EXISTS idx_artifacts_file ON artifacts(file_id);
+
+-- E2 Timeline Engine: materializovaná timeline — jeden řádek = jedna událost v čase.
+-- Naplní se explicitním insertem při artifact extrakci (pipeline), ne triggerem
+-- (trigger by byl křehký na re-ingest / replace). UTC timestamp + lokální zobrazení
+-- počítá GUI přes case timezone_name; anomaly_flags = kanonické flagy nesrovnalostí.
+CREATE TABLE IF NOT EXISTS timeline_events (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    artifact_id TEXT REFERENCES artifacts(id),
+    file_id TEXT REFERENCES files(id),
+    rel_path TEXT,
+    event_type TEXT NOT NULL,          -- artifact_type (browser_history, chat_message, …)
+    ts_utc TEXT NOT NULL,              -- ISO UTC — čas události
+    title TEXT,
+    confidence REAL,
+    parser_version TEXT,
+    extracted_at TEXT,                 -- kdy byl artifact extrahován (odliší se od event time)
+    anomaly_flags TEXT                 -- komou oddělené kanonické flagy nesrovnalostí
+);
+CREATE INDEX IF NOT EXISTS idx_timeline_ts ON timeline_events(ts_utc);
+CREATE INDEX IF NOT EXISTS idx_timeline_source ON timeline_events(source_id);
 
 -- Meta (verze schématu, stav FTS indexu…)
 CREATE TABLE IF NOT EXISTS meta (
@@ -153,6 +180,24 @@ class CaseDB:
         if "flags" not in em_cols:
             self.conn.execute("ALTER TABLE evidence_marks ADD COLUMN flags TEXT")
             self.conn.commit()
+        # E2 Timeline Engine: stará case DB bez sloupce timezone_name (cases).
+        case_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(cases)").fetchall()}
+        if "timezone_name" not in case_cols:
+            self.conn.execute(
+                "ALTER TABLE cases ADD COLUMN timezone_name TEXT DEFAULT 'Europe/Prague'"
+            )
+            self.conn.commit()
+        # E2 Timeline Engine: stará case DB bez provenience sloupců (artifacts).
+        art_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(artifacts)").fetchall()}
+        for col, decl in (
+            ("confidence", "REAL"),
+            ("parser_version", "TEXT"),
+            ("extracted_at", "TEXT"),
+            ("anomaly_flags", "TEXT"),
+        ):
+            if col not in art_cols:
+                self.conn.execute(f"ALTER TABLE artifacts ADD COLUMN {col} {decl}")
+                self.conn.commit()
         # FÁZE 3 backfill: staré case DB (bez FTS indexu) — jednou doindexovat existující řádky.
         # 'rebuild' u external-content FTS5 přečte obsah přímo z tabulky `files`.
         # Meta-flaga je spolehlivější než COUNT(*) (external-content stíny po delete).
@@ -185,8 +230,16 @@ class CaseDB:
     # ── cases ────────────────────────────────────────────────
     def add_case(self, case: Case) -> None:
         self.conn.execute(
-            "INSERT INTO cases (id, name, created_at, examiner, notes) VALUES (?, ?, ?, ?, ?)",
-            (case.id, case.name, case.created_at.isoformat(), case.examiner, case.notes),
+            "INSERT INTO cases (id, name, created_at, examiner, notes, timezone_name)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                case.id,
+                case.name,
+                case.created_at.isoformat(),
+                case.examiner,
+                case.notes,
+                case.timezone_name,
+            ),
         )
         self.conn.commit()
 
@@ -198,6 +251,9 @@ class CaseDB:
             c = Case(
                 id=r["id"], name=r["name"], examiner=r["examiner"], notes=r["notes"]
             )
+            cols = r.keys()  # E2: staré DB bez sloupce → default
+            if "timezone_name" in cols:
+                c.timezone_name = r["timezone_name"] or "Europe/Prague"
             if r["created_at"]:
                 from datetime import datetime
 
@@ -220,6 +276,8 @@ class CaseDB:
             created_at=datetime.fromisoformat(row["created_at"]),
             examiner=row["examiner"],
             notes=row["notes"],
+            # E2: staré DB bez sloupce / NULL → default Europe/Prague
+            timezone_name=row["timezone_name"] or "Europe/Prague",
         )
 
     # ── sources ──────────────────────────────────────────────
@@ -272,8 +330,13 @@ class CaseDB:
         ]
 
     # ── files ────────────────────────────────────────────────
-    def upsert_file(self, rec: FileRecord) -> None:
-        """Idempotentní insert/update podle (source_id, rel_path)."""
+    def upsert_file(self, rec: FileRecord) -> str:
+        """Idempotentní insert/update podle (source_id, rel_path).
+
+        Vrací kanonický file id — při konfliktu (re-ingest) se drží původní id,
+        takže volající musí použít návratovou hodnotu pro FK (artifacts/timeline),
+        ne vlastní ``rec.id``.
+        """
         self.conn.execute(
             "INSERT INTO files (id, source_id, rel_path, name, size_bytes,"
             " mtime, ctime, atime, sha256, md5, signature_type, extension,"
@@ -308,6 +371,12 @@ class CaseDB:
                 rec.meta_addr,
             ),
         )
+        # kanonický id — při konfliktu (re-ingest) se drží původní řádek
+        row = self.conn.execute(
+            "SELECT id FROM files WHERE source_id = ? AND rel_path = ?",
+            (rec.source_id, rec.rel_path),
+        ).fetchone()
+        return row[0] if row else rec.id
 
     def commit(self) -> None:
         self.conn.commit()
@@ -551,8 +620,9 @@ class CaseDB:
         )
         self.conn.execute(
             "INSERT INTO artifacts (id, source_id, file_id, rel_path,"
-            " artifact_type, timestamp, title, details_json)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            " artifact_type, timestamp, title, details_json,"
+            " confidence, parser_version, extracted_at, anomaly_flags)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 art.id,
                 art.source_id,
@@ -562,6 +632,10 @@ class CaseDB:
                 _iso(art.timestamp),
                 art.title,
                 json.dumps(art.details, ensure_ascii=False),
+                art.confidence,
+                art.parser_version,
+                _iso(art.extracted_at),
+                ",".join(art.anomaly_flags) if art.anomaly_flags else None,
             ),
         )
         self.conn.commit()
@@ -574,8 +648,9 @@ class CaseDB:
                 raise ValueError(f"Artifact {a.id} nemá source_id")
             self.conn.execute(
                 "INSERT INTO artifacts (id, source_id, file_id, rel_path,"
-                " artifact_type, timestamp, title, details_json)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " artifact_type, timestamp, title, details_json,"
+                " confidence, parser_version, extracted_at, anomaly_flags)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     a.id,
                     a.source_id,
@@ -585,20 +660,44 @@ class CaseDB:
                     _iso(a.timestamp),
                     a.title,
                     json.dumps(a.details, ensure_ascii=False),
+                    a.confidence,
+                    a.parser_version,
+                    _iso(a.extracted_at),
+                    ",".join(a.anomaly_flags) if a.anomaly_flags else None,
                 ),
             )
         self.conn.commit()
         return len(arts)
+
+    def clear_timeline_events(self, source_id: str | None = None) -> int:
+        """Odstraní materializované timeline události (re-ingest → čisté data).
+
+        ``source_id=None`` vyčistí celý případ. Vrací počet odstraněných řádků.
+        """
+        if source_id is not None:
+            cur = self.conn.execute(
+                "DELETE FROM timeline_events WHERE source_id = ?", (source_id,)
+            )
+        else:
+            cur = self.conn.execute("DELETE FROM timeline_events")
+        return cur.rowcount
 
     def list_artifacts(
         self,
         source_id: str | None = None,
         artifact_type: str | None = None,
         rel_path_like: str | None = None,
+        from_ts: datetime | None = None,
+        to_ts: datetime | None = None,
+        anomalies_only: bool = False,
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[Artifact]:
-        """Timeline dotaz — chronologicky (None timestamps na konec)."""
+        """Timeline dotaz — chronologicky (None timestamps na konec).
+
+        E2 filtry: ``from_ts``/``to_ts`` omezí časové okno událostí (UTC),
+        ``anomalies_only=True`` vrátí jen artifacty s detekovanou nesrovnalostí.
+        """
         q = "SELECT * FROM artifacts"
         where: list[str] = []
         args: list[object] = []
@@ -611,6 +710,14 @@ class CaseDB:
         if rel_path_like is not None:
             where.append("rel_path LIKE ?")
             args.append(f"%{rel_path_like}%")
+        if from_ts is not None:
+            where.append("timestamp >= ?")
+            args.append(_iso(from_ts))
+        if to_ts is not None:
+            where.append("timestamp <= ?")
+            args.append(_iso(to_ts))
+        if anomalies_only:
+            where.append("anomaly_flags IS NOT NULL AND anomaly_flags != ''")
         if where:
             q += " WHERE " + " AND ".join(where)
         q += " ORDER BY (timestamp IS NULL), timestamp, id"
@@ -620,6 +727,136 @@ class CaseDB:
             q += f" OFFSET {int(offset)}"
         rows = self.conn.execute(q, args).fetchall()
         return [_row_to_artifact(r) for r in rows]
+
+    # ── E2 Timeline Engine: materializovaná timeline (timeline_events) ───────
+    def add_timeline_event(
+        self,
+        *,
+        source_id: str,
+        ts_utc: datetime,
+        event_type: str,
+        artifact_id: str | None = None,
+        file_id: str | None = None,
+        rel_path: str | None = None,
+        title: str | None = None,
+        confidence: float | None = None,
+        parser_version: str | None = None,
+        extracted_at: datetime | None = None,
+        anomaly_flags: tuple[str, ...] | list[str] = (),
+    ) -> str:
+        """Explicitní insert jednoho timeline eventu (ROADMAP E2 bod 2).
+
+        Materializace běží v pipeline při artifact extrakci — ne triggerem,
+        aby re-ingest / replace zůstal pod kontrolou. Vrací ID nového řádku.
+        """
+        event_id = new_id("tl")
+        self.conn.execute(
+            "INSERT INTO timeline_events (id, source_id, artifact_id, file_id,"
+            " rel_path, event_type, ts_utc, title, confidence, parser_version,"
+            " extracted_at, anomaly_flags)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                event_id,
+                source_id,
+                artifact_id,
+                file_id,
+                rel_path,
+                event_type,
+                _iso(ts_utc),
+                title,
+                confidence,
+                parser_version,
+                _iso(extracted_at),
+                ",".join(anomaly_flags) if anomaly_flags else None,
+            ),
+        )
+        return event_id
+
+    def list_timeline_events(
+        self,
+        source_id: str | None = None,
+        event_type: str | None = None,
+        from_ts: datetime | None = None,
+        to_ts: datetime | None = None,
+        anomalies_only: bool = False,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[dict]:
+        """Timeline dotaz nad materializovanou tabulkou (chronologicky).
+
+        Vrací slovníky s UTC i lokálním časem — lokální konverze počítá GUI
+        přes case ``timezone_name``; tady jen předáme ISO UTC + flagy.
+        """
+        q = "SELECT * FROM timeline_events"
+        where: list[str] = []
+        args: list[object] = []
+        if source_id is not None:
+            where.append("source_id = ?")
+            args.append(source_id)
+        if event_type is not None:
+            where.append("event_type = ?")
+            args.append(event_type)
+        if from_ts is not None:
+            where.append("ts_utc >= ?")
+            args.append(_iso(from_ts))
+        if to_ts is not None:
+            where.append("ts_utc <= ?")
+            args.append(_iso(to_ts))
+        if anomalies_only:
+            where.append("anomaly_flags IS NOT NULL AND anomaly_flags != ''")
+        if where:
+            q += " WHERE " + " AND ".join(where)
+        q += " ORDER BY ts_utc, id"
+        if limit is not None:
+            q += f" LIMIT {int(limit)}"
+        if offset:
+            q += f" OFFSET {int(offset)}"
+        rows = self.conn.execute(q, args).fetchall()
+        out: list[dict] = []
+        for r in rows:
+            flags_raw = r["anomaly_flags"] or ""
+            out.append({
+                "id": r["id"],
+                "source_id": r["source_id"],
+                "artifact_id": r["artifact_id"],
+                "file_id": r["file_id"],
+                "rel_path": r["rel_path"],
+                "event_type": r["event_type"],
+                "ts_utc": r["ts_utc"],
+                "title": r["title"],
+                "confidence": r["confidence"],
+                "parser_version": r["parser_version"],
+                "extracted_at": r["extracted_at"],
+                "anomaly_flags": [f for f in flags_raw.split(",") if f],
+            })
+        return out
+
+    def timeline_window(self, source_id: str | None = None) -> dict[str, datetime | None]:
+        """Min/max pozorovaných časů událostí — operační okno pro anomaly detekci.
+
+        Pravidlo ``out_of_range`` potřebuje rozsah zařízení; bez dat → oba None
+        (pravidlo se nepoužije). Čte z materializované timeline, fallback na artifacts.
+        """
+        where = "WHERE source_id = ?" if source_id else ""
+        args: tuple[object, ...] = (source_id,) if source_id else ()
+        row = self.conn.execute(
+            f"SELECT MIN(ts_utc) AS lo, MAX(ts_utc) AS hi FROM timeline_events {where}",
+            args,
+        ).fetchone()
+        if not row or (row["lo"] is None and row["hi"] is None):
+            # fallback: stará DB bez materializované timeline → artifacts.timestamp
+            where_a = "WHERE source_id = ?" if source_id else ""
+            args_a: tuple[object, ...] = (source_id,) if source_id else ()
+            row = self.conn.execute(
+                f"SELECT MIN(timestamp) AS lo, MAX(timestamp) AS hi FROM artifacts {where_a}",
+                args_a,
+            ).fetchone()
+        from datetime import datetime as _dt
+
+        def parse(v):
+            return _dt.fromisoformat(v) if v else None
+
+        return {"window_start": parse(row["lo"]), "window_end": parse(row["hi"])}
 
     def artifact_stats(self, source_id: str | None = None) -> dict[str, int]:
         where = "WHERE source_id = ?" if source_id else ""
@@ -678,15 +915,29 @@ def _row_to_record(r: sqlite3.Row) -> FileRecord:
 def _row_to_artifact(r: sqlite3.Row) -> Artifact:
     from datetime import datetime
 
+    def parse(v):
+        return datetime.fromisoformat(v) if v else None
+
+    keys = r.keys()
+    # E2: staré DB bez provenience sloupců (migrace je idempotentní, ale čtení
+    # může jít přes přímý SELECT na starém souboru) → defenzivně None.
     return Artifact(
         id=r["id"],
         source_id=r["source_id"],
         file_id=r["file_id"],
         rel_path=r["rel_path"],
         artifact_type=r["artifact_type"],
-        timestamp=datetime.fromisoformat(r["timestamp"]) if r["timestamp"] else None,
+        timestamp=parse(r["timestamp"]),
         title=r["title"],
         details=json.loads(r["details_json"]),
+        confidence=r["confidence"] if "confidence" in keys else None,
+        parser_version=r["parser_version"] if "parser_version" in keys else None,
+        extracted_at=parse(r["extracted_at"]) if "extracted_at" in keys else None,
+        anomaly_flags=(
+            [f for f in r["anomaly_flags"].split(",") if f]
+            if "anomaly_flags" in keys and r["anomaly_flags"]
+            else []
+        ),
     )
 
 

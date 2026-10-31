@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from stopa.artifacts.imessage_cloud import (
@@ -33,6 +34,7 @@ from stopa.domain.dedupe import Deduper
 from stopa.domain.hashing import hash_bytes, hash_file
 from stopa.domain.profiles import get_profile
 from stopa.domain.signatures import detect_signature
+from stopa.domain.timeline_anomaly import AnomalyContext, detect_anomalies
 from stopa.models import Artifact, FileRecord, ProcessResult
 
 log = logging.getLogger("stopa.pipeline")
@@ -73,19 +75,24 @@ def parser_versions() -> dict[str, str]:
     }
 
 
-def _extract_artifacts_for(path: Path, signature_type: str | None) -> list[Artifact]:
+def _extract_artifacts_for(
+    path: Path, signature_type: str | None
+) -> tuple[list[Artifact], str | None]:
     """Artifact extraktoři pro jeden soubor — signatura PŘED name-based fallbackem.
 
     AXIOM Hunter pattern: iCloud Messages export (`MessagesInICloud.csv`) nemá
     spolehlivou magic (XLSX je generic OOXML, delimited text žádnou), proto se
     detekuje podle názvu souboru — jen když signatura nic nenašla.
+
+    Vrací ``(artifacts, parser_version)`` — verze se eviduje na každém artifactu
+    (E2 provenience / reprodukovatelnost). Bez extraktoru → ``([], None)``.
     """
     if signature_type in ARTIFACT_EXTRACTORS:
-        fn, _ver = ARTIFACT_EXTRACTORS[signature_type]
-        return fn(path)
+        fn, ver = ARTIFACT_EXTRACTORS[signature_type]
+        return fn(path), ver
     if is_icloud_messages_file(path.name):  # name-based fallback (AXIOM Hunter)
-        return extract_icloud_messages(path)
-    return []
+        return extract_icloud_messages(path), IMESSAGE_CLOUD_VERSION
+    return [], None
 
 
 def _read_head(path: Path) -> bytes:
@@ -140,6 +147,18 @@ def process_source(
             normalized_sets[name] = {h.lower() for h in hashes}
 
     root_resolved = root.resolve()
+
+    # E2 Timeline Engine — kontext pro detekci nesrovnalostí.
+    # Operační okno (min/max) se seeduje ze stavu DB a průběžně rozšiřuje;
+    # seen_timestamps naplňuje duplikát detekci během běhu.
+    now_utc = datetime.now(timezone.utc)
+    win = db.timeline_window(source_id=source_id)
+    anomaly_ctx = AnomalyContext(
+        window_start=win.get("window_start"),
+        window_end=win.get("window_end"),
+    )
+    # re-ingest stejného zdroje → čisté timeline (idempotence, žádné duplicitní události)
+    db.clear_timeline_events(source_id=source_id)
 
     for i, wf in enumerate(walked):
         abs_path = root_resolved / wf.rel_path if not root.is_file() else root_resolved
@@ -214,17 +233,66 @@ def process_source(
                 if rec.hash_set_hit:
                     break
 
-        db.upsert_file(rec)  # nejdřív soubor — FK pro artifacts níže
+        # kanonický file id — při re-ingestu se drží původní řádek (FK stability)
+        file_id = db.upsert_file(rec)  # nejdřív soubor — FK pro artifacts níže
 
         # ── artifact extraktoři (AXIOM-style) — signatura → extraktor (+ name fallback) ──
         if profile.extract_artifacts:
-            arts = _extract_artifacts_for(abs_path, rec.signature_type)
+            arts, parser_ver = _extract_artifacts_for(abs_path, rec.signature_type)
             for a in arts:
                 a.source_id = source_id
-                a.file_id = rec.id
+                a.file_id = file_id
                 a.rel_path = wf.rel_path
-            db.replace_artifacts_for_file(rec.id, arts)
+                # E2 Timeline Engine — provenience (reprodukovatelnost analýzy):
+                # kdy byl artifact extrahován + jakou verzí parseru.
+                if a.extracted_at is None:
+                    a.extracted_at = now_utc
+                if a.parser_version is None and parser_ver is not None:
+                    a.parser_version = parser_ver
+            db.replace_artifacts_for_file(file_id, arts)
             result.artifacts_extracted += len(arts)
+
+            # E2 Timeline Engine — materializace timeline + detekce nesrovnalostí.
+            # Explicitní insert (ne trigger): re-ingest / replace zůstává pod kontrolou.
+            for a in arts:
+                if a.timestamp is None:
+                    continue  # bez času události → není timeline event
+                flags = detect_anomalies(
+                    a.artifact_type,
+                    a.timestamp,
+                    title=a.title,
+                    rel_path=wf.rel_path,
+                    file_mtime=rec.mtime,
+                    file_ctime=rec.ctime,
+                    ctx=anomaly_ctx,
+                )
+                if flags:
+                    a.anomaly_flags = tuple(flags)
+                db.add_timeline_event(
+                    source_id=source_id,
+                    artifact_id=a.id,
+                    file_id=file_id,
+                    rel_path=wf.rel_path,
+                    event_type=a.artifact_type,
+                    ts_utc=a.timestamp,
+                    title=a.title,
+                    confidence=a.confidence,
+                    parser_version=a.parser_version,
+                    extracted_at=a.extracted_at,
+                    anomaly_flags=tuple(flags),
+                )
+                # průběžné doplnění kontextu — duplikát detekce + rozšiřování okna
+                if a.timestamp is not None:
+                    key = f"{a.artifact_type}|{a.title or ''}|{wf.rel_path}"
+                    anomaly_ctx.seen_timestamps.append((a.timestamp, key))
+                    # operační okno se průběžně rozšiřuje — události daleko od
+                    # těžiště dat se tak označí i při prvním ingestu zdroje
+                    if (anomaly_ctx.window_start is None
+                            or a.timestamp < anomaly_ctx.window_start):
+                        anomaly_ctx.window_start = a.timestamp
+                    if (anomaly_ctx.window_end is None
+                            or a.timestamp > anomaly_ctx.window_end):
+                        anomaly_ctx.window_end = a.timestamp
 
         if progress is not None and ((i + 1) % 10 == 0 or i + 1 == total):
             progress(i + 1, total)

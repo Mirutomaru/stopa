@@ -88,3 +88,23 @@ def to_iso(dt: datetime | None) -> str | None:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc).isoformat()
+
+
+def to_local_iso(dt: datetime | None, tz_name: str = "Europe/Prague") -> str | None:
+    """UTC → lokální ISO čas v daném IANA časovém pásmu (E2 Timeline Engine).
+
+    ``tz_name`` je vázán na case (``Case.timezone_name``, default Europe/Prague).
+    Neznámé/poškozené TZ nebo chybějící tzdata → defenzivní fallback na UTC,
+    aby timeline nikdy nepadla kvůli časovému pásmu.
+    """
+    if dt is None:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo(tz_name)
+    except Exception:  # noqa: BLE001 — neznámé TZ / chybějící tzdata → UTC
+        return to_iso(dt)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(tz).isoformat()
