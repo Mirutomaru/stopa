@@ -186,6 +186,23 @@ def process_disk_image(
     return summary
 
 
+def _fde_plaintext_to_tmp(plaintext: bytes) -> tuple[Path | None, str]:
+    """Zapíše dešifrovaný plaintext do dočasného souboru pro TSK pipeline.
+
+    Vrací ``(cesta, "")`` při úspěchu nebo ``(None, popis_chyby)`` při selhání.
+    TSK čte z cesty (ne z paměti), takže plaintext musí být na disku.
+    """
+    import tempfile
+
+    try:
+        fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-fde-")
+        os.close(fd)
+        Path(tmp_name).write_bytes(plaintext)
+        return Path(tmp_name), ""
+    except OSError as e:
+        return None, f"FDE plaintext zápis: {e}"
+
+
 def process_mobile_image(
     db: CaseDB,
     source_id: str,
@@ -194,13 +211,20 @@ def process_mobile_image(
     password: str | None = None,
     carve_free: bool = False,
 ) -> ImageSummary:
-    """Mobilní physical obraz (FÁZE 6b) — FDE/FBE detekce + unlock + disk image pipeline.
+    """Mobilní physical obraz (FÁZE 6b + B2) — FDE/FBE/LUKS detekce + unlock.
 
-    Pokud obraz začíná FDE magic ``STOPAFDE``, dešifruje se heslem (PBKDF2→AES-256-CBC)
-    do dočasného plaintextu a ten jde přes běžný ``process_disk_image`` (TSK).
-    Bez FDE (běžný RAW/E01) jde rovnou. Chybějící/špatné heslo → chyba v ``errors``.
+    Detekuje a dešifruje tři formáty podle magic na offsetu 0:
+      * ``STOPAFBE`` → Android FBE (AES-256-XTS sektorová, čistý Python)
+      * ``LUKS\\xba\\xbe`` → LUKS/dm-crypt (cryptsetup, vyžaduje root + loop device)
+      * ``STOPAFDE`` → proprietární testovací formát (PBKDF2→AES-256-CBC)
+
+    Dešifrovaný plaintext jde do dočasného souboru a přes něj běžný
+    ``process_disk_image`` (TSK). Bez FDE/FBE/LUKS (běžný RAW/E01) jde rovnou.
+    Chybějící/špatné heslo → chyba v ``errors``.
     """
     from stopa.domain.fde import FdeError, decrypt_image, is_fde_image
+    from stopa.domain.fde_fbe import decrypt_fbe, is_fbe_image
+    from stopa.domain.fde_luks import decrypt_luks, is_luks_image
 
     image_path = Path(image_path).expanduser()
     summary = ImageSummary()
@@ -209,35 +233,62 @@ def process_mobile_image(
         summary.errors.append(f"Obraz neexistuje: {image_path}")
         return summary
 
-    # 1) FDE detekce (stačí hlavička)
+    # 1) FDE/FBE/LUKS detekce (stačí hlavička — všechny magics jsou ≤8 B na offsetu 0)
     try:
-        head = image_path.open("rb").read(48)
+        head = image_path.open("rb").read(96)
     except OSError as e:
         summary.errors.append(f"Chyba čtení obrazu: {e}")
         return summary
 
     work_path = image_path
-    if is_fde_image(head):
+    if is_fbe_image(head):
+        # FÁZE B2 — Android FBE (AES-XTS sektorová)
+        full = image_path.read_bytes()
+        try:
+            plaintext, header = decrypt_fbe(full, password or "")
+        except FdeError as e:
+            summary.errors.append(f"FDE unlock selhal (FBE): {e}")
+            return summary
+        work_path, desc = _fde_plaintext_to_tmp(plaintext)
+        if work_path is None:
+            summary.errors.append(desc)
+            return summary
+    elif is_luks_image(head):
+        # FÁZE B2 — LUKS/dm-crypt (cryptsetup, vyžaduje root + loop device)
+        try:
+            plaintext, header = decrypt_luks(image_path, password or "")
+        except FdeError as e:
+            summary.errors.append(f"LUKS unlock selhal: {e}")
+            return summary
+        work_path, desc = _fde_plaintext_to_tmp(plaintext)
+        if work_path is None:
+            summary.errors.append(desc)
+            return summary
+    elif is_fde_image(head):
+        # FÁZE 6b — STOPAFDE (AES-256-CBC, proprietární testovací formát)
         full = image_path.read_bytes()
         try:
             plaintext, header = decrypt_image(full, password or "")
         except FdeError as e:
             summary.errors.append(f"FDE unlock selhal: {e}")
             return summary
-        # plaintext do dočasného souboru → TSK pipeline (TSK čte z cesty)
-        import tempfile
+        work_path, desc = _fde_plaintext_to_tmp(plaintext)
+        if work_path is None:
+            summary.errors.append(desc)
+            return summary
 
-        fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-fde-")
-        try:
-            os.close(fd)
-            Path(tmp_name).write_bytes(plaintext)
-            work_path = Path(tmp_name)
-            summary.fde_unlocked = True
+    # FDE/FBE/LUKS metadata (typ + popis) — jen pokud se něco dešifrovalo
+    if work_path != image_path:
+        summary.fde_unlocked = True
+        if is_fbe_image(head):
+            summary.image_type = "fde"
+            summary.description = f"FBE obraz (fs={header.fs_type}) — AES-XTS, dešifrován heslem"
+        elif is_luks_image(head):
+            summary.image_type = "luks"
+            summary.description = f"LUKS v{header.version} obraz — dešifrován cryptsetup"
+        else:
             summary.image_type = "fde"
             summary.description = f"FDE obraz (fs={header.fs_type}) — dešifrován heslem"
-        except OSError as e:
-            summary.errors.append(f"FDE plaintext zápis: {e}")
-            return summary
 
     try:
         inner = process_disk_image(db, source_id, work_path, profile, carve_free=carve_free)
