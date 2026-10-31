@@ -107,16 +107,17 @@ Audit Chain of Custody odhalil 3 mezery — všechny doplněny:
 | 2 | **D Apple GUI + C1 Store + C2 pagination** | ✅ `dcd139d` |
 | 3 | **A1 rozbití sqlite_recover.py** | ✅ `6614d91` (parser/carver/formatter + shim) |
 | 4 | **CoC audit v reportu** | ✅ `27d242e` (MD5 + zdroj v manifestu, verze nástroje) |
-| 5 | **A2 pytsk3 / Docker TSK** | ⏳ onboarding, neblokující |
-| 6 | **B2 LUKS + Android FBE** | ⏳ produkční FDE, největší rozsah |
+| 5 | **A2 pytsk3 / Docker TSK** | ✅ `fd96535` (pytsk3 backend + CLI fallback, facade `data/tsk.py`) |
+| 6 | **B2 LUKS + Android FBE** | ✅ `0243e26`+`877dd6b` (LUKS/dm-crypt + FBE AES-XTS + keyfile import) |
 
 ---
 
-## F. Aktuální stav (ověřeno 2026-10-30)
+## F. Aktuální stav (ověřeno 2026-10-31)
 
 - Backend: FastAPI 0.162 + uvicorn[standard], `stopa serve --port 8473`.
 - **FTS5 search** (`db.py`: `files_fts`, `_fts_query()` s AND/OR/NOT/NEAR, bm25 relevance) → napojeno na Cmd+K modal.
-- Pagination: `list_files(offset)` + `/files?offset=` a `/timeline?offset=`; nový endpoint `/families` (DISTINCT signatury pro filtr).
+- Pagination: `list_files(offset)` + `/files?offset=` a `/timeline?offset=`; endpoint `/families` (DISTINCT signatury pro filtr).
 - Frontend: modulární vanilla JS — `app.js` (tenký orchestrátor) + `js/state.js` (Store) + `js/api.js` + `js/components/{sidebar,files,inspector,search,modules}.js`.
-- TSK binárky: `~/tsk-install/bin/`, `TSK_AVAILABLE` flag v `data/tsk.py`.
-- Testy: 318 (z toho 29 web), ruff clean.
+- **TSK (A2):** `data/tsk.py` = tenká facade → primárně **pytsk3** C-extension (`tsk_py.py`, bez subprocessů), fallback na CLI binárky (`tsk_cli.py`). Sdílené typy v `tsk_types.py`. `TSK_AVAILABLE` = pytsk3 NEBO CLI.
+- **FDE (B2):** `domain/fde_luks.py` (LUKS1/2 detekce + parsing hlavičky čistý Python, dešifrování přes cryptsetup) a `domain/fde_fbe.py` (Android FBE AES-256-XTS sektorová šifra). `process_mobile_image` = multi-formát dispatcher (FBE/LUKS/STOPAFDE podle magic) + **keyfile import** (`--keyfile`, priorita před `--password`).
+- Testy: **362 passed, 1 skipped**, ruff clean.
