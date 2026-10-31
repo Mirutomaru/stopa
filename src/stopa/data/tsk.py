@@ -1,184 +1,81 @@
-"""The Sleuth Kit (TSK) CLI wrapper — file systems + carving pro disk obrazy.
+"""TSK facade — jednotné veřejné API nad pytsk3 (primární) a CLI binárky (fallback).
 
-Ekvivalent X-Ways Forensics / FTK image analysis vrstva.
-IO vrstva: volá TSK binárky (mmls/fls/icat/blkls/img_stat) přes subprocess.
+Clean Architecture: konzumenti (`image_pipeline`, `web/app`) importují ODTUD,
+ne přímo z backendů. Tuto vrstvu mění jen při přidání nového backendu.
 
-Bin dir se řeší v tomto pořadí:
-1. env ``STOPA_TSK_BIN`` — explicitní cesta ke složce s TSK nástroji
-2. ``~/tsk-install/bin`` — výchozí (zdrojový build bez sudo)
-3. systémový PATH
+Strategie volby backendu:
+1. ``pytsk3`` — nativní bindingy, žádné subprocess (preferováno)
+2. CLI binárky (mmls/fls/icat/blkls/img_stat) — fallback když pytsk3 chybí
 
-Všechny funkce jsou defenzivní: chybějící binárka / neplatný obraz → výjimka
-``TskError`` srozumitelnou zprávou, ne traceback.
+Veřejné API (shoda s původním monolitem):
+- ``Partition``, ``ImageFile``, ``TskError`` — datové typy + výjimka
+- ``TSK_AVAILABLE`` — True pokud je dostupný alespoň jeden backend
+- ``tsk_bin_dir()`` — cesta ke TSK binárkám (CLI fallback)
+- ``image_partitions(path) -> list[Partition]``
+- ``list_files(path, partition=None, include_deleted=True) -> list[ImageFile]``
+- ``extract_file(path, meta_addr, partition=None) -> bytes``
+- ``free_blocks(path, partition=None) -> list[str]``
+- ``image_info(path) -> dict[str, str]``
+
+Privátní helpery (pro testy):
+- ``_desc_to_fstype(desc) -> str | None``
+- ``_parse_fls_line(line) -> ImageFile | None``
 """
 
 from __future__ import annotations
 
-import os
-import re
-import shutil
-import subprocess
-from dataclasses import dataclass
+import logging
 from pathlib import Path
 
+# --- backends -----------------------------------------------------------------
+import stopa.data.tsk_cli as _cli
+import stopa.data.tsk_py as _py
 
-class TskError(RuntimeError):
-    """TSK nástroj chybí nebo vrátil chybu."""
+# --- sdílené typy + výjimka ---------------------------------------------------
+from stopa.data.tsk_types import (
+    ImageFile,
+    Partition,
+    TskError,
+    desc_to_fstype,
+)
 
-
-def _tsk_available() -> bool:
-    try:
-        tsk_bin_dir()
-        return True
-    except TskError:
-        return False
+_log = logging.getLogger(__name__)
 
 
 def tsk_bin_dir() -> str:
-    """Vrátí cestu ke složce s TSK binárkami (None-safe)."""
-    env = os.environ.get("STOPA_TSK_BIN")
-    if env and Path(env, "fls").exists():
-        return env
-    default = Path.home() / "tsk-install" / "bin"
-    if (default / "fls").exists():
-        return str(default)
-    # fallback: hledat v PATH
-    which = shutil.which("fls")
-    if which:
-        return os.path.dirname(which)
-    raise TskError(
-        "TSK nástroje nenalezeny — nastav STOPA_TSK_BIN nebo nainstaluj do ~/tsk-install/bin"
-    )
+    """Cesta ke TSK binárkám (CLI backend); při chybě ``TskError``."""
+    return _cli.tsk_bin_dir()
 
 
-#: Dostupnost TSK binárek (fls/icat/…) — False = disk image pipeline nesežene.
-TSK_AVAILABLE = _tsk_available()
+# --- dostupnost ----------------------------------------------------------------
+
+#: True pokud je dostupný alespoň jeden backend (pytsk3 NEBO CLI binárky).
+TSK_AVAILABLE: bool = _py.py_available() or _cli.cli_available()
 
 
-def _tool(name: str) -> str:
-    d = tsk_bin_dir()
-    p = Path(d, name)
-    if not p.exists():
-        raise TskError(f"TSK nástroj chybí: {name} (hledáno v {d})")
-    return str(p)
+def _use_py() -> bool:
+    """Vrátí True, pokud má být použit pytsk3 backend."""
+    return _py.py_available()
 
 
-def _run(tool: str, args: list[str], timeout: int = 120, binary: bool = False) -> str | bytes:
-    """Spustí TSK nástroj a vrátí stdout; při chybě TskError.
-
-    ``binary=True`` — stdout jako raw bajty (pro icat s binárním obsahem);
-    jinak text (UTF-8).
-    """
-    exe = _tool(tool)
-    try:
-        r = subprocess.run(
-            [exe, *args], check=False, capture_output=True,
-            text=not binary, timeout=timeout,
-        )
-    except FileNotFoundError as e:
-        raise TskError(f"TSK nástroj se nedaří spustit: {e}") from e
-    except subprocess.TimeoutExpired as e:
-        raise TskError(f"TSK nástroj {tool} přetekl (>{timeout}s)") from e
-    if r.returncode != 0:
-        err = ((r.stderr or b"") if binary else (r.stderr or r.stdout)).strip().splitlines()
-        raise TskError(f"{tool} exit {r.returncode}: {err[-1] if err else 'bez zprávy'}")
-    return r.stdout
-
-
-@dataclass(frozen=True)
-class Partition:
-    """Partice / volume v obrazu (z mmls)."""
-
-    index: int  # slot v mmls
-    offset_sectors: int  # startový sektor (pro fls/icat -o)
-    size_sectors: int  # velikost v sektorech
-    desc: str  # popis z mmls (např. "DOS FAT16 (0x06)")
-    fstype: str | None = None  # TSK fstype pro -f (fat/ntfs/ext2/...)
-
-
-@dataclass(frozen=True)
-class ImageFile:
-    """Soubor v diskovém obrazu (z fls)."""
-
-    path: str  # plná cesta /dir/file.txt
-    meta_addr: str  # metadata adresa (pro icat)
-    file_type: str  # r/d/l/b/c/s/f/p/v
-    size: int | None = None
-    mtime: str | None = None
-
-
-# --- mapování popisu z mmls → TSK fstype pro -f -------------------------------
-
-def _desc_to_fstype(desc: str) -> str | None:
-    d = desc.lower()
-    # NTFS PŘED FAT — popis "NTFS / exFAT (0x07)" obsahuje oba, ale 0x07 je exFAT/NTFS slot
-    if "ntfs" in d:
-        return "ntfs"
-    if "fat" in d or "exfat" in d:
-        return "fat"
-    if "ext2" in d or "ext3" in d or "ext4" in d:
-        return "ext2"  # TSK čte ext2/3/4 pod jedním typem
-    if "hfs+" in d or "hfsplus" in d:
-        return "hfs+"
-    if "apfs" in d:
-        return "apfs"
-    if "reiser" in d:
-        return "reiserfs"
-    if "xfs" in d:
-        return "xfs"
-    if "udf" in d:
-        return "udf"
-    if "iso9660" in d or "iso 9660" in d:
-        return "iso9660"
-    return None
+# --- public API (facade) -------------------------------------------------------
 
 
 def image_partitions(image_path: Path) -> list[Partition]:
-    """Seznam partici/volumin v obrazu (mmls).
+    """Seznam partici/volumin v obrazu.
 
-    Vrací jen data partitiony s rozpoznaným fstype (pro fls/icat).
+    Preferuje pytsk3 (Volume_Info); fallback na mmls.
+    Vrací jen data partitiony s rozpoznaným fstype.
     """
-    out = _run("mmls", [str(image_path)])
-    parts: list[Partition] = []
-    for line in out.splitlines():
-        # "002:  000:000   0000000063   0000008191   0000008129   DOS FAT16 (0x06)"
-        m = re.match(
-            r"\s*(\d+):\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+)$", line
-        )
-        if not m:
-            continue
-        index, _meta, start, _end, length, desc = (
-            int(m.group(1)),
-            m.group(2),
-            int(m.group(3)),
-            int(m.group(4)),
-            int(m.group(5)),
-            m.group(6).strip(),
-        )
-        fstype = _desc_to_fstype(desc)
-        if fstype is None:
-            continue  # přeskočit "Primary Table", "Unallocated" apod.
-        parts.append(
-            Partition(
-                index=index,
-                offset_sectors=start,
-                size_sectors=length,
-                desc=desc,
-                fstype=fstype,
-            )
-        )
-    return parts
-
-
-def image_info(image_path: Path) -> dict[str, str]:
-    """Základní info o obrazu (img_stat)."""
-    out = _run("img_stat", [str(image_path)])
-    info: dict[str, str] = {}
-    for line in out.splitlines():
-        if ":" in line and not line.startswith("-"):
-            k, _, v = line.partition(":")
-            info[k.strip()] = v.strip()
-    return info
+    if _use_py():
+        try:
+            return _py.image_partitions(image_path)
+        except TskError as e:
+            # pytsk3 selhalo (např. raw obraz bez partition tabulky) → zkusit CLI
+            if not _cli.cli_available():
+                raise
+            _log.debug("pytsk3 image_partitions selhalo, fallback na mmls: %s", e)
+    return _cli.image_partitions(image_path)
 
 
 def list_files(
@@ -186,63 +83,77 @@ def list_files(
     partition: Partition | None = None,
     include_deleted: bool = True,
 ) -> list[ImageFile]:
-    """Rekurzivní seznam souborů (fls -r -l -p).
+    """Rekurzivní seznam souborů v obrazu.
 
-    ``partition`` — z mmls; pokud None a obraz má MBR, použije se první data partice.
+    Preferuje pytsk3 (dir walk); fallback na fls -r -l -p.
+    ``partition`` — z image_partitions; None → DETECT / první data partice.
+    ``include_deleted`` — False → jen alokované soubory.
     """
-    args = ["-r", "-l", "-p"]
-    if not include_deleted:
-        args.append("-u")  # jen nesmazané (výchozí výstup už obsahuje i smazané)
-    if partition is not None:
-        args += ["-f", partition.fstype or "fat", "-o", str(partition.offset_sectors)]
-    out = _run("fls", [*args, str(image_path)])
-    files: list[ImageFile] = []
-    for line in out.splitlines():
-        f = _parse_fls_line(line)
-        if f:
-            files.append(f)
-    return files
+    if _use_py():
+        try:
+            return _py.list_files(image_path, partition=partition, include_deleted=include_deleted)
+        except TskError as e:
+            if not _cli.cli_available():
+                raise
+            _log.debug("pytsk3 list_files selhalo, fallback na fls: %s", e)
+    return _cli.list_files(image_path, partition=partition, include_deleted=include_deleted)
 
 
-def _parse_fls_line(line: str) -> ImageFile | None:
-    """Parsovaní jednoho řádku ``fls -l`` (tab-separovaný formát).
+def extract_file(
+    image_path: Path, meta_addr: str, partition: Partition | None = None
+) -> bytes:
+    """Obsah souboru podle metadata adresy.
 
-    Formát:  ``r/r 3:\tREADME.TXT\t<mtime>\t<atime>\t<ctime>\t<rdate>\t<size>\t<uid>\t<gid>``
+    Preferuje pytsk3 (open_meta + read_random); fallback na icat.
+    Vrací raw bajty (binární obsah).
     """
-    line = line.rstrip("\n")
-    if not line or "\t" not in line:
-        return None
-    head, _, rest = line.partition(":")
-    # head = "r/r 3" → typ + meta_addr
-    hm = re.match(r"([a-zA-Z])/([a-zA-Z])\s+(\S+)", head.strip())
-    if not hm:
-        return None
-    ftype, _ftype2, meta_addr = hm.group(1), hm.group(2), hm.group(3)
-    fields = rest.lstrip("\t").split("\t")
-    if len(fields) < 6:
-        return None
-    path = fields[0].strip()
-    mtime = fields[1].strip() or None
-    size_raw = fields[5].strip()
-    size = int(size_raw) if size_raw.isdigit() else None
-    return ImageFile(
-        path=path, meta_addr=meta_addr, file_type=ftype, size=size, mtime=mtime
-    )
-
-
-def extract_file(image_path: Path, meta_addr: str, partition: Partition | None = None) -> bytes:
-    """Obsah souboru podle metadata adresy (icat). Raw bajty (binární obsah)."""
-    args = [str(image_path), meta_addr]
-    if partition is not None:
-        args = ["-f", partition.fstype or "fat", "-o", str(partition.offset_sectors)] + args
-    out = _run("icat", args, binary=True)
-    return out if isinstance(out, bytes) else out.encode("utf-8")
+    if _use_py():
+        try:
+            return _py.extract_file(image_path, meta_addr, partition=partition)
+        except TskError as e:
+            if not _cli.cli_available():
+                raise
+            _log.debug(
+                "pytsk3 extract_file selhalo (addr=%s), fallback na icat: %s", meta_addr, e
+            )
+    return _cli.extract_file(image_path, meta_addr, partition=partition)
 
 
 def free_blocks(image_path: Path, partition: Partition | None = None) -> list[str]:
-    """Volné bloky (blkls) — pro carving nealokovaného prostoru."""
-    args = []
-    if partition is not None:
-        args += ["-f", partition.fstype or "fat", "-o", str(partition.offset_sectors)]
-    out = _run("blkls", [*args, str(image_path)])
-    return [ln for ln in out.splitlines() if ln.strip()]
+    """Volné bloky — pro carving nealokovaného prostoru.
+
+    Preferuje pytsk3 (complement runs); fallback na blkls.
+    Vrací seřazené adresy bloků jako str.
+    """
+    if _use_py():
+        try:
+            return _py.free_blocks(image_path, partition=partition)
+        except TskError as e:
+            if not _cli.cli_available():
+                raise
+            _log.debug("pytsk3 free_blocks selhalo, fallback na blkls: %s", e)
+    return _cli.free_blocks(image_path, partition=partition)
+
+
+def image_info(image_path: Path) -> dict[str, str]:
+    """Základní info o obrazu (typ, velikost, sektor).
+
+    Preferuje pytsk3 (Img_Info.get_size); fallback na img_stat.
+    """
+    if _use_py():
+        try:
+            return _py.image_info(image_path)
+        except TskError as e:
+            if not _cli.cli_available():
+                raise
+            _log.debug("pytsk3 image_info selhalo, fallback na img_stat: %s", e)
+    return _cli.image_info(image_path)
+
+
+# --- privátní helpery (pro testy) ----------------------------------------------
+
+#: Alias pro ``desc_to_fstype`` (test_tsk.py importuje jako ``_desc_to_fstype``).
+_desc_to_fstype = desc_to_fstype
+
+#: Parsování řádku fls -l (CLI backend; test_tsk.py importuje jako ``_parse_fls_line``).
+_parse_fls_line = _cli.parse_fls_line
