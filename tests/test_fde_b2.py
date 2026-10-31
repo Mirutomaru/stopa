@@ -311,3 +311,79 @@ def test_pipeline_fbe_no_password(tmp_path: Path, case_db):
     assert summary.fde_unlocked is False
     assert any("FDE unlock selhal" in e for e in summary.errors)
     db.close()
+
+
+# ── import extrahovaného klíče / passphrase (B2 bod 3: keyfile) ─────────────
+
+def test_key_material_password_only():
+    from stopa.data.image_pipeline import _fde_key_material
+
+    assert _fde_key_material("hlasovka", None) == b"hlasovka"
+
+
+def test_key_material_bytes_password():
+    from stopa.data.image_pipeline import _fde_key_material
+
+    assert _fde_key_material(b"\x01\x02", None) == b"\x01\x02"
+
+
+def test_key_material_none_returns_empty():
+    from stopa.data.image_pipeline import _fde_key_material
+
+    assert _fde_key_material(None, None) == b""
+
+
+def test_key_material_keyfile_priority(tmp_path: Path):
+    """Klíčový soubor má prioritu před heslem (importovaný klíč)."""
+    from stopa.data.image_pipeline import _fde_key_material
+
+    kf = tmp_path / "key.bin"
+    kf.write_bytes(b"\xde\xad\xbe\xef")
+    assert _fde_key_material("heslo", kf) == b"\xde\xad\xbe\xef"
+
+
+def test_key_material_missing_keyfile_raises(tmp_path: Path):
+    from stopa.data.image_pipeline import _fde_key_material
+
+    with pytest.raises(FdeError):
+        _fde_key_material(None, tmp_path / "chybi.bin")
+
+
+@requires_tsk
+def test_pipeline_fbe_unlock_via_keyfile(tmp_path: Path, case_db):
+    """FBE obraz → dešifrován importovaným klíčem (keyfile), bez --password."""
+    from stopa.models import ProcessingProfile
+
+    db, src_id = case_db
+    img = _fat16_fbe_image(tmp_path, password="hlasovka")
+    # extrahovaný klíč = heslo v souboru (simulace importu)
+    kf = tmp_path / "extracted-key.bin"
+    kf.write_bytes(b"hlasovka")
+
+    summary = process_mobile_image(
+        db, src_id, img, ProcessingProfile(name="default"), keyfile=kf
+    )
+
+    assert summary.fde_unlocked is True
+    assert summary.image_type == "fde"
+    assert summary.files_total >= 1
+    db.close()
+
+
+@requires_tsk
+def test_pipeline_fbe_keyfile_beats_password(tmp_path: Path, case_db):
+    """Keyfile má prioritu — špatné heslo + správný keyfile → unlock."""
+    from stopa.models import ProcessingProfile
+
+    db, src_id = case_db
+    img = _fat16_fbe_image(tmp_path, password="spravne")
+    kf = tmp_path / "key.bin"
+    kf.write_bytes(b"spravne")
+
+    summary = process_mobile_image(
+        db, src_id, img, ProcessingProfile(name="default"),
+        password="nespravne", keyfile=kf,
+    )
+
+    assert summary.fde_unlocked is True
+    db.close()

@@ -203,12 +203,31 @@ def _fde_plaintext_to_tmp(plaintext: bytes) -> tuple[Path | None, str]:
         return None, f"FDE plaintext zápis: {e}"
 
 
+def _fde_key_material(password: str | None, keyfile: Path | str | None) -> bytes:
+    """Rozřeší heslo / extrahovaný klíč na bajty (pro FBE + STOPAFDE).
+
+    ``keyfile`` má prioritu (importovaného klíče); jinak se použije ``password``.
+    Žádný → prázdné bytes (dešifrování selže srozumitelně v domain vrstvě).
+    """
+    if keyfile is not None:
+        kf = Path(keyfile).expanduser()
+        if not kf.exists():
+            from stopa.domain.fde import FdeError
+
+            raise FdeError(f"Klíčový soubor neexistuje: {kf}")
+        return kf.read_bytes()
+    if password is not None:
+        return password.encode("utf-8") if isinstance(password, str) else password
+    return b""
+
+
 def process_mobile_image(
     db: CaseDB,
     source_id: str,
     image_path: Path | str,
     profile: ProcessingProfile,
     password: str | None = None,
+    keyfile: Path | str | None = None,
     carve_free: bool = False,
 ) -> ImageSummary:
     """Mobilní physical obraz (FÁZE 6b + B2) — FDE/FBE/LUKS detekce + unlock.
@@ -245,7 +264,8 @@ def process_mobile_image(
         # FÁZE B2 — Android FBE (AES-XTS sektorová)
         full = image_path.read_bytes()
         try:
-            plaintext, header = decrypt_fbe(full, password or "")
+            key = _fde_key_material(password, keyfile)
+            plaintext, header = decrypt_fbe(full, key)
         except FdeError as e:
             summary.errors.append(f"FDE unlock selhal (FBE): {e}")
             return summary
@@ -256,7 +276,7 @@ def process_mobile_image(
     elif is_luks_image(head):
         # FÁZE B2 — LUKS/dm-crypt (cryptsetup, vyžaduje root + loop device)
         try:
-            plaintext, header = decrypt_luks(image_path, password or "")
+            plaintext, header = decrypt_luks(image_path, password=password, keyfile=keyfile)
         except FdeError as e:
             summary.errors.append(f"LUKS unlock selhal: {e}")
             return summary
@@ -268,7 +288,8 @@ def process_mobile_image(
         # FÁZE 6b — STOPAFDE (AES-256-CBC, proprietární testovací formát)
         full = image_path.read_bytes()
         try:
-            plaintext, header = decrypt_image(full, password or "")
+            key = _fde_key_material(password, keyfile)
+            plaintext, header = decrypt_image(full, key)
         except FdeError as e:
             summary.errors.append(f"FDE unlock selhal: {e}")
             return summary

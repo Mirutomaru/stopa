@@ -245,7 +245,8 @@ def cmd_mobile(args: argparse.Namespace) -> int:
     db.add_source(source)
     summary = process_mobile_image(
         db, source.id, img_path, profile,
-        password=args.password, carve_free=not args.no_carve,
+        password=args.password, keyfile=getattr(args, "keyfile", None),
+        carve_free=not args.no_carve,
     )
     if summary.fde_unlocked:
         print(f"Mobilní FDE obraz: {summary.description}")
@@ -385,6 +386,8 @@ def build_parser() -> argparse.ArgumentParser:
     mob_p.add_argument("path", help="cesta k mobilnímu obrazu (.img/.dd, volitelně FDE)")
     mob_p.add_argument("--password", metavar="HESLO", default=None,
                        help="FDE/FBE heslo (pokud je obraz šifrovaný)")
+    mob_p.add_argument("--keyfile", metavar="SOUBOR", default=None,
+                       help="extrahovaný klíč / passphrase soubor (má prioritu před --password)")
     mob_p.add_argument("--profile", default="forensic", choices=sorted(PROFILES),
                        help="processing profil (default: forensic)")
     mob_p.add_argument("--no-carve", action="store_true",
