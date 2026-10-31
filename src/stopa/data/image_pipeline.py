@@ -16,6 +16,7 @@ Vše defenzivní: chybějící TSK / neplatný obraz → chyby v ``errors``, ne 
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,9 +30,11 @@ from stopa.data.tsk import (
     list_files,
 )
 from stopa.domain.carving import carve_file
-from stopa.domain.image_types import detect_image_type, filesystem_fstype
+from stopa.domain.image_types import detect_image_type, filesystem_fstype, is_container
 from stopa.domain.signatures import detect_signature
 from stopa.models import Artifact, FileRecord, ProcessingProfile
+
+_log = logging.getLogger(__name__)
 
 # Kolik bajtů obsahu extrahovat pro signaturu (hlavička stačí).
 _SIG_HEAD = 65_536
@@ -85,18 +88,49 @@ def process_disk_image(
     if det:
         summary.image_type, summary.description = det
 
+    # 1b) kontejner (E01/AFF4) → extrakce obsahu do dočasného RAW souboru.
+    #     TSK čte jen RAW/partice; obsah kontejneru se musí nejdřív rozbalit.
+    work_path = image_path
+    extracted_raw: Path | None = None
+    if is_container(summary.image_type):
+        from stopa.data.ewf_container import EwfError, ewf_available, read_container
+
+        if not ewf_available():
+            summary.errors.append(
+                f"Kontejner {summary.image_type} detekován, ale libewf/libafflib "
+                "nedostupné (nainstalujte runtime knihovny)"
+            )
+            return summary
+        try:
+            raw = read_container(image_path, summary.image_type)
+        except EwfError as e:
+            summary.errors.append(f"Čtení kontejneru ({summary.image_type}): {e}")
+            return summary
+        import tempfile
+
+        fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-ewf-")
+        os.close(fd)
+        extracted_raw = Path(tmp_name)
+        try:
+            extracted_raw.write_bytes(raw)
+        except OSError as e:
+            summary.errors.append(f"Zápis extrahovaného obrazu: {e}")
+            return summary
+        work_path = extracted_raw
+
     # 2) particie (TSK mmls) — defenzivně
     try:
-        summary.partitions = image_partitions(image_path)
+        summary.partitions = image_partitions(work_path)
     except TskError as e:
         summary.errors.append(f"mmls: {e}")
 
     # 2b) fallback bez partition table — čistý FS na offsetu 0 (mobilní oddíl,
     #     FDE plaintext): mmls nic nenajde → celý obraz = jedna syntetická partice.
     if not summary.partitions:
-        fstype = filesystem_fstype(head)
+        work_head = work_path.open("rb").read(4096)
+        fstype = filesystem_fstype(work_head)
         if fstype:
-            size_sectors = image_path.stat().st_size // 512
+            size_sectors = work_path.stat().st_size // 512
             summary.partitions.append(
                 Partition(
                     index=0,
@@ -110,7 +144,7 @@ def process_disk_image(
     # 3) soubory v každé partici → FileRecord + signatura
     for part in summary.partitions:
         try:
-            files = list_files(image_path, partition=part)
+            files = list_files(work_path, partition=part)
         except TskError as e:
             summary.errors.append(f"fls (partice {part.index}): {e}")
             continue
@@ -123,7 +157,7 @@ def process_disk_image(
             sig_type: str | None = None
             if profile.signature_analysis and size > 0:
                 try:
-                    content = extract_file(image_path, f.meta_addr, partition=part)
+                    content = extract_file(work_path, f.meta_addr, partition=part)
                     det2 = detect_signature(content[:_SIG_HEAD])
                     if det2:
                         sig_type = det2[0]
@@ -178,9 +212,16 @@ def process_disk_image(
     # 5) carving — STREAMING přes mmap (sliding window), ne read_bytes() celého obrazu
     if carve_free:
         try:
-            summary.carved_candidates = len(carve_file(image_path))
+            summary.carved_candidates = len(carve_file(work_path))
         except OSError as e:
             summary.errors.append(f"carving čtení: {e}")
+
+    # 6) cleanup extrahovaného RAW (E01/AFF4 kontejner) — TSK už s ním hotovo
+    if extracted_raw is not None and extracted_raw.exists():
+        try:
+            extracted_raw.unlink()
+        except OSError as e:
+            _log.debug("cleanup extrahovaného obrazu %s selhal: %s", extracted_raw, e)
 
     db.commit()
     return summary

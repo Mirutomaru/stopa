@@ -4,8 +4,9 @@ Ekvivalent X-Ways Forensics / The Sleuth Kit image type detection.
 ČISTÁ funkce nad bajty — žádný IO, žádná síť → 100% offline testovatelné.
 
 Podporované kontejnery:
-- EWF/E01 (Expert Witness Format) — magic ``EWF`` na offsetu 0
-- AFF4 (Autopsy Forensic File Format) — magic ``AFF4`` na offsetu 0
+- EWF/E01 (Expert Witness Format) — magic ``EVF\\t\\r\\n\\xff\\x00`` na offsetu 0
+  (v1 signatura, kterou píše libewf; staré soubory mohou mít i ``EWF`` prefix)
+- AFF4 (Autopsy Forensic File Format) — magic ``AFF10\\r\\n\\x00`` na offsetu 0
 - RAW/DD — bez vlastní hlavičky; detekuje se podkladový file system
 
 Podkladové file systémy pro RAW obrazy:
@@ -46,8 +47,16 @@ def detect_image_type(data: bytes) -> tuple[str, str] | None:
     if not data:
         return None
     # Kontejnery s vlastní magic hlavičkou
+    # E01 v1 signatura (co píše libewf): "EVF\t\r\n\xff\0" — 8 bajtů na offsetu 0
+    if data.startswith(b"EVF\t\r\n\xff\x00"):
+        return ("e01", "Expert Witness Format (EWF/E01)")
+    # starší EWF soubory mohou mít prefix "EWF" (kompatibilita)
     if data[:3] == b"EWF":
         return ("e01", "Expert Witness Format (EWF/E01)")
+    # AFF4 header: "AFF10\r\n\0" (8 B, network byte order dle afflib specifikace)
+    if data.startswith(b"AFF10\r\n\x00"):
+        return ("aff4", "Autopsy Forensic File Format 4")
+    # kompatibilita s původní detekcí prefixu "AFF4"
     if data[:4] == b"AFF4":
         return ("aff4", "Autopsy Forensic File Format 4")
     # RAW/DD — detekce podkladového file systemu
