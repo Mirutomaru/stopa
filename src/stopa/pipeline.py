@@ -15,6 +15,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from stopa.artifacts.imessage_cloud import extract_icloud_messages, is_icloud_messages_file
 from stopa.artifacts.plist_extract import extract_plist_artifacts
 from stopa.artifacts.registry_extract import extract_registry_artifacts
 from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
@@ -52,6 +53,20 @@ ARTIFACT_EXTRACTORS: dict[str, Callable[[Path], list]] = {
     "registry_hive": extract_registry_artifacts,
     "plist": extract_plist_artifacts,
 }
+
+
+def _extract_artifacts_for(path: Path, signature_type: str | None) -> list[Artifact]:
+    """Artifact extraktoři pro jeden soubor — signatura PŘED name-based fallbackem.
+
+    AXIOM Hunter pattern: iCloud Messages export (`MessagesInICloud.csv`) nemá
+    spolehlivou magic (XLSX je generic OOXML, delimited text žádnou), proto se
+    detekuje podle názvu souboru — jen když signatura nic nenašla.
+    """
+    if signature_type in ARTIFACT_EXTRACTORS:
+        return ARTIFACT_EXTRACTORS[signature_type](path)
+    if is_icloud_messages_file(path.name):  # name-based fallback (AXIOM Hunter)
+        return extract_icloud_messages(path)
+    return []
 
 
 def _read_head(path: Path) -> bytes:
@@ -176,9 +191,9 @@ def process_source(
 
         db.upsert_file(rec)  # nejdřív soubor — FK pro artifacts níže
 
-        # ── artifact extraktoři (AXIOM-style) — signatura → extraktor ──
-        if profile.extract_artifacts and rec.signature_type in ARTIFACT_EXTRACTORS:
-            arts = ARTIFACT_EXTRACTORS[rec.signature_type](abs_path)
+        # ── artifact extraktoři (AXIOM-style) — signatura → extraktor (+ name fallback) ──
+        if profile.extract_artifacts:
+            arts = _extract_artifacts_for(abs_path, rec.signature_type)
             for a in arts:
                 a.source_id = source_id
                 a.file_id = rec.id

@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS artifacts (
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_source ON artifacts(source_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifacts(timestamp);
+-- name-based fallback (iCloud Messages) volá replace pro KAŽDÝ soubor → DELETE WHERE file_id=?
+CREATE INDEX IF NOT EXISTS idx_artifacts_file ON artifacts(file_id);
 
 -- Meta (verze schématu, stav FTS indexu…)
 CREATE TABLE IF NOT EXISTS meta (
