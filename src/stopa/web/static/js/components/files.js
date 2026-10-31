@@ -6,6 +6,7 @@
 
 const FILES_PAGE = 100; // řádků na stránku (virtualizace: DOM drží jen načtené)
 let _fs = { rows: [], offset: 0, loading: false, done: false };
+let _kbCursor = -1; // index do _fs.rows aktuálně zvýrazněného řádku (-1 = žádný)
 
 function fsQuery() {
   const p = new URLSearchParams();
@@ -38,6 +39,7 @@ async function renderFileSystem(cid) {
   } catch (e) { /* ignorovat */ }
 
   _fs = { rows: [], offset: 0, loading: false, done: false };
+  _kbCursor = -1; // nový případ → kurzor gridu od začátku
   document.querySelector("#files-table tbody").innerHTML = "";
   await loadFilesPage();
 }
@@ -117,9 +119,66 @@ async function bulkFlag(flag) {
 
 function resetFiles() {
   _fs = { rows: [], offset: 0, loading: false, done: false };
+  _kbCursor = -1; // nový filtr → kurzor gridu od začátku
   const tbody = document.querySelector("#files-table tbody");
   if (tbody) tbody.innerHTML = "";
   loadFilesPage();
+}
+
+/* ── klávesová navigace v gridu (forensic ergonomics) ───────────
+   šipky ↑/↓  = pohyb mezi řádky (+ okamžitý update File Inspector + Hex Viewer),
+   Space      = rychlé označení/odznačení aktuálního řádku jako důkaz (Mark as Evidence),
+   [ / ]      = rychlé přepínání stránek (stejné PageUp/PageDown). */
+
+function gridRows() {
+  return [...document.querySelectorAll("#files-table tbody tr[data-fid]")];
+}
+
+function kbSelect(idx, scrollIntoView = true) {
+  const rows = gridRows();
+  if (!rows.length) return;
+  idx = Math.max(0, Math.min(idx, rows.length - 1));
+  _kbCursor = idx;
+  rows.forEach((tr, i) => tr.classList.toggle("selected", i === idx));
+  const fid = rows[idx].dataset.fid;
+  if (fid && Store.get("caseId")) openInspector(fid); // okamžitý update Inspector + Hex
+  if (scrollIntoView) rows[idx].scrollIntoView({ block: "nearest" });
+}
+
+async function kbMove(d) {
+  let rows = gridRows();
+  if (!rows.length && !_fs.done) await loadFilesPage();
+  rows = gridRows();
+  // první pohyb bez zvýrazněného řádku → začni na začátku (dolů) nebo konci (nahoru)
+  const target = _kbCursor < 0 ? (d > 0 ? 0 : rows.length - 1) : _kbCursor + d;
+  // dopředu za načtené řádky → dočíst další stránku (infinite scroll, server-side)
+  while (target >= _fs.rows.length && !_fs.done && !_fs.loading) await loadFilesPage();
+  kbSelect(target);
+}
+
+function wireGridKeyboard() {
+  document.addEventListener("keydown", (e) => {
+    if (Store.get("module") !== "file-system") return; // jen v modulu File System
+    const t = e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return; // neinterferovat s psaním
+    let handled = true;
+    switch (e.key) {
+      case "ArrowDown": kbMove(1); break;
+      case "ArrowUp": kbMove(-1); break;
+      case "[": case "PageUp": kbMove(-FILES_PAGE); break;
+      case "]": case "PageDown": kbMove(FILES_PAGE); break;
+      case " ": { // Space — Mark as Evidence na aktuálním řádku
+        const rows = gridRows();
+        if (_kbCursor >= 0 && _kbCursor < rows.length) {
+          const fid = rows[_kbCursor].dataset.fid;
+          if (fid) toggleFlag(fid, "evidence");
+        } else handled = false;
+        break;
+      }
+      default: handled = false;
+    }
+    if (handled) e.preventDefault(); // zabránit scrollu stránky šipkami/Space/PageUp-Down
+  });
 }
 
 function wireFiles() {

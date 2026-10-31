@@ -10,6 +10,7 @@ function wire() {
   wireSidebar();
   wireFiles();
   wireInspector();
+  wireGridKeyboard();
   wireCmdK();
   wireArtifacts();
   wireStatusBar();
