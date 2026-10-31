@@ -15,9 +15,15 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from stopa.artifacts.imessage_cloud import (
+    PARSER_VERSION as IMESSAGE_CLOUD_VERSION,
+)
 from stopa.artifacts.imessage_cloud import extract_icloud_messages, is_icloud_messages_file
+from stopa.artifacts.plist_extract import PARSER_VERSION as PLIST_VERSION
 from stopa.artifacts.plist_extract import extract_plist_artifacts
+from stopa.artifacts.registry_extract import PARSER_VERSION as REGISTRY_VERSION
 from stopa.artifacts.registry_extract import extract_registry_artifacts
+from stopa.artifacts.sqlite_extract import PARSER_VERSION as SQLITE_VERSION
 from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
 from stopa.artifacts.sqlite_recover import recover_deleted_rows
 from stopa.data.db import CaseDB
@@ -47,12 +53,24 @@ def _extract_sqlite_all(path: Path) -> list[Artifact]:
     return arts
 
 
-# signatura → extraktor (AXIOM-style artifact engine). Nový typ = nový řádek.
-ARTIFACT_EXTRACTORS: dict[str, Callable[[Path], list]] = {
-    "sqlite": _extract_sqlite_all,
-    "registry_hive": extract_registry_artifacts,
-    "plist": extract_plist_artifacts,
+# signatura → (extraktor, verze_parseru) — E1: verze se eviduje v audit logu.
+ARTIFACT_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
+    "sqlite": (_extract_sqlite_all, SQLITE_VERSION),
+    "registry_hive": (extract_registry_artifacts, REGISTRY_VERSION),
+    "plist": (extract_plist_artifacts, PLIST_VERSION),
 }
+
+# name-based fallback (AXIOM Hunter) — iCloud Messages export bez spolehlivé magiky.
+NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
+    "icloud_messages": (extract_icloud_messages, IMESSAGE_CLOUD_VERSION),
+}
+
+
+def parser_versions() -> dict[str, str]:
+    """Verze všech registrovaných parserů — pro audit log (reprodukovatelnost)."""
+    return {sig: ver for sig, (_fn, ver) in ARTIFACT_EXTRACTORS.items()} | {
+        name: ver for name, (_fn, ver) in NAME_BASED_EXTRACTORS.items()
+    }
 
 
 def _extract_artifacts_for(path: Path, signature_type: str | None) -> list[Artifact]:
@@ -63,7 +81,8 @@ def _extract_artifacts_for(path: Path, signature_type: str | None) -> list[Artif
     detekuje podle názvu souboru — jen když signatura nic nenašla.
     """
     if signature_type in ARTIFACT_EXTRACTORS:
-        return ARTIFACT_EXTRACTORS[signature_type](path)
+        fn, _ver = ARTIFACT_EXTRACTORS[signature_type]
+        return fn(path)
     if is_icloud_messages_file(path.name):  # name-based fallback (AXIOM Hunter)
         return extract_icloud_messages(path)
     return []
@@ -93,6 +112,12 @@ def process_source(
     """
     profile = get_profile(profile_name)
     result = ProcessResult(source_id=source_id, profile=profile.name)
+
+    # E1 Evidence Manager: neměnná stopa operací (provenience — SWGDE-style)
+    db.log_operation(
+        "processing_started",
+        details={"source_id": source_id, "profile": profile_name},
+    )
 
     walked = walk_source(root)
     total = len(walked)
@@ -205,6 +230,22 @@ def process_source(
             progress(i + 1, total)
 
     db.commit()
+    # E1 Evidence Manager: uzavření běhu — souhrny + verze parserů (reprodukovatelnost)
+    db.log_operation(
+        "processing_completed",
+        details={
+            "source_id": source_id,
+            "files_total": result.files_total,
+            "bytes_total": result.bytes_total,
+            "signatures_detected": result.signatures_detected,
+            "bad_extensions": result.bad_extensions,
+            "duplicates": result.duplicates,
+            "hash_set_hits": result.hash_set_hits,
+            "artifacts_extracted": result.artifacts_extracted,
+            "errors": len(result.errors),
+            "parser_versions": parser_versions(),
+        },
+    )
     return result
 
 

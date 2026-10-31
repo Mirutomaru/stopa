@@ -22,6 +22,9 @@ from stopa.models import Artifact
 
 log = logging.getLogger("stopa.artifacts.sqlite")
 
+# E1: verze parseru — eviduje se v audit logu (reprodukovatelnost analýzy)
+PARSER_VERSION = "1.0"
+
 MAX_GENERIC_TABLES = 20  # triage artifact — nevtěsnávat 500 tabulek do detailů
 
 

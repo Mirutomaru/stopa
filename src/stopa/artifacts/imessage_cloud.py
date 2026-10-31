@@ -31,6 +31,9 @@ from stopa.models import Artifact
 
 log = logging.getLogger("stopa.artifacts.imessage_cloud")
 
+# E1: verze parseru — eviduje se v audit logu (reprodukovatelnost analýzy)
+PARSER_VERSION = "1.0"
+
 # detekce podle názvu — AXIOM Hunter pattern (case-insensitive)
 NAME_MARKER = "messagesinicloud"
 

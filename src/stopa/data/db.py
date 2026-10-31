@@ -8,9 +8,20 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from stopa.models import Artifact, Case, EvidenceSource, FileRecord
+
+# E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
+# ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
+SCHEMA_VERSION = 2
+
+
+def _schema_version(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+    return int(row["value"]) if row else 1
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cases (
@@ -73,6 +84,32 @@ CREATE TABLE IF NOT EXISTS evidence_marks (
     flags TEXT  -- komou oddělené flagy: "evidence", "report"
 );
 
+-- E1 Evidence Manager: neměnný audit log operací (kdo/kdy/co — SWGDE-style provenience)
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    action TEXT NOT NULL,
+    actor TEXT,
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
+-- append-only: UPDATE/DELETE se tichom ignorují (RAISE(IGNORE)) — neměnná stopa
+CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log BEGIN
+    SELECT RAISE(IGNORE);
+END;
+CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log BEGIN
+    SELECT RAISE(IGNORE);
+END;
+
+-- E1 Evidence Manager: custody items — metadata nabytí důkazu per source (průběžná evidence)
+CREATE TABLE IF NOT EXISTS custody_items (
+    source_id TEXT PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
+    acquired_at TEXT NOT NULL,
+    method TEXT,
+    custodian TEXT,
+    notes TEXT
+);
+
 -- FÁZE 3: full-text search (FTS5) — external content nad `files` + sync triggery.
 -- Idempotentní i pro staré case DB z FÁZE 1 (IF NOT EXISTS).
 CREATE VIRTUAL TABLE IF NOT EXISTS files_fts USING fts5(
@@ -131,6 +168,19 @@ class CaseDB:
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('fts_backfilled', '1')"
             )
             self.conn.commit()
+        # E1: verze schématu — stará DB se migrují idempotentně nahoře;
+        # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).
+        if _schema_version(self.conn) < SCHEMA_VERSION:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value)"
+                " VALUES ('schema_version', ?)",
+                (str(SCHEMA_VERSION),),
+            )
+            self.conn.commit()
+
+    def schema_version(self) -> int:
+        """Aktuální verze schématu case DB (E1 — diagnostika / migrace)."""
+        return _schema_version(self.conn)
 
     # ── cases ────────────────────────────────────────────────
     def add_case(self, case: Case) -> None:
@@ -310,7 +360,7 @@ class CaseDB:
         """Přepne flag souboru („evidence“ / „report“). Idempotentní."""
         flags = self.get_file_flags(file_id)
         new = (flags + (flag,)) if (on and flag not in flags) else tuple(f for f in flags if f != flag)
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         if new:
             self.conn.execute(
@@ -340,6 +390,106 @@ class CaseDB:
             flags = tuple(r["flags"].split(",")) if r["flags"] else ()
             out.append((rec, flags))
         return out
+
+    # ── E1 Evidence Manager: audit log + custody items ────────
+    def log_operation(
+        self, action: str, actor: str | None = None, details: dict | None = None
+    ) -> int:
+        """Neměnný záznam operace (append-only). Vrací ID řádku.
+
+        `action` — kanonický verb: case_created / source_added / file_processed /
+        artifact_extracted / report_generated / hash_verified …
+        """
+        from datetime import datetime
+
+        cur = self.conn.execute(
+            "INSERT INTO audit_log (ts, action, actor, details_json)"
+            " VALUES (?, ?, ?, ?)",
+            (
+                datetime.now(timezone.utc).isoformat(),
+                action,
+                actor,
+                json.dumps(details or {}, ensure_ascii=False),
+            ),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def list_audit_log(
+        self, limit: int | None = 100, offset: int | None = None
+    ) -> list[dict]:
+        """Audit trail — nejnovější operace první (chronologická stopa)."""
+        q = "SELECT id, ts, action, actor, details_json FROM audit_log ORDER BY id DESC"
+        if limit is not None:
+            q += f" LIMIT {int(limit)}"
+        if offset:
+            q += f" OFFSET {int(offset)}"
+        rows = self.conn.execute(q).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "ts": r["ts"],
+                "action": r["action"],
+                "actor": r["actor"],
+                "details": json.loads(r["details_json"] or "{}"),
+            }
+            for r in rows
+        ]
+
+    def set_custody_item(
+        self,
+        source_id: str,
+        acquired_at: datetime | None = None,
+        method: str | None = None,
+        custodian: str | None = None,
+        notes: str | None = None,
+    ) -> None:
+        """Metadata nabytí důkazu pro jeden source (idempotentní upsert)."""
+        from datetime import datetime as _dt
+
+        ts = acquired_at or _dt.now(timezone.utc)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        self.conn.execute(
+            "INSERT INTO custody_items (source_id, acquired_at, method, custodian, notes)"
+            " VALUES (?, ?, ?, ?, ?)"
+            " ON CONFLICT (source_id) DO UPDATE SET"
+            " acquired_at = excluded.acquired_at,"
+            " method = COALESCE(excluded.method, custody_items.method),"
+            " custodian = COALESCE(excluded.custodian, custody_items.custodian),"
+            " notes = COALESCE(excluded.notes, custody_items.notes)",
+            (source_id, ts.isoformat(), method, custodian, notes),
+        )
+        self.conn.commit()
+
+    def get_custody_item(self, source_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM custody_items WHERE source_id = ?", (source_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "source_id": row["source_id"],
+            "acquired_at": row["acquired_at"],
+            "method": row["method"],
+            "custodian": row["custodian"],
+            "notes": row["notes"],
+        }
+
+    def list_custody_items(self) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT c.* FROM custody_items c ORDER BY c.acquired_at"
+        ).fetchall()
+        return [
+            {
+                "source_id": r["source_id"],
+                "acquired_at": r["acquired_at"],
+                "method": r["method"],
+                "custodian": r["custodian"],
+                "notes": r["notes"],
+            }
+            for r in rows
+        ]
 
     def search(
         self,
@@ -491,7 +641,6 @@ class CaseDB:
 
 
 def _iso(dt) -> str | None:
-    from datetime import timezone
 
     if dt is None:
         return None

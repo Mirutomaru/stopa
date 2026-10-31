@@ -15,6 +15,7 @@ from pathlib import Path
 
 from stopa.data.db import CaseDB
 from stopa.domain.report import (
+    AuditEntry,
     CustodyItem,
     FlaggedFile,
     MarkedFile,
@@ -89,6 +90,15 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
         for rec, flags in db.list_marked()
     )
 
+    # E1 Evidence Manager: audit trail + custody metadata (průběžná evidence)
+    audit_entries = tuple(
+        AuditEntry(ts=e["ts"], action=e["action"], actor=e.get("actor"), details=e["details"])
+        for e in db.list_audit_log(limit=500)
+    )
+    # list_audit_log vrací nejnovější první — report chce chronologický pořádek
+    audit_entries = tuple(reversed(audit_entries))
+    custody_metadata = {c["source_id"]: c for c in db.list_custody_items()}
+
     return ReportData(
         case_id=case.id,
         case_name=case.name,
@@ -102,6 +112,8 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
         custody_items=tuple(custody),
         flagged_files=tuple(flagged),
         marked_files=marked,
+        audit_entries=audit_entries,
+        custody_metadata=custody_metadata,
     )
 
 
@@ -112,6 +124,11 @@ def generate_html_report(db: CaseDB, case_id: str, out_path: Path | str) -> Path
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html_doc, encoding="utf-8")
+    db.log_operation(
+        "report_generated",
+        actor=data.examiner,
+        details={"case_id": case_id, "format": "html", "path": str(out)},
+    )
     log.info("HTML report %s → %s", case_id, out)
     return out
 
@@ -132,6 +149,10 @@ def generate_pdf_report(
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     HTML(string=html_doc).write_pdf(str(out))
+    db.log_operation(
+        "report_generated",
+        details={"case_id": case_id, "format": "pdf", "path": str(out)},
+    )
     log.info("PDF report %s → %s", case_id, out)
     return out
 

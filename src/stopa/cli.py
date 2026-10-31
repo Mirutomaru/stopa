@@ -9,6 +9,9 @@ Použití:
   stopa image <case_id> /cesta/ke/obrazu.img       # disk image (TSK) [+ --no-carve]
   stopa mobile <case_id> /obraz.img [--password HESLO]  # mobilní FDE/FBE unlock + TSK
   stopa stats <case_id>
+  stopa verify <case_id> [--limit N]                     # E1 — re-hash + kontrola integrity (SHA-256/MD5)
+  stopa audit <case_id> [--limit N] [-v]                 # E1 — neměnná stopa operací
+  stopa backup <case_id> [--out DIR]                     # E1 — záloha case DB (SQLite .backup + integrity)
   stopa report <case_id> [--format html|pdf] [--out DIR]    # court-ready report + chain of custody
   stopa serve [--port 8473]                                 # web GUI (FastAPI)
   stopa profiles
@@ -19,6 +22,7 @@ DB: cases/<case_id>.db (přesaditelné přes STOPA_DB_DIR).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -42,10 +46,22 @@ def _open_db(case_id: str) -> CaseDB:
     return CaseDB(db_path)
 
 
+def case_examiner(db: CaseDB, case_id: str) -> str | None:
+    """Znalec případu — výchozí actor pro audit log operací."""
+    case = db.get_case(case_id)
+    return case.examiner if case else None
+
+
 def cmd_case_new(args: argparse.Namespace) -> int:
     case = Case(name=args.name, examiner=args.examiner, notes=args.notes)
     db = CaseDB(_db_dir() / f"{case.id}.db")
     db.add_case(case)
+    # E1 Evidence Manager: neměnná stopa — vznik případu
+    db.log_operation(
+        "case_created",
+        actor=case.examiner,
+        details={"case_id": case.id, "name": case.name},
+    )
     db.close()
     print(f"Případ vytvořen: {case.id}")
     print(f"  název:   {case.name}")
@@ -78,6 +94,23 @@ def cmd_add(args: argparse.Namespace) -> int:
             continue
         source = EvidenceSource(case_id=args.case_id, kind="folder" if root.is_dir() else "file", path=str(root))
         db.add_source(source)
+        # E1 Evidence Manager: custody metadata + neměnná stopa nabytí důkazu
+        db.set_custody_item(
+            source.id,
+            acquired_at=source.added_at,
+            method=getattr(args, "method", None),
+            custodian=getattr(args, "custodian", None),
+        )
+        db.log_operation(
+            "source_added",
+            actor=getattr(args, "custodian", None) or case_examiner(db, args.case_id),
+            details={
+                "source_id": source.id,
+                "path": str(root),
+                "kind": source.kind,
+                "method": getattr(args, "method", None),
+            },
+        )
 
         def _progress(done: int, total: int, label: str = source.path) -> None:
             pct = (done / total * 100) if total else 100.0
@@ -302,6 +335,139 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_verify(args: argparse.Namespace) -> int:
+    """E1 Evidence Manager: re-hash všech souborů v případu a porovnání s evidencí.
+
+    Důkaz integrity — SHA-256 + MD5 (chunked, read-only přístup k originálům).
+    Výsledek se zapíše do neměnného audit logu (`hash_verified`).
+    """
+    from stopa.domain.hashing import hash_file
+
+    db = _open_db(args.case_id)
+    sources = db.list_sources(args.case_id)
+    if not sources:
+        print("(žádné evidence sources)")
+        db.close()
+        return 0
+
+    ok = mismatched = missing = skipped = 0
+    problems: list[str] = []
+    for src in sources:
+        root = Path(src.path).expanduser()
+        rows = db.conn.execute(
+            "SELECT rel_path, sha256, md5 FROM files WHERE source_id = ? ORDER BY rel_path",
+            (src.id,),
+        ).fetchall()
+        for r in rows:
+            if root.is_file():
+                p = root  # file zdroj — rel_path je jen jméno souboru
+            else:
+                p = root / r["rel_path"]
+            if not p.exists():
+                missing += 1
+                problems.append(f"CHYBÍ: {src.path}/{r['rel_path']}")
+                continue
+            try:
+                digests = hash_file(p, ["md5", "sha256"])
+            except OSError as e:
+                skipped += 1
+                problems.append(f"NELZE ČÍST: {r['rel_path']}: {e}")
+                continue
+            bad = []
+            if r["sha256"] and digests.get("sha256") != r["sha256"]:
+                bad.append("SHA-256")
+            if r["md5"] and digests.get("md5") != r["md5"]:
+                bad.append("MD5")
+            if bad:
+                mismatched += 1
+                problems.append(f"ROZDÍL ({', '.join(bad)}): {r['rel_path']}")
+            else:
+                ok += 1
+
+    db.log_operation(
+        "hash_verified",
+        actor=case_examiner(db, args.case_id),
+        details={
+            "ok": ok,
+            "mismatched": mismatched,
+            "missing": missing,
+            "skipped": skipped,
+        },
+    )
+    print(f"Integrita: {ok} OK, {mismatched} rozdílů, {missing} chybí, {skipped} nečitelných")
+    for p in problems[: args.limit]:
+        print(f"  ! {p}")
+    if len(problems) > args.limit:
+        print(f"  … a dalších {len(problems) - args.limit}")
+    db.close()
+    return 1 if (mismatched or missing) else 0
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    """E1 Evidence Manager: neměnná stopa operací (audit trail)."""
+    db = _open_db(args.case_id)
+    entries = db.list_audit_log(limit=args.limit, offset=args.offset)
+    if not entries:
+        print("(prázdný audit log)")
+        return 0
+    # chronologicky — nejstarší první (stopa čtená od začátku)
+    for e in reversed(entries):
+        ts = e["ts"][:19].replace("T", " ")
+        actor = f" [{e['actor']}]" if e.get("actor") else ""
+        details = {k: v for k, v in e["details"].items() if not str(k).endswith("_total")}
+        det = f"  {json.dumps(details, ensure_ascii=False)}" if details and args.verbose else ""
+        print(f"{ts}  {e['action']}{actor}{det}")
+    db.close()
+    return 0
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    """E1 Evidence Manager: záloha case DB (SQLite .backup() — konzistentní snapshot).
+
+    Pravidlo 4: před migracemi vytvářej zálohu. Výchozí název <case>_backup_<ts>.db.
+    """
+    import sqlite3
+    from datetime import datetime, timezone
+
+    db = _open_db(args.case_id)
+    out_dir = Path(args.out).expanduser() if args.out else _db_dir().parent / "backups"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    out_path = out_dir / f"{args.case_id}_backup_{stamp}.db"
+
+    src = db.conn
+    dst = sqlite3.connect(out_path)
+    try:
+        with dst:
+            src.backup(dst)
+    finally:
+        dst.close()
+
+    # integrita zálohy — otevření + kontrola integrity (PRAGMA quick_check)
+    chk = sqlite3.connect(out_path)
+    ok = chk.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    n_files = chk.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+    chk.close()
+
+    db.log_operation(
+        "db_backed_up",
+        actor=case_examiner(db, args.case_id),
+        details={
+            "case_id": args.case_id,
+            "path": str(out_path),
+            "integrity_ok": ok,
+            "files_in_backup": n_files,
+        },
+    )
+    db.close()
+    if not ok:
+        print(f"Záloha selhala integritní kontrolou: {out_path}", file=sys.stderr)
+        return 1
+    size = out_path.stat().st_size / 1e6
+    print(f"Záloha vytvořena: {out_path} ({size:.2f} MB, {n_files} souborů, integrity OK)")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     """Web GUI (FÁZE web) — FastAPI nad analyze(), uvicorn server."""
     try:
@@ -337,6 +503,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="processing profil (default: forensic)")
     add_p.add_argument("--hash-set", action="append", metavar="FILE",
                        help="known-bad hash set (text, 1 hash/řádek) — lze opakovat")
+    add_p.add_argument("--custodian", default=None,
+                       help="kdo nabytí důkazu eviduje (chain of custody)")
+    add_p.add_argument("--method", default=None,
+                       help="metoda nabytí (např. 'forensic copy', 'USB export')")
     add_p.set_defaults(func=cmd_add)
 
     files_p = sub.add_parser("files", help="seznam souborů v případu")
@@ -362,6 +532,28 @@ def build_parser() -> argparse.ArgumentParser:
     stats_p = sub.add_parser("stats", help="shrnutí případu")
     stats_p.add_argument("case_id")
     stats_p.set_defaults(func=cmd_stats)
+
+    ver_p = sub.add_parser("verify", help="E1 — re-hash všech souborů a kontrola integrity (SHA-256/MD5)")
+    ver_p.add_argument("case_id")
+    ver_p.add_argument("--limit", type=int, default=20,
+                       help="max. počet zobrazených problémů (default: 20)")
+    ver_p.set_defaults(func=cmd_verify)
+
+    aud_p = sub.add_parser("audit", help="E1 — neměnná stopa operací (audit trail)")
+    aud_p.add_argument("case_id")
+    aud_p.add_argument("--limit", type=int, default=50,
+                       help="max. počet záznamů (default: 50)")
+    aud_p.add_argument("--offset", type=int, default=None,
+                       help="posun od nejnovějšího záznamu")
+    aud_p.add_argument("-v", "--verbose", action="store_true",
+                       help="zobrazit i detaily operací (JSON)")
+    aud_p.set_defaults(func=cmd_audit)
+
+    bak_p = sub.add_parser("backup", help="E1 — záloha case DB (SQLite .backup, integrity check)")
+    bak_p.add_argument("case_id")
+    bak_p.add_argument("--out", metavar="DIR",
+                       help="výstupní složka (default: backups/ vedle case DB)")
+    bak_p.set_defaults(func=cmd_backup)
 
     tl_p = sub.add_parser("timeline", help="AXIOM-style timeline extrahovaných artifactů")
     tl_p.add_argument("case_id")

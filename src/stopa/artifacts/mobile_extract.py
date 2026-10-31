@@ -28,6 +28,9 @@ from stopa.models import Artifact
 
 log = logging.getLogger("stopa.artifacts.mobile")
 
+# E1: verze parseru — eviduje se v audit logu (reprodukovatelnost analýzy)
+PARSER_VERSION = "1.0"
+
 
 def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     rows = conn.execute(f'PRAGMA table_info("{table}")').fetchall()

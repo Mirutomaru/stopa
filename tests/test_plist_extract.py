@@ -129,5 +129,16 @@ class TestSignatureIntegration:
     def test_dispatch_map_extractors_are_callable(self):
         from stopa.pipeline import ARTIFACT_EXTRACTORS
 
-        for sig, fn in ARTIFACT_EXTRACTORS.items():
+        for sig, (fn, _ver) in ARTIFACT_EXTRACTORS.items():
             assert callable(fn), f"extraktor pro {sig} není callable"
+
+    def test_dispatch_map_has_parser_versions(self):
+        """E1: každý extraktor má verzi parseru (reprodukovatelnost)."""
+        from stopa.pipeline import ARTIFACT_EXTRACTORS, parser_versions
+
+        for sig, (_fn, ver) in ARTIFACT_EXTRACTORS.items():
+            assert isinstance(ver, str) and ver, f"extraktor {sig} nemá verzi"
+        versions = parser_versions()
+        assert "sqlite" in versions
+        assert "registry_hive" in versions
+        assert "plist" in versions

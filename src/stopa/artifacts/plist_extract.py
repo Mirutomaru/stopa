@@ -20,6 +20,9 @@ from stopa.models import Artifact
 
 log = logging.getLogger("stopa.artifacts.plist")
 
+# E1: verze parseru — eviduje se v audit logu (reprodukovatelnost analýzy)
+PARSER_VERSION = "1.0"
+
 MAX_DATE_ARTIFACTS = 50  # nevtěsnávat stovky date polí do timeline
 MAX_TOP_KEYS = 30  # triage artifact — seznam top-level klíčů
 

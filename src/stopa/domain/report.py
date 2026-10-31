@@ -61,6 +61,16 @@ class MarkedFile:
 
 
 @dataclass(frozen=True)
+class AuditEntry:
+    """Jeden záznam neměnného audit logu (E1 Evidence Manager)."""
+
+    ts: str
+    action: str
+    actor: str | None = None
+    details: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ReportData:
     """Všechny údaje pro report — presentation vrstva naplní z case DB."""
 
@@ -77,6 +87,8 @@ class ReportData:
     custody_items: tuple[CustodyItem, ...] = ()
     flagged_files: tuple[FlaggedFile, ...] = ()
     marked_files: tuple[MarkedFile, ...] = ()  # ručně označené v GUI (Evidence/Report)
+    audit_entries: tuple[AuditEntry, ...] = ()  # E1 — neměnná stopa operací
+    custody_metadata: dict[str, dict[str, str | None]] = field(default_factory=dict)
 
 
 def _esc(v: object) -> str:
@@ -101,6 +113,15 @@ def _fmt_bytes(n: float) -> str:
             return f"{n:,.0f} {unit}" if unit == "B" else f"{n:,.2f} {unit}"
         n /= 1024
     return f"{n:,.2f} TB"
+
+
+def _audit_details_str(details: dict[str, object]) -> str:
+    """Detaily audit záznamu — kompaktní `k=v` řetězec (bez JSON šumu)."""
+    parts = []
+    for k, v in details.items():
+        if isinstance(v, str) or v is not None:
+            parts.append(f"{k}={v}")
+    return " ".join(parts)
 
 
 def build_html(data: ReportData) -> str:
@@ -157,14 +178,17 @@ def build_html(data: ReportData) -> str:
     if data.sources:
         parts.append(
             "<table><tr><th>#</th><th>Zdroj</th><th>Typ</th>"
-            "<th>Přidáno (UTC)</th><th>Velikost</th></tr>"
+            "<th>Přidáno (UTC)</th><th>Velikost</th><th>Metoda nabytí</th><th>Evidoval</th></tr>"
         )
         for i, s in enumerate(data.sources, 1):
             size = _fmt_bytes(s.size_bytes) if s.size_bytes is not None else "—"
+            cust = data.custody_metadata.get(s.id, {})
+            method = cust.get("method") or "—"
+            custodian = cust.get("custodian") or "—"
             parts.append(
                 f"<tr><td>{i}</td><td class='mono'>{_esc(s.path)}</td>"
                 f"<td>{_esc(s.kind)}</td><td>{_fmt_dt(s.added_at)}</td>"
-                f"<td>{size}</td></tr>"
+                f"<td>{size}</td><td>{_esc(method)}</td><td>{_esc(custodian)}</td></tr>"
             )
         parts.append("</table>")
     else:
@@ -277,6 +301,29 @@ def build_html(data: ReportData) -> str:
             )
     else:
         parts.append("<p class='small'>Žádné soubory s hashem.</p>")
+
+    # ── E1 Evidence Manager: audit trail (neměnná stopa operací) ──
+    parts.append("<h2>7. Audit trail — neměnná stopa operací</h2>")
+    if data.audit_entries:
+        parts.append(
+            "<table><tr><th>#</th><th>Čas (UTC)</th><th>Operace</th>"
+            "<th>Aktor</th><th>Detaily</th></tr>"
+        )
+        for i, e in enumerate(data.audit_entries[:500], 1):  # limit — court-ready
+            det = _esc(_audit_details_str(e.details)) if e.details else "—"
+            parts.append(
+                f"<tr><td>{i}</td><td class='mono'>{_esc(e.ts)}</td>"
+                f"<td>{_esc(e.action)}</td><td>{_esc(e.actor or '—')}</td>"
+                f"<td class='mono small'>{det}</td></tr>"
+            )
+        parts.append("</table>")
+        if len(data.audit_entries) > 500:
+            parts.append(
+                f"<p class='small'>Zobrazeno prvních 500 z {len(data.audit_entries):,} "
+                "operací (plná stopa v case DB — `stopa audit`).</p>"
+            )
+    else:
+        parts.append("<p class='small'>Žádné zaznamenané operace.</p>")
 
     # ── patička ────────────────────────────────────────────────
     parts.append(
