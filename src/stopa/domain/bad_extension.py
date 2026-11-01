@@ -37,6 +37,8 @@ TYPE_EXTENSIONS: dict[str, frozenset[str]] = {
     # E6 Windows artefakty — LNK jako .exe/.dll se flaguje (rozpor signatury)
     "lnk": frozenset({"lnk", "url"}),
     "win_prefetch": frozenset({"pf"}),
+    # E7 Windows Event Log — .evtx je kanonická přípona
+    "evtx": frozenset({"evtx"}),
 }
 
 

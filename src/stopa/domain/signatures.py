@@ -36,6 +36,10 @@ SIGNATURES: list[tuple[int, bytes, str, str]] = [
     (0, b"\x4c\x00\x00\x00\x01\x14\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x46", "lnk", "windows"),
     # Windows SuperFetch prefetch (MAM) — magic "MAM\x04" + uncompressed_size
     (0, b"MAM\x04", "win_prefetch", "windows"),
+    # E7 Windows Event Log (.evtx) — standardní magic "EVTX" i ground-truth
+    # varianta "ElfFile\0" (Windows 11, chunky "ElfChnk\0")
+    (0, b"EVTX", "evtx", "windows"),
+    (0, b"ElfFile\x00", "evtx", "windows"),
 ]
 
 # RIFF kontejner — druhá kontrola na offsetu 8

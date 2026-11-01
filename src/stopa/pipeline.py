@@ -30,12 +30,20 @@ from stopa.artifacts.registry_extract import extract_registry_artifacts
 from stopa.artifacts.sqlite_extract import PARSER_VERSION as SQLITE_VERSION
 from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
 from stopa.artifacts.sqlite_recover import recover_deleted_rows
+from stopa.artifacts.win_amcache import extract_amcache_artifacts
+from stopa.artifacts.win_eventlog import PARSER_VERSION as EVTX_VERSION
+from stopa.artifacts.win_eventlog import extract_evtx_artifacts
 from stopa.artifacts.win_jumplist import PARSER_VERSION as JUMPLIST_VERSION
 from stopa.artifacts.win_jumplist import extract_jump_list_artifacts, is_jump_list_file
 from stopa.artifacts.win_lnk import PARSER_VERSION as LNK_VERSION
 from stopa.artifacts.win_lnk import extract_lnk_artifacts
 from stopa.artifacts.win_prefetch import PARSER_VERSION as PREFETCH_VERSION
 from stopa.artifacts.win_prefetch import extract_prefetch_artifacts
+from stopa.artifacts.win_shimcache import extract_shimcache_artifacts
+from stopa.artifacts.win_usn import (
+    PARSER_VERSION as USN_VERSION,
+)
+from stopa.artifacts.win_usn import extract_usn_artifacts, is_usn_journal_file
 from stopa.data.db import CaseDB
 from stopa.data.ingest import WalkedFile, walk_source
 from stopa.domain.bad_extension import extension_of, is_bad_extension
@@ -64,14 +72,37 @@ def _extract_sqlite_all(path: Path) -> list[Artifact]:
     return arts
 
 
+def _extract_registry_all(path: Path) -> list[Artifact]:
+    """Registry hive (regf) — generic + Amcache + ShimCache.
+
+    Všechny tři extraktory sdílejí `regf` magic → jeden kombinovaný dispatch
+    (pattern jako `_extract_sqlite_all`). Každá cesta je nezávislá: Amcache
+    běží jen na Amcache.hve, ShimCache jen na SYSTEM hive; bez příslušného
+    klíče vrátí prázdný výsledek.
+    """
+    arts = extract_registry_artifacts(path)
+    try:
+        arts.extend(extract_amcache_artifacts(path))
+    except Exception as e:  # noqa: BLE001 — Amcache je bonus, nesmí potopit extrakci
+        log.warning("Amcache %s: %s", path, e)
+    try:
+        arts.extend(extract_shimcache_artifacts(path))
+    except Exception as e:  # noqa: BLE001 — ShimCache je bonus, nesmí potopit extrakci
+        log.warning("ShimCache %s: %s", path, e)
+    return arts
+
+
 # signatura → (extraktor, verze_parseru) — E1: verze se eviduje v audit logu.
 ARTIFACT_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "sqlite": (_extract_sqlite_all, SQLITE_VERSION),
-    "registry_hive": (extract_registry_artifacts, REGISTRY_VERSION),
+    # E7: registry hivy běží generic + Amcache + ShimCache (sdílená regf magic)
+    "registry_hive": (_extract_registry_all, REGISTRY_VERSION),
     "plist": (extract_plist_artifacts, PLIST_VERSION),
     # E6 Windows parsery vlna 1 — LNK + SuperFetch prefetch (MAM)
     "lnk": (extract_lnk_artifacts, LNK_VERSION),
     "win_prefetch": (extract_prefetch_artifacts, PREFETCH_VERSION),
+    # E7 Windows Event Log (.evtx) — magic "EVTX" i ground-truth "ElfFile\0"
+    "evtx": (extract_evtx_artifacts, EVTX_VERSION),
 }
 
 # name-based fallback (AXIOM Hunter) — soubory bez spolehlivé magiky.
@@ -79,6 +110,8 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "icloud_messages": (extract_icloud_messages, IMESSAGE_CLOUD_VERSION),
     # E6 Jump Lists — .customDestinations-ms kontejnery (magic je jen u32 version)
     "win_jumplist": (extract_jump_list_artifacts, JUMPLIST_VERSION),
+    # E7 NTFS USN Journal ($UsnJrnl) — metadata file bez spolehlivé magiky
+    "win_usn": (extract_usn_artifacts, USN_VERSION),
 }
 
 
@@ -92,6 +125,8 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["icloud_messages"]
     if is_jump_list_file(name):
         return NAME_BASED_EXTRACTORS["win_jumplist"]
+    if is_usn_journal_file(name):
+        return NAME_BASED_EXTRACTORS["win_usn"]
     return None
 
 
