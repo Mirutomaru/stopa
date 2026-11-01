@@ -14,13 +14,16 @@ const MODULES = {
   "messaging-chat":  ["Messaging Chats", "SMS, iMessage, WhatsApp a hovory — chronologicky"],
   "deletion-check":  ["Deduplication", "Bad-ext, duplikáty a smazané záznamy"],
   "artifacts":       ["Artifacts", "Kompletní timeline extrahovaných artifactů"],
+  "entity-graph":    ["Entity Graph", "Graf entit a propojení — force-directed vizualizace (E5)"],
+  "correlation":     ["Correlation", "Propojení mezi entitami + evidence s přechodem na důkaz (E5)"],
   "reporting":       ["Reporting", "Court-ready reporty + ručně označené soubory"],
 };
 
 const MODULE_ICONS = {
   "dashboard": "▦", "disk-image": "◫", "file-system": "🗀", "partition-map": "▤",
   "system-recovery": "⚙", "sql-recovery": "∞", "messaging-chat": "✉",
-  "deletion-check": "⌫", "artifacts": "◈", "reporting": "▤",
+  "deletion-check": "⌫", "artifacts": "◈", "entity-graph": "❖", "correlation": "⇄",
+  "reporting": "▤",
 };
 
 function renderSidebarNav() {

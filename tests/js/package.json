@@ -1,0 +1,8 @@
+{
+  "name": "stopa-web-tests",
+  "private": true,
+  "description": "DOM testy STOPA web frontendu (graph.js) přes jsdom — node tests/js/graph.test.mjs",
+  "devDependencies": {
+    "jsdom": "^30.1.3"
+  }
+}

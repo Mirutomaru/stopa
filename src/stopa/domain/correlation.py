@@ -93,6 +93,7 @@ def _artifact_evidence(occurrences: list[EntityOccurrence]) -> list[dict]:
         out.append(
             {
                 "artifact_id": o.artifact_id,
+                "file_id": o.file_id,
                 "rel_path": o.rel_path,
                 "detail": f"{o.kind}={o.value}",
             }
@@ -179,6 +180,7 @@ def temporal_overlap_rules(
             evidence = [
                 {
                     "artifact_id": o.artifact_id,
+                    "file_id": o.file_id,
                     "rel_path": o.rel_path,
                     "detail": f"{o.kind}={o.value} na zdroji {source_a}",
                 }
@@ -188,6 +190,7 @@ def temporal_overlap_rules(
             evidence += [
                 {
                     "artifact_id": o.artifact_id,
+                    "file_id": o.file_id,
                     "rel_path": o.rel_path,
                     "detail": f"{o.kind}={o.value} na zdroji {source_b}",
                 }

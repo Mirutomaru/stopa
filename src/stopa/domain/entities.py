@@ -133,6 +133,7 @@ class EntityOccurrence:
     value: str  # normalizovaný tvar
     source_id: str | None
     artifact_id: str
+    file_id: str | None = None  # FileRecord.id — pro „přechod na důkaz“ (file inspector)
     rel_path: str | None = None
     ts_utc: datetime | None = None
     raw_value: str = ""  # původní tvar (pro entities.raw_value)
@@ -246,6 +247,7 @@ def collect_occurrences(artifacts: list[Artifact]) -> list[EntityOccurrence]:
                     value=e.value,
                     source_id=a.source_id,
                     artifact_id=a.id,
+                    file_id=a.file_id,
                     rel_path=a.rel_path,
                     ts_utc=a.timestamp,
                     raw_value=e.raw_value,

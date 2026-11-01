@@ -54,6 +54,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     """App factory — `db_dir` pro testy (tmp), default z env STOPA_DB_DIR."""
     app = FastAPI(title="STOPA", version="0.1.0")
     base = db_dir or _db_dir()
+    app.state.db_dir = base  # pro testy (TestClient)
 
     def open_db(case_id: str) -> CaseDB:
         path = base / f"{case_id}.db"

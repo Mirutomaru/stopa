@@ -29,6 +29,8 @@ async function renderModule() {
       case "messaging-chat":  await renderChat(cid); break;
       case "deletion-check":  await renderDeletionCheck(cid); break;
       case "artifacts":       await renderArtifacts(cid); break;
+      case "entity-graph":    await renderEntityGraphModule(cid); break;
+      case "correlation":     await renderCorrelation(cid); break;
       case "reporting":       await renderReporting(cid); break;
     }
   } catch (e) { toast(`⚠ ${e.message}`); }
@@ -272,4 +274,44 @@ async function renderReporting(cid) {
     const tr = e.target.closest("tr[data-fid]");
     if (tr && Store.get("caseId")) openInspector(tr.dataset.fid);
   });
+}
+
+/* ── CORRELATION (E5): tabulka propojení + filtry + důkaz ─── */
+async function renderCorrelation(cid) {
+  const [entities, correlations] = await Promise.all([
+    api(`/api/cases/${cid}/entities`),
+    api(`/api/cases/${cid}/correlations`),
+  ]);
+  Store.set("graphData", { entities, correlations });
+
+  // filtry — vztahy dynamicky z dat
+  const relSel = document.getElementById("c-relation");
+  const rels = [...new Set(correlations.map((c) => c.relation))].sort();
+  relSel.innerHTML = '<option value="">všechny vztahy</option>' +
+    rels.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
+
+  const draw = () => {
+    const rel = relSel.value;
+    const conf = document.getElementById("c-confidence").value;
+    const rows = correlations.filter(
+      (c) => (!rel || c.relation === rel) && (!conf || c.confidence === conf));
+    document.querySelector("#correlations-table tbody").innerHTML = rows.length
+      ? rows.map((c, i) => `<tr data-idx="${i}">
+          <td><span class="flag-badge">${esc(c.relation)}</span></td>
+          <td><span class="conf-badge ${esc(c.confidence)}">${esc(c.confidence)}</span></td>
+          <td class="mono small" title="${esc(c.entity_a)}">${esc(shortLabel(c.entity_a, entityKindFromId(c.entity_a)))}</td>
+          <td class="mono small" title="${esc(c.entity_b)}">${esc(shortLabel(c.entity_b, entityKindFromId(c.entity_b)))}</td>
+          <td>${(c.evidence || []).length}</td></tr>`).join("")
+      : '<tr><td colspan="5" class="muted">Žádná propojení — spusťte korelaci v Entity Graph.</td></tr>';
+    // klik na řádek → evidence panel (přechod na důkaz)
+    document.querySelector("#correlations-table tbody").onclick = (e) => {
+      const tr = e.target.closest("tr[data-idx]");
+      if (!tr) return;
+      showEvidenceList(document.getElementById("corr-evidence"), rows[+tr.dataset.idx], openInspector);
+    };
+  };
+
+  relSel.onchange = draw;
+  document.getElementById("c-confidence").onchange = draw;
+  draw();
 }

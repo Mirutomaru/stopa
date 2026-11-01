@@ -259,6 +259,26 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 /* ── TOAST ───────────────────────────────────────────────── */
 #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 200; background: rgba(28, 28, 30, .95); backdrop-filter: blur(20px); border: var(--border); border-radius: 12px; padding: 10px 18px; font-size: 12.5px; box-shadow: 0 12px 40px rgba(0,0,0,.5); animation: fadein .15s ease-out; }
 
+/* ── ENTITY GRAPH (E5) ───────────────────────────────────── */
+#graph-svg { width: 100%; max-width: 960px; height: auto; background: rgba(255,255,255,.02); border: var(--border); border-radius: 14px; margin-top: 8px; }
+.g-edge { stroke: #5a6372; cursor: pointer; transition: stroke .12s; }
+.g-edge:hover { stroke: var(--accent); }
+.g-edge.verified { stroke: #7d8797; }
+.g-edge.inferred { opacity: .8; }
+.g-node circle { stroke: rgba(0,0,0,.45); stroke-width: 1.5px; cursor: default; }
+.g-label { fill: #cfd6e2; font-size: 10px; text-anchor: middle; pointer-events: none; }
+.g-legend-label { fill: var(--muted); font-size: 9.5px; }
+#graph-legend span { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; }
+#graph-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+/* evidence panel (graf + correlation sekce) */
+.ev-list { max-height: 260px; overflow-y: auto; margin-top: 8px; }
+.ev-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: rgba(255,255,255,.03); margin-bottom: 4px; }
+.ev-row .mono { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conf-badge { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; border-radius: 5px; padding: 1px 7px; background: rgba(255,255,255,.08); color: var(--muted); }
+.conf-badge.verified { background: rgba(48, 209, 88, .16); color: var(--green); }
+.conf-badge.inferred { background: rgba(255, 171, 64, .16); color: var(--orange); }
+
 /* scrollbary (Apple-like) */
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }

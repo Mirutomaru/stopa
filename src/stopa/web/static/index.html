@@ -159,6 +159,34 @@
     </table>
   </section>
 
+  <!-- ── ENTITY GRAPH (E5) ─────────────────────── -->
+  <section id="mod-entity-graph" class="module">
+    <div class="toolbar">
+      <button id="btn-run-correlate" class="primary small-btn">⟳ Spustit korelaci</button>
+      <span id="graph-legend" class="muted small"></span>
+    </div>
+    <p class="muted small">Uzel = entity (barva podle typu), hrana = propojení (tloušťka = confidence, přerušeno = inferred). Klik na hranu → evidence.</p>
+    <svg id="graph-svg" viewBox="0 0 900 520" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="graph-evidence" class="card hidden"></div>
+  </section>
+
+  <!-- ── CORRELATION (E5) ──────────────────────── -->
+  <section id="mod-correlation" class="module">
+    <div class="toolbar">
+      <select id="c-relation"><option value="">všechny vztahy</option></select>
+      <select id="c-confidence">
+        <option value="">všechna confidence</option>
+        <option value="verified">verified</option>
+        <option value="inferred">inferred</option>
+      </select>
+    </div>
+    <table id="correlations-table">
+      <thead><tr><th>Vztah</th><th>Confidence</th><th>Entity A</th><th>Entity B</th><th>Evidence</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="corr-evidence" class="card hidden"></div>
+  </section>
+
   <!-- ── REPORTING ─────────────────────────────── -->
   <section id="mod-reporting" class="module">
     <div class="toolbar">
@@ -217,6 +245,7 @@
 <script src="/static/js/components/files.js"></script>
 <script src="/static/js/components/inspector.js"></script>
 <script src="/static/js/components/search.js"></script>
+<script src="/static/js/components/graph.js"></script>
 <script src="/static/js/components/modules.js"></script>
 <script src="/static/app.js"></script>
 </body>
