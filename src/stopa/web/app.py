@@ -362,6 +362,47 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── E8 — souborová metadata (PDF/OOXML/ID3/MP4/EXIF) ───────────────
+    META_MAX_BYTES = 32 * 1024 * 1024  # metadata bývají na začátku; strop pro velké soubory
+
+    @app.get("/api/cases/{case_id}/files/{file_id}/metadata")
+    def file_metadata(case_id: str, file_id: str) -> dict:
+        """Metadata z obsahu souboru (čistý Python + volitelné EXIF)."""
+        from stopa.domain.file_meta import extract_metadata
+
+        db = open_db(case_id)
+        try:
+            rec = db.get_file(file_id)
+            if rec is None or rec.source_id not in {s.id for s in db.list_sources(case_id)}:
+                raise HTTPException(404, f"soubor {file_id} nenalezen")
+            data = _read_file_bytes(db, rec, offset=0, length=META_MAX_BYTES)
+            meta = extract_metadata(data, rec.name or "")
+            return {"file_id": file_id, "name": rec.name, "metadata": meta}
+        finally:
+            db.close()
+
+    @app.post("/api/cases/{case_id}/files/compare-metadata")
+    def compare_metadata(case_id: str, a: str, b: str) -> dict:
+        """Porovnání metadat dvou souborů (řádky field/a/b/match)."""
+        from stopa.domain.file_meta import diff_metadata, extract_metadata
+
+        db = open_db(case_id)
+        try:
+            ra = db.get_file(a)
+            rb = db.get_file(b)
+            srcs = {s.id for s in db.list_sources(case_id)}
+            if ra is None or rb is None or ra.source_id not in srcs or rb.source_id not in srcs:
+                raise HTTPException(404, "soubor nenalezen")
+            ma = extract_metadata(_read_file_bytes(db, ra, 0, META_MAX_BYTES), ra.name or "")
+            mb = extract_metadata(_read_file_bytes(db, rb, 0, META_MAX_BYTES), rb.name or "")
+            return {
+                "a": {"file_id": a, "name": ra.name},
+                "b": {"file_id": b, "name": rb.name},
+                "diff": diff_metadata(ma, mb),
+            }
+        finally:
+            db.close()
+
     @app.post("/api/files/{file_id}/flag")
     def set_flag(file_id: str, flag: str = "evidence", on: bool = True) -> dict:
         """Přepne flag souboru — „Mark as Evidence“ / „Add to Report“."""

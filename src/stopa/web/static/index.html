@@ -217,6 +217,21 @@
     <h3>HEX DUMP</h3>
     <pre id="insp-hex" class="hexgrid mono"></pre>
 
+    <h3>METADATA</h3>
+    <div id="insp-meta" class="small muted">Načítám…</div>
+
+    <h3>POROVNÁNÍ METADAT</h3>
+    <div class="meta-compare small">
+      <select id="cmp-a"></select>
+      <span class="muted">vs</span>
+      <select id="cmp-b"></select>
+      <button id="btn-cmp-meta" class="primary">⇄ Porovnat</button>
+    </div>
+    <table id="cmp-result" class="kv-table hidden">
+      <thead><tr><th>Pole</th><th>A</th><th>B</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
     <div class="insp-actions">
       <button id="btn-mark-evidence" class="primary">★ Mark as Evidence</button>
       <button id="btn-export-file">⬇ Export File</button>
