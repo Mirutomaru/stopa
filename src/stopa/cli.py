@@ -233,6 +233,45 @@ def cmd_timeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_correlate(args: argparse.Namespace) -> int:
+    """E4 — Entity + Correlation Engine (explicitní krok, ne při extrakci)."""
+    from stopa.domain.correlation import run_correlation
+
+    db = _open_db(args.case_id)
+    case = db.get_case(args.case_id)
+    summary = run_correlation(db, args.case_id)
+    db.log_operation(
+        "correlation_run",
+        actor=case.examiner if case else None,
+        details={
+            "entities": summary["entities"],
+            "correlations_total": summary["correlations_total"],
+            "by_relation": summary["by_relation"],
+        },
+    )
+
+    print(f"Entit: {summary['entities']}")
+    total = summary["correlations_total"]
+    if not total:
+        print("Propojení: 0 (žádné entity napříč artifacty/soubory)")
+    else:
+        by_rel = ", ".join(
+            f"{k}: {v}" for k, v in sorted(summary["by_relation"].items())
+        )
+        print(f"Propojení: {total} ({by_rel})")
+        if args.verbose:
+            for c in db.list_correlations(args.case_id):
+                a = c["entity_a"]
+                b = c["entity_b"]
+                label = a if a == b else f"{a} ↔ {b}"
+                print(f"  [{c['relation']}/{c['confidence']}] {label}")
+                for ev in c["evidence"][:5]:
+                    path = ev.get("rel_path") or ""
+                    print(f"      └─ {ev.get('detail', '')} {path}".rstrip())
+    db.close()
+    return 0
+
+
 def cmd_image(args: argparse.Namespace) -> int:
     """Disk image processing (FÁZE 5) — TSK file systems + carving."""
     from stopa.data.image_pipeline import process_disk_image
@@ -569,6 +608,12 @@ def build_parser() -> argparse.ArgumentParser:
     tl_p.add_argument("--limit", type=int, default=100)
     tl_p.add_argument("-v", "--verbose", action="store_true", help="zobrazit i zdrojové cesty")
     tl_p.set_defaults(func=cmd_timeline)
+
+    cor_p = sub.add_parser("correlate", help="E4 — Entity + Correlation Engine (explicitní krok)")
+    cor_p.add_argument("case_id")
+    cor_p.add_argument("-v", "--verbose", action="store_true",
+                       help="zobrazit detail propojení s evidence listy")
+    cor_p.set_defaults(func=cmd_correlate)
 
     img_p = sub.add_parser("image", help="disk image (RAW/E01) — TSK file systems + carving")
     img_p.add_argument("case_id")

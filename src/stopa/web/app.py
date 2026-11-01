@@ -275,6 +275,47 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── E4 Entity + Correlation Engine ────────────────────────────────
+    @app.post("/api/cases/{case_id}/correlate")
+    def correlate(case_id: str) -> dict:
+        """Explicitní krok korelace (ROADMAP E4 bod 4) — re-run = clear + insert."""
+        from stopa.domain.correlation import run_correlation
+
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            summary = run_correlation(db, case_id)
+            db.log_operation(
+                "correlation_run",
+                actor=case.examiner if case else None,
+                details={
+                    "entities": summary["entities"],
+                    "correlations_total": summary["correlations_total"],
+                    "by_relation": summary["by_relation"],
+                },
+            )
+            return summary
+        finally:
+            db.close()
+
+    @app.get("/api/cases/{case_id}/correlations")
+    def list_correlations(case_id: str) -> list[dict]:
+        """Propojení entit s evidence listy (dohledatelnost každého nálezu)."""
+        db = open_db(case_id)
+        try:
+            return db.list_correlations(case_id)
+        finally:
+            db.close()
+
+    @app.get("/api/cases/{case_id}/entities")
+    def list_entities(case_id: str) -> list[dict]:
+        """Kanonické entity extrahované z artifactů (E4)."""
+        db = open_db(case_id)
+        try:
+            return db.list_entities(case_id)
+        finally:
+            db.close()
+
     # ── partition map (GUI File System & Carving — vizuální mapa) ────────────
     @app.get("/api/cases/{case_id}/partition-map")
     def partition_map(case_id: str) -> list[dict]:
