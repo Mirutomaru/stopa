@@ -47,6 +47,7 @@ class CaseIn(BaseModel):
 class SourceIn(BaseModel):
     path: str
     profile: str = "forensic"
+    resume: bool = False  # E3 checkpointing — přeskočit soubory už v DB
 
 
 def create_app(db_dir: Path | None = None) -> FastAPI:
@@ -143,7 +144,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 path=str(root),
             )
             db.add_source(source)
-            result = process_source(db, source.id, root, body.profile)
+            result = process_source(db, source.id, root, body.profile, resume=body.resume)
             return {
                 "source_id": source.id,
                 **result.model_dump(),

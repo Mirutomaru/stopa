@@ -282,8 +282,8 @@ def process_mobile_image(
     ``process_disk_image`` (TSK). Bez FDE/FBE/LUKS (běžný RAW/E01) jde rovnou.
     Chybějící/špatné heslo → chyba v ``errors``.
     """
-    from stopa.domain.fde import FdeError, decrypt_image, is_fde_image
-    from stopa.domain.fde_fbe import decrypt_fbe, is_fbe_image
+    from stopa.domain.fde import FdeError, decrypt_image_stream, is_fde_image
+    from stopa.domain.fde_fbe import decrypt_fbe_stream, is_fbe_image
     from stopa.domain.fde_luks import decrypt_luks, is_luks_image
 
     image_path = Path(image_path).expanduser()
@@ -302,17 +302,12 @@ def process_mobile_image(
 
     work_path = image_path
     if is_fbe_image(head):
-        # FÁZE B2 — Android FBE (AES-XTS sektorová)
-        full = image_path.read_bytes()
+        # FÁZE B2 — Android FBE (AES-XTS sektorová); E3 RAM fix: streaming po chunkách
         try:
             key = _fde_key_material(password, keyfile)
-            plaintext, header = decrypt_fbe(full, key)
+            work_path, header = decrypt_fbe_stream(image_path, key)
         except FdeError as e:
             summary.errors.append(f"FDE unlock selhal (FBE): {e}")
-            return summary
-        work_path, desc = _fde_plaintext_to_tmp(plaintext)
-        if work_path is None:
-            summary.errors.append(desc)
             return summary
     elif is_luks_image(head):
         # FÁZE B2 — LUKS/dm-crypt (cryptsetup, vyžaduje root + loop device)
@@ -326,17 +321,12 @@ def process_mobile_image(
             summary.errors.append(desc)
             return summary
     elif is_fde_image(head):
-        # FÁZE 6b — STOPAFDE (AES-256-CBC, proprietární testovací formát)
-        full = image_path.read_bytes()
+        # FÁZE 6b — STOPAFDE (AES-256-CBC, proprietární testovací formát); E3 RAM fix: streaming
         try:
             key = _fde_key_material(password, keyfile)
-            plaintext, header = decrypt_image(full, key)
+            work_path, header = decrypt_image_stream(image_path, key)
         except FdeError as e:
             summary.errors.append(f"FDE unlock selhal: {e}")
-            return summary
-        work_path, desc = _fde_plaintext_to_tmp(plaintext)
-        if work_path is None:
-            summary.errors.append(desc)
             return summary
 
     # FDE/FBE/LUKS metadata (typ + popis) — jen pokud se něco dešifrovalo

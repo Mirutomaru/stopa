@@ -15,7 +15,7 @@ from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS artifacts (
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_source ON artifacts(source_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifacts(timestamp);
+-- E3: filtrace artifactů podle typu (GUI chat view, timeline filtry) — častý dotaz
+CREATE INDEX IF NOT EXISTS idx_artifacts_type ON artifacts(artifact_type);
 -- name-based fallback (iCloud Messages) volá replace pro KAŽDÝ soubor → DELETE WHERE file_id=?
 CREATE INDEX IF NOT EXISTS idx_artifacts_file ON artifacts(file_id);
 

@@ -27,8 +27,10 @@ bez ní ``decrypt_fbe()`` zvedne ``FdeError`` srozumitelně. Sektorová logika j
 from __future__ import annotations
 
 import hashlib
+import os
 import struct
 from dataclasses import dataclass
+from pathlib import Path
 
 # sdílená výjimka + konvence z fde.py (jeden typ pro všechny FDE formáty)
 from stopa.domain.fde import DEFAULT_ITERATIONS, FdeError
@@ -90,10 +92,12 @@ def is_fbe_image(data: bytes) -> bool:
     return len(data) >= 8 and data[:8] == MAGIC
 
 
-def _xts_transform(plaintext: bytes, key: bytes, encrypt: bool) -> bytes:
+def _xts_transform(plaintext: bytes, key: bytes, encrypt: bool, base_sector: int = 0) -> bytes:
     """AES-256-XTS po 512 B sektorech (tweak = číslo sektoru).
 
     Vyžaduje ``cryptography``; data musí být násobkem SECTOR_SIZE.
+    ``base_sector`` — posun číselování sektorů (pro streaming: chunk N začíná
+    na globálním sektoru base_sector, tweak se počítá od něj).
     """
     try:
         from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -108,7 +112,8 @@ def _xts_transform(plaintext: bytes, key: bytes, encrypt: bool) -> bytes:
     out = bytearray()
     for sector_idx in range(0, len(plaintext), SECTOR_SIZE):
         chunk = plaintext[sector_idx : sector_idx + SECTOR_SIZE]
-        tweak = (sector_idx // SECTOR_SIZE).to_bytes(16, "big")  # číslo sektoru
+        # globální číslo sektoru — tweak se počítá od base_sector (streaming)
+        tweak = ((sector_idx // SECTOR_SIZE) + base_sector).to_bytes(16, "big")
         cipher = Cipher(algorithms.AES(key), modes.XTS(tweak))
         op = cipher.encryptor() if encrypt else cipher.decryptor()
         out += op.update(chunk) + op.finalize()
@@ -154,3 +159,59 @@ def decrypt_fbe(data: bytes, password: str | bytes) -> tuple[bytes, FbeHeader]:
     except Exception as e:  # cryptography zvedá různé typy (ValueError apod.)
         raise FdeError(f"AES-XTS dešifrování selhalo: {e}") from e
     return plaintext, header
+
+
+# E3 RAM fix: streaming chunk — 4 MiB je násobek SECTOR_SIZE i rozumná velikost
+# pro disk IO. Peak paměť = ~2×chunk (ciphertext + plaintext), ne celý obraz.
+STREAM_CHUNK = 4 * 1024 * 1024
+
+
+def decrypt_fbe_stream(
+    image_path: Path | str, password: str | bytes
+) -> tuple[Path, FbeHeader]:
+    """Dešifruje FBE obraz STREAMINGEM → plaintext do dočasného souboru.
+
+    E3 RAM fix: místo ``read_bytes()`` celého obrazu + celého plaintextu v RAM
+    se čte po ``STREAM_CHUNK`` (4 MiB) a každý chunk se dešifruje nezávisle —
+    XTS je sektorová šifra, tweak = globální číslo sektoru (``base_sector``).
+    Peak paměť ≈ 2×chunk bez ohledu na velikost obrazu.
+
+    Vrací ``(cesta_k_tmp_plaintextu, hlavička)``; volající tmp soubor smaže.
+    Chyby: neplatná hlavička / špatné heslo / IO → ``FdeError``.
+    """
+    import tempfile
+
+    image_path = Path(image_path).expanduser()
+    with open(image_path, "rb") as f:
+        head = f.read(HEADER_SIZE)
+    header = parse_header(head)
+    if header is None:
+        raise FdeError("Ne FBE obraz (chybí magic STOPAFBE)")
+
+    derived = derive_xts_key(
+        password.encode() if isinstance(password, str) else password, header.salt
+    )
+    if derived != header.key:
+        raise FdeError("Špatné heslo — odvozený XTS klíč neodpovídá uloženému")
+
+    fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-fbe-")
+    try:
+        with open(image_path, "rb") as src, os.fdopen(fd, "wb") as dst:
+            src.seek(HEADER_SIZE)  # ciphertext začíná za hlavičkou
+            base_sector = 0
+            while True:
+                chunk = src.read(STREAM_CHUNK)
+                if not chunk:
+                    break
+                pt = _xts_transform(chunk, header.key, encrypt=False, base_sector=base_sector)
+                dst.write(pt)
+                base_sector += len(chunk) // SECTOR_SIZE
+    except FdeError:
+        Path(tmp_name).unlink(missing_ok=True)  # odstranit částečný plaintext
+        raise
+    except Exception as e:  # cryptography zvedá různé typy (ValueError apod.) + IO
+        Path(tmp_name).unlink(missing_ok=True)
+        if isinstance(e, OSError):
+            raise FdeError(f"Streaming dešifrování FBE selhalo (IO): {e}") from e
+        raise FdeError(f"AES-XTS dešifrování selhalo: {e}") from e
+    return Path(tmp_name), header

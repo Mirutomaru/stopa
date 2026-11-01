@@ -116,7 +116,10 @@ def cmd_add(args: argparse.Namespace) -> int:
             pct = (done / total * 100) if total else 100.0
             print(f"\r  {label}: {done}/{total} souborů ({pct:.0f}%)", end="", flush=True)
 
-        result = process_source(db, source.id, root, args.profile, hash_sets, _progress)
+        result = process_source(
+            db, source.id, root, args.profile, hash_sets, _progress,
+            resume=getattr(args, "resume", False),
+        )
         if result.files_total:
             print()
         print(f"  [{result.profile}] {result.files_total} souborů, {result.bytes_total / 1e6:.2f} MB")
@@ -507,6 +510,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="kdo nabytí důkazu eviduje (chain of custody)")
     add_p.add_argument("--method", default=None,
                        help="metoda nabytí (např. 'forensic copy', 'USB export')")
+    add_p.add_argument("--resume", action="store_true",
+                       help="E3 checkpointing — přeskočit soubory už v DB "
+                            "(pokračovat po přerušeném běhu)")
     add_p.set_defaults(func=cmd_add)
 
     files_p = sub.add_parser("files", help="seznam souborů v případu")
