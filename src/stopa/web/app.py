@@ -193,12 +193,31 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             db.close()
 
     @app.get("/api/cases/{case_id}/search")
-    def search(case_id: str, q: str = "", limit: int = 100) -> list[dict]:
-        if not q.strip():
-            return []
+    def search(
+        case_id: str,
+        q: str = "",
+        hash: str | None = Query(None),  # E9 — exact hash lookup (SHA-256/MD5)
+        limit: int = 100,
+    ) -> list[dict]:
+        """E9 Search rozšíření: FTS + metadata filtry v `q` nebo exact `?hash=`.
+
+        - `q` — kombinace FTS termínů a filtrů (``size:>1MB``, ``mtime:A..B``,
+          ``ext:jpg``, ``in-artifact:X``)
+        - `hash` — hex SHA-256/MD5 → exact lookup přes index (priorita před `q`)
+        """
         db = open_db(case_id)
         try:
-            recs = db.search(q, limit=limit)
+            if hash and hash.strip():
+                recs = db.search_by_hash(hash, limit=limit)
+            elif q.strip():
+                from stopa.domain.search_filters import SearchFilterError
+
+                try:
+                    recs = db.search(q, limit=limit)
+                except SearchFilterError as exc:
+                    raise HTTPException(400, f"neplatný filtr: {exc}") from exc
+            else:
+                return []
             return [r.model_dump(mode="json") for r in recs]
         finally:
             db.close()

@@ -15,7 +15,7 @@ from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -189,6 +189,28 @@ CREATE TRIGGER IF NOT EXISTS files_au AFTER UPDATE ON files BEGIN
     INSERT INTO files_fts(rowid, rel_path, name, signature_type, hash_set_hit)
     VALUES (new.rowid, new.rel_path, new.name, new.signature_type, new.hash_set_hit);
 END;
+
+-- E9 Search rozšíření: full-text nad artifacty (title + details_json).
+-- External content nad `artifacts` — rowid = artifacts.rowid. details_json je
+-- surový JSON (tokenizace unicode61 rozloží i hodnoty uvnitř klíčů/hodnot).
+CREATE VIRTUAL TABLE IF NOT EXISTS artifacts_fts USING fts5(
+    artifact_type, title, details_json,
+    content='artifacts', content_rowid='rowid'
+);
+CREATE TRIGGER IF NOT EXISTS artifacts_ai AFTER INSERT ON artifacts BEGIN
+    INSERT INTO artifacts_fts(rowid, artifact_type, title, details_json)
+    VALUES (new.rowid, new.artifact_type, new.title, new.details_json);
+END;
+CREATE TRIGGER IF NOT EXISTS artifacts_ad AFTER DELETE ON artifacts BEGIN
+    INSERT INTO artifacts_fts(artifacts_fts, rowid, artifact_type, title, details_json)
+    VALUES ('delete', old.rowid, old.artifact_type, old.title, old.details_json);
+END;
+CREATE TRIGGER IF NOT EXISTS artifacts_au AFTER UPDATE ON artifacts BEGIN
+    INSERT INTO artifacts_fts(artifacts_fts, rowid, artifact_type, title, details_json)
+    VALUES ('delete', old.rowid, old.artifact_type, old.title, old.details_json);
+    INSERT INTO artifacts_fts(rowid, artifact_type, title, details_json)
+    VALUES (new.rowid, new.artifact_type, new.title, new.details_json);
+END;
 """
 
 
@@ -245,6 +267,21 @@ class CaseDB:
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('fts_backfilled', '1')"
             )
             self.conn.commit()
+        # E9: backfill artifacts_fts — stará case DB bez FTS nad artifacty.
+        already_art = self.conn.execute(
+            "SELECT value FROM meta WHERE key = 'artifacts_fts_backfilled'"
+        ).fetchone()
+        if already_art is None:
+            n_arts = self.conn.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
+            if n_arts:
+                self.conn.execute(
+                    "INSERT INTO artifacts_fts(artifacts_fts) VALUES ('rebuild')"
+                )
+            self.conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value)"
+                " VALUES ('artifacts_fts_backfilled', '1')"
+            )
+            self.commit()
         # E1: verze schématu — stará DB se migrují idempotentně nahoře;
         # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).
         if _schema_version(self.conn) < SCHEMA_VERSION:
@@ -598,26 +635,129 @@ class CaseDB:
         source_id: str | None = None,
         limit: int | None = 100,
     ) -> list[FileRecord]:
-        """Full-text search (FTS5) přes cesty, názvy, signatury a hash-set trefy.
+        """Full-text search (FTS5) + E9 metadata filtry + in-artifact prefix.
 
-        `query` — FTS5 syntaxe: `"dokumentace.pdf"` (fráze), `*.jpg` (prefix),
-        `pdf OR docx`. Neznámé znaky se escapují do frází pro bezpečnost.
+        `query` — kombinace FTS5 termínů a prefixovaných filtrů:
+        - textové termíny → files_fts MATCH (fráze, prefix *, AND/OR/NOT)
+        - ``size:>1MB`` / ``mtime:2026-01..2026-06`` / ``ext:jpg`` → SQL WHERE
+        - ``in-artifact:X`` → artifacts_fts MATCH → vráceny soubory s odpovídajícím artifactem
+
         Výsledek je řazen podle relevance (bm25) a omezen na existující soubory.
         """
+        from stopa.domain.search_filters import (
+            mtime_sql,
+            parse_search_query,
+            size_sql,
+        )
+
         if not query.strip():
             return []
-        # FTS5 MATCH bere výraz — zabalíme celou dotaz do frází, pokud neobsahuje operátory
-        expr = _fts_query(query)
-        q = (
-            "SELECT f.* FROM files_fts"
-            " JOIN files f ON f.rowid = files_fts.rowid"
-            " WHERE files_fts MATCH ?"
-        )
-        args: list[object] = [expr]
+
+        parsed = parse_search_query(query)
+
+        # ── in-artifact: prefix → artifacts_fts lookup ────────────────
+        artifact_file_ids: set[str] | None = None
+        art_terms = [t for t in parsed.text_terms if t.lower().startswith("in-artifact:")]
+        file_terms = [t for t in parsed.text_terms if not t.lower().startswith("in-artifact:")]
+
+        if art_terms:
+            # extrahuj text za prefixem a hledej v artifacts_fts
+            art_queries = " ".join(t[len("in-artifact:"):] for t in art_terms)
+            art_expr = _fts_query(art_queries)
+            rows_art = self.conn.execute(
+                "SELECT DISTINCT file_id FROM artifacts_fts"
+                " JOIN artifacts a ON a.rowid = artifacts_fts.rowid"
+                " WHERE artifacts_fts MATCH ? AND file_id IS NOT NULL",
+                (art_expr,),
+            ).fetchall()
+            artifact_file_ids = {r["file_id"] for r in rows_art}
+
+        # ── metadata filtry → SQL WHERE na files ───────────────────────
+        where_clauses: list[str] = []
+        args: list[object] = []
+
+        if parsed.size is not None:
+            frag, val = size_sql(parsed.size)
+            where_clauses.append(frag)
+            args.append(val)
+        if parsed.mtime is not None:
+            for frag, val in mtime_sql(parsed.mtime):
+                where_clauses.append(frag)
+                args.append(val)
+        if parsed.exts:
+            placeholders = ",".join("?" * len(parsed.exts))
+            where_clauses.append(f"extension IN ({placeholders})")
+            args.extend(parsed.exts)
+
+        # ── FTS textový dotaz (jen file_terms, bez in-artifact:) ───────
+        has_fts = bool(file_terms)
+        if has_fts:
+            expr = _fts_query(" ".join(file_terms))
+            q = (
+                "SELECT f.* FROM files_fts"
+                " JOIN files f ON f.rowid = files_fts.rowid"
+                " WHERE files_fts MATCH ?"
+            )
+            args.insert(0, expr)
+        else:
+            # jen filtry / in-artifact → SELECT přímo z files (bez FTS joinu)
+            q = "SELECT f.* FROM files f WHERE 1=1"
+
+        # ── in-artifact: bez textových termínů → omezení na file_ids ───
+        if not has_fts and artifact_file_ids is not None:
+            if artifact_file_ids:
+                ph = ",".join("?" * len(artifact_file_ids))
+                where_clauses.append(f"f.id IN ({ph})")
+                args.extend(sorted(artifact_file_ids))
+            else:
+                # žádné artifacty neodpovídají → prázdný výsledek
+                return []
+
+        # ── in-artifact: S textovými termíny → intersect přes subquery ──
+        if has_fts and artifact_file_ids is not None:
+            if artifact_file_ids:
+                ph = ",".join("?" * len(artifact_file_ids))
+                where_clauses.append(f"f.id IN ({ph})")
+                args.extend(sorted(artifact_file_ids))
+            else:
+                # žádné artifacty neodpovídají → prázdný výsledek
+                return []
+
         if source_id is not None:
-            q += " AND f.source_id = ?"
+            where_clauses.append("f.source_id = ?")
             args.append(source_id)
-        q += " ORDER BY bm25(files_fts)"
+
+        if where_clauses:
+            q += " AND " + " AND ".join(where_clauses)
+
+        # řazení: s FTS → bm25 relevance; bez FTS → mtime desc
+        if has_fts:
+            q += " ORDER BY bm25(files_fts)"
+        else:
+            q += " ORDER BY f.mtime DESC, f.name"
+
+        if limit is not None:
+            q += f" LIMIT {int(limit)}"
+
+        rows = self.conn.execute(q, args).fetchall()
+        return [_row_to_record(r) for r in rows]
+
+    def search_by_hash(
+        self, hash_hex: str, source_id: str | None = None, limit: int | None = 100
+    ) -> list[FileRecord]:
+        """E9 — exact hash lookup (SHA-256 / MD5).
+
+        `hash_hex` — hex string bez prefixu; porovnává se s columnami
+        sha256 a md5 (case-insensitive přes LOWER).
+        """
+        h = hash_hex.strip().lower()
+        if not h:
+            return []
+        q = "SELECT * FROM files WHERE LOWER(sha256) = ? OR LOWER(md5) = ?"
+        args: list[object] = [h, h]
+        if source_id is not None:
+            q += " AND source_id = ?"
+            args.append(source_id)
         if limit is not None:
             q += f" LIMIT {int(limit)}"
         rows = self.conn.execute(q, args).fetchall()
