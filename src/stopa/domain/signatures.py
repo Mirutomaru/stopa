@@ -32,6 +32,10 @@ SIGNATURES: list[tuple[int, bytes, str, str]] = [
     (0, b"MZ", "pe", "executable"),  # DOS/PE — ověřeno PE hlavičkou níže
     (4, b"ftyp", "iso_bmff", "media"),  # MP4/MOV: 'ftyp' na offsetu 4
     (0, b"ID3", "mp3_id3", "audio"),
+    # Windows artefakty (E6) — LNK: cbLinkHeaderSize=76 + IShellLink CLSID @4
+    (0, b"\x4c\x00\x00\x00\x01\x14\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x46", "lnk", "windows"),
+    # Windows SuperFetch prefetch (MAM) — magic "MAM\x04" + uncompressed_size
+    (0, b"MAM\x04", "win_prefetch", "windows"),
 ]
 
 # RIFF kontejner — druhá kontrola na offsetu 8

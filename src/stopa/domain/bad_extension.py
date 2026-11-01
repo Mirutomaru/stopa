@@ -34,6 +34,9 @@ TYPE_EXTENSIONS: dict[str, frozenset[str]] = {
     "mp3_frame": frozenset({"mp3"}),
     "wav": frozenset({"wav"}),
     "avi": frozenset({"avi"}),
+    # E6 Windows artefakty — LNK jako .exe/.dll se flaguje (rozpor signatury)
+    "lnk": frozenset({"lnk", "url"}),
+    "win_prefetch": frozenset({"pf"}),
 }
 
 
