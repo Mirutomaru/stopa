@@ -20,6 +20,7 @@ from pydantic import BaseModel, ValidationError
 
 from stopa.intelligence.agents import AGENTS, DEFAULT_AGENT, AgentProfile
 from stopa.intelligence.case_context import CaseContext
+from stopa.intelligence.rag import RagContext
 
 
 class OrchestrationError(Exception):
@@ -57,14 +58,26 @@ def route_agent(question: str, agent_id: str | None = None) -> AgentProfile:
     return AGENTS[DEFAULT_AGENT]
 
 
-def build_prompt(profile: AgentProfile, context: CaseContext, question: str) -> list[dict[str, str]]:
-    """Messages pro LLM: system (role agenta) + user (dotaz + kontext případu)."""
+def build_prompt(
+    profile: AgentProfile,
+    context: CaseContext,
+    question: str,
+    rag: RagContext | None = None,
+) -> list[dict[str, str]]:
+    """Messages pro LLM: system (role agenta) + user (dotaz + kontext případu).
+
+    ``rag`` — volitelný RAG retrieval (I2): vrstvy case/technical/knowledge se
+    připojí jako izolovaný blok s citacemi; prázdný kontext = nic nepřidá.
+    """
     user = (
         f"Dotaz: {question}\n\n"
         f"Dostupné vstupy tohoto agenta: {profile.inputs}.\n\n"
         "Data případu (read-only snapshot):\n"
         f"{context.to_prompt_block()}"
     )
+    rag_block = rag.to_prompt_block() if rag is not None else ""
+    if rag_block:
+        user += "\n\n" + rag_block
     return [
         {"role": "system", "content": profile.system_prompt},
         {"role": "user", "content": user},
@@ -126,6 +139,7 @@ def orchestrate(
     context: CaseContext,
     question: str,
     agent_id: str | None = None,
+    rag: RagContext | None = None,
 ) -> AgentResult:
     """Spustí jeden analytický úkol přes vybraného agenta.
 
@@ -134,6 +148,7 @@ def orchestrate(
         context: read-only snapshot případu.
         question: dotaz uživatele.
         agent_id: explicitní agent; ``None`` = auto-routing.
+        rag: volitelný RAG retrieval (I2) — připojí se do promptu jako izolovaný blok.
 
     Returns:
         ``AgentResult`` s validovaným výstupem + auditními metadaty.
@@ -142,7 +157,7 @@ def orchestrate(
         OrchestrationError: neznámý agent / nevalidní výstup LLM.
     """
     profile = route_agent(question, agent_id)
-    messages = build_prompt(profile, context, question)
+    messages = build_prompt(profile, context, question, rag=rag)
     prompt_chars = sum(len(m["content"]) for m in messages)
 
     t0 = time.monotonic()

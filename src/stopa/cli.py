@@ -734,7 +734,14 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     import json as _json
 
     from stopa.data.lmstudio_client import LmStudioClient, LmStudioUnavailable
-    from stopa.intelligence import OrchestrationError, build_case_context, orchestrate
+    from stopa.intelligence import (
+        OrchestrationError,
+        audit_ai_query,
+        build_case_context,
+        orchestrate,
+        prompt_hash,
+        retrieve,
+    )
 
     db = _open_db(args.case_id)
     try:
@@ -745,14 +752,33 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             return 1
 
         context = build_case_context(db, args.case_id)
+        # P0 Intelligence I2 — Forensic RAG: retrieval napříč vrstvami
+        rag = retrieve(args.question, db=db, case_id=args.case_id)
         try:
-            result = orchestrate(client.chat, context, args.question, agent_id=args.agent)
+            result = orchestrate(
+                client.chat, context, args.question, agent_id=args.agent, rag=rag
+            )
         except LmStudioUnavailable as exc:
             print(f"AI nedostupná: {exc}")
             return 1
         except OrchestrationError as exc:
             print(f"AI orchestrace selhala: {exc}")
             return 1
+
+        # audit AI dotazu (evidence modelu + promptu) — analysis_operations
+        from stopa.intelligence.ai_orchestrator import build_prompt, route_agent
+
+        profile = route_agent(args.question, args.agent)
+        ph = prompt_hash(build_prompt(profile, context, args.question, rag=rag))
+        audit_ai_query(
+            db,
+            case_id=args.case_id,
+            question=args.question,
+            model=str(health.get("model") or None),
+            prompt_sha256=ph,
+            citations=result.citations,
+            agent=result.agent_id,
+        )
 
         db.log_operation(
             "ai_analyzed",
@@ -772,6 +798,11 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                         "agent": result.agent_id,
                         "output": result.output.model_dump(mode="json"),
                         "citations": result.citations,
+                        "rag": {
+                            "case": len(rag.case_chunks),
+                            "technical": len(rag.technical_chunks),
+                            "knowledge": len(rag.knowledge_chunks),
+                        },
                         "prompt_chars": result.prompt_chars,
                         "duration_ms": round(result.duration_ms, 1),
                     },

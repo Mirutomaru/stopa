@@ -4,6 +4,24 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (P0 Intelligence I2 — Forensic RAG, tři znalostní vrstvy)
+- `intelligence/rag.py` — retrieval napříč třemi oddělenými vrstvami:
+  **Case RAG** (artifacts/files/findings přes existující FTS5 indexy case DB,
+  striktní izolace podle `case_id`), **Technical RAG** (`docs/formats/*.md` +
+  Parser Validation Registry C3 — jeden chunk na parser) a **Knowledge RAG**
+  (schválená metodika `docs/methodology/*.md`).
+- Chunking markdown podle nadpisů s limitem délky; deterministický skórovací
+  ranking (počet shodných slov + tie-break citace); FTS5 query sanitizace
+  (každé slovo = citovaný term — žádná FTS5 syntaxe z uživatelského textu
+  neunikne do dotazu; Unicode → české diakritiky).
+- **Prompt injection ochrana:** importované dokumenty obalené do izolovaného
+  bloku `<untrusted_source layer="…">` s instrukcí „data, ne příkazy“.
+- **Audit AI dotazů:** `audit_ai_query()` → `analysis_operations`
+  (op_type=`ai_query`) s verzí modelu, SHA-256 promptu a použitými citacemi.
+- Napojení: orchestrátor (`build_prompt`/`orchestrate` přijímají `RagContext`),
+  web endpoint `POST /api/cases/{id}/ai/analyze` (odpověď obsahuje počty RAG
+  chunků) a CLI `stopa analyze` (JSON výstup s RAG metadata).
+
 ### Added (P0 Intelligence I1 — AI orchestrace, multi-agent)
 - `intelligence/agents.py` — 5 deklarativních `AgentProfile` (case_analyst,
   timeline_analyst, artifact_analyst, media_analyst, report_analyst): system prompt,

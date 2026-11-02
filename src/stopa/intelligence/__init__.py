@@ -24,6 +24,17 @@ from stopa.intelligence.ai_orchestrator import (
     route_agent,
 )
 from stopa.intelligence.case_context import CaseContext, build_case_context
+from stopa.intelligence.rag import (
+    RagChunk,
+    RagContext,
+    audit_ai_query,
+    chunk_markdown,
+    load_doc_layer,
+    prompt_hash,
+    retrieve,
+    sanitize_fts_query,
+    technical_registry_chunks,
+)
 
 __all__ = [
     "AGENTS",
@@ -34,9 +45,18 @@ __all__ = [
     "CaseContext",
     "MediaAnalystOutput",
     "OrchestrationError",
+    "RagChunk",
+    "RagContext",
     "ReportAnalystOutput",
     "TimelineAnalystOutput",
+    "audit_ai_query",
     "build_case_context",
+    "chunk_markdown",
+    "load_doc_layer",
     "orchestrate",
+    "prompt_hash",
+    "retrieve",
     "route_agent",
+    "sanitize_fts_query",
+    "technical_registry_chunks",
 ]

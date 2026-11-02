@@ -644,7 +644,14 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         (citace, délka promptu, doba inference). Fail-closed: nevalidní
         odpověď LLM → 502 s úryvkem (auditovatelné).
         """
-        from stopa.intelligence import OrchestrationError, build_case_context, orchestrate
+        from stopa.intelligence import (
+            OrchestrationError,
+            audit_ai_query,
+            build_case_context,
+            orchestrate,
+            prompt_hash,
+            retrieve,
+        )
 
         if not body.question.strip():
             raise HTTPException(400, "chybí otázka")
@@ -660,12 +667,31 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 raise HTTPException(503, "AI nedostupná — spusťte LM Studio (localhost:1234)")
 
             context = build_case_context(db, case_id)
+            # P0 Intelligence I2 — Forensic RAG: retrieval napříč vrstvami
+            rag = retrieve(body.question, db=db, case_id=case_id)
             try:
-                result = orchestrate(client.chat, context, body.question, agent_id=body.agent)
+                result = orchestrate(
+                    client.chat, context, body.question, agent_id=body.agent, rag=rag
+                )
             except LmStudioUnavailable as exc:
                 raise HTTPException(503, str(exc)) from exc
             except OrchestrationError as exc:
                 raise HTTPException(502, f"AI orchestrace selhala: {exc}") from exc
+
+            # audit AI dotazu (evidence modelu + promptu) — analysis_operations
+            from stopa.intelligence.ai_orchestrator import build_prompt, route_agent
+
+            profile = route_agent(body.question, body.agent)
+            ph = prompt_hash(build_prompt(profile, context, body.question, rag=rag))
+            audit_ai_query(
+                db,
+                case_id=case_id,
+                question=body.question,
+                model=str(health.get("model") or None),
+                prompt_sha256=ph,
+                citations=result.citations,
+                agent=result.agent_id,
+            )
 
             db.log_operation(
                 "ai_analyzed",
@@ -681,6 +707,11 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 "agent": result.agent_id,
                 "output": result.output.model_dump(mode="json"),
                 "citations": result.citations,
+                "rag": {
+                    "case": len(rag.case_chunks),
+                    "technical": len(rag.technical_chunks),
+                    "knowledge": len(rag.knowledge_chunks),
+                },
                 "prompt_chars": result.prompt_chars,
                 "duration_ms": round(result.duration_ms, 1),
             }
