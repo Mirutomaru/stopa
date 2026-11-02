@@ -26,17 +26,21 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 
 | Metrika | Hodnota |
 |---|---|
-| Dokončené úkoly (TASKS.md) | 14 |
+| Dokončené úkoly (TASKS.md) | **17** |
 | Rozpracované (IN_PROGRESS) | 0 |
-| Čekající (BACKLOG/READY) | 8 |
+| Čekající (BACKLOG/READY) | **7** (READY: STP-016; BACKLOG: 6) |
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-015 — ETAPA B vlna 1: port AXIOM extraktorů (6 parserů + 76 testů)**
-Commit `afc49a0`, 2026-11-03.
+**STP-012c — kořenové výstupy MASTER DEVELOPMENT PROMPT (9/9)**
+Všechny povinné soubory v kořeni: `STOPA_TECHNICAL_AUDIT.md`, `STOPA_ARCHITECTURE.md`,
+`STOPA_ROADMAP.md`, `STOPA_COVERAGE_MATRIX.csv`, `STOPA_CHANGELOG.md`, `STOPA_TEST_REPORT.md`,
+`STOPA_SECURITY_REPORT.md`, `STOPA_AI_GOVERNANCE.md`, `STOPA_VALIDATION_REPORT.md`.
+Předtím: STP-012b (povinná pole registrů), STP-012 (DEV OS bootstrap, `e227929`),
+STP-013..015 (ETAPA B vlna 1, `afc49a0`).
 
 ## Aktuální úkol
-Žádný aktivní — čeká na výběr dalšího READY úkolu (doporučeno: STP-016 vlna 2 portu).
+Žádný aktivní — čeká na zahájení STP-016 (vlna 2 portu AXIOM extraktorů).
 
 ## Nejbližší následující úkol
 **STP-016 — ETAPA B vlna 2: port AXIOM extraktorů (dalších ~8 portable-local typů)**
@@ -55,4 +59,4 @@ CmdScan/FileScan text output, CurrentTabs, MSNArtifact.
 - SHA-512 chybí v integrity vrstvě; RBAC minimální
 
 ## Datum poslední aktualizace
-**2026-11-03** — po dokončení ETAPA B vlna 1 + bootstrap DEV OS.
+**2026-11-03** — po dokončení ETAPA B vlna 1 + bootstrap DEV OS + kořenové výstupy MASTER promptu (9/9).

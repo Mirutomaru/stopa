@@ -2,6 +2,10 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
+## 2026-11-03 — STP-012c kořenové výstupy MASTER promptu (9/9)
+**Změněné soubory:** nové v kořeni `STOPA_TECHNICAL_AUDIT.md` (131 ř.), `STOPA_ARCHITECTURE.md` (96), `STOPA_ROADMAP.md` (92, A–Q), `STOPA_CHANGELOG.md` (245, autoritativní kopie + pointer v docs/), `STOPA_TEST_REPORT.md` (97, tabulka 53 souborů / 896 testů doloženo collect-only), `STOPA_SECURITY_REPORT.md` (49, T1–T10), `STOPA_AI_GOVERNANCE.md` (66, nový — F-044), `STOPA_VALIDATION_REPORT.md` (70, C3 registry 13 parserů živě ověřeno); `docs/STOPA_CHANGELOG.md` + pointer na kořen.
+**Výsledek:** všech 9 povinných kořenových výstupů MASTER DEVELOPMENT PROMPT existuje; ruff clean; testy nedotčeny (895 passed, 1 skipped).
+
 ## 2026-11-03 — STP-012b doplnění povinných polí DEV OS registrů
 - **Změněné soubory:** `.stopa-dev/FEATURE_REGISTRY.md` (+sloupce Popis, Verze), `.stopa-dev/TEST_REGISTRY.md` (+Datum, Verze aplikace, Případná chyba, Odkaz na protokol), `.stopa-dev/DECISIONS.md` (+pole Dotčené moduly u všech ADR).
 - **Přidané funkce:** registrace nyní plně odpovídají povinným polím DEV OS promptu §3.7 (testy) a §3.8 (rozhodnutí); FEATURE_REGISTRY rozšiřuje §3.6 o Popis+Verzi.

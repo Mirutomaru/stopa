@@ -166,3 +166,23 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Oblast:** K/Q | **Priorita:** P3 | **Stav:** BACKLOG
 - **Popis:** Rozšíření export engine o JSONL, XML, STIX/UCO.
 - **Závislosti:** —
+
+## STP-024 — DEV OS: doplnění povinných polí registrů (STP-012b)
+- **Oblast:** P (QA) | **Priorita:** P1 | **Stav:** DONE
+- **Popis:** `FEATURE_REGISTRY.md` +sloupce Popis/Verze; `TEST_REGISTRY.md` +pole Datum/Verze
+  aplikace/Případná chyba/Odkaz na protokol; `DECISIONS.md` +pole Dotčené moduly u všech ADR.
+- **Dotčené moduly:** `.stopa-dev/*`
+- **Testy:** konzistence s promptem DEV OS ověřena — PASS
+- **Dokončeno:** 2026-11-03 | Commit: `19a458d`
+
+## STP-025 — Kořenové výstupy MASTER DEVELOPMENT PROMPT (STP-012c)
+- **Oblast:** P (QA) | **Priorita:** P1 | **Stav:** DONE
+- **Popis:** Vytvořeny všechny povinné kořenové soubory: `STOPA_TECHNICAL_AUDIT.md`,
+  `STOPA_ARCHITECTURE.md`, `STOPA_ROADMAP.md` (A–Q), `STOPA_CHANGELOG.md` (autoritativní kopie,
+  pointer v docs/), `STOPA_TEST_REPORT.md` (tabulka 53 souborů / 896 testů doloženo collect-only),
+  `STOPA_SECURITY_REPORT.md` (T1–T10), `STOPA_AI_GOVERNANCE.md` (nový, F-044),
+  `STOPA_VALIDATION_REPORT.md` (C3 registry 13 parserů živě ověřeno). `STOPA_COVERAGE_MATRIX.csv`
+  už v kořeni existoval.
+- **Dotčené moduly:** kořen projektu, `.stopa-dev/*`, `docs/STOPA_CHANGELOG.md`
+- **Testy:** ruff clean; testy nedotčeny (895 passed, 1 skipped) — PASS
+- **Dokončeno:** 2026-11-03 | Commit: (tento commit)

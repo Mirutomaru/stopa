@@ -1,6 +1,7 @@
 # STOPA — Changelog
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
+**Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 

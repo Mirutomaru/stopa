@@ -1,0 +1,245 @@
+# STOPA — Changelog
+
+Formát: Conventional Commits + fáze. Nejnovější nahoře.
+
+## [Unreleased] — 2026-11-02 (ETAPA A–C)
+
+### Added (ETAPA B vlna 1 — port AXIOM extraktorů, 6 nových parserů + 76 testů)
+- `artifacts/email_mbox.py` — **mbox/EML email parser** (AXIOM `CloudMboxEmailArtifact` /
+  `OfflineGmailArtifact`): rozdělení mbox na zprávy (`From ` řádky), hlavičky From/To/Cc/Bcc/
+  Subject/Date, MIME body (text/plain + base64/QP decode), UTF-8/UTF-16 detekce; artifact type
+  `email_message`. Detekce name/content-based (mbox nemá spolehlivou magiku).
+- `artifacts/win_wlan.py` — **WiFi WLAN profile XML parser** (AXIOM `WiFiLocationsArtifact`):
+  SSID (`<SSID><name>`), authentication/encryption, MAC adresy ze stationList; namespace-agnostické
+  helpery `_local()`/`_find_text()` (XML má `xmlns`). Artifact type `wifi_profile`.
+- `artifacts/win_schedtask.py` — **Scheduled Tasks XML parser** (AXIOM `ScheduledTasksArtifact`):
+  název, akce (Exec), triggery; detekce UTF-16 LE/BE s BOM (reálné task XML jsou UTF-16).
+  Artifact type `scheduled_task`.
+- `artifacts/net_connections.py` — **netstat/connstat text parser** (AXIOM `ConnscanArtifact` /
+  `NetScanArtifact` / `SockscanArtifact`): robustní token-based parser — Windows `netstat -ano`
+  (uppercase, PID), Unix `ss`/`netstat` (State/Recv-Q/Send-Q sloupce), IPv4/IPv6 v hranatých
+  závorkách, wildcard `*:*`. Artifact type `network_connection`.
+- `artifacts/win_clipboard.py` — **Clipboard registry parser** (AXIOM `ClipboardArtifact`):
+  sekundární průchod NTUSER.DAT (`Software\Microsoft\Windows\CurrentVersion\Clipboards\<fmt>`),
+  CF_* formáty, UTF-8/UTF-16LE detekce hodnot. Artifact type `clipboard_entry`.
+- `artifacts/win_sids.py` — **SID extraction parser** (AXIOM `GetsidsArtifact` / `SidsArtifact` /
+  `UserSidsArtifact`): SAM/SECURITY `Sam\Domains\Account\Users\<SID>` + NTUSER.DAT ProfileList;
+  zdroj rozlišen podle názvu souboru. Artifact type `user_sid`.
+- `pipeline.py` — importy všech 6 parserů; `NAME_BASED_EXTRACTORS` rozšířen o email/wlan/
+  schedtask/netstat; `_extract_registry_all` rozšířen o Clipboard + SID sekundární průchody
+  (sdílená regf magic, pattern Amcache/ShimCache).
+- `domain/validation_registry.py` — 4 nové C3 záznamy (`email_mbox`, `win_wlan`, `win_schedtask`,
+  `net_connections`) + aktualizované limitations u `registry_hive`; `build_registry()` nyní
+  **13 parserů** (1:1 sync s pipeline ověřen).
+- Testy: `tests/test_email_mbox.py` (17), `test_win_wlan.py` (12), `test_win_schedtask.py` (11),
+  `test_net_connections.py` (12), `test_win_clipboard.py` (12), `test_win_sids.py` (12) — celkem
+  **76 nových testů**, plně offline (syntetické fixtures + fake regipy objekty). Plná sada:
+  **895 passed, 1 skipped**; ruff clean.
+
+### Added (FÁZE 1 — kompletní technický audit + FÁZE 15 coverage matrix CSV)
+- `docs/STOPA_TECHNICAL_AUDIT.md` — přepsán na aktuální stav (commit `2244d95`,
+  schema v11, **819 testů**, ruff clean): 18 oblastí × (současný stav / funguje /
+  neúplné / dluh / rizika / doporučení / priorita), každé tvrzení podloženo
+  zdrojovým kódem, testem nebo živým spuštěním. Souhrn priorit P0–P3.
+- `scripts/build_axiom_coverage.py` — generátor matice rozšířen o export
+  **`STOPA_COVERAGE_MATRIX.csv`** (FÁZE 15) do kořene projektu: 232 unikátních
+  AXIOM typů × sloupce (artifact_type, platforma, zdroj_dat, parser_stopa,
+  stav_implementace SUPPORTED/NOT_SUPPORTED/DEPRECATED, stav_testovani, verze,
+  známá_omezeni, referencni_dataset, vysledek_validace). Deterministický výstup
+  ověřen opakovaným spuštěním (shoda SHA-256).
+
+### Added (P0 Intelligence I3 — Entity Resolution 2.0, confidence levels + normalizace účtů)
+- `domain/entity_resolution.py` — nový doménový modul: čtyři úrovně confidence
+  vztahů (`confirmed`, `strong_candidate`, `possible`, `unverified`) s
+  `map_legacy_confidence()` (staré `verified`→`confirmed`, `inferred`→`possible`);
+  normalizace platformních účtů — WhatsApp JID `+420…@c.us` → `wa:+E164`,
+  skype:/telegram: handle; heuristická detekce duplicit entit
+  `find_merge_candidates()` s důvody (stejný normalizovaný telefon, stejný
+  e-mail local-part na různých doménách, shoda platformního účtu).
+- `domain/entities.py` — nový druh entity **`user_account`**; `classify_value()`
+  detekuje platformní účty (JID, skype:/telegram: handle) a vrací `user_account`.
+- `domain/correlation.py` — `CONTACT_KINDS = ("phone", "email", "user_account")`;
+  pravidla same_contact/hash_match → `confirmed`, temporal_overlap → `possible`;
+  `CorrelationResult` rozšířen o časové rozmezí **`first_seen`/`last_seen`**;
+  `run_correlation()` vrací `merge_candidates`.
+- `data/db.py` — schéma **v10 → v11**: CHECK constraints pro `entities`
+  (`user_account`) a `correlations` (4 confidence + `first_seen`/`last_seen`);
+  idempotentní migrace `_migrate_entity_resolution()` (rebuild tabulek, protože
+  SQLite nemění CHECK in-place; staré confidence hodnoty se remapují při kopii —
+  bez ztráty dat); `add_correlation()`/`list_correlations()` rozšířeny o časové
+  rozmezí.
+- Web: nový endpoint **`GET /api/cases/{case_id}/entities/merge-candidates`**;
+  audit log `correlation_run` rozšířen o počet duplicit/merge candidates.
+- CLI: `stopa correlate` tiskne „Možné duplikity entit“ s důvody (max 10).
+- Report/i18n: `_correlation_confidence_label()` podporuje 4 úrovně + passthrough
+  neznámých hodnot; i18n rozšířen o nové confidence štítky.
+- GUI graph (`graph.js`): barva `user_account`, EDGE_WIDTHS pro 4 úrovně +
+  backward compat staré `verified`/`inferred`; plná hrana pro confirmed,
+  přerušovaná pro ostatní.
+- Testy: nový `tests/test_entity_resolution.py` (26 testů — confidence levels,
+  normalizace JID/handle, merge candidates + determinismus, časové rozmezí,
+  migrace v10→v11 bez ztráty dat, web endpoint); aktualizovány `test_e4/e5/e10/
+  reproducibility` na novou škálu a schéma v11.
+
+### Added (P0 Intelligence I2 — Forensic RAG, tři znalostní vrstvy)
+- `intelligence/rag.py` — retrieval napříč třemi oddělenými vrstvami:
+  **Case RAG** (artifacts/files/findings přes existující FTS5 indexy case DB,
+  striktní izolace podle `case_id`), **Technical RAG** (`docs/formats/*.md` +
+  Parser Validation Registry C3 — jeden chunk na parser) a **Knowledge RAG**
+  (schválená metodika `docs/methodology/*.md`).
+- Chunking markdown podle nadpisů s limitem délky; deterministický skórovací
+  ranking (počet shodných slov + tie-break citace); FTS5 query sanitizace
+  (každé slovo = citovaný term — žádná FTS5 syntaxe z uživatelského textu
+  neunikne do dotazu; Unicode → české diakritiky).
+- **Prompt injection ochrana:** importované dokumenty obalené do izolovaného
+  bloku `<untrusted_source layer="…">` s instrukcí „data, ne příkazy“.
+- **Audit AI dotazů:** `audit_ai_query()` → `analysis_operations`
+  (op_type=`ai_query`) s verzí modelu, SHA-256 promptu a použitými citacemi.
+- Napojení: orchestrátor (`build_prompt`/`orchestrate` přijímají `RagContext`),
+  web endpoint `POST /api/cases/{id}/ai/analyze` (odpověď obsahuje počty RAG
+  chunků) a CLI `stopa analyze` (JSON výstup s RAG metadata).
+
+### Added (P0 Intelligence I1 — AI orchestrace, multi-agent)
+- `intelligence/agents.py` — 5 deklarativních `AgentProfile` (case_analyst,
+  timeline_analyst, artifact_analyst, media_analyst, report_analyst): system prompt,
+  popis vstupů, Pydantic výstupní model (`CaseAnalystOutput`, `TimelineAnalystOutput`,
+  `ArtifactAnalystOutput`, `MediaAnalystOutput`, `ReportAnalystOutput`), max_tokens/timeout;
+  žádná autonomní smyčka — jeden LLM call na úkol
+- `intelligence/case_context.py` — `CaseContext` (frozen read-only snapshot: stats,
+  findings, timeline events, sample artifacts) + `build_case_context(db, case_id)`
+  s limity velikosti pro prompt; čistá logika orchestrace DB nevidí
+- `intelligence/ai_orchestrator.py` — `route_agent()` (explicitní volba > auto-routing
+  podle klíčových slov), `build_prompt()`, `parse_output()` (**fail-closed**: JSON →
+  Pydantic validace, zvládne markdown fence + proza kolem), `extract_citations()`
+  ([art:<id>]/[file:<id>]), `AgentResult` (audit: prompt_chars, duration_ms, raw_text)
+  a `orchestrate(llm_call, context, question)` — `llm_call` je injektovatelný callable,
+  celá orchestrace se testuje offline bez LM Studio
+- Web: nový endpoint **`POST /api/cases/{case_id}/ai/analyze`** (agent volitelný,
+  audit záznam `ai_analyzed`, nevalidní výstup LLM → 502)
+- CLI: nový subpříkaz **`stopa analyze <case> "dotaz" [--agent X] [--json]`**
+
+### Added (P0 Core C6 — Benchmark Engine + validační reporty / E13)
+- `domain/benchmark.py` — čistá logika bez I/O: `BenchmarkResult` (frozen dataclass:
+  name, suite, duration_ms, ram_peak_bytes, artifacts, iterations), `RegressionWarning`,
+  `detect_regressions()` (práh >20% zpomalení proti baseline, defenzivní u baseline=0),
+  `validation_coverage()` (covered/total/pct + nepokrivené parsery), `env_info()`
+- `data/benchmark_engine.py` — deterministické benchmarky na syntetických datech:
+  core workload (pipeline ingest+extrakce stromu souborů) a per-parser workloads
+  (9 parserů z registry, minimální vstup); měření času + špičkové RAM (tracemalloc);
+  historie do `meta` (`benchmark_history`, max 50 záznamů), `check_regressions()`,
+  `benchmark_report()`; každý workload obalen try/except (jeden selže, ostatní běží)
+- `data/validation_report.py` — Evidence Validation Report per případ: per-artifact
+  parser ID+verze + validation status + confidence + provenance; souhrn coverage
+  (kolik artefaktů je z validovaných parserů); deterministický JSON export
+- CLI: nové subpříkazy **`stopa benchmark [case] [--suite core|parsers|all]`**
+  (výsledky + detekce regresí >20% proti baseline) a **`stopa validate <case> [--json]`**
+  (validační report); audit záznam `benchmark_run`
+- `tests/test_benchmark_engine.py` — 18 testů (čistá logika: detekce regresí/práh/coverage;
+  engine: core+parser workloads, historie roundtrip, regresní detekce, report shape;
+  validační report: provenance coverage, determinismus JSON, prázdný případ); suite 720 → **738 passed**
+
+### Added (P0 Core C5 — Reproducibility Engine)
+- `domain/reproducibility.py` — čistá logika bez I/O: `AnalysisOperation` (frozen dataclass:
+  vstupní soubory + SHA-256, verze parserů, verze STOPA, config_hash, parametry, prostředí),
+  `env_snapshot()` (python/platform/sqlite), deterministické `compare_outputs()` →
+  `ComparisonReport`, `verify_inputs()` (změna/ztráta/přidání vstupního souboru)
+- DB schéma **v9 → v10**: nová tabulka `analysis_operations` + idempotentní migrace sloupce
+  `params_json`; metody `record_operation()` / `get_operation()` / `list_operations(case_id, op_type)`
+- `pipeline.process_source()` nyní zaznamenává každou extrakci: vstupní soubory se SHA-256,
+  verze parserů, config_hash profilu, parametry, deterministický souhrn výstupů
+  (`summarize_outputs()` — jen stabilní počty, bez ID/časů) + `duration_ms`
+- `pipeline.replay_extract(op, root)` — ověří hashe vstupů, spustí extrakci v dočasné DB
+  (původní případ se nedotkne), porovná souhrny → `ReplayResult(inputs_identical, outputs_identical, diffs)`
+- CLI: nový subpříkaz **`stopa replay <case_id> [op]`** — opakování zaznamenané operace +
+  lidsky čitelný report (vstupy OK/ZMĚNĚNY, výstup IDENTICKÝ/LIŠÍ), audit záznam
+  `operation_replayed`, exit code 0/1
+- `tests/test_reproducibility.py` — 20 testů (čistá logika: porovnání/ověření vstupů/model/env;
+  DB integrace: roundtrip/filtry/migrace v9→v10; pipeline: záznam operace, replay identický,
+  detekce změněného i zmizelého souboru, determinismus souhrnu); suite 700 → **720 passed**
+
+### Added (P0 Core C4 — Evidence Integrity 2.0)
+- `domain/integrity.py` — čistá logika bez I/O: **hash chaining** audit logu
+  (`compute_audit_hash`, `verify_chain` s detekcí rozbitého řetězce + ID prvního
+  špatného řádku), **Ed25519** kontrolní body (lazy import `cryptography` — volitelná
+  závislost, graceful degradation jako FDE: `generate_keypair`, `sign_hash`,
+  `verify_signature`), **export manifesty** (`build_manifest` + deterministický
+  `manifest_hash` — stejný vstup = stejný hash + Ed25519 podpis)
+- DB schéma **v8 → v9**: audit_log +sloupce `prev_hash`/`hash`, nová tabulka
+  `integrity_checkpoints`; idempotentní `_migrate_audit_chain()` (ALTER + backfill
+  řetězce od GENESIS pro staré DB, triggery append-only dočasně zrušeny a obnoveny)
+- `CaseDB.log_operation()` nyní chainuje; metody `ensure_integrity_key` /
+  `add_integrity_checkpoint` / `verify_integrity_checkpoints`; odstraněna duplicitní
+  stará `log_operation`
+- CLI: nový subpříkaz **`stopa integrity <case>`** (ověření řetězce + klíč + kontrolní
+  body, `--init-key`, `--checkpoint DŮVOD`); Ed25519 pár generován při `case new`;
+  kontrolní body automaticky po ingest / correlate / export; `_write_export_manifest()`
+  — podepsaný manifest vedle exportního souboru (reprodukovatelnost)
+- `tests/test_integrity.py` — 22 testů (čistá logika: chain/tamper/Ed25519 roundtrip/
+  manifest determinismus; DB integrace: chaining, backfill staré DB, kontrolní body,
+  export manifest); suite 678 → **700 passed**
+
+### Added (P0 Core C3 — Parser Validation Registry)
+- `domain/validation_registry.py` — `ParserValidation` (parser_id, verze, formáty,
+  omezení, referenční dataset, test files), deklarativní registry pro všech 9 parserů
+  (sqlite, registry_hive, plist, lnk, win_prefetch, evtx, icloud_messages, win_jumplist,
+  win_usn) s formáty a omezeními dle docstringů parserů
+- `build_registry()` — synchronizace s pipeline (`parser_versions()`): každý extraktor má
+  záznam v registry a naopak, verze se shodují; nesoulad → `RegistryError`; lazy import
+  (domain bez tvrdé závislosti na pipeline)
+- `registry_report()` — shrnutí registry pro CLI/GUI
+- `tests/test_validation_registry.py` — 10 testů (sync s pipeline, verze, chybějící
+  extraktor/záznam, version mismatch, frozen model, report); suite 668 → 678 passed
+
+### Added (P0 Core C2 — Evidence Lineage Engine)
+- `domain/lineage.py` — `LineageEvent` (append-only krok: verze nástroje, hash konfigurace,
+  vstupní/výstupní reference), `config_hash()` (deterministický SHA-256 kanonické konfigurace),
+  `build_chain()` (zpětné dohledání řetězce zdroj → … → ref); čistá logika bez I/O
+- DB schéma **v8**: tabulka `lineage_events` + idempotentní migrace starých case DB
+- `CaseDB`: log_lineage / list_lineage (chronologicky) / get_lineage_chain (chain traversal)
+- Integrace do pipeline: krok `extract` (process_source, output_refs = ID artefaktů),
+  `correlate` (run_correlation, artefakty → propojení), `finding_added` (add_finding,
+  provenance refy → finding), `report_generated` (HTML/PDF report)
+- `ProcessResult.extracted_artifact_ids` — output refs extrakčního kroku
+- `tests/test_lineage.py` — 12 testů (model, CRUD, chain traversal, pipeline integrace, migrace v7→v8)
+
+### Added (P0 Core C1 — Unified Evidence Model)
+- `domain/evidence_model.py` — ConfidenceLevel (5 úrovní AI grounding), Provenance, Finding
+  (povinná provenance = doložitelnost); čistá logika bez I/O
+- `models.Artifact` +sloupce `provenance: list[Provenance]`, `validation_status`
+  (staré artifacty čitelné s defaulty)
+- DB schéma v7: tabulka `findings` (kind, confidence_level CHECK, provenance_json),
+  sloupce `artifacts.provenance_json/validation_status`; idempotentní migrace starých DB
+- `CaseDB`: add_finding / list_findings (filtry case/kind/confidence) / get_finding / delete_finding
+- `tests/test_evidence_model.py` — 14 testů (modely, CRUD, CHECK constraint, migrace v6→v7, roundtrip)
+
+### Added (dokumentace)
+- `udelej.md` — master prompt STOPA Ultimate Forensic Platform (zadání)
+- `docs/STOPA_TECHNICAL_AUDIT.md` — ETAPA A: kompletní technický audit (ověřená čísla,
+  silné stránky, slabá místa S1–S11, návrhy architektonických změn)
+- `docs/STOPA_GAP_ANALYSIS.md` — ETAPA B: gap analysis vs. zadání §4–§20
+  (IMPLEMENTED/PARTIAL/MISSING/NEEDS VALIDATION/NOT RECOMMENDED + moduly/soubory)
+- `docs/STOPA_TARGET_ARCHITECTURE.md` — ETAPA C: cílová architektura, datové modely
+  (Unified Evidence Model, schéma v7), API kontrakty, závislosti, migrační strategie,
+  technologické vyhodnocení (§20)
+- `docs/STOPA_IMPLEMENTATION_ROADMAP.md` — ETAPA C: P0 Core (C1–C6), P0 Intelligence (I1–I5),
+  P1 zdroje (S1–S6), P1 Multimedia (M1–M4), P2 enterprise/workspace (E1–E5) + odhady
+- `docs/STOPA_VALIDATION_STRATEGY.md` — ETAPA C: Parser Validation Registry, referenční
+  datasety, Benchmark Engine, regresní sada, validační reporty, kritéria validace parseru
+- `docs/STOPA_SECURITY_MODEL.md` — ETAPA C: hrozby, Integrity 2.0 (hash chaining + Ed25519),
+  AI bezpečnost, web API, důvěryhodnost vstupů, kontrolní seznam commitů
+- `docs/STOPA_AI_ARCHITECTURE.md` — ETAPA C: multi-agent orchestrátor (5 agentů), Forensic RAG
+  (Case/Technical/Knowledge vrstvy), AI grounding (5 úrovní), modelová vrstva
+
+## [0.1.0] — 2026-11-02 (commit ae73ad0)
+
+### Fixed (E-audit + code review)
+- Path traversal case_id → `validate_case_id()` regex v open_db/delete_case
+- rel_path traversal → resolve()+prefix check; RFC 5987 Content-Disposition + CRLF hardening
+- RAM peak exportu → ranged read (seek+read) místo read_bytes()
+- Mrtvý kód sqlite_formatter wrapper; redundantní datetime importy v db.py
+- README test count; verze z jednoho zdroje (importlib.metadata)
+
+### Added
+- CI workflow od noly (ruff + pytest + JS DOM přes jsdom)
+- `tests/test_audit_fixes.py` — 15 testů audit oprav
+- Suite: **642 passed, 1 skipped**; ruff clean
