@@ -65,6 +65,12 @@ class TestConfidenceLabels:
     def test_correlation_confidence_mapping(self):
         from stopa.domain.report import _correlation_confidence_label
 
+        # P0 I3: čtyři nové úrovně vztahů (Entity Resolution 2.0)
+        assert _correlation_confidence_label("confirmed") == "conf_verified"
+        assert _correlation_confidence_label("strong_candidate") == "conf_strong_candidate"
+        assert _correlation_confidence_label("possible") == "conf_inferred"
+        assert _correlation_confidence_label("unverified") == "conf_unverified"
+        # backward compat: staré hodnoty ze starých DB se mapují na nové škále
         assert _correlation_confidence_label("verified") == "conf_verified"
         assert _correlation_confidence_label("inferred") == "conf_inferred"
         # neznámá hodnota → zobrazení tak, jak je (žádný pad)
@@ -234,7 +240,7 @@ def e10_case(tmp_path: Path, monkeypatch) -> tuple[object, str]:
         confidence=0.9, parser_version="t-1.0", extracted_at=TS,
     )
     db.add_correlation(
-        case_id, "user:jan.novak", "host:PC-OFFICE", "temporal_overlap", "inferred",
+        case_id, "user:jan.novak", "host:PC-OFFICE", "temporal_overlap", "possible",
         [{"rel_path": "doc.pdf", "detail": "SHA-256 cdcd… (2048 B)"}],
     )
     return db, case_id

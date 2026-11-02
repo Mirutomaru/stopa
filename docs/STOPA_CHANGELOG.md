@@ -4,6 +4,39 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (P0 Intelligence I3 — Entity Resolution 2.0, confidence levels + normalizace účtů)
+- `domain/entity_resolution.py` — nový doménový modul: čtyři úrovně confidence
+  vztahů (`confirmed`, `strong_candidate`, `possible`, `unverified`) s
+  `map_legacy_confidence()` (staré `verified`→`confirmed`, `inferred`→`possible`);
+  normalizace platformních účtů — WhatsApp JID `+420…@c.us` → `wa:+E164`,
+  skype:/telegram: handle; heuristická detekce duplicit entit
+  `find_merge_candidates()` s důvody (stejný normalizovaný telefon, stejný
+  e-mail local-part na různých doménách, shoda platformního účtu).
+- `domain/entities.py` — nový druh entity **`user_account`**; `classify_value()`
+  detekuje platformní účty (JID, skype:/telegram: handle) a vrací `user_account`.
+- `domain/correlation.py` — `CONTACT_KINDS = ("phone", "email", "user_account")`;
+  pravidla same_contact/hash_match → `confirmed`, temporal_overlap → `possible`;
+  `CorrelationResult` rozšířen o časové rozmezí **`first_seen`/`last_seen`**;
+  `run_correlation()` vrací `merge_candidates`.
+- `data/db.py` — schéma **v10 → v11**: CHECK constraints pro `entities`
+  (`user_account`) a `correlations` (4 confidence + `first_seen`/`last_seen`);
+  idempotentní migrace `_migrate_entity_resolution()` (rebuild tabulek, protože
+  SQLite nemění CHECK in-place; staré confidence hodnoty se remapují při kopii —
+  bez ztráty dat); `add_correlation()`/`list_correlations()` rozšířeny o časové
+  rozmezí.
+- Web: nový endpoint **`GET /api/cases/{case_id}/entities/merge-candidates`**;
+  audit log `correlation_run` rozšířen o počet duplicit/merge candidates.
+- CLI: `stopa correlate` tiskne „Možné duplikity entit“ s důvody (max 10).
+- Report/i18n: `_correlation_confidence_label()` podporuje 4 úrovně + passthrough
+  neznámých hodnot; i18n rozšířen o nové confidence štítky.
+- GUI graph (`graph.js`): barva `user_account`, EDGE_WIDTHS pro 4 úrovně +
+  backward compat staré `verified`/`inferred`; plná hrana pro confirmed,
+  přerušovaná pro ostatní.
+- Testy: nový `tests/test_entity_resolution.py` (26 testů — confidence levels,
+  normalizace JID/handle, merge candidates + determinismus, časové rozmezí,
+  migrace v10→v11 bez ztráty dat, web endpoint); aktualizovány `test_e4/e5/e10/
+  reproducibility` na novou škálu a schéma v11.
+
 ### Added (P0 Intelligence I2 — Forensic RAG, tři znalostní vrstvy)
 - `intelligence/rag.py` — retrieval napříč třemi oddělenými vrstvami:
   **Case RAG** (artifacts/files/findings přes existující FTS5 indexy case DB,

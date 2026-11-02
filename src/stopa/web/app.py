@@ -373,6 +373,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                     "entities": summary["entities"],
                     "correlations_total": summary["correlations_total"],
                     "by_relation": summary["by_relation"],
+                    "merge_candidates": len(summary.get("merge_candidates", [])),
                 },
             )
             return summary
@@ -394,6 +395,20 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         db = open_db(case_id)
         try:
             return db.list_entities(case_id)
+        finally:
+            db.close()
+
+    @app.get("/api/cases/{case_id}/entities/merge-candidates")
+    def merge_candidates(case_id: str) -> list[dict]:
+        """P0 I3 — detekce duplicitních entit s důvody (heuristické páry)."""
+        from stopa.domain.entity_resolution import find_merge_candidates
+
+        db = open_db(case_id)
+        try:
+            return [
+                {"kind": m.kind, "value_a": m.value_a, "value_b": m.value_b, "reason": m.reason}
+                for m in find_merge_candidates(db.list_entities(case_id))
+            ]
         finally:
             db.close()
 

@@ -2,14 +2,19 @@
 
 Tři pravidla propojení entit (ROADMAP E4 bod 3, ARCHITECTURE_PROPOSAL §6):
 
-- ``same_contact``    (verified) — stejná kontaktní entita (phone/email) se
-  objeví ve 2+ různých artifactech → potvrzený kontakt. entity_a == entity_b
-  (self-link: „tato hodnota je ověřena napříč N důkazy“).
-- ``temporal_overlap`` (inferred) — časová okna aktivit DVOU RŮZNÝCH entit na
+- ``same_contact``    (confirmed) — stejná kontaktní entita (phone/email/
+  user_account) se objeví ve 2+ různých artifactech → potvrzený kontakt.
+  entity_a == entity_b (self-link: „tato hodnota je ověřena napříč N důkazy“).
+- ``temporal_overlap`` (possible) — časová okna aktivit DVOU RŮZNÝCH entit na
   RŮZNÝCH zdrojích se překrývají (v toleranci) → hypotéza „stejná osoba na
   obou zařízeních“ (SECURITY_AND_EVIDENCE_INTEGRITY: analytickká hypotéza).
-- ``hash_match``      (verified) — identický SHA-256 souboru napříč různými
+- ``hash_match``      (confirmed) — identický SHA-256 souboru napříč různými
   zdroji → tentýž soubor na více zařízeních. entity_a == entity_b.
+
+P0 Intelligence I3 (Entity Resolution 2.0): confidence je čtyřúrovňová škála
+(confirmed / strong_candidate / possible / unverified) — viz
+:mod:`stopa.domain.entity_resolution`. Každé propojení navíc nese časové
+rozmezí ``first_seen``/``last_seen`` (z timestampů podkladových výskytů).
 
 Každé propojení nese **evidence list** (artifact/file ID + cesta + detail) —
 dohledatelnost každého nálezu (pravidlo „přímý přechod z grafu na důkaz“).
@@ -43,7 +48,8 @@ DEFAULT_OVERLAP_TOLERANCE = timedelta(minutes=30)
 # strop evidence listu — pro dohledatelnost, ne pro úplnost (ta je v DB)
 MAX_EVIDENCE = 25
 
-CONTACT_KINDS = ("phone", "email")
+#: kontaktní druhy pro pravidlo same_contact (P0 I3: + user_account)
+CONTACT_KINDS = ("phone", "email", "user_account")
 
 
 def _occ_key(o: EntityOccurrence) -> tuple:
@@ -81,16 +87,41 @@ def _iso(dt: datetime | None) -> str | None:
 
 @dataclass(frozen=True)
 class CorrelationResult:
-    """Jedno propojení — entity_a/entity_b jsou kanonická ID (entity_id())."""
+    """Jedno propojení — entity_a/entity_b jsou kanonická ID (entity_id()).
+
+    P0 I3: ``first_seen``/``last_seen`` = časové rozmezí podkladových výskytů
+    (ISO UTC stringy, None pokud žádný výskyt nemá timestamp) → časově
+    závislé vztahy.
+    """
 
     entity_a: str
     entity_b: str
     relation: str  # same_contact | temporal_overlap | hash_match
-    confidence: str  # verified | inferred
+    confidence: str  # confirmed | strong_candidate | possible | unverified
     evidence: tuple[dict, ...] = ()
+    first_seen: str | None = None
+    last_seen: str | None = None
 
 
-# ── pravidlo 1: same_contact (verified) ───────────────────────────
+def _time_range_iso(occs: list[EntityOccurrence]) -> tuple[str | None, str | None]:
+    """first/last seen z timestampů výskytů (ISO UTC, None pokud žádné)."""
+    ts = [o.ts_utc for o in occs if o.ts_utc is not None]
+    if not ts:
+        return None, None
+    lo, hi = min(ts), max(ts)
+    return _iso(lo), _iso(hi)
+
+
+def _file_time_range_iso(recs: list[FileRecord]) -> tuple[str | None, str | None]:
+    """first/last seen z timestampů souborů (mtime/ctime/atime)."""
+    ts = [t for r in recs for t in (r.mtime, r.ctime, r.atime) if t is not None]
+    if not ts:
+        return None, None
+    lo, hi = min(ts), max(ts)
+    return _iso(lo), _iso(hi)
+
+
+# ── pravidlo 1: same_contact (confirmed) ───────────────────────
 
 
 def _artifact_evidence(occurrences: list[EntityOccurrence]) -> list[dict]:
@@ -115,7 +146,7 @@ def _artifact_evidence(occurrences: list[EntityOccurrence]) -> list[dict]:
 
 
 def same_contact_rules(occurrences: list[EntityOccurrence]) -> list[CorrelationResult]:
-    """Stejná phone/email entita ve 2+ různých artifactech → verified self-link."""
+    """Stejná phone/email/user_account entita ve 2+ různých artifactech → confirmed."""
     groups: dict[tuple[str, str], list[EntityOccurrence]] = {}
     for o in occurrences:
         if o.kind in CONTACT_KINDS:
@@ -126,13 +157,22 @@ def same_contact_rules(occurrences: list[EntityOccurrence]) -> list[CorrelationR
         distinct_artifacts = {o.artifact_id for o in occs}
         if len(distinct_artifacts) >= 2:
             eid = entity_id(kind, value)
+            first_seen, last_seen = _time_range_iso(occs)
             results.append(
-                CorrelationResult(eid, eid, "same_contact", "verified", tuple(_artifact_evidence(occs)))
+                CorrelationResult(
+                    eid,
+                    eid,
+                    "same_contact",
+                    "confirmed",
+                    tuple(_artifact_evidence(occs)),
+                    first_seen=first_seen,
+                    last_seen=last_seen,
+                )
             )
     return results
 
 
-# ── pravidlo 2: temporal_overlap (inferred) ───────────────────────
+# ── pravidlo 2: temporal_overlap (possible) ───────────────────────
 
 
 def _source_time_ranges(occurrences: list[EntityOccurrence]) -> dict[tuple[str, str], tuple[datetime, datetime]]:
@@ -158,10 +198,11 @@ def temporal_overlap_rules(
     occurrences: list[EntityOccurrence],
     tolerance: timedelta = DEFAULT_OVERLAP_TOLERANCE,
 ) -> list[CorrelationResult]:
-    """Různé entity na různých zdrojích s překrývajícími se okny aktivit → inferred.
+    """Různé entity na různých zdrojích s překrývajícími se okny aktivit → possible.
 
     Pár (X na zdroji A, Y na zdroji B), X ≠ Y a A ≠ B: pokud se jejich časová
     okna překrývají v toleranci, je to hypotéza stejné osoby na obou zařízeních.
+    Časové rozmezí propojení = sjednocení oken obou entit (P0 I3).
     """
     ranges = _source_time_ranges(occurrences)
     # (value, source) → kind pro kanonické ID
@@ -208,20 +249,32 @@ def temporal_overlap_rules(
                 for o in _sorted_occurrences(occurrences)
                 if o.value == value_b and o.source_id == source_b and o.ts_utc is not None
             ][:MAX_EVIDENCE]
+            # časové rozmezí = sjednocení oken obou entit (P0 I3 — časově závislé vztahy)
+            union_lo = min(window_a[0], window_b[0])
+            union_hi = max(window_a[1], window_b[1])
             results.append(
-                CorrelationResult(pair[0], pair[1], "temporal_overlap", "inferred", tuple(evidence))
+                CorrelationResult(
+                    pair[0],
+                    pair[1],
+                    "temporal_overlap",
+                    "possible",
+                    tuple(evidence),
+                    first_seen=_iso(union_lo),
+                    last_seen=_iso(union_hi),
+                )
             )
     return results
 
 
-# ── pravidlo 3: hash_match (verified) ─────────────────────────────
+# ── pravidlo 3: hash_match (confirmed) ─────────────────────────────
 
 
 def hash_match_rules(files: list[FileRecord]) -> list[CorrelationResult]:
-    """Identický SHA-256 napříč různými zdroji → verified self-link.
+    """Identický SHA-256 napříč různými zdroji → confirmed self-link.
 
     Duplikáty v rámci jednoho zdroje řeší dedupe (files.is_duplicate_of);
     sem patří jen soubory, které se objeví na více zařízeních/zdrojích.
+    Časové rozmezí = rozsah timestampů všech kopií (P0 I3).
     """
     groups: dict[str, list[FileRecord]] = {}
     for f in files:
@@ -243,7 +296,18 @@ def hash_match_rules(files: list[FileRecord]) -> list[CorrelationResult]:
             }
             for f in sorted(recs, key=lambda r: (r.source_id or "", r.rel_path))[:MAX_EVIDENCE]
         ]
-        results.append(CorrelationResult(eid, eid, "hash_match", "verified", tuple(evidence)))
+        first_seen, last_seen = _file_time_range_iso(recs)
+        results.append(
+            CorrelationResult(
+                eid,
+                eid,
+                "hash_match",
+                "confirmed",
+                tuple(evidence),
+                first_seen=first_seen,
+                last_seen=last_seen,
+            )
+        )
     return results
 
 
@@ -305,7 +369,16 @@ def run_correlation(db, case_id: str, *, overlap_tolerance: timedelta = DEFAULT_
     db.clear_correlations(case_id)
     correlation_refs: list[str] = []
     for r in results:
-        row_id = db.add_correlation(case_id, r.entity_a, r.entity_b, r.relation, r.confidence, list(r.evidence))
+        row_id = db.add_correlation(
+            case_id,
+            r.entity_a,
+            r.entity_b,
+            r.relation,
+            r.confidence,
+            list(r.evidence),
+            first_seen=r.first_seen,
+            last_seen=r.last_seen,
+        )
         correlation_refs.append(f"correlation:{row_id}")
 
     # P0 Core C2: Evidence Lineage — krok korelace (artefakty → propojení).
@@ -328,8 +401,16 @@ def run_correlation(db, case_id: str, *, overlap_tolerance: timedelta = DEFAULT_
     by_relation: dict[str, int] = {}
     for r in results:
         by_relation[r.relation] = by_relation.get(r.relation, 0) + 1
+    # P0 I3: detekce duplicitních entit (merge candidates) — heuristické páry.
+    from stopa.domain.entity_resolution import find_merge_candidates
+
+    merge_candidates = [
+        {"kind": m.kind, "value_a": m.value_a, "value_b": m.value_b, "reason": m.reason}
+        for m in find_merge_candidates(db.list_entities(case_id))
+    ]
     return {
         "entities": n_entities,
         "correlations_total": len(results),
         "by_relation": by_relation,
+        "merge_candidates": merge_candidates,
     }

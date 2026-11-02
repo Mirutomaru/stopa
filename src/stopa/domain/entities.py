@@ -3,11 +3,13 @@
 Čistá doménová logika bez IO: kanonické tvary kontaktních hodnot, aby se
 "+420 777 123 456", "00420777123456" a "+420777123456" propojily do JEDNÉ entity.
 
-Druhy entit (ROADMAP E4 bod 1):
-- ``phone``    → tel:+E164 — jen číslice s vedoucím + (předpona 00 → +)
-- ``email``    → lowercase
-- ``url_host`` → hostname bez portu, lowercase
-- ``hash``     → hex lowercase (32/40/64 znaků = MD5/SHA1/SHA-256)
+Druhy entit (ROADMAP E4 bod 1 + P0 Intelligence I3):
+- ``phone``        → tel:+E164 — jen číslice s vedoucím + (předpona 00 → +)
+- ``email``        → lowercase
+- ``url_host``     → hostname bez portu, lowercase
+- ``hash``         → hex lowercase (32/40/64 znaků = MD5/SHA1/SHA-256)
+- ``user_account`` → platformní identifikátor (P0 I3 Entity Resolution 2.0):
+  WhatsApp JID ``+420…@c.us`` → ``wa:+E164``, ostatní handle lowercase
 
 Extrakce běží nad `Artifact` objekty: typově specifická pole (handle/adresa
 zprávy, URL v browser history, hodnota kontaktu + mimetype) + generický sken
@@ -103,7 +105,16 @@ def normalize_hash(raw: str) -> str | None:
 
 
 def classify_value(raw: str) -> Entity | None:
-    """Heuristická klasifikace volné hodnoty (e-mail má přednost před telefonem)."""
+    """Heuristická klasifikace volné hodnoty (e-mail má přednost před telefonem).
+
+    P0 I3: platformní účty (WhatsApp JID, skype:/telegram: handle) se
+    klasifikují jako ``user_account`` — čistá čísla a e-maily zůstávají phone/email.
+    """
+    from stopa.domain.entity_resolution import is_platform_account, normalize_user_account
+
+    if is_platform_account(raw):
+        n = normalize_user_account(raw)
+        return Entity("user_account", n, raw.strip()) if n else None
     e = normalize_email(raw)
     if e is not None:
         return Entity("email", e, raw.strip())

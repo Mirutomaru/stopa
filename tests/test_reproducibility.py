@@ -102,8 +102,9 @@ class TestModel:
 # ── DB integrace: analysis_operations ───────────────────────────
 
 class TestDbOperations:
-    def test_new_db_at_v10(self, case_db: CaseDB):
-        assert case_db.schema_version() == SCHEMA_VERSION == 10
+    def test_new_db_at_v11(self, case_db: CaseDB):
+        # P0 I3 Entity Resolution 2.0: SCHEMA_VERSION 10 → 11 (CHECK entities/correlations)
+        assert case_db.schema_version() == SCHEMA_VERSION == 11
 
     def test_record_and_get_roundtrip(self, case_db: CaseDB):
         op_id = case_db.record_operation(

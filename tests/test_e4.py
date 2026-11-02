@@ -2,7 +2,7 @@
 
 Pokrytí: kanonické tvary (tel:+E164 / email lowercase / URL host / hash hex),
 extrakce z artifactů (typově specifická pole + generický sken), tři korelační
-pravidla (same_contact verified, temporal_overlap inferred, hash_match verified),
+pravidla (same_contact confirmed, temporal_overlap possible, hash_match confirmed),
 determinismus nezávislý na pořadí vstupů, DB roundtrip s idempotentním re-runem,
 CLI `stopa correlate` a web endpointy.
 """
@@ -120,11 +120,11 @@ class TestExtraction:
         assert ("hash", "d" * 64) in got
 
 
-# ── pravidlo 1: same_contact (verified) ───────────────────────────
+# ── pravidlo 1: same_contact (confirmed) ───────────────────────
 
 
 class TestSameContact:
-    def test_same_phone_two_artifacts_verified(self):
+    def test_same_phone_two_artifacts_confirmed(self):
         arts = [
             _art("a1", "s1", "sms_message", "x", {"handle": "+420 777 123 456"}),
             _art("a2", "s1", "contact", "+420777123456", {"mimetype": "phone"}, ts=T0 + timedelta(minutes=5)),
@@ -133,7 +133,7 @@ class TestSameContact:
         res = same_contact_rules(occ)
         assert len(res) == 1
         r = res[0]
-        assert r.relation == "same_contact" and r.confidence == "verified"
+        assert r.relation == "same_contact" and r.confidence == "confirmed"
         assert r.entity_a == r.entity_b == entity_id("phone", "+420777123456")
         # evidence list — oba artifacty, dohledatelnost
         ev_ids = {e["artifact_id"] for e in r.evidence}
@@ -144,19 +144,19 @@ class TestSameContact:
         assert same_contact_rules(collect_occurrences(arts)) == []
 
 
-# ── pravidlo 2: temporal_overlap (inferred) ───────────────────────
+# ── pravidlo 2: temporal_overlap (possible) ───────────────────────
 
 
 class TestTemporalOverlap:
     def _occ(self, value, source, ts):
         return collect_occurrences([_art("a", source, "sms_message", "", {"handle": value}, ts=ts)])
 
-    def test_overlapping_windows_inferred(self):
+    def test_overlapping_windows_possible(self):
         occ = self._occ("+420777123456", "s1", T0) + self._occ("john.doe@example.com", "s2", T0 + timedelta(minutes=10))
         res = temporal_overlap_rules(occ)
         assert len(res) == 1
         r = res[0]
-        assert r.relation == "temporal_overlap" and r.confidence == "inferred"
+        assert r.relation == "temporal_overlap" and r.confidence == "possible"
         ids = {r.entity_a, r.entity_b}
         assert ids == {"tel:+420777123456", "email:john.doe@example.com"}
 
@@ -176,11 +176,11 @@ class TestTemporalOverlap:
         assert temporal_overlap_rules(occ2) == []
 
 
-# ── pravidlo 3: hash_match (verified) ─────────────────────────────
+# ── pravidlo 3: hash_match (confirmed) ─────────────────────────────
 
 
 class TestHashMatch:
-    def test_same_sha256_two_sources_verified(self):
+    def test_same_sha256_two_sources_confirmed(self):
         files = [
             FileRecord(id="f1", source_id="s1", rel_path="a/x.bin", name="x.bin", size_bytes=10, sha256="e" * 64),
             FileRecord(id="f2", source_id="s2", rel_path="b/x.bin", name="x.bin", size_bytes=10, sha256="E" * 64),
@@ -189,7 +189,7 @@ class TestHashMatch:
         assert len(res) == 1
         r = res[0]
         h = "e" * 64
-        assert r.relation == "hash_match" and r.confidence == "verified"
+        assert r.relation == "hash_match" and r.confidence == "confirmed"
         assert r.entity_a == r.entity_b == f"hash:{h}"
         ev_files = {e["file_id"] for e in r.evidence}
         assert ev_files == {"f1", "f2"}

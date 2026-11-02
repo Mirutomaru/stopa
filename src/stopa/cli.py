@@ -255,6 +255,7 @@ def cmd_correlate(args: argparse.Namespace) -> int:
             "entities": summary["entities"],
             "correlations_total": summary["correlations_total"],
             "by_relation": summary["by_relation"],
+            "merge_candidates": len(summary.get("merge_candidates", [])),
         },
     )
 
@@ -276,6 +277,12 @@ def cmd_correlate(args: argparse.Namespace) -> int:
                 for ev in c["evidence"][:5]:
                     path = ev.get("rel_path") or ""
                     print(f"      └─ {ev.get('detail', '')} {path}".rstrip())
+    # P0 I3: detekce duplicitních entit (merge candidates) — heuristické páry.
+    mc = summary.get("merge_candidates", [])
+    if mc:
+        print(f"Možné duplikity entit: {len(mc)}")
+        for m in mc[:10]:
+            print(f"  [{m['kind']}] {m['value_a']} ≈ {m['value_b']} — {m['reason']}")
     # P0 Core C4: kontrolní bod po korelaci.
     db.add_integrity_checkpoint("correlate")
     db.close()

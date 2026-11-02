@@ -209,12 +209,26 @@ def confidence_label(confidence: float | None) -> str:
 
 
 def _correlation_confidence_label(confidence: str) -> str:
-    """E10 — korelační confidence (verified/inferred) → i18n klíč."""
-    if confidence == "verified":
-        return "conf_verified"
-    if confidence == "inferred":
-        return "conf_inferred"
-    return confidence  # neznámá hodnota → zobrazení tak, jak je
+    """E10/P0 I3 — korelační confidence → i18n klíč.
+
+    P0 Intelligence I3 (Entity Resolution 2.0): čtyřúrovňová škála vztahů
+    (confirmed / strong_candidate / possible / unverified). Staré hodnoty
+    verified/inferred se mapují pro zpětnou kompatibilitu starých DB;
+    neznámá hodnota → zobrazení tak, jak je (defenzivní passthrough).
+    """
+    from stopa.domain.entity_resolution import CONFIDENCE_LEVELS, LEGACY_CONFIDENCE_MAP
+
+    if confidence not in CONFIDENCE_LEVELS and confidence not in LEGACY_CONFIDENCE_MAP:
+        return confidence  # neznámá hodnota → zobrazení tak, jak je (žádný pad)
+    from stopa.domain.entity_resolution import map_legacy_confidence
+
+    mapped = map_legacy_confidence(confidence)
+    return {
+        "confirmed": "conf_verified",
+        "strong_candidate": "conf_strong_candidate",
+        "possible": "conf_inferred",
+        "unverified": "conf_unverified",
+    }.get(mapped, confidence)
 
 
 def _evidence_str(evidence: tuple[dict[str, object], ...]) -> str:

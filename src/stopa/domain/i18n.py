@@ -134,11 +134,14 @@ _STRINGS: dict[str, tuple[str, str]] = {
         "Žádná propojení — spusťte `stopa correlate <case>`.",
         "No correlations — run `stopa correlate <case>`.",
     ),
-    # ── confidence štítky (E10) ────────────────────────────────
+    # ── confidence štítky (E10 + P0 I3 Entity Resolution 2.0) ────────
     "conf_extracted": ("extrahováno", "extracted"),
     "conf_verified": ("ověřeno", "verified"),
     "conf_hypothesis": ("hypotéza", "hypothesis"),
     "conf_inferred": ("odvozeno", "inferred"),
+    # P0 I3: čtyři úrovně vztahů (Entity Resolution 2.0)
+    "conf_strong_candidate": ("silný kandidát", "strong candidate"),
+    "conf_unverified": ("neověřeno", "unverified"),
     # ── patička ────────────────────────────────────────────────
     "footer": (
         ("STOPA report — případ {case_id}, vygenerován {ts}. Hash manifest slouží "

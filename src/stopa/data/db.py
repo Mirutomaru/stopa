@@ -26,7 +26,7 @@ from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -117,10 +117,11 @@ CREATE INDEX IF NOT EXISTS idx_timeline_source ON timeline_events(source_id);
 -- E4 Entity + Correlation Engine: kanonické entity extrahované z artifactů.
 -- value_normalized je klíč pro propojování (tel:+E164, email lowercase, host, hash hex).
 -- first_seen/last_seen = rozsah časové osy, kdy se entita objevila (z timestampů artifactů).
+-- P0 I3 Entity Resolution 2.0: + kind 'user_account' (platformní identifikátory).
 CREATE TABLE IF NOT EXISTS entities (
     id TEXT PRIMARY KEY,
     case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK (kind IN ('phone', 'email', 'url_host', 'hash')),
+    kind TEXT NOT NULL CHECK (kind IN ('phone', 'email', 'url_host', 'hash', 'user_account')),
     value_normalized TEXT NOT NULL,
     raw_value TEXT,
     first_seen TEXT,
@@ -130,7 +131,10 @@ CREATE TABLE IF NOT EXISTS entities (
 CREATE INDEX IF NOT EXISTS idx_entities_case ON entities(case_id);
 
 -- E4: propojení mezi entitami — explicitní krok `stopa correlate` (ne při extrakci).
--- relation: same_contact | temporal_overlap | hash_match; confidence: verified | inferred.
+-- relation: same_contact | temporal_overlap | hash_match.
+-- P0 I3 Entity Resolution 2.0: confidence = 4 úrovně vztahů
+--   (confirmed / strong_candidate / possible / unverified); staré DB migrují
+--   verified→confirmed, inferred→possible. first_seen/last_seen = časové rozmezí vztahu.
 -- evidence_json = [ {artifact_id, file_id, rel_path, detail} ] — dohledatelnost každého propojení.
 CREATE TABLE IF NOT EXISTS correlations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -138,8 +142,10 @@ CREATE TABLE IF NOT EXISTS correlations (
     entity_a TEXT NOT NULL,        -- kanonický identifikátor (tel:+420..., email:...)
     entity_b TEXT NOT NULL,
     relation TEXT NOT NULL CHECK (relation IN ('same_contact', 'temporal_overlap', 'hash_match')),
-    confidence TEXT NOT NULL DEFAULT 'inferred' CHECK (confidence IN ('verified', 'inferred')),
+    confidence TEXT NOT NULL DEFAULT 'possible' CHECK (confidence IN ('confirmed', 'strong_candidate', 'possible', 'unverified')),
     evidence_json TEXT NOT NULL DEFAULT '[]',
+    first_seen TEXT,               -- P0 I3: časové rozmezí vztahu (ISO UTC)
+    last_seen TEXT,                -- P0 I3: časové rozmezí vztahu (ISO UTC)
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_correlations_case ON correlations(case_id);
@@ -341,6 +347,8 @@ class CaseDB:
                 self.conn.commit()
         # P0 Core C4: Evidence Integrity 2.0 — hash chaining audit logu (sloupce + backfill).
         self._migrate_audit_chain()
+        # P0 Intelligence I3: Entity Resolution 2.0 — CHECK rozšíření entities/correlations.
+        self._migrate_entity_resolution()
         # P0 Core C5: Reproducibility Engine — stará DB bez sloupce params_json.
         ops_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(analysis_operations)").fetchall()}
         if "params_json" not in ops_cols:
@@ -436,6 +444,99 @@ class CaseDB:
             """
         )
         self.conn.commit()
+
+    def _migrate_entity_resolution(self) -> None:
+        """P0 I3 Entity Resolution 2.0 — stará case DB (schéma ≤ v10).
+
+        Idempotentní, bez ztráty dat:
+        - ``entities``: CHECK rozšíření o kind ``user_account`` (tabulka se
+          rebuilduje — SQLite nemůže ALTER CHECK; žádné FK na tabulku);
+        - ``correlations``: confidence 2→4 úrovně (verified→confirmed,
+          inferred→possible) + nové sloupce first_seen/last_seen.
+
+        Nové DB mají oba CHECKy a sloupce přímo ze SCHEMA — migrace je no-op.
+        """
+        from stopa.domain.entity_resolution import map_legacy_confidence  # lazy — bez cyklu
+
+        ent_sql = self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='entities'"
+        ).fetchone()
+        if ent_sql is not None and "user_account" not in str(ent_sql["sql"]):
+            cols = [c[1] for c in self.conn.execute("PRAGMA table_info(entities)").fetchall()]
+            self.conn.execute("ALTER TABLE entities RENAME TO _entities_old")
+            self.conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS entities (
+                    id TEXT PRIMARY KEY,
+                    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+                    kind TEXT NOT NULL CHECK (kind IN ('phone', 'email', 'url_host', 'hash', 'user_account')),
+                    value_normalized TEXT NOT NULL,
+                    raw_value TEXT,
+                    first_seen TEXT,
+                    last_seen TEXT,
+                    UNIQUE (case_id, kind, value_normalized)
+                );
+                CREATE INDEX IF NOT EXISTS idx_entities_case ON entities(case_id);
+                """
+            )
+            # INSERT…SELECT bez placeholderů → jeden execute (executemany by čekal parametry)
+            self.conn.execute(
+                f"INSERT INTO entities ({', '.join(cols)}) SELECT {', '.join(cols)} FROM _entities_old"
+            )
+            self.conn.execute("DROP TABLE _entities_old")
+            self.conn.commit()
+
+        cor_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(correlations)").fetchall()}
+        if "first_seen" not in cor_cols:
+            self.conn.execute("ALTER TABLE correlations ADD COLUMN first_seen TEXT")
+            self.conn.commit()
+        if "last_seen" not in cor_cols:
+            self.conn.execute("ALTER TABLE correlations ADD COLUMN last_seen TEXT")
+            self.conn.commit()
+
+        # CHECK constraint starého schématu — pokud tabulka nemá novou škálu,
+        # rebuildovat (i když je prázdná). Staré confidence hodnoty se remapují
+        # PŘI KOPÍROVÁNÍ do nové tabulky (verified→confirmed, inferred→possible)
+        # — UPDATE před rebuildem by narazil na starý CHECK verified/inferred.
+        cor_sql = self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='correlations'"
+        ).fetchone()
+        if cor_sql is not None and "strong_candidate" not in str(cor_sql["sql"]):
+            cols = [c[1] for c in self.conn.execute("PRAGMA table_info(correlations)").fetchall()]
+            rows = self.conn.execute(f"SELECT {', '.join(cols)} FROM correlations").fetchall()
+            self.conn.execute("ALTER TABLE correlations RENAME TO _correlations_old")
+            self.conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS correlations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+                    entity_a TEXT NOT NULL,
+                    entity_b TEXT NOT NULL,
+                    relation TEXT NOT NULL CHECK (relation IN ('same_contact', 'temporal_overlap', 'hash_match')),
+                    confidence TEXT NOT NULL DEFAULT 'possible' CHECK (confidence IN ('confirmed', 'strong_candidate', 'possible', 'unverified')),
+                    evidence_json TEXT NOT NULL DEFAULT '[]',
+                    first_seen TEXT,
+                    last_seen TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_correlations_case ON correlations(case_id);
+                """
+            )
+            # Kopie řádků s parametry — při tom se remapují legacy confidence
+            # (verified→confirmed, inferred→possible) přes map_legacy_confidence.
+            conf_idx = cols.index("confidence") if "confidence" in cols else None
+            new_rows: list[tuple] = []
+            for r in rows:
+                vals = list(r)
+                if conf_idx is not None and vals[conf_idx] in ("verified", "inferred"):
+                    vals[conf_idx] = map_legacy_confidence(vals[conf_idx])
+                new_rows.append(tuple(vals))
+            self.conn.executemany(
+                f"INSERT INTO correlations ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
+                new_rows,
+            )
+            self.conn.execute("DROP TABLE _correlations_old")
+            self.conn.commit()
 
     def _last_audit_row(self) -> tuple[int | None, str]:
         """ID posledního audit řádku + jeho hash (GENESIS pokud log prázdný)."""
@@ -1640,12 +1741,17 @@ class CaseDB:
         relation: str,
         confidence: str,
         evidence: list[dict],
+        first_seen: str | None = None,
+        last_seen: str | None = None,
     ) -> int:
-        """Vloží jedno propojení s evidence listem. Vrací ID řádku."""
+        """Vloží jedno propojení s evidence listem. Vrací ID řádku.
+
+        P0 I3: ``first_seen``/``last_seen`` = časové rozmezí vztahu (ISO UTC).
+        """
         cur = self.conn.execute(
             "INSERT INTO correlations (case_id, entity_a, entity_b, relation,"
-            " confidence, evidence_json, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            " confidence, evidence_json, first_seen, last_seen, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 case_id,
                 entity_a,
@@ -1653,6 +1759,8 @@ class CaseDB:
                 relation,
                 confidence,
                 json.dumps(evidence, ensure_ascii=False),
+                first_seen,
+                last_seen,
                 datetime.now(timezone.utc).isoformat(),
             ),
         )
@@ -1677,6 +1785,10 @@ class CaseDB:
                     "relation": r["relation"],
                     "confidence": r["confidence"],
                     "evidence": evidence,
+                    # P0 I3: migrace _migrate_entity_resolution() v __init__ vždy
+                    # přidá sloupce first_seen/last_seen → přímý přístup je bezpečný.
+                    "first_seen": r["first_seen"],
+                    "last_seen": r["last_seen"],
                     "created_at": r["created_at"],
                 }
             )

@@ -105,7 +105,7 @@ class TestGraphDataContract:
         assert len(sc) >= 1, "same_contact hrana v grafu"
         # self-link: entity_a == entity_b (stejná entita napříč artifacty)
         assert sc[0]["entity_a"] == sc[0]["entity_b"] == "tel:+420777123456"
-        assert sc[0]["confidence"] == "verified"
+        assert sc[0]["confidence"] == "confirmed"  # P0 I3: verified → confirmed
 
     def test_evidence_carries_file_id_for_inspector(self, client):
         """„Přechod na důkaz“ — evidence items nesou file_id pro file inspector."""

@@ -7,9 +7,11 @@
 "use strict";
 
 const ENTITY_COLORS = {
-  phone: "#4da3ff", email: "#b07cff", url: "#ffa94d", hash: "#51cf66", other: "#8a93a2",
+  phone: "#4da3ff", email: "#b07cff", url: "#ffa94d", hash: "#51cf66",
+  user_account: "#f783ac", other: "#8a93a2",
 };
-const EDGE_WIDTHS = { verified: 3, inferred: 1.5 };
+// P0 I3 Entity Resolution 2.0: 4 úrovně vztahů (+ staré verified/inferred pro backward compat)
+const EDGE_WIDTHS = { confirmed: 3, strong_candidate: 2.5, possible: 1.5, unverified: 1, verified: 3, inferred: 1.5 };
 const GRAPH_W = 900;
 const GRAPH_H = 520;
 
@@ -153,10 +155,11 @@ function renderEntityGraph(svgEl, entities, correlations, opts = {}) {
       el.setAttribute("x1", a.x); el.setAttribute("y1", a.y);
       el.setAttribute("x2", b.x); el.setAttribute("y2", b.y);
     }
-    const verified = e.confidence === "verified";
+    // P0 I3: confirmed (nové) i verified (staré DB) = plná hrana; ostatní přerušované
+    const solid = e.confidence === "verified" || e.confidence === "confirmed";
     el.setAttribute("class", `g-edge ${e.relation} ${e.confidence}`);
     el.setAttribute("stroke-width", String(EDGE_WIDTHS[e.confidence] ?? 1.5));
-    if (!verified) el.setAttribute("stroke-dasharray", "6 4");
+    if (!solid) el.setAttribute("stroke-dasharray", "6 4");
     const title = document.createElementNS(NS, "title");
     title.textContent = `${e.relation} (${e.confidence}): ${e.source} ↔ ${e.target}`;
     el.appendChild(title);
