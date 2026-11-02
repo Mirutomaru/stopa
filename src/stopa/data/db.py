@@ -11,11 +11,12 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+from stopa.domain.evidence_model import ConfidenceLevel, Finding, Provenance
 from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -70,7 +71,10 @@ CREATE TABLE IF NOT EXISTS artifacts (
     confidence REAL,
     parser_version TEXT,
     extracted_at TEXT,
-    anomaly_flags TEXT  -- komou oddělené kanonické flagy nesrovnalostí
+    anomaly_flags TEXT,  -- komou oddělené kanonické flagy nesrovnalostí
+    -- P0 Core C1: Unified Evidence Model — strukturovaná provenance + stav validace
+    provenance_json TEXT NOT NULL DEFAULT '[]',
+    validation_status TEXT NOT NULL DEFAULT 'extracted'  -- extracted|validated|needs_validation
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_source ON artifacts(source_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifacts(timestamp);
@@ -160,6 +164,22 @@ CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log BEGIN
     SELECT RAISE(IGNORE);
 END;
 
+-- P0 Core C1: Unified Evidence Model — derived findings / analytical observations.
+-- Každé zjištění nese confidence_level (5 úrovní, AI grounding §5.3) a provenance_json
+-- (≥1 Provenance záznam — doložitelnost až k důkaznímu zdroji). details_json = volitelný obsah.
+CREATE TABLE IF NOT EXISTS findings (
+    id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,  -- correlation | anomaly | contradiction | ai_observation | …
+    confidence_level TEXT NOT NULL DEFAULT 'derived'
+        CHECK (confidence_level IN ('direct', 'derived', 'interpretation', 'hypothesis', 'unverified')),
+    provenance_json TEXT NOT NULL DEFAULT '[]',
+    details_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_findings_case ON findings(case_id);
+CREATE INDEX IF NOT EXISTS idx_findings_kind ON findings(kind);
+
 -- E1 Evidence Manager: custody items — metadata nabytí důkazu per source (průběžná evidence)
 CREATE TABLE IF NOT EXISTS custody_items (
     source_id TEXT PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
@@ -248,6 +268,9 @@ class CaseDB:
             ("parser_version", "TEXT"),
             ("extracted_at", "TEXT"),
             ("anomaly_flags", "TEXT"),
+            # P0 Core C1: Unified Evidence Model — strukturovaná provenance + stav validace.
+            ("provenance_json", "TEXT NOT NULL DEFAULT '[]'"),
+            ("validation_status", "TEXT NOT NULL DEFAULT 'extracted'"),
         ):
             if col not in art_cols:
                 self.conn.execute(f"ALTER TABLE artifacts ADD COLUMN {col} {decl}")
@@ -829,8 +852,9 @@ class CaseDB:
         self.conn.execute(
             "INSERT INTO artifacts (id, source_id, file_id, rel_path,"
             " artifact_type, timestamp, title, details_json,"
-            " confidence, parser_version, extracted_at, anomaly_flags)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " confidence, parser_version, extracted_at, anomaly_flags,"
+            " provenance_json, validation_status)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 art.id,
                 art.source_id,
@@ -844,6 +868,8 @@ class CaseDB:
                 art.parser_version,
                 _iso(art.extracted_at),
                 ",".join(art.anomaly_flags) if art.anomaly_flags else None,
+                json.dumps([p.model_dump(mode="json") for p in art.provenance], ensure_ascii=False),
+                art.validation_status,
             ),
         )
         self.conn.commit()
@@ -857,8 +883,9 @@ class CaseDB:
             self.conn.execute(
                 "INSERT INTO artifacts (id, source_id, file_id, rel_path,"
                 " artifact_type, timestamp, title, details_json,"
-                " confidence, parser_version, extracted_at, anomaly_flags)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " confidence, parser_version, extracted_at, anomaly_flags,"
+                " provenance_json, validation_status)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     a.id,
                     a.source_id,
@@ -872,6 +899,8 @@ class CaseDB:
                     a.parser_version,
                     _iso(a.extracted_at),
                     ",".join(a.anomaly_flags) if a.anomaly_flags else None,
+                    json.dumps([p.model_dump(mode="json") for p in a.provenance], ensure_ascii=False),
+                    a.validation_status,
                 ),
             )
         self.conn.commit()
@@ -942,6 +971,64 @@ class CaseDB:
             "SELECT * FROM artifacts WHERE id = ?", (artifact_id,)
         ).fetchone()
         return _row_to_artifact(row) if row is not None else None
+
+    # ── P0 Core C1: Unified Evidence Model — findings ───────────────
+    def add_finding(self, finding: Finding) -> str:
+        """Vloží derived finding / analytical observation. Vrací ID záznamu."""
+        self.conn.execute(
+            "INSERT INTO findings (id, case_id, kind, confidence_level,"
+            " provenance_json, details_json, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                finding.id,
+                finding.case_id,
+                finding.kind,
+                finding.confidence_level.value,
+                json.dumps([p.model_dump(mode="json") for p in finding.provenance], ensure_ascii=False),
+                json.dumps(finding.details_json, ensure_ascii=False),
+                _iso(finding.created_at) or datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        self.conn.commit()
+        return finding.id
+
+    def list_findings(
+        self,
+        case_id: str | None = None,
+        kind: str | None = None,
+        confidence_level: str | None = None,
+    ) -> list[Finding]:
+        """Findings s volitelnými filtry (case/kind/confidence)."""
+        q = "SELECT * FROM findings"
+        where: list[str] = []
+        args: list[object] = []
+        if case_id is not None:
+            where.append("case_id = ?")
+            args.append(case_id)
+        if kind is not None:
+            where.append("kind = ?")
+            args.append(kind)
+        if confidence_level is not None:
+            where.append("confidence_level = ?")
+            args.append(confidence_level)
+        if where:
+            q += " WHERE " + " AND ".join(where)
+        q += " ORDER BY created_at DESC, id"
+        rows = self.conn.execute(q, args).fetchall()
+        return [_row_to_finding(r) for r in rows]
+
+    def get_finding(self, finding_id: str) -> Finding | None:
+        """Jeden finding podle ID; ``None`` = nenalezen."""
+        row = self.conn.execute(
+            "SELECT * FROM findings WHERE id = ?", (finding_id,)
+        ).fetchone()
+        return _row_to_finding(row) if row is not None else None
+
+    def delete_finding(self, finding_id: str) -> bool:
+        """Odstraní finding; ``True`` pokud řádek existoval."""
+        cur = self.conn.execute("DELETE FROM findings WHERE id = ?", (finding_id,))
+        self.conn.commit()
+        return cur.rowcount > 0
 
     # ── E2 Timeline Engine: materializovaná timeline (timeline_events) ───────
     def add_timeline_event(
@@ -1253,6 +1340,34 @@ def _row_to_artifact(r: sqlite3.Row) -> Artifact:
             if "anomaly_flags" in keys and r["anomaly_flags"]
             else []
         ),
+        # P0 Core C1: staré DB bez sloupců → defaulty (prázdná provenance / 'extracted')
+        provenance=(
+            [Provenance.model_validate(p) for p in json.loads(r["provenance_json"])]
+            if "provenance_json" in keys and r["provenance_json"] not in (None, "", "[]")
+            else []
+        ),
+        validation_status=r["validation_status"] if "validation_status" in keys else "extracted",
+    )
+
+
+def _row_to_finding(r: sqlite3.Row) -> Finding:
+    """Řádek tabulky findings → Pydantic model (P0 Core C1)."""
+
+    def parse(v):
+        return datetime.fromisoformat(v) if v else None
+
+    keys = r.keys()
+    prov_raw = r["provenance_json"] if "provenance_json" in keys else "[]"
+    details_raw = r["details_json"] if "details_json" in keys else "{}"
+    created = parse(r["created_at"]) if "created_at" in keys and r["created_at"] else None
+    return Finding(
+        id=r["id"],
+        case_id=r["case_id"],
+        kind=r["kind"],
+        confidence_level=ConfidenceLevel(r["confidence_level"]),
+        provenance=[Provenance.model_validate(p) for p in json.loads(prov_raw or "[]")],
+        details_json=json.loads(details_raw),
+        created_at=created if created is not None else datetime.now(timezone.utc),
     )
 
 

@@ -4,6 +4,16 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (P0 Core C1 — Unified Evidence Model)
+- `domain/evidence_model.py` — ConfidenceLevel (5 úrovní AI grounding), Provenance, Finding
+  (povinná provenance = doložitelnost); čistá logika bez I/O
+- `models.Artifact` +sloupce `provenance: list[Provenance]`, `validation_status`
+  (staré artifacty čitelné s defaulty)
+- DB schéma v7: tabulka `findings` (kind, confidence_level CHECK, provenance_json),
+  sloupce `artifacts.provenance_json/validation_status`; idempotentní migrace starých DB
+- `CaseDB`: add_finding / list_findings (filtry case/kind/confidence) / get_finding / delete_finding
+- `tests/test_evidence_model.py` — 14 testů (modely, CRUD, CHECK constraint, migrace v6→v7, roundtrip)
+
 ### Added (dokumentace)
 - `udelej.md` — master prompt STOPA Ultimate Forensic Platform (zadání)
 - `docs/STOPA_TECHNICAL_AUDIT.md` — ETAPA A: kompletní technický audit (ověřená čísla,
