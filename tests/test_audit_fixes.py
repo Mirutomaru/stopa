@@ -134,6 +134,25 @@ class TestP1RelPathTraversalAndHeaders:
         assert 'filename="weird_.txt"' in cd
         assert 'weird".txt' not in cd
 
+    def test_export_crlf_control_chars_in_name(self, client):
+        """ASCII control chars (\\r\\n) v názvu → '_' (CRLF injection pryč)."""
+        c, tmp = client
+        ev = tmp / "ev"
+        ev.mkdir()
+        (ev / "evil\r\nX-Injected: 1.txt").write_text("obsah", encoding="utf-8")
+        cid = _make_case(c)["id"]
+        _add_source(c, cid, ev)
+        fid = c.get(f"/api/cases/{cid}/files").json()[0]["id"]
+
+        r = c.get(f"/api/cases/{cid}/files/{fid}/export")
+        assert r.status_code == 200
+        cd = r.headers["content-disposition"]
+        # fallback filename (ASCII) nesmí obsahovat control chars ani uvozovky
+        ascii_part = cd.split(";")[1].strip()  # filename="…"
+        inner = ascii_part.split('"')[1]
+        for ch in "\r\n\"":
+            assert ch not in inner, f"control char {ch!r} unikl do headeru: {cd!r}"
+
 
 class TestP1RangedRead:
     def test_ranged_read_uses_seek_and_length(self, client, monkeypatch):

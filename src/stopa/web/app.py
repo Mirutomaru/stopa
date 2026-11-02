@@ -532,8 +532,9 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             data = _read_file_bytes(db, rec, offset=0, length=None)
             # audit P1 — RFC 5987 quoting: nequoted `"` v názvu = header injection;
             # filename* nese UTF-8 (české názvy), fallback filename je ASCII-safe.
+            # isprintable() vyfiltruje i control chars (\r\n) → CRLF injection pryč.
             name = rec.name or "soubor"
-            ascii_name = "".join(c if c.isascii() and c not in '"\\' else "_" for c in name)
+            ascii_name = "".join(c if c.isascii() and c.isprintable() and c not in '"\\' else "_" for c in name)
             return Response(
                 content=data,
                 media_type="application/octet-stream",

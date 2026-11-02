@@ -136,7 +136,7 @@ export STOPA_DB_DIR=~/stopa_cases   # kde se ukládají case DB (default: ./case
 ## Testy & lint
 
 ```bash
-.venv/bin/pytest -q        # 627 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze)
+.venv/bin/pytest -q        # 642 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze)
 .venv/bin/ruff check src tests
 ```
 
