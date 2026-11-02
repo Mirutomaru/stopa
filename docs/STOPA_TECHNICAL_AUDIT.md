@@ -1,179 +1,204 @@
-# STOPA — Technický audit (ETAPA A)
+# STOPA — Technický audit (FÁZE 1, MASTER PROMPT)
 
-**Datum:** 2026-11-02 · **Commit:** `ae73ad0` · **Základní zadání:** `udelej.md` (master prompt)
+**Datum:** 2026-11-02 · **Commit:** `2244d95` · **Základní zadání:** `udelej.md` (master prompt)
+**Metoda:** každé tvrzení ověřeno zdrojovým kódem, testem nebo živým spuštěním — ne deklarací.
 
-## 1. Současný stav (nezávisle ověřeno, ne z deklarace)
+## 0. Baseline (nezávisle ověřeno)
 
-| Metrika | Deklarace | Ověřeno |
+| Metrika | Hodnota | Důkaz |
 |---|---|---|
-| Moduly (src/stopa/*.py) | ~60 | **59** ✓ |
-| Řádků src + tests | ~22 400 | **22 422** ✓ (src 13 321, tests 9 101) |
-| API endpointy | 29 | **29** ✓ (`@app.` dekorátory v `web/app.py`) |
-| Testy | 642 | **642 passed, 1 skipped** ✓ (39 test souborů) |
-| Ruff | clean | **clean** ✓ |
+| Testy | **819 passed, 1 skipped** (48 test souborů) | `.venv/bin/python -m pytest -q` |
+| Ruff | clean | `ruff check src/stopa tests` → All checks passed! |
+| SCHEMA_VERSION | **11** | `data/db.py:29` |
+| Řádků src / tests | 17 032 / 11 308 | `wc -l` |
+| Moduly | domain 32 souborů (5 832 ř.), data 13 (4 007), artifacts 14 (3 146), web 2 (1 016), intelligence 5 (878), presentation 2 (239) | `find`/`wc -l` |
+| CLI příkazy | **21** (case new, add, files, stats, search, timeline, correlate, image, mobile, profiles, report, export, verify, integrity, replay, benchmark, validate, analyze, audit, backup, serve) | `cli.py` |
+| Web endpointy | **30** (`@app.get`) | `web/app.py` |
+| Magic signatur | **25** | `domain/signatures.py` |
+| Parsery s verzí | **12** (imessage_cloud, mobile_extract, plist_extract, registry_extract, sqlite_extract, win_amcache, win_eventlog, win_jumplist, win_lnk v2.0, win_prefetch, win_shimcache, win_usn) | `artifacts/*.py` |
+| C3 Parser Validation Registry | **9 parserů** registrováno + 1:1 sync s pipeline (RegistryError při nesouladu) | `domain/validation_registry.py`, živý import |
+| E01/AFF4 (libewf) | **dostupná** | `ewf_container.ewf_available() → True` |
+| The Sleuth Kit | **dostupný** (pytsk3 primární, CLI fallback) | `data/tsk.py TSK_AVAILABLE → True` |
+| Závislosti | povinné: pydantic, regipy; volitelné: weasyprint (PDF), fastapi/uvicorn/httpx (web), cryptography (FDE), pytsk3 (TSK), openpyxl (XLSX), Pillow (EXIF) | `pyproject.toml` |
+| Test fixtures | 29 MB, plně offline | `du -sh tests/` |
 
-### Struktura projektu (Clean Architecture — drží se)
+### Architektura (Clean Architecture — drží se)
 
 ```
 src/stopa/
-├── models.py            # Pydantic v2 boundary modely
-├── domain/              # 30 modulů — čistá logika bez IO (100% offline testovatelné)
-│   ├── signatures, bad_extension, dedupe, hashing, profiles, times
+├── models.py            # Pydantic v2 boundary modely (Artifact, FileRecord, …)
+├── domain/              # 32 modulů — čistá logika bez IO (offline testovatelné)
+│   ├── signatures, bad_extension, dedupe, hashing, profiles, times, i18n
 │   ├── image_types, carving, sqlite_parser/carver/formatter/recover
-│   ├── fde, fde_fbe, fde_luks, file_meta, correlation, entities
-│   ├── timeline_anomaly, report, export, ai_assistant, i18n, …
-├── artifacts/           # 13 extraktorů (IO jen v entrypointech)
-│   ├── sqlite_extract (Chrome/Firefox/iMessage/SMS/calls/triage)
-│   ├── registry_extract, plist_extract, imessage_cloud, mobile_extract
-│   └── win_lnk, win_prefetch, win_jumplist, win_eventlog, win_amcache, win_shimcache, win_usn
-├── data/                # IO vrstva: db (1274 řádků), ingest, tsk/tsk_cli/tsk_py,
-│   │                     # image_pipeline, ewf_container, lmstudio_client, diagnostics
-├── pipeline.py          # jediný analyze() entrypoint + ARTIFACT_EXTRACTORS dispatch
-├── cli.py               # argparse subpříkazy (747 řádků)
-└── web/                 # FastAPI app (906 řádků, 29 endpointů) + vanilla JS SPA (~2 000 LOC)
+│   ├── fde, fde_fbe, fde_luks, file_meta, correlation, entities, entity_resolution
+│   ├── timeline_anomaly, report, export, ai_assistant
+│   └── P0 Core: evidence_model, lineage, validation_registry, integrity, reproducibility, benchmark
+├── artifacts/           # 14 extraktorů (IO jen v entrypointech) — viz §2
+├── data/                # IO vrstva: db (schema v11), ingest, tsk/tsk_cli/tsk_py,
+│                        # image_pipeline, ewf_container, lmstudio_client, diagnostics, benchmark_engine
+├── intelligence/        # P0 I1 AI orchestrace (5 agentů) + I2 Forensic RAG (3 vrstvy)
+├── pipeline.py          # jediný analyze() entrypoint: ARTIFACT_EXTRACTORS (magic) + NAME_BASED_EXTRACTORS fallback, ThreadPoolExecutor, E3 resume/checkpointing
+├── cli.py               # argparse subpříkazy (21)
+└── web/                 # FastAPI (30 endpointů) + vanilla JS SPA (~2 000 LOC, dark mode)
 ```
 
-### Databázové schéma (SQLite, `SCHEMA_VERSION = 6`)
+**Databázové schéma:** SQLite, `SCHEMA_VERSION = 11`, tabulky: cases, sources, files (+FTS5), artifacts (+FTS5), timeline_events, entities (CHECK confidence v4 úrovních), correlations (first_seen/last_seen), meta, evidence_marks, audit_log (append-only triggery), custody_items, lineage_events, analysis_operations, integrity_checkpoints. Migrační mechanismus: idempotentní `CREATE TABLE IF NOT EXISTS` + verziované migrace (`_migrate_entity_resolution()` v10→v11 s rebuildem tabulek pro změnu CHECK constraintů).
 
-13 tabulek: `cases`, `sources`, `files` (+FTS5 `files_fts`), `artifacts` (+FTS5 `artifacts_fts`),
-`timeline_events`, `entities`, `correlations`, `meta`, `evidence_marks`, `audit_log` (append-only
-triggery RAISE(IGNORE)), `custody_items`.
+---
 
-**Migrační mechanismus:** idempotentní `CREATE TABLE IF NOT EXISTS` + meta-flagy backfillu
-(`artifacts_fts_backfilled`) + `schema_version` v `meta`. **Není to verzirovací migrační engine** —
-přidání sloupce do existující tabulky vyžaduje ruční `ALTER TABLE` (zatím se nestalo).
+## 1. Architektura a moduly
 
-### Implementovaní extraktoři (dispatch `signatura → extraktor`)
+**Současný stav:** Clean Architecture se striktním oddělením domain (bez IO) / artifacts (IO jen entrypointy) / data (IO vrstva) / web+cli (presentační). Pipeline je jediný analyze() entrypoint s dispatchem signatura→extraktor a name-based fallbackem.
 
-| Kanál | Signatury / name-based | Artifact typy |
+**Funguje:** závislosti tečou jedním směrem; domain testovatelný 100% offline; C3 registry vynucuje 1:1 synchronizaci parserů mezi pipeline a validačním registrem (RegistryError při driftu).
+
+**Neúplné / dluh:**
+- `domain/` má 5 832 řádků v 32 modulech — největší modul je `db.py` (data vrstva, ~1 900 ř.) s migracemi i dotazy; při dalším růstu rozdělit na `migrations.py`.
+- Web SPA (~2 000 LOC vanilla JS) bez build kroku a bez testů UI logiky (jen API testy přes TestClient).
+
+**Rizika:** nízká. **Doporučení:** db.py rozdělit při příští změně schématu; pro UI přidat minimálně smoke testy (Playwright volitelně). **Priorita:** P2.
+
+## 2. Artifact Engine (parsery)
+
+**Současný stav — implementováno a otestováno (14 souborů, 12 verzovaných parserů):**
+
+| Parser | Typy artifactů | Platforma |
 |---|---|---|
-| Magic dispatch (`ARTIFACT_EXTRACTORS`) | sqlite, registry_hive (+Amcache+ShimCache), plist, lnk, win_prefetch, evtx | browser_history, imessage, sms_message, call_log, contact, whatsapp_message, app_execution, shell_link, win_prefetch, event_log_entry, registry_hive, property_list, plist_date, sqlite_database |
-| Name-based fallback (`NAME_BASED_EXTRACTORS`) | icloud_messages, win_jumplist, win_usn | usn_record, win_jumplist (+iCloud messages) |
+| win_lnk v2.0 | shell_link (+metadata, cíle) | Windows |
+| win_prefetch | app_execution (spuštění aplikací) | Windows |
+| win_jumplist | jump_list (nedávné soubory/aplikace) | Windows |
+| win_eventlog | event_log_entry (EVTX binární parser) | Windows |
+| win_amcache | amcache (AppCompatCache) | Windows |
+| win_shimcache | shimcache (SRUM-like) | Windows |
+| win_usn | usn_journal (USN Journal NTFS) | Windows |
+| registry_extract | registry_hive (+Amcache/ShimCache detekce), regipy | Windows |
+| plist_extract | property_list, plist_date | macOS |
+| sqlite_extract | browser_history (Chrome/Firefox), imessage, sms_message, call_log, contact, whatsapp_message, sqlite_database | multi |
+| imessage_cloud | iCloud Messages export (CSV/XLSX warrant return) | iOS cloud |
+| mobile_extract | mobilní logical exporty | Android/iOS |
 
-Každý extraktor má **verzi parseru** (eviduje se v `artifacts.parser_version` + audit log).
-RE podklad: 237 AXIOM extraktorů v `docs/re-axiom/axiom-artifact-extractors.json`.
+**Funguje:** každý parser má PARSER_VERSION, testovací sadu, evidenci zdroje nálezu; dispatch přes 25 magic signatur + name-based fallback (AXIOM Hunter pattern); C3 registry s validací vstupů a confidence.
 
-### AI vrstva (E11)
+**Neúplné (proti FÁZE 2 master promptu):**
+- **Windows chybí:** SRUM, MFT (přímo — jen přes TSK), Recycle Bin metadata, Windows Search index, Browser Downloads/Cookies/Sessions/Bookmarks (jen History), Defender logs, Scheduled Tasks, Services, UserAssist, Shellbags, Thumbnail Cache, Firewall logs, RDP artifacts, USB device history, Installed applications, Notification DB.
+- **Browser:** Chrome/Firefox History ✓; Edge/Opera/Brave/Safari ✗; Downloads/Cookies/Sessions/Extensions/Autofill/Search history/Cache metadata — jen částečně (sqlite_extract pokrývá historii).
+- **Linux:** systemd journal, syslog, auth logs, bash history, SSH config, cron, package manager — ✗ (jen obecný file_meta + carving).
+- **macOS:** Unified Logs, FSEvents, Spotlight, Quarantine, KnowledgeC, Recent Items, Launch Agents — ✗ (jen plist).
+- **Mobile/messaging:** WhatsApp/iMessage/SMS/hovory ✓; Telegram/Signal/Discord/Teams/Skype/Outlook/Thunderbird — částečně (whatsapp_message přes sqlite; ostatní čekají na port AXIOM cloud-export extraktorů).
 
-- `domain/ai_assistant.py` — čistá logika promptů, 3 režimy (`nl_search`, `summary`, `explain`)
-- Citace `[art:<id>]` validované proti reálným ID; JSON odpovědi s confidence
-- `data/lmstudio_client.py` — OpenAI-kompatibilní API (default `localhost:1234/v1`, env override)
-- **Graceful degradation:** bez LM Studio → 503, jádro funguje dál ✓
+**Dluh:** 12 parserů v C3 registry vs. 9 registrovaných — `sqlite_extract`, `imessage_cloud`, `mobile_extract` nejsou v validačním registru (fungují, ale bez C3 validace vstupů). **Rizika:** nízká (parsery jsou izolované, fail-safe try/except). **Doporučení:** portovat po skupinách podle pokryvací matice (`docs/re-axiom/AXIOM_COVERAGE.md`: 22 covered / 49 portable-local / 112 cloud-export / 15 memory / 34 base-class); doplnit chybějící parsery do C3 registry. **Priorita:** P0 (hlavní gap oproti AXIOM).
 
-### GUI (vanilla JS SPA, bez build kroku)
+## 3. Processing pipeline a diskové obrazy
 
-~2 000 LOC: `index.html` + `style.css` + modulární `js/` (api, state, components: ai/files/graph/
-inspector/modules/search/sidebar). Data grid s nekonečným skrolováním, inspector drawer s hex dumpem,
-Cmd+K search, entity graph (SVG force-directed), System Diagnostics, Settings persistence.
+**Funguje:** E01/AFF4 přes libewf ✓, RAW/IMG přes TSK (pytsk3 primární + CLI fallback) ✓, NTFS/FAT/APFS ✓, FDE workflow (AES-256-CBC mobilní FDE, FBE, LUKS) ✓, file carving (magic bytes) ✓, volný prostor (`--carve-free`) ✓, **paralelizace** (ThreadPoolExecutor, `max_workers`) ✓, **resume/checkpointing** (E3 — přeskočí soubory už v DB) ✓.
 
-### Závislosti
+**Neúplné:** progress monitoring jen v CLI (web nemá live stav zpracování); stream processing chybí (soubor se načte do paměti pro parsing — u velkých obrazů RAM peak, zmírněno chunkingem v ewf_container). **Dluh:** determinismus paralelního běhu je zajištěn deterministickým řazením při ukládání, ale není explicitně testován pod load. **Rizika:** střední (RAM u velkých E01). **Doporučení:** FÁZE 11 — progress endpoint + stream parsing pro soubory >1 GB. **Priorita:** P1.
 
-- **Core:** `pydantic>=2.5`, `regipy>=6` — jen 2 povinné závislosti ✓
-- **Volitelné extras:** dev (pytest/ruff), pdf (weasyprint), web (fastapi/uvicorn/httpx),
-  fde (cryptography), tsk (pytsk3), xlsx (openpyxl), meta (Pillow)
-- **TSK dual backend:** pytsk3 nativní + CLI fallback (`~/tsk-install`, `STOPA_TSK_BIN`)
+## 4. Hashování a integrita
 
-## 2. Silné stránky
+**Funguje:** SHA-256 + MD5 všech souborů ✓, re-hash `stopa verify` ✓, hash manifesty exportů ✓, **Ed25519 podpisy** (kontrolní body integrity C4) ✓, hash chaining audit logu ✓, duplikáty podle hashů ✓, hash set management (hit/miss v reportu) ✓.
 
-1. **Disciplinovaná Clean Architecture** — domain vrstva bez IO, defenzivní IO wrappery
-   (poškozený soubor → `[]`, ne výjimka), dispatch mapa signatura→extraktor (nový typ = nový řádek)
-2. **Plně offline testovatelné jádro** — 642 testů bez sítě, fake objekty pro matchery
-3. **Forenzní metadata od začátku** — parser verze, extracted_at, confidence, anomaly_flags,
-   append-only audit log, custody items (E1–E5 hotové)
-4. **Minimální povinné závislosti** — 2 core balíčky; vše ostatní volitelné extras
-5. **Čerstvý E-audit + code review** (`244f3ed`, `ae73ad0`) — path traversal ×2, RFC 5987,
-   ranged read, mrtvý kód, verze z jednoho zdroje
-6. **Idempotentní pipeline** — re-ingest bez duplicit (UNIQUE constraints + upsert)
+**Neúplné:** SHA-512 chybí (master prompt FÁZE 7); verifikace podpisů exportů je v `stopa verify`, ale web UI ji neukazuje. **Rizika:** nízká. **Doporučení:** přidat SHA-512 do hashing pipeline (backward compat — nová kolona). **Priorita:** P2.
 
-## 3. Slabá místa a technický dluh
+## 5. Chain of Custody a audit log
 
-### S1. Chybí Unified Evidence Model (P0)
-`artifacts` tabulka má confidence/parser_version/extracted_at, ale **chybí**: explicitní
-provenience na zdrojový offset/záznam, validation status, rozlišení Direct/Derived/Interpretation,
-derived findings jako samostatný entitní typ. `timeline_events` je materializovaný pohled, ne model.
+**Funguje:** custody_items s metadata ✓, append-only audit_log s triggery RAISE(IGNORE) ✓, `stopa audit` CLI ✓, audit trail v reportu (sekce 7) ✓, AI dotazy auditované (`analysis_operations`, op_type=ai_query, verze modelu + SHA-256 promptu) ✓.
 
-### S2. Chybí Evidence Lineage (P0)
-Doložitelnost finding → report → zdroj existuje částečně (`correlations.evidence_json`,
-report odkazuje na artifact ID), ale **není systematická**: transformace (korelace, timeline
-agregace) nemají vlastní záznam s verzí nástroje a konfigurací.
+**Neúplné:** RBAC chybí — actor je volitelný řetězec bez ověření identity; audit přístupů k web API není (jen operace). **Rizika:** střední pro multi-analytik provoz. **Doporučení:** FÁZE 12 — minimálně actor povinný + session token. **Priorita:** P2.
 
-### S3. Chybí Parser Validation Registry + E13 (P0)
-Parser verze se evidují, ale **neexistuje registry** s formáty/omezeními/referenčními datasy.
-E13 (benchmarky + regresní sada + SWGDE/NIST validace) = celá P3 fáze nezačatá.
+## 6. Exportní systém
 
-### S4. Audit log není kryptograficky provázaný (P0)
-`audit_log` je append-only (triggery), ale **bez hash chainingu** — UPDATE/DELETE se tichom
-ignorují (RAISE(IGNORE)), nikoli házejí výjimku; bez podpisů kontrolních bodů.
+**Funguje:** CSV/JSON (artifacts, timeline, correlations) ✓, manifest s deterministickým hashem + Ed25519 podpisem u každého exportu ✓, kontrolní bod integrity po exportu ✓, i18n hlaviček ✓.
 
-### S5. Chybí Reproducibility Engine (P0)
-Analytické operace (correlate, timeline export) nejsou záznamy s vstupy/konfigurací/verzí STOPA —
-opakování operace není garantovatelné porovnáním výsledků.
+**Neúplné (FÁZE 9):** STIX 2.1 ✗, CASE/UCO ✗, Plaso-compatible ✗, LEF ✗, JSONL ✗, XML ✗, SQLite export ✗; standardizované schéma s verzí schématu v manifestu — částečně (verze modulu ano, verze schématu ne). **Rizika:** nízká. **Doporučení:** nejdřív JSONL + XML (levné), STIX/UCO až při konkrétním požadavku interoperability. **Priorita:** P2.
 
-### S6. AI vrstva je 3-režimový asistent, ne multi-agentní platforma (P0 Intelligence)
-Žádný orchestrátor, žádné specializované agenty, žádné RAG vrstvy (Case/Technical/Knowledge),
-žádné grounding rozlišení (Direct/Derived/Interpretation/Hypothesis/Unverified), žádný audit AI dotazů
-(v audit log se píše jen akce, ne prompt/model verze).
+## 7. Report engine
 
-### S7. Entity Resolution je základní (P0 Intelligence)
-`entities.kind` CHECK omezen na 4 typy (phone/email/url_host/hash); normalizace telefonů = E164
-heuristika; confidence vztahů jen `verified|inferred` (zadání chce 4 úrovně); žádná detekce
-duplicitních entit, žádné časově závislé vztahy.
+**Funguje:** HTML vždy, PDF volitelně (weasyprint) ✓, i18n cs/en ✓, **9 sekcí**: chain of custody, průběh zpracování, artifacty, findings, označené soubory, manifest (SHA-256+Ed25519), audit trail, timeline, korelace ✓; lineage reportu do DB (`_log_report_lineage`) ✓.
 
-### S8. Timeline Intelligence je částečná (P0 Intelligence)
-Materializovaná timeline + TZ konverze + anomaly flags existují; **chybí**: přesnost/nejistota
-timestampů, detekce duplicitních událostí, korelace napříč zařízeními, ukládání analytických pohledů.
+**Neúplné (FÁZE 10 — 20 sekcí):** chybí titulní strana s identifikací případu a rozsahem analýzy, metodika zpracování, použité nástroje+verze (částečně v manifestu), technická omezení, chyby/neúplnosti zpracování (jsou v auditu, ale ne jako samostatná sekce), závěrečné shrnutí, přílohy. **Rizika:** nízká. **Doporučení:** doplnit chybějící sekce z dat, která už v DB jsou (nástroje+verze = C3 registry + benchmark; omezení = coverage matrix). **Priorita:** P1.
 
-### S9. Web API bez auth a CORS (bezpečnost)
-29 endpointů naslouchá na `localhost` bez jakékoli autentizace; **žádný CORSMiddleware** —
-pokud se GUI otevře z jiného originu, cross-origin volání selžou (nebo je nutno přidat CORS).
-Pro single-user offline provoz akceptovatelné, pro enterprise nasazení P2.
+## 8. Timeline Intelligence
 
-### S10. Duplicitní funkcionality / tech-debt
-- `tsk.py` (CLI) + `tsk_py.py` (nativní) — dual backend je záměrný fallback, ale API se liší
-- `sqlite_recover.py` shim re-exportuje 3 moduly (parser/carver/formatter) — zachovává staré importy
-- `cli.py` 747 řádků a `web/app.py` 906 řádků — oba rostou lineárně s funkcemi; CLI subpříkazy
-  duplikují logiku, která by mohla být sdílená service vrstva (zatím tolerovatelné)
+**Funguje:** unified timeline z všech zdrojů ✓, časová normalizace (UTC + lokální čas přes case timezone_name) ✓, `timeline_anomaly` detekce anomálií (označeny jako analytický podnět, ne důkaz) ✓, AXIOM-style timeline CLI ✓, web timeline view s filtry ✓.
 
-### S11. Bezpečnostní rizika (z E-auditu + tento audit)
-- ✅ Opraveno: path traversal case_id/rel_path, RFC 5987 header injection, CRLF v exportu
-- ⚠️ `open(p,'rb')` v diskové větvi exportu → OSError = raw 500 (nemapuje se na 4xx)
-- ⚠️ AI citace `[art:<id>]` — model může citovat neexistující ID; validace existuje, ale GUI
-  by mělo explicitně značit „neověřená citace"
-- ⚠️ Prompt injection: importované dokumenty (iCloud CSV/XLSX) jdou do AI kontextu bez izolace
+**Neúplné (FÁZE 3):** porovnání více časových období ✗, export vybraného úseku (export je celkový) ✗, rozlišení přesnosti časových údajů (timestamp precision) — částečně; vizualizace je tabulková, ne interaktivní osa. **Rizika:** nízká. **Doporučení:** m-d10 Timeline Intelligence 2.0 (rozpory, duplikáty, přesnost timestampů) — už v roadmapě. **Priorita:** P1.
 
-## 4. Chybějící schopnosti (vs. master prompt)
+## 9. Evidence Graph / Entity Resolution
 
-| Oblast | Stav |
+**Funguje:** entity + korelace engine ✓, **Entity Resolution 2.0** (I3): 4 confidence levels (confirmed/strong_candidate/possible/unverified), normalizace telefonů/mailů/platformních účtů, WhatsApp JID→E164, merge candidates s důvody, časové rozmezí vztahů first_seen/last_seen ✓; SVG graf v web UI s barvami podle druhu entity a tloušťkou hran podle confidence ✓.
+
+**Neúplné (FÁZE 4):** cross-artifact correlation je heuristická (same_contact, hash_match, temporal_overlap) — chybí detekce vztahů mezi událostmi vyššího řádu; vizuální navigace je statický SVG (bez zoom/pan/filtru hran); každý vztah má zdroj+metodu+confidence ✓, ale verzi analytického algoritmu ne. **Rizika:** nízká. **Doporučení:** přidat `algorithm_version` do correlations; interaktivní graf (zoom/pan) jako UX vylepšení. **Priorita:** P2.
+
+## 10. Forensic AI Copilot
+
+**Funguje:** I1 orchestrace — 5 deklarativních agentů (case/timeline/artifact/media/report analyst), auto/explicitní routing, fail-closed validace LLM výstupu + citace ✓; I2 Forensic RAG — tři znalostní vrstvy (Case/Technical/Knowledge), chunking markdown, FTS5 sanitizace, prompt injection ochrana `<untrusted_source>` ✓; E11 LM Studio klient (localhost:1234, OpenAI-kompatibilní) s graceful degradation ✓; offline-first ✓; audit AI dotazů s verzí modelu + SHA-256 promptu ✓.
+
+**Neúplné (FÁZE 5):** redakce citlivých údajů před odesláním do LLM ✗; oddělení případů je implicitní (RAG čte jen aktivní případ) ale není explicitně testováno; AI nesmí označovat pachatele — pravidlo je v promptu agentů, ne vynuceno validátorem. **Rizika:** střední (data mohou jít do lokálního LLM bez redakce). **Doporučení:** STOPA_AI_GOVERNANCE.md + redaktor PII před inference; explicitní test oddělení případů. **Priorita:** P1.
+
+## 11. File Intelligence
+
+**Funguje:** rozpoznávání skutečných typů (magic bytes, 25 signatur) ✓, MIME vs přípona (`bad_extension` flag) ✓, duplikáty podle hashů ✓, hash sety ✓, metadata extraction: EXIF (Pillow volitelné), PDF/OOXML/ID3/MP4 bez závislostí ✓, file provenance (lineage C2) ✓.
+
+**Neúplné (FÁZE 6):** file similarity ✗; preview v web UI = hex view + metadata (obrázky/PDF/text náhled chybí); detekce poškozených souborů je jen implicitní (parser fail). **Rizika:** nízká. **Doporučení:** bezpečný image/PDF preview (data URL z DB, bez sandboxu — akceptovatelné pro desktop GUI) + explicitní `corrupted` flag v files tabulce. **Priorita:** P2.
+
+## 12. Validation Engine (P0 Core C1–C6 — hotové)
+
+**Funguje:** C1 Unified Evidence Model (provenance, findings, confidence) ✓; C2 Lineage Engine (lineage_events v8, chain traversal) ✓; **C3 Parser Validation Registry** (9 parserů, 1:1 sync s pipeline, shoda verzí) ✓; C4 Integrity 2.0 (hash chaining, Ed25519 kontrolní body, manifesty) ✓; C5 Reproducibility Engine (záznam operací, `stopa replay`, porovnání výsledků) ✓; C6 Benchmark Engine (deterministické workloads, měření času + špičková RAM, validační reporty per-parser s ID+verzí+confidence+provenance) ✓.
+
+**Neúplné:** kontrola konzistence databáze je v `stopa integrity`, ale ne automaticky po každém zpracování; evidence nepodporovaných formátů — částečně (fallback generic file). **Rizika:** nízká. **Doporučení:** automatický integrity checkpoint na konci analyze(). **Priorita:** P2.
+
+## 13. Case Management
+
+**Funguje:** více zdrojů v jednom případě ✓, více diskových obrazů ✓, evidence marks (ruční označování) ✓, findings management ✓, audit trail rozhodnutí ✓, backup (SQLite .backup + integrity check) ✓, CRUD případů v web UI ✓.
+
+**Neúplné (FÁZE 8):** osoby a role ✗, štítky na artifactech ✗ (jen marks), přiřazování úkolů ✗, případové šablony ✗, porovnání více případů ✗, archivace s pozdější verifikací integrity — backup existuje, ale „archive + verify" workflow ne. **Rizika:** nízká (single-analytik provoz). **Doporučení:** osoby+role až při multi-user; štítky levné doplnit. **Priorita:** P2–P3.
+
+## 14. Performance
+
+**Funguje:** paralelní parsery (ThreadPoolExecutor) ✓, resume/checkpointing ✓, FTS5 indexy ✓, stránkování API (LIMIT/OFFSET) ✓, benchmark engine s RAM měřením ✓.
+
+**Neúplné (FÁZE 11):** processing queue ✗, progress monitoring v web UI ✗, cache ✗, stream processing pro velké soubory ✗. **Rizika:** střední (RAM peak u velkých E01). **Doporučení:** progress endpoint + stream parsing; benchmark baseline commitovat do DB pro detekci regresí (C6 to umí — jen napojit na CI). **Priorita:** P1.
+
+## 15. Security
+
+**Funguje:** Pydantic validace vstupů ✓, oddělení případů (samostatné DB) ✓, Ed25519 podpisy ✓, prompt injection ochrana v RAG ✓, path traversal opraveny (E-audit) ✓, graceful degradation AI ✓.
+
+**Neúplné (FÁZE 12):** RBAC ✗, šifrování citlivých dat v DB ✗, izolace parserů (sandbox) ✗ — parser běží s právy procesu; zranitelnostní skenování závislostí ✗ (žádné dependabot/pip-audit); bezpečné aktualizace ✗. **Rizika:** střední (nedůvěryhodné dokumenty parsuje stejný proces). **Doporučení:** pip-audit do CI; sandbox parserů až při multi-user; RBAC minimálně actor+token. **Priorita:** P2.
+
+## 16. UI
+
+**Funguje:** dark mode ✓, moduly: dashboard, disk-image, file-system, partition-map, system-recovery, sql-recovery, messaging-chat (chronologický chat), deletion-check, artifacts, entity-graph ✓; File Inspector s hex view + metadata ✓; AI panel (ai.js) ✓.
+
+**Neúplné (FÁZE 13 — 14 obrazovek):** chybí samostatné: Processing Monitor (live stav), Validation Center, Audit Center, Report Center (report je endpoint, ne modul), File Intelligence jako modul; globální filtr a rychlé vyhledávání jsou částečné. **Rizika:** nízká. **Doporučení:** doplnit chybějící moduly z existujících API (všechna data už v DB jsou — jen UI vrstva). **Priorita:** P2.
+
+## 17. QA a testy
+
+**Funguje:** 819 testů, plně offline (magic bytes + SQLite + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze + P0 Core + P0 Intelligence) ✓; syntetické fixtures 29 MB ✓; benchmark report ✓; ruff clean ✓.
+
+**Neúplné (FÁZE 14):** performance tests jsou v C6, ale ne běží automaticky při každém commitu; security tests ✗ (jen ad-hoc); recovery tests — E3 resume testováno, ale „poškozený obraz" fixture chybí; porovnání s nezávislými referenčními nástroji ✗. **Rizika:** nízká. **Doporučení:** benchmark do CI (s prahem regresí >20% — C6 `detect_regressions()` to umí); přidat fixture poškozeného obrazu. **Priorita:** P2.
+
+## 18. Coverage Matrix
+
+**Funguje:** `docs/re-axiom/AXIOM_COVERAGE.md` + `.json` (generátor `scripts/build_axiom_coverage.py`) — všech 237 AXIOM položek klasifikováno: **22 covered / 49 portable-local / 112 cloud-export / 15 memory / 34 base-class** ✓.
+
+**Neúplné (FÁZE 15):** chybí `STOPA_COVERAGE_MATRIX.csv` v kořeni; stavy jsou kategorie portu, ne SUPPORTED/PARTIALLY_SUPPORTED/EXPERIMENTAL/NOT_SUPPORTED/DEPRECATED; u každého typu chybí: referenční dataset + výsledek validace (C6 to generuje — jen napojit). **Rizika:** nízká. **Doporučení:** rozšířit generátor matice o požadované sloupce a export CSV. **Priorita:** P1 (levné, vysoká viditelnost).
+
+---
+
+## Souhrn priorit
+
+| Priorita | Položky |
 |---|---|
-| Cloud Forensics (§8) | **MISSING** — jen iCloud Messages (warrant return CSV/XLSX) |
-| Memory Forensics (§9) | **MISSING** |
-| Communication Intelligence (§11) | **PARTIAL** — iMessage/SMS/WhatsApp existují; EML/MBOX/PST chybí |
-| Mobile 2.0 (§10) | **PARTIAL** — logická extrakce hotová; WAL/SHM, notifikace, systémové logy chybí |
-| Multimedia 2.0 (§12) | **PARTIAL** — EXIF/PDF/OOXML/ID3/MP4 metadata (E8); OCR/audio/video/deepfake/C2PA chybí |
-| macOS/Linux extraktoři (§17) | **MISSING** (kromě Apple plists + Safari/iMessage z mobilní fáze) |
-| Network forensics (PCAP/DNS) | **MISSING** |
-| Enterprise/multi-user (§19) | **MISSING** (single-user, bez RBAC) |
-| Advanced Search (§16) | **PARTIAL** — FTS5 + filtry hotové; sémantické vyhledávání, ukládání dotazů chybí |
+| **P0** | Port AXIOM extraktorů po skupinách (49 portable-local nejprve); doplnit chybějící parsery do C3 registry |
+| **P1** | Report engine — doplnit 20 sekcí; Timeline Intelligence 2.0 (m-d10); AI governance + PII redaktor; progress monitoring + stream parsing; coverage matrix CSV s plnými stavy |
+| **P2** | SHA-512; export JSONL/XML/STIX; file preview + similarity; RBAC minimální; UI moduly (Processing/Validation/Audit Center); benchmark do CI; pip-audit |
+| **P3** | Case Management 2.0 (osoby, role, šablony); sandbox parserů; porovnání případů |
 
-## 5. Návrhy architektonických změn
+## Návrh cílové architektury a implementačního plánu
 
-1. **Nová `domain/evidence_model.py`** — Pydantic modely pro Unified Evidence Model (Event,
-   Finding, Provenance, ConfidenceLevel) + nová tabulka `findings` a rozšíření `artifacts`
-   o sloupce `provenance_json`, `validation_status` (idempotentní migrace v7)
-2. **Nová `domain/lineage.py`** — lineage záznamy jako řádky v nové tabulce `lineage_events`
-   (op_id, op_type, tool_version, config_hash, input_refs, output_refs) — napojí se na audit_log
-3. **Nová `domain/validation_registry.py`** — deklarativní registry parserů (ID, verze, formáty,
-   omezení, referenční datasety) + benchmark engine nad nimi
-4. **Rozšíření `data/db.py`** — hash chaining audit_logu (nový sloupec `prev_hash`, `hash`)
-   + Ed25519 kontrolní body v `meta`; migrační mechanismus升级为 explicitní `_MIGRATIONS: dict[int, list[str]]`
-5. **AI orchestrátor** — `domain/ai_orchestrator.py` (čistá logika) + 5 agentů jako prompt
-   profile s jasnými vstupy/výstupy; RAG vrstvy jako samostatné moduly s citacemi
-6. **Zachovat vanilla JS** — audit neprokázal důvod ke změně (bez build kroku = offline nasazení);
-   rozšířit o workspace layout (§18)
+Viz `docs/STOPA_TARGET_ARCHITECTURE.md` + `docs/DEVELOPMENT_ROADMAP.md` (aktualizovat o tento audit). Implementace po etapách A–M master promptu; **ETAPY A–C hotové** (audit, gap analysis, target architecture), P0 Core C1–C6 a P0 Intelligence I1–I3 commitnuté.
 
-## 6. Závěr
+## Testovací strategie
 
-STOPA má **solidní forenzní jádro** s disciplinovanou architekturou a plnou offline testovatelností.
-Hlavní mezera vs. master promptu je v **P0 vrstvě důvěryhodnosti** (lineage, validation registry,
-integrity 2.0, reproducibility) a v **AI Intelligence Engine** (multi-agent + RAG + grounding).
-Obě oblasti jsou navrhované jako *nové moduly nad existujícím jádrem* — bez přepisování funkčních částí.
+Plně offline sada (819) + syntetické fixtures + benchmark engine s detekcí regresí; cíl: každý nový parser = unit testy na syntetickém fixture + záznam v C3 registry + řádek v coverage matrix.

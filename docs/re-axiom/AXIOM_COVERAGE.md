@@ -1,0 +1,261 @@
+# STOPA × Magnet AXIOM — pokryvací matice extraktorů
+
+Zdroj: `axiom-artifact-extractors.json` (237 položek, 232 unikátních typů).
+Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_coverage.py`.
+
+## Souhrn
+
+- **✅ COVERED**: 22
+- **🔧 PORTABLE-LOCAL**: 49
+- **☁️ CLOUD-EXPORT**: 112
+- **💾 MEMORY**: 15
+- **🧩 BASE-CLASS**: 34
+
+---
+
+## ✅ COVERED — STOPA už umí (existující parser) (22)
+
+- `AppleIMessageArtifact` — sqlite_extract → imessage
+- `AuditDriveEventsArtifact` — EVTX event log (evtx parser)
+- `AuditLoginEventsArtifact` — EVTX event log (evtx parser)
+- `CallLogsArtifact` — sqlite_extract → call_log
+- `CloudGoogleChromeBrowserHistoryArtifact` — browser_history
+- `DocumentMetadataExtractor` — OOXML metadata
+- `GoogleBrowsingHistoryArtifact` — browser_history
+- `IeTypedUrlArtifact` — browser_history (chrome/firefox)
+- `ImageInfoArtifact` — magic bytes → image info
+- `JumpListsArtifact` — win_jumplist parser
+- `MapArtifact` — timeline / map
+- `MediaMetadataExtractor` — media family
+- `MftArtifact` — TSK disk image MFT
+- `MicrosoftTeamsMessagesArtifact` — sqlite generic (teams.db)
+- `MicrosoftTeamsMessagesBaseArtifact` — sqlite generic
+- `MicrosoftTeamsMessagesComputerArtifact` — sqlite generic
+- `OfficeArtifact` — OOXML document parser
+- `SamsungConnectionsArtifact` — mobile_extract → calllog
+- `SamsungContactArtifact` — mobile_extract → contacts2
+- `SamsungMessagesArtifact` — mobile_extract → sms
+- `TimelineArtifact` — timeline engine
+- `WorldMapArtifact` — world map (timeline)
+
+## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (49)
+
+- `AllowlistedWebSitesArtifact` — lokální parser (čistý Python)
+- `AttachmentExtractor` — lokální parser (čistý Python)
+- `BeboArtifact` — legacy mobile / messenger (SQLite)
+- `ChatrouletteArtifact` — legacy mobile / messenger (SQLite)
+- `ClipboardArtifact` — Windows registry / XML profil
+- `CloudMboxEmailArtifact` — existující parser
+- `CmdScanArtifact` — lokální parser (čistý Python)
+- `ConnscanArtifact` — text output (connstat/netstat)
+- `CurrentTabsArtifact` — lokální parser (čistý Python)
+- `DriveActivityArtifact` — lokální parser (čistý Python)
+- `DuckDuckGoCookiesArtifact` — browser cookies/bookmarks
+- `FileScanArtifact` — lokální parser (čistý Python)
+- `GetsidsArtifact` — registry SAM/Security
+- `GoogleAccountChangeHistoryArtifact` — lokální profil / takeout
+- `GoogleAccountInfoArtifact` — lokální profil / takeout
+- `GoogleAggregatedActivitiesArtifact` — lokální profil / takeout
+- `GoogleAggregatedActivitiesIdentitySessionsArtifact` — lokální profil / takeout
+- `GoogleBarArtifact` — lokální profil / takeout
+- `GoogleChatArtifact` — lokální profil / takeout
+- `GoogleDevicesArtifact` — lokální profil / takeout
+- `GoogleExportSummaryArtifact` — lokální profil / takeout
+- `GoogleHangoutsArtifact` — lokální profil / takeout
+- `GoogleLocationHistoryArtifact` — lokální profil / takeout
+- `GoogleLoginHistoryArtifact` — lokální profil / takeout
+- `GoogleMailMessageInformationArtifact` — lokální profil / takeout
+- `GoogleMapsActivityArtifact` — lokální profil / takeout
+- `GooglePhotosArtifact` — lokální profil / takeout
+- `GooglePlusChatArtifact` — lokální profil / takeout
+- `GoogleSearchHistoryArtifact` — lokální profil / takeout
+- `GoogleTalkArtifact` — lokální profil / takeout
+- `KikLocalUserExtractor` — legacy mobile / messenger (SQLite)
+- `LimerunnerArtifact` — legacy mobile / messenger (SQLite)
+- `LimewireArtifact` — legacy mobile / messenger (SQLite)
+- `LuckywireArtifact` — legacy mobile / messenger (SQLite)
+- `MSNArtifact` — lokální parser (čistý Python)
+- `MailRuChatArtifact` — legacy mobile / messenger (SQLite)
+- `MailRuContactArtifact` — legacy mobile / messenger (SQLite)
+- `MailRuGroupArtifact` — legacy mobile / messenger (SQLite)
+- `NetScanArtifact` — text output (connstat/netstat)
+- `OfflineGmailArtifact` — existující parser
+- `OpenOfficeBaseArtifact` — lokální parser (čistý Python)
+- `ParkedCarLocationsArtifact` — lokální parser (čistý Python)
+- `SamsungVoiceRecordingArtifact` — legacy mobile / messenger (SQLite)
+- `ScheduledTasksArtifact` — Windows registry / XML profil
+- `SidsArtifact` — registry SAM/Security
+- `SockscanArtifact` — text output (connstat/netstat)
+- `UserSidsArtifact` — registry SAM/Security
+- `VoiceMailArtifact` — lokální parser (čistý Python)
+- `WiFiLocationsArtifact` — Windows registry / XML profil
+
+## ☁️ CLOUD-EXPORT — JSON export / warrant return (112)
+
+- `CloudAccountsInfoArtifact` — JSON export / warrant return
+- `CloudAmazonCloudTrailEventsArtifact` — JSON export / warrant return
+- `CloudAmazonCloudTrailInsightsArtifact` — JSON export / warrant return
+- `CloudAmazonEC2InstanceArtifact` — JSON export / warrant return
+- `CloudAmazonS3FilesArtifact` — JSON export / warrant return
+- `CloudAndroidBackupsArtifact` — JSON export / warrant return
+- `CloudAppleBackupArtifact` — JSON export / warrant return
+- `CloudAppleContactsArtifact` — JSON export / warrant return
+- `CloudAppleDriveArtifact` — JSON export / warrant return
+- `CloudAppleIMessageArtifact` — JSON export / warrant return
+- `CloudAppleKeychainArtifact` — JSON export / warrant return
+- `CloudAppleMailArtifact` — JSON export / warrant return
+- `CloudApplePhotosArtifact` — JSON export / warrant return
+- `CloudAzureVirtualMachineSnapshotArtifact` — JSON export / warrant return
+- `CloudBoxEnterpriseEventArtifact` — JSON export / warrant return
+- `CloudBoxFilesArtifact` — JSON export / warrant return
+- `CloudBoxUserEventArtifact` — JSON export / warrant return
+- `CloudConnectedAppsArtifact` — JSON export / warrant return
+- `CloudDriveFileArtifact` — JSON export / warrant return
+- `CloudDriveFileVersionArtifact` — JSON export / warrant return
+- `CloudDropboxEntryArtifact` — JSON export / warrant return
+- `CloudFacebookFriendsArtifact` — JSON export / warrant return
+- `CloudFacebookInstagramMessagesArtifact` — JSON export / warrant return
+- `CloudFacebookMessengerMessagesArtifact` — JSON export / warrant return
+- `CloudFacebookMobileTimelineArtifact` — JSON export / warrant return
+- `CloudFacebookProfileInfoArtifact` — JSON export / warrant return
+- `CloudFacebookTimelineArtifact` — JSON export / warrant return
+- `CloudGmailMessagesArtifact` — JSON export / warrant return
+- `CloudGmailMessagesWarrantReturnArtifact` — JSON export / warrant return
+- `CloudGoogleActivityArtifact` — JSON export / warrant return
+- `CloudGoogleCalendarEventsArtifact` — JSON export / warrant return
+- `CloudGoogleCalendarEventsTakeoutArtifact` — JSON export / warrant return
+- `CloudGoogleChatArtifact` — JSON export / warrant return
+- `CloudGoogleChatSpacesArtifact` — JSON export / warrant return
+- `CloudGoogleChatsArtifact` — JSON export / warrant return
+- `CloudGoogleChromeAutofillArtifact` — JSON export / warrant return
+- `CloudGoogleChromeBookmarksArtifact` — JSON export / warrant return
+- `CloudGoogleChromeExtensionSettingsArtifact` — JSON export / warrant return
+- `CloudGoogleChromeExtensionsArtifact` — JSON export / warrant return
+- `CloudGoogleChromeSearchEnginesArtifact` — JSON export / warrant return
+- `CloudGoogleChromeSyncSettingsAppSettingsArtifact` — JSON export / warrant return
+- `CloudGoogleChromeSyncSettingsAppsArtifact` — JSON export / warrant return
+- `CloudGoogleChromeSyncSettingsPreferencesArtifact` — JSON export / warrant return
+- `CloudGoogleContactsArtifact` — JSON export / warrant return
+- `CloudGoogleKeepArtifact` — JSON export / warrant return
+- `CloudGoogleLocationHistoryArtifact` — JSON export / warrant return
+- `CloudGooglePhotosArtifact` — JSON export / warrant return
+- `CloudGooglePhotosAxiom2Pt8Artifact` — JSON export / warrant return
+- `CloudGoogleSemanticLocationHistoryActivitySegmentArtifact` — JSON export / warrant return
+- `CloudGoogleSemanticLocationHistoryPlaceVisitArtifact` — JSON export / warrant return
+- `CloudGoogleTasksArtifact` — JSON export / warrant return
+- `CloudHangoutsMessagesArtifact` — JSON export / warrant return
+- `CloudInstagramDirectMessagesArtifact` — JSON export / warrant return
+- `CloudInstagramPostsArtifact` — JSON export / warrant return
+- `CloudInstagramPostsAxiom2Pt1Artifact` — JSON export / warrant return
+- `CloudMegaFilesArtifact` — JSON export / warrant return
+- `CloudMicrosoftContactsArtifact` — JSON export / warrant return
+- `CloudMicrosoftMailPstArtifact` — JSON export / warrant return
+- `CloudMicrosoftTeamsConversationsArtifact` — JSON export / warrant return
+- `CloudMicrosoftTeamsTeamsArtifact` — JSON export / warrant return
+- `CloudOneDriveFileArtifact` — JSON export / warrant return
+- `CloudOneDriveFileVersionArtifact` — JSON export / warrant return
+- `CloudOutlookCalendarArtifact` — JSON export / warrant return
+- `CloudPasswordsArtifact` — JSON export / warrant return
+- `CloudRecentDevicesArtifact` — JSON export / warrant return
+- `CloudSharePointContentArtifact` — JSON export / warrant return
+- `CloudSharePointDocumentsArtifact` — JSON export / warrant return
+- `CloudSharePointSitePagesArtifact` — JSON export / warrant return
+- `CloudTimelineArtifact` — JSON export / warrant return
+- `CloudTwitterDirectMessagesArtifact` — JSON export / warrant return
+- `CloudTwitterPostsArtifact` — JSON export / warrant return
+- `CloudTwitterPostsPublicArtifact` — JSON export / warrant return
+- `CloudTwitterUsersArtifact` — JSON export / warrant return
+- `CloudTwitterUsersPublicArtifact` — JSON export / warrant return
+- `CloudTwitterWarrantReturnDirectMessagesArtifact` — JSON export / warrant return
+- `CloudTwitterWarrantReturnPostsArtifact` — JSON export / warrant return
+- `CloudTwitterWarrantReturnUsersArtifact` — JSON export / warrant return
+- `CloudWhatsAppBackupsArtifact` — JSON export / warrant return
+- `CloudWhatsAppChatsArtifact` — JSON export / warrant return
+- `GoogleAccessLogDevices2025Artifact` — warrant return (JSON)
+- `GoogleAccountTargetAssociation2025Artifact` — warrant return (JSON)
+- `GoogleCalls2025Artifact` — warrant return (JSON)
+- `GoogleChromeAutofillWarrantReturnArtifact` — warrant return (JSON)
+- `GoogleChromeBookmarksWarrantReturnArtifact` — warrant return (JSON)
+- `GoogleChromeContactInfoWarrantReturnArtifact` — warrant return (JSON)
+- `GoogleChromeHistoryWarrantReturnArtifact` — warrant return (JSON)
+- `GoogleContactsWarrantReturnArtifact` — warrant return (JSON)
+- `GoogleMapsLabeledPlacesWarrantReturnArtifact` — warrant return (JSON)
+- `GoogleVoiceContactsMetadata2026Artifact` — warrant return (JSON)
+- `GoogleVoiceSubscriberInformation2026Artifact` — warrant return (JSON)
+- `GoogleVoiceTexts2025Artifact` — warrant return (JSON)
+- `GoogleVoicemail2025Artifact` — warrant return (JSON)
+- `InstagramAccountActionsArtifact` — JSON/DB export
+- `InstagramAccountHistoryArtifact` — JSON/DB export
+- `InstagramArchivedStoriesArtifact` — JSON/DB export
+- `InstagramCommentsArtifact` — JSON/DB export
+- `InstagramDirectSharesArtifact` — JSON/DB export
+- `InstagramDirectStoriesArtifact` — JSON/DB export
+- `InstagramFollowersAndFollowingArtifact` — JSON/DB export
+- `InstagramMediaArtifact` — JSON/DB export
+- `InstagramMessagesArtifact` — JSON/DB export
+- `InstagramPhotosArtifact` — JSON/DB export
+- `SkypeWarrantReturnAccountDetailsArtifact` — warrant return (JSON)
+- `SkypeWarrantReturnChatHistoryRecordsArtifact` — warrant return (JSON)
+- `SkypeWarrantReturnConnectionHistoryArtifact` — warrant return (JSON)
+- `SkypeWarrantReturnContactsArtifact` — warrant return (JSON)
+- `SnapchatAccountInformationArtifact` — JSON/DB export
+- `SnapchatFriendsArtifact` — JSON/DB export
+- `SnapchatGeolocationArtifact` — JSON/DB export
+- `SnapchatGroupChatMessagesArtifact` — JSON/DB export
+- `SnapchatIpHistoryArtifact` — JSON/DB export
+- `SnapchatMessagesWarrantReturnArtifact` — warrant return (JSON)
+
+## 💾 MEMORY — live forensics (paměťový dump) (15)
+
+- `ApiHooksArtifact` — live forensics (paměťový dump)
+- `CallbacksArtifact` — live forensics (paměťový dump)
+- `DriversArtifact` — live forensics (paměťový dump)
+- `ExecutiveObjectCallbacksArtifact` — live forensics (paměťový dump)
+- `HandlesArtifact` — live forensics (paměťový dump)
+- `MalfindArtifact` — live forensics (paměťový dump)
+- `ModScanArtifact` — live forensics (paměťový dump)
+- `NetworkConnectionsArtifact` — live forensics (paměťový dump)
+- `OpenConnectionsArtifact` — live forensics (paměťový dump)
+- `OpenHandlesArtifact` — live forensics (paměťový dump)
+- `ProcessListArtifact` — live forensics (paměťový dump)
+- `ProcessScanArtifact` — live forensics (paměťový dump)
+- `ProcessesArtifact` — live forensics (paměťový dump)
+- `PsxViewArtifact` — live forensics (paměťový dump)
+- `SocketsArtifact` — live forensics (paměťový dump)
+
+## 🧩 BASE-CLASS — rozhraní / základní třída (34)
+
+- `Artifact` — rozhraní / základní třída
+- `BinaryTextExtractor` — rozhraní / základní třída
+- `CaseAmendingTestArtifact` — rozhraní / základní třída
+- `ChannelArtifact` — rozhraní / základní třída
+- `CloudArtifact` — rozhraní / základní třída
+- `CustomArtifact` — rozhraní / základní třída
+- `DbArtifact` — rozhraní / základní třída
+- `DevicesArtifact` — rozhraní / základní třída
+- `DllArtifact` — rozhraní / základní třída
+- `EventExtractor` — rozhraní / základní třída
+- `IArtifact` — rozhraní / základní třída
+- `IAttachmentExtractor` — rozhraní / základní třída
+- `ICloudArtifact` — rozhraní / základní třída
+- `IContainerEnabledArtifact` — rozhraní / základní třída
+- `ICustomArtifact` — rozhraní / základní třída
+- `ICustomXmlArtifact` — rozhraní / základní třída
+- `ILegacyArtifact` — rozhraní / základní třída
+- `ILsaRegistryExtractor` — rozhraní / základní třída
+- `ITpduDataExtractor` — rozhraní / základní třída
+- `IUnifiedLogsExtractor` — rozhraní / základní třída
+- `IWorldMapArtifact` — rozhraní / základní třída
+- `IconExtractor` — rozhraní / základní třída
+- `LabelArtifact` — rozhraní / základní třída
+- `LegacyArtifact` — rozhraní / základní třída
+- `LsaRegistryExtractor` — rozhraní / základní třída
+- `MappedArtifact` — rozhraní / základní třída
+- `MappedLegacyEmailArtifact` — rozhraní / základní třída
+- `MemoryArtifact` — rozhraní / základní třída
+- `MessageArtifact` — rozhraní / základní třída
+- `ServerArtifact` — rozhraní / základní třída
+- `SimpleArtifact` — rozhraní / základní třída
+- `TpduDataExtractor` — rozhraní / základní třída
+- `UserArtifact` — rozhraní / základní třída
+- `XmlArtifact` — rozhraní / základní třída

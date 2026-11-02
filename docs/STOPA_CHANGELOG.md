@@ -4,6 +4,18 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (FÁZE 1 — kompletní technický audit + FÁZE 15 coverage matrix CSV)
+- `docs/STOPA_TECHNICAL_AUDIT.md` — přepsán na aktuální stav (commit `2244d95`,
+  schema v11, **819 testů**, ruff clean): 18 oblastí × (současný stav / funguje /
+  neúplné / dluh / rizika / doporučení / priorita), každé tvrzení podloženo
+  zdrojovým kódem, testem nebo živým spuštěním. Souhrn priorit P0–P3.
+- `scripts/build_axiom_coverage.py` — generátor matice rozšířen o export
+  **`STOPA_COVERAGE_MATRIX.csv`** (FÁZE 15) do kořene projektu: 232 unikátních
+  AXIOM typů × sloupce (artifact_type, platforma, zdroj_dat, parser_stopa,
+  stav_implementace SUPPORTED/NOT_SUPPORTED/DEPRECATED, stav_testovani, verze,
+  známá_omezeni, referencni_dataset, vysledek_validace). Deterministický výstup
+  ověřen opakovaným spuštěním (shoda SHA-256).
+
 ### Added (P0 Intelligence I3 — Entity Resolution 2.0, confidence levels + normalizace účtů)
 - `domain/entity_resolution.py` — nový doménový modul: čtyři úrovně confidence
   vztahů (`confirmed`, `strong_candidate`, `possible`, `unverified`) s
