@@ -2,6 +2,11 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
+## 2026-11-03 — STP-012b doplnění povinných polí DEV OS registrů
+- **Změněné soubory:** `.stopa-dev/FEATURE_REGISTRY.md` (+sloupce Popis, Verze), `.stopa-dev/TEST_REGISTRY.md` (+Datum, Verze aplikace, Případná chyba, Odkaz na protokol), `.stopa-dev/DECISIONS.md` (+pole Dotčené moduly u všech ADR).
+- **Přidané funkce:** registrace nyní plně odpovídají povinným polím DEV OS promptu §3.7 (testy) a §3.8 (rozhodnutí); FEATURE_REGISTRY rozšiřuje §3.6 o Popis+Verzi.
+- **Testy:** bez změny kódu — 895 passed, 1 skipped; ruff clean.
+
 ## 2026-11-03 — STP-012 DEV OS bootstrap + STP-013..015 ETAPA B vlna 1 (commit `afc49a0`)
 - **Změněné soubory:**
   - nové parsery: `src/stopa/artifacts/{email_mbox,win_wlan,win_schedtask,net_connections,win_clipboard,win_sids}.py`

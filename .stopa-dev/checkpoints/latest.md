@@ -2,7 +2,7 @@
 
 **Datum:** 2026-11-03
 **Verze projektu:** 0.1.0, commit `afc49a0` (vlna 1) + tento DEV OS bootstrap commit
-**Poslední dokončený úkol:** STP-012 (DEV OS bootstrap) — před ním STP-013..015 (ETAPA B vlna 1, commit `afc49a0`)
+**Poslední dokončený úkol:** STP-012b (doplnění povinných polí DEV OS registrů) — před ním STP-012 (DEV OS bootstrap), STP-013..015 (ETAPA B vlna 1, commit `afc49a0`)
 **Aktuální fáze:** ETAPA B — port AXIOM extraktorů
 
 ## Aktuální stav
