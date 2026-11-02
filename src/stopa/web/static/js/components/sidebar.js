@@ -18,13 +18,16 @@ const MODULES = {
   "correlation":     ["Correlation", "Propojení mezi entitami + evidence s přechodem na důkaz (E5)"],
   "reporting":       ["Reporting", "Court-ready reporty + ručně označené soubory"],
   "ai":              ["AI Assistant", "LM Studio — hledání přirozenou řečí, shrnutí a vysvětlení artifactů (E11)"],
+  "cases":           ["Cases", "Případy v workspace — přehled, zařízení a poslední aktivita (E12)"],
+  "diagnostics":     ["Diagnostics", "Verze knihoven + dostupnost TSK/EWF/FDE + audit log (E12)"],
+  "settings":        ["Settings", "Časové pásmo, AI URL, role a bind address (E12)"],
 };
 
 const MODULE_ICONS = {
   "dashboard": "▦", "disk-image": "◫", "file-system": "🗀", "partition-map": "▤",
   "system-recovery": "⚙", "sql-recovery": "∞", "messaging-chat": "✉",
   "deletion-check": "⌫", "artifacts": "◈", "entity-graph": "❖", "correlation": "⇄",
-  "reporting": "▤", "ai": "✦",
+  "reporting": "▤", "ai": "✦", "cases": "🗂", "diagnostics": "🩺", "settings": "⚙︎",
 };
 
 function renderSidebarNav() {

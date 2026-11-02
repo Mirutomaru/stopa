@@ -12,6 +12,7 @@ Spuštění: ``stopa serve [--port 8473]`` nebo ``uvicorn stopa.web.app:app``.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import datetime
@@ -65,6 +66,24 @@ class AiQueryIn(BaseModel):
     mode: str  # nl_search | summary | explain
     question: str = ""  # nl_search: přirozená řeč; explain: volitelný kontext
     artifact_id: str | None = None  # explain: který artifact vysvětlit
+
+
+class SettingsIn(BaseModel):
+    """E12 — uživatelská nastavení (jen zadaná pole se uloží)."""
+
+    timezone_name: str | None = None
+    ai_url: str | None = None
+    role: str | None = None  # examiner | analyst | admin
+    bind_address: str | None = None
+
+
+class CaseUpdateIn(BaseModel):
+    """E12 — aktualizace metadat případu (jen zadaná pole)."""
+
+    name: str | None = None
+    examiner: str | None = None
+    notes: str | None = None
+    timezone_name: str | None = None
 
 
 def create_app(db_dir: Path | None = None) -> FastAPI:
@@ -580,6 +599,113 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 raise HTTPException(503, str(exc)) from exc
         finally:
             db.close()
+
+    # ── E12 — System Diagnostics ──────────────────────────────
+    @app.get("/api/diagnostics")
+    def diagnostics() -> dict:
+        """Verze knihoven + dostupnost volitelných komponent (TSK/EWF/FDE).
+
+        Poslední operace z audit_log všech případů (nejnovější 10) — GUI je
+        zobrazí jako „poslední aktivity“; chyby = processing_completed s errors>0.
+        """
+        from stopa.data.diagnostics import collect_diagnostics
+
+        out = collect_diagnostics()
+        recent: list[dict] = []
+        for path in sorted(base.glob("case-*.db")):
+            db = CaseDB(path)
+            try:
+                for row in db.list_audit_log(limit=10):
+                    row["case_id"] = path.stem
+                    recent.append(row)
+            finally:
+                db.close()
+        recent.sort(key=lambda r: r.get("ts") or "", reverse=True)
+        out["recent_operations"] = recent[:25]
+        return out
+
+    # ── E12 — Settings (persistence do settings.json v db_dir) ──
+    def _settings_path() -> Path:
+        return base / "settings.json"
+
+    def _load_settings() -> dict:
+        p = _settings_path()
+        if not p.exists():
+            return {}
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (json.JSONDecodeError, OSError):
+            log.warning("settings.json je poškozený — použiju defaulty")
+            return {}
+
+    def _save_settings(data: dict) -> None:
+        _settings_path().write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    @app.get("/api/settings")
+    def get_settings() -> dict:
+        """Uživatelská nastavení (defaulty + uložené přepsání)."""
+        s = _load_settings()
+        return {
+            "timezone_name": s.get("timezone_name", "Europe/Prague"),
+            "ai_url": s.get("ai_url") or os.environ.get(
+                "STOPA_LMSTUDIO_URL", "http://localhost:1234/v1"
+            ),
+            "role": s.get("role", "examiner"),
+            "bind_address": s.get("bind_address", "127.0.0.1"),
+        }
+
+    @app.put("/api/settings")
+    def put_settings(body: SettingsIn) -> dict:
+        """Uloží nastavení (jen zadaná pole). Bind address platí po restartu."""
+        s = _load_settings()
+        if body.timezone_name is not None:
+            s["timezone_name"] = body.timezone_name
+        if body.ai_url is not None:
+            s["ai_url"] = body.ai_url
+        if body.role is not None:
+            s["role"] = body.role
+        if body.bind_address is not None:
+            s["bind_address"] = body.bind_address
+        _save_settings(s)
+        return get_settings()
+
+    # ── E12 — Cases CRUD (update/delete nad existujícím GET/POST) ──
+    @app.patch("/api/cases/{case_id}")
+    def update_case(case_id: str, body: CaseUpdateIn) -> dict:
+        """Aktualizace metadat případu (name/examiner/notes/timezone)."""
+        db = open_db(case_id)
+        try:
+            ok = db.update_case(
+                case_id,
+                name=body.name,
+                examiner=body.examiner,
+                notes=body.notes,
+                timezone_name=body.timezone_name,
+            )
+            if not ok:
+                raise HTTPException(404, "případ neexistuje")
+            db.log_operation("case_updated", details={"case_id": case_id})
+            return get_case(case_id)
+        finally:
+            db.close()
+
+    @app.delete("/api/cases/{case_id}")
+    def delete_case(case_id: str) -> dict:
+        """Smaže případ i zdroje (kaskáda na files/artifacts/timeline)."""
+        path = base / f"{case_id}.db"
+        db = CaseDB(path) if path.exists() else None
+        try:
+            if db is None or db.get_case(case_id) is None:
+                raise HTTPException(404, "případ neexistuje")
+            db.log_operation("case_deleted", details={"case_id": case_id})
+            db.delete_case(case_id)
+        finally:
+            if db is not None:
+                db.close()
+        return {"deleted": case_id}
 
     # ── statická SPA ──────────────────────────────────────────
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

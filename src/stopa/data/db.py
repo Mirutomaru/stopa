@@ -349,6 +349,56 @@ class CaseDB:
             timezone_name=row["timezone_name"] or "Europe/Prague",
         )
 
+    def update_case(
+        self,
+        case_id: str,
+        name: str | None = None,
+        examiner: str | None = None,
+        notes: str | None = None,
+        timezone_name: str | None = None,
+    ) -> bool:
+        """E12 — aktualizace metadat případu (jen zadaná pole). True pokud existoval."""
+        sets: list[str] = []
+        vals: list[str] = []
+        for col, val in (
+            ("name", name),
+            ("examiner", examiner),
+            ("notes", notes),
+            ("timezone_name", timezone_name),
+        ):
+            if val is not None:
+                sets.append(f"{col} = ?")
+                vals.append(val)
+        if not sets:
+            return self.get_case(case_id) is not None
+        vals.append(case_id)
+        cur = self.conn.execute(
+            f"UPDATE cases SET {', '.join(sets)} WHERE id = ?", vals
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def delete_case(self, case_id: str) -> bool:
+        """E12 — smaže případ i všechny jeho zdroje (kaskáda na files/artifacts/timeline).
+
+        `sources` nemá ON DELETE CASCADE na cases(id), takže je nutné smazat
+        zdroje explicitně; entities/correlations mají vlastní CASCADE.
+        Vrací True pokud případ existoval.
+        """
+        existing = self.get_case(case_id) is not None
+        if not existing:
+            return False
+        # zdroje → kaskáda na files/artifacts/timeline_events/evidence_marks/custody_items
+        self.conn.execute("DELETE FROM sources WHERE case_id = ?", (case_id,))
+        # entities + correlations mají ON DELETE CASCADE, ale explicitně pro jistotu
+        self.conn.execute("DELETE FROM entities WHERE case_id = ?", (case_id,))
+        self.conn.execute(
+            "DELETE FROM correlations WHERE case_id = ?", (case_id,)
+        )
+        self.conn.execute("DELETE FROM cases WHERE id = ?", (case_id,))
+        self.conn.commit()
+        return True
+
     # ── sources ──────────────────────────────────────────────
     def add_source(self, source: EvidenceSource) -> None:
         self.conn.execute(

@@ -77,6 +77,17 @@
     </div>
     <h2>Artifacty podle typu</h2>
     <div id="artifact-bars"></div>
+    <!-- E12 — Dashboard rozšíření: AI status + poslední operace -->
+    <div class="dash-extra">
+      <div class="card small" id="ai-status-card">
+        <h3><span class="ico">✦</span> AI Assistant (LM Studio)</h3>
+        <div id="ai-status-dash" class="muted small">Načítám…</div>
+      </div>
+      <div class="card small" id="recent-ops-card">
+        <h3><span class="ico">▤</span> Poslední operace</h3>
+        <div id="recent-ops" class="muted small">Načítám…</div>
+      </div>
+    </div>
   </section>
 
   <!-- ── DISK IMAGE ────────────────────────────── -->
@@ -217,6 +228,74 @@
       <input id="ai-artifact-id" placeholder="art-…" class="mono" autocomplete="off">
     </div>
     <div id="ai-chat"></div>
+  </section>
+
+  <!-- ── E12 — CASES (případy, zařízení, workspace) ─────────── -->
+  <section id="mod-cases" class="module">
+    <h2>Případy</h2>
+    <table id="cases-table">
+      <thead><tr><th>Název</th><th>Examinátor</th><th>Vytvořeno (UTC)</th><th>Soubory</th><th>Artifacty</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <h2>Zařízení a workspace</h2>
+    <div class="card small" id="cases-env">
+      <dl class="kv">
+        <dt>DB workspace</dt><dd id="env-dbdir" class="mono small"></dd>
+        <dt>Případy v workspace</dt><dd id="env-cases-count"></dd>
+        <dt>Poslední aktivita</dt><dd id="env-last-activity" class="small"></dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ── E12 — SYSTEM DIAGNOSTICS ───────────────────────────── -->
+  <section id="mod-diagnostics" class="module">
+    <h2>Systémové diagnostiky</h2>
+    <div class="card small" id="diag-env">
+      <dl class="kv">
+        <dt>Python</dt><dd id="diag-python" class="mono"></dd>
+        <dt>FastAPI</dt><dd id="diag-fastapi" class="mono"></dd>
+        <dt>pytsk3 (TSK)</dt><dd id="diag-pytsk3" class="mono"></dd>
+        <dt>Pillow (EXIF)</dt><dd id="diag-pillow" class="mono"></dd>
+        <dt>httpx</dt><dd id="diag-httpx" class="mono"></dd>
+      </dl>
+    </div>
+    <h2>Dostupnost komponent</h2>
+    <table id="diag-components">
+      <thead><tr><th>Komponenta</th><th>Stav</th><th>Použití</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <h2>Poslední operace (audit log)</h2>
+    <div id="diag-recent-ops" class="muted small">Načítám…</div>
+  </section>
+
+  <!-- ── E12 — SETTINGS ─────────────────────────────────────── -->
+  <section id="mod-settings" class="module">
+    <h2>Nastavení</h2>
+    <div class="card small" id="settings-form-card">
+      <form id="settings-form">
+        <label>Časové pásmo (zobrazení timeline)
+          <input id="set-timezone" list="tz-list" autocomplete="off" placeholder="Europe/Prague">
+          <datalist id="tz-list"></datalist>
+        </label>
+        <label>AI URL (LM Studio)
+          <input id="set-ai-url" class="mono" autocomplete="off" placeholder="http://localhost:1234/v1">
+        </label>
+        <label>Role uživatele
+          <select id="set-role">
+            <option value="examiner">Examinátor</option>
+            <option value="analyst">Analytik</option>
+            <option value="admin">Admin</option>
+          </select>
+        </label>
+        <label>Bind address (platí po restartu serveru)
+          <input id="set-bind" class="mono" autocomplete="off" placeholder="127.0.0.1">
+        </label>
+        <div class="toolbar">
+          <button type="submit" class="primary">💾 Uložit nastavení</button>
+          <span id="settings-saved" class="muted small hidden">✓ Uloženo</span>
+        </div>
+      </form>
+    </div>
   </section>
 </main>
 

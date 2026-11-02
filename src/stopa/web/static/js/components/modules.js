@@ -16,7 +16,9 @@ function switchModule(name) {
 }
 
 async function renderModule() {
-  if (!Store.get("caseId")) return;
+  // E12: cases/diagnostics/settings jsou globální moduly (nevyžadují otevřený případ)
+  const globalMods = ["cases", "diagnostics", "settings"];
+  if (!Store.get("caseId") && !globalMods.includes(Store.get("module"))) return;
   const cid = Store.get("caseId");
   try {
     switch (Store.get("module")) {
@@ -33,8 +35,136 @@ async function renderModule() {
       case "correlation":     await renderCorrelation(cid); break;
       case "reporting":       await renderReporting(cid); break;
       case "ai":              await renderAiModule(cid); break;
+      // E12 — globální moduly (bez case ID)
+      case "cases":           await renderCasesModule(); break;
+      case "diagnostics":     await renderDiagnosticsModule(); break;
+      case "settings":        await renderSettingsModule(); break;
     }
   } catch (e) { toast(`⚠ ${e.message}`); }
+}
+
+/* ── E12 — CASES (případy v workspace + zařízení) ─────────── */
+async function renderCasesModule() {
+  const cases = await api("/api/cases");
+  document.querySelector("#cases-table tbody").innerHTML = cases.length
+    ? cases.map((c) => `
+      <tr class="${c.id === Store.get("caseId") ? "active-case" : ""}">
+        <td><b>${esc(c.name)}</b></td>
+        <td>${esc(c.examiner || "—")}</td>
+        <td>${fmtDT(c.created_at)}</td>
+        <td class="mono">${c.files}</td>
+        <td class="mono">${c.artifacts}</td>
+        <td class="row-actions">
+          <button data-act="open" title="Otevřít případ">↗</button>
+          <button data-act="del" title="Smazat případ">✕</button>
+        </td>
+      </tr>`).join("")
+    : '<tr><td colspan="6" class="muted">Žádné případy — vytvořte nový vlevo (sidebar).</td></tr>';
+
+  // workspace info
+  const diag = await api("/api/diagnostics");
+  document.getElementById("env-dbdir").textContent = "cases/ (STOPA_DB_DIR)";
+  document.getElementById("env-cases-count").textContent = `${cases.length} případů`;
+  const lastTs = cases.map((c) => c.created_at).sort().pop();
+  document.getElementById("env-last-activity").textContent =
+    lastTs ? `poslední vytvořen: ${fmtDT(lastTs)}` : "—";
+
+  // akce na řádcích
+  for (const btn of document.querySelectorAll("#cases-table button[data-act]")) {
+    btn.addEventListener("click", async () => {
+      const tr = btn.closest("tr");
+      const id = tr.querySelector("td b")?.textContent;
+      if (btn.dataset.act === "open") {
+        await openCase(id);
+      } else if (btn.dataset.act === "del") {
+        const name = id || "";
+        if (!confirm(`Smazat případ „${name}“ i se všemi zdroji?`)) return;
+        try {
+          await api(`/api/cases/${id}`, { method: "DELETE" });
+          toast(`✓ Případ smazán`);
+          if (Store.get("caseId") === id) Store.set("caseId", null), Store.set("caseDetail", null);
+          await loadCases();
+          renderCasesModule();
+        } catch (e) { toast(`⚠ ${e.message}`); }
+      }
+    });
+  }
+}
+
+/* ── E12 — SYSTEM DIAGNOSTICS ─────────────────────────────── */
+async function renderDiagnosticsModule() {
+  const d = await api("/api/diagnostics");
+  document.getElementById("diag-python").textContent = d.python || "—";
+  const libs = d.libraries || {};
+  document.getElementById("diag-fastapi").textContent = libs.fastapi || "chybí";
+  document.getElementById("diag-pytsk3").textContent = libs.pytsk3 || "chybí";
+  document.getElementById("diag-pillow").textContent = libs.PIL || "chybí (EXIF)";
+  document.getElementById("diag-httpx").textContent = libs.httpx || "chybí";
+
+  const comps = d.components || {};
+  const rows = [
+    ["TSK (pytsk3)", comps.tsk, "filesystem walk diskových obrazů"],
+    ["E01/AFF4 (libewf+afflib)", comps.ewf, "čtení EWF kontejnerů"],
+    ["cryptsetup (FDE LUKS/FBE)", comps.cryptsetup, "dešifrování šifrovaných obrazů"],
+  ];
+  document.querySelector("#diag-components tbody").innerHTML = rows.map(([name, ok, use]) => `
+    <tr><td>${esc(name)}</td>
+      <td><span class="dot ${ok ? "ok" : "bad"}"></span> ${ok ? "dostupná" : "chybí"}</td>
+      <td class="muted small">${esc(use)}</td></tr>`).join("");
+
+  renderRecentOps(d.recent_operations || [], "#diag-recent-ops");
+}
+
+/* E12 — poslední operace z audit log (sdílené dashboard + diagnostics) */
+function renderRecentOps(ops, selector) {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  if (!ops.length) { el.textContent = "Zatím žádné operace."; return; }
+  el.innerHTML = ops.slice(0, 12).map((o) => {
+    const err = o.action === "processing_completed" && (o.details?.errors || 0) > 0;
+    return `<div class="op-row ${err ? "op-err" : ""}">
+      <span class="mono small op-ts">${fmtDT(o.ts)}</span>
+      <span class="op-action">${esc(o.action)}</span>
+      ${o.case_id ? `<span class="muted small mono">${esc(o.case_id)}</span>` : ""}
+      ${err ? `<span class="flag-badge">⚠ ${o.details.errors} chyb</span>` : ""}
+    </div>`;
+  }).join("");
+}
+
+/* ── E12 — SETTINGS ───────────────────────────────────────── */
+async function renderSettingsModule() {
+  const s = await api("/api/settings");
+  document.getElementById("set-timezone").value = s.timezone_name || "";
+  document.getElementById("set-ai-url").value = s.ai_url || "";
+  document.getElementById("set-role").value = s.role || "examiner";
+  document.getElementById("set-bind").value = s.bind_address || "";
+
+  // datalist běžných časových pásem (IANA)
+  const tzList = ["Europe/Prague", "Europe/Berlin", "Europe/London", "America/New_York",
+    "America/Chicago", "Asia/Tokyo", "Australia/Sydney", "UTC"];
+  document.getElementById("tz-list").innerHTML =
+    tzList.map((t) => `<option value="${esc(t)}">`).join("");
+
+  const form = document.getElementById("settings-form");
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timezone_name: document.getElementById("set-timezone").value.trim() || null,
+          ai_url: document.getElementById("set-ai-url").value.trim() || null,
+          role: document.getElementById("set-role").value,
+          bind_address: document.getElementById("set-bind").value.trim() || null,
+        }),
+      });
+      const saved = document.getElementById("settings-saved");
+      saved.classList.remove("hidden");
+      setTimeout(() => saved.classList.add("hidden"), 2500);
+      toast("✓ Nastavení uloženo");
+    } catch (err) { toast(`⚠ ${err.message}`); }
+  };
 }
 
 /* ── DASHBOARD ───────────────────────────────────────────── */
@@ -84,6 +214,18 @@ async function renderDashboard(cid) {
       await openCase(Store.get("caseId")); // refresh statistik + aktuální modul
     } catch (e) { out.textContent = `⚠ ${e.message}`; }
   };
+
+  // E12 — dashboard rozšíření: AI status + poslední operace (audit log)
+  try {
+    const ai = await api("/api/ai/status");
+    document.getElementById("ai-status-dash").innerHTML = ai.available
+      ? `<span class="dot ok"></span> <b>dostupná</b> — ${esc(ai.model || "model")} (${esc(ai.url)})`
+      : `<span class="dot bad"></span> <b>nedostupná</b> — spusťte LM Studio (${esc(ai.url)}).`;
+  } catch { document.getElementById("ai-status-dash").textContent = "—"; }
+  try {
+    const diag = await api("/api/diagnostics");
+    renderRecentOps(diag.recent_operations || [], "#recent-ops");
+  } catch { document.getElementById("recent-ops").textContent = "—"; }
 }
 
 /* ── DISK IMAGE ──────────────────────────────────────────── */

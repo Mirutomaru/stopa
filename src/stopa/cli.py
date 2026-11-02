@@ -566,10 +566,29 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     from stopa.web.app import create_app
 
+    # E12: bind address — CLI flag > settings.json > default 127.0.0.1
+    host = args.host or _settings_bind_address() or "127.0.0.1"
+
     app = create_app()
-    print(f"STOPA web GUI → http://127.0.0.1:{args.port} (Ctrl+C pro ukončení)")
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    print(f"STOPA web GUI → http://{host}:{args.port} (Ctrl+C pro ukončení)")
+    uvicorn.run(app, host=host, port=args.port, log_level="warning")
     return 0
+
+
+def _settings_bind_address() -> str | None:
+    """E12 — bind address z settings.json (None pokud není nastaveno)."""
+    import json
+    from pathlib import Path
+
+    p = Path(os.environ.get("STOPA_DB_DIR", "cases")) / "settings.json"
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        val = data.get("bind_address") if isinstance(data, dict) else None
+        return str(val) if val else None
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -710,7 +729,8 @@ def build_parser() -> argparse.ArgumentParser:
     exp_p.set_defaults(func=cmd_export)
 
     srv_p = sub.add_parser("serve", help="web GUI (FastAPI nad analyze())")
-    srv_p.add_argument("--host", default="127.0.0.1")
+    srv_p.add_argument("--host", default=None,  # E12: None → settings.json → 127.0.0.1
+                       help="bind address (default z Settings / 127.0.0.1)")
     srv_p.add_argument("--port", type=int, default=8473)
     srv_p.set_defaults(func=cmd_serve)
 
