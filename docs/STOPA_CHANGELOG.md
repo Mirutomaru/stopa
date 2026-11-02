@@ -4,6 +4,26 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (P0 Core C6 — Benchmark Engine + validační reporty / E13)
+- `domain/benchmark.py` — čistá logika bez I/O: `BenchmarkResult` (frozen dataclass:
+  name, suite, duration_ms, ram_peak_bytes, artifacts, iterations), `RegressionWarning`,
+  `detect_regressions()` (práh >20% zpomalení proti baseline, defenzivní u baseline=0),
+  `validation_coverage()` (covered/total/pct + nepokrivené parsery), `env_info()`
+- `data/benchmark_engine.py` — deterministické benchmarky na syntetických datech:
+  core workload (pipeline ingest+extrakce stromu souborů) a per-parser workloads
+  (9 parserů z registry, minimální vstup); měření času + špičkové RAM (tracemalloc);
+  historie do `meta` (`benchmark_history`, max 50 záznamů), `check_regressions()`,
+  `benchmark_report()`; každý workload obalen try/except (jeden selže, ostatní běží)
+- `data/validation_report.py` — Evidence Validation Report per případ: per-artifact
+  parser ID+verze + validation status + confidence + provenance; souhrn coverage
+  (kolik artefaktů je z validovaných parserů); deterministický JSON export
+- CLI: nové subpříkazy **`stopa benchmark [case] [--suite core|parsers|all]`**
+  (výsledky + detekce regresí >20% proti baseline) a **`stopa validate <case> [--json]`**
+  (validační report); audit záznam `benchmark_run`
+- `tests/test_benchmark_engine.py` — 18 testů (čistá logika: detekce regresí/práh/coverage;
+  engine: core+parser workloads, historie roundtrip, regresní detekce, report shape;
+  validační report: provenance coverage, determinismus JSON, prázdný případ); suite 720 → **738 passed**
+
 ### Added (P0 Core C5 — Reproducibility Engine)
 - `domain/reproducibility.py` — čistá logika bez I/O: `AnalysisOperation` (frozen dataclass:
   vstupní soubory + SHA-256, verze parserů, verze STOPA, config_hash, parametry, prostředí),

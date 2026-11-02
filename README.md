@@ -115,9 +115,9 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 | E11 | AI Forensic Assistant (LM Studio) — nl_search/summary/explain s validovanými citacemi | ✅ |
 | E12 | GUI doplnění — System Diagnostics, Settings persistence, Cases CRUD | ✅ |
 
-> Reference validation (E13: benchmarky + regresní sada + SWGDE/NIST validace) = zbývající P3, viz `docs/DEVELOPMENT_ROADMAP.md`.
+> E13: benchmark engine + regresní sada + validační reporty = hotové v **P0 Core C6** (viz níže); zbývá externí reference validace (SWGDE/NIST datasety) jako P3, viz `docs/DEVELOPMENT_ROADMAP.md`.
 
-## Co umí (P0 Core — Evidence Model, Lineage, Integrity & Reproducibility, hotovo)
+## Co umí (P0 Core — Evidence Model, Lineage, Integrity, Reproducibility & Benchmark, hotovo)
 
 | Funkce | Popis | Stav |
 |---|---|---|
@@ -126,6 +126,7 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 | C3 Parser Validation Registry | Deklarativní registry 9 parserů (verze, formáty, omezení); synchronizace s pipeline (`RegistryError` při nesouladu) | ✅ |
 | C4 Evidence Integrity 2.0 | Hash chaining audit logu (v9, GENESIS→…); Ed25519 kontrolní body (po ingest/correlate/export + `stopa integrity --checkpoint`); podepsané export manifesty (deterministický hash) | ✅ |
 | C5 Reproducibility Engine | Každá extrakce se zaznamená (vstupy+SHA-256, verze parserů, config_hash, prostředí — v10 `analysis_operations`); `stopa replay <case> [op]` opakuje operaci v dočasné DB a porovná výsledek | ✅ |
+| C6 Benchmark Engine + validační reporty (E13) | Deterministické benchmarky (pipeline core + 9 parserů): čas, špičková RAM (tracemalloc), historie v `meta` + detekce regresí >20%; Evidence Validation Report per případ (parser × validace, coverage); `stopa benchmark`, `stopa validate` | ✅ |
 
 > P0 Core = doložitelnost + integrity důkazů: každý finding se dá dohledat ke zdroji, audit log je tamper-evidentní, exporty jsou reprodukovatelné a každou operaci lze opakovat a porovnat. Detail: `docs/STOPA_TARGET_ARCHITECTURE.md`, `docs/STOPA_SECURITY_MODEL.md`.
 
@@ -144,13 +145,15 @@ export STOPA_DB_DIR=~/stopa_cases   # kde se ukládají case DB (default: ./case
 .venv/bin/stopa image <case_id> /cesta/ke/obrazu.img [--no-carve]   # disk image (TSK)
 .venv/bin/stopa integrity <case_id> [--init-key | --checkpoint DUVOD]  # P0 C4 — hash chaining + Ed25519 kontrolní body
 .venv/bin/stopa replay <case_id> [op]                                  # P0 C5 — opakovat operaci + porovnání výsledků
+.venv/bin/stopa benchmark [case_id] [--suite core|parsers|all]         # P0 C6 — benchmarky + detekce regresí >20%
+.venv/bin/stopa validate <case_id> [--json]                            # P0 C6 — Evidence Validation Report (parser × validace)
 .venv/bin/stopa stats <case_id>
 ```
 
 ## Testy & lint
 
 ```bash
-.venv/bin/pytest -q        # 720 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze + P0 Core)
+.venv/bin/pytest -q        # 738 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze + P0 Core)
 .venv/bin/ruff check src tests
 ```
 

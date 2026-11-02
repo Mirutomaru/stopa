@@ -661,6 +661,74 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0 if (res.inputs_identical and res.outputs_identical) else 1
 
 
+def cmd_benchmark(args: argparse.Namespace) -> int:
+    """P0 Core C6 — Benchmark Engine: deterministické benchmarky + detekce regresí."""
+    from stopa.data.benchmark_engine import (
+        check_regressions,
+        run_benchmark,
+        save_history,
+    )
+
+    print(f"Benchmark suite: {args.suite}")
+    results = run_benchmark(suite=args.suite)
+    if not results:
+        print("Žádné výsledky (selhaly všechny workloads)", file=sys.stderr)
+        return 2
+
+    for r in results:
+        print(
+            f"  {r.name:<24} {r.duration_ms:>10.3f} ms | "
+            f"RAM peak {r.ram_peak_bytes / 1e6:>8.2f} MB | artefakty {r.artifacts}"
+        )
+
+    # historie + regresní detekce (jen s případem — meta benchmark_history)
+    if args.case_id:
+        db = _open_db(args.case_id)
+        warnings = check_regressions(db, results)
+        save_history(db, results)
+        db.log_operation(
+            "benchmark_run",
+            actor=case_examiner(db, args.case_id),
+            details={"suite": args.suite, "results": len(results)},
+        )
+        db.close()
+        if warnings:
+            print(f"\n⚠ Regrese výkonu (>20% proti baseline): {len(warnings)}")
+            for w in warnings:
+                print(
+                    f"  ! {w.name}: {w.baseline_ms:.3f} → {w.current_ms:.3f} ms "
+                    f"(+{w.delta_pct}%)"
+                )
+        else:
+            print("\nRegrese výkonu: žádná (baseline OK)")
+
+    return 0
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """P0 Core C6 — Evidence Validation Report per případ."""
+    from stopa.data.validation_report import build_validation_report, report_to_json
+
+    db = _open_db(args.case_id)
+    rep = build_validation_report(db, args.case_id)
+    cov = rep["coverage"]
+
+    print(f"Validační report: {args.case_id} ({rep['total_artifacts']} artefaktů)")
+    for status, n in sorted(rep["by_status"].items()):
+        print(f"  {status}: {n}")
+    print(
+        f"Coverage validace: {cov['covered_artifacts']}/{cov['total_artifacts']} "
+        f"({cov['coverage_pct']}%)"
+    )
+    if cov["uncovered_parsers"]:
+        print("Nepokrivené parsery: " + ", ".join(cov["uncovered_parsers"]))
+
+    if args.json:
+        print(report_to_json(rep))
+    db.close()
+    return 0
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     """E1 Evidence Manager: neměnná stopa operací (audit trail)."""
     db = _open_db(args.case_id)
@@ -836,6 +904,21 @@ def build_parser() -> argparse.ArgumentParser:
     rep_p.add_argument("op", nargs="?", default=None,
                        help="ID operace (default: poslední extract)")
     rep_p.set_defaults(func=cmd_replay)
+
+    bm_p = sub.add_parser(
+        "benchmark", help="P0 C6 — Benchmark Engine (deterministické benchmarky + regresní detekce)"
+    )
+    bm_p.add_argument("case_id", nargs="?", default=None,
+                      help="případ pro historii/regrese (volitelné)")
+    bm_p.add_argument("--suite", choices=["core", "parsers", "all"], default="core")
+    bm_p.set_defaults(func=cmd_benchmark)
+
+    val_p = sub.add_parser(
+        "validate", help="P0 C6 — Evidence Validation Report (parser × validace)"
+    )
+    val_p.add_argument("case_id")
+    val_p.add_argument("--json", action="store_true", help="kompletní report jako JSON")
+    val_p.set_defaults(func=cmd_validate)
 
     aud_p = sub.add_parser("audit", help="E1 — neměnná stopa operací (audit trail)")
     aud_p.add_argument("case_id")
