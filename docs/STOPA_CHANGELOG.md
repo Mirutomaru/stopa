@@ -1,0 +1,37 @@
+# STOPA — Changelog
+
+Formát: Conventional Commits + fáze. Nejnovější nahoře.
+
+## [Unreleased] — 2026-11-02 (ETAPA A–C)
+
+### Added (dokumentace)
+- `udelej.md` — master prompt STOPA Ultimate Forensic Platform (zadání)
+- `docs/STOPA_TECHNICAL_AUDIT.md` — ETAPA A: kompletní technický audit (ověřená čísla,
+  silné stránky, slabá místa S1–S11, návrhy architektonických změn)
+- `docs/STOPA_GAP_ANALYSIS.md` — ETAPA B: gap analysis vs. zadání §4–§20
+  (IMPLEMENTED/PARTIAL/MISSING/NEEDS VALIDATION/NOT RECOMMENDED + moduly/soubory)
+- `docs/STOPA_TARGET_ARCHITECTURE.md` — ETAPA C: cílová architektura, datové modely
+  (Unified Evidence Model, schéma v7), API kontrakty, závislosti, migrační strategie,
+  technologické vyhodnocení (§20)
+- `docs/STOPA_IMPLEMENTATION_ROADMAP.md` — ETAPA C: P0 Core (C1–C6), P0 Intelligence (I1–I5),
+  P1 zdroje (S1–S6), P1 Multimedia (M1–M4), P2 enterprise/workspace (E1–E5) + odhady
+- `docs/STOPA_VALIDATION_STRATEGY.md` — ETAPA C: Parser Validation Registry, referenční
+  datasety, Benchmark Engine, regresní sada, validační reporty, kritéria validace parseru
+- `docs/STOPA_SECURITY_MODEL.md` — ETAPA C: hrozby, Integrity 2.0 (hash chaining + Ed25519),
+  AI bezpečnost, web API, důvěryhodnost vstupů, kontrolní seznam commitů
+- `docs/STOPA_AI_ARCHITECTURE.md` — ETAPA C: multi-agent orchestrátor (5 agentů), Forensic RAG
+  (Case/Technical/Knowledge vrstvy), AI grounding (5 úrovní), modelová vrstva
+
+## [0.1.0] — 2026-11-02 (commit ae73ad0)
+
+### Fixed (E-audit + code review)
+- Path traversal case_id → `validate_case_id()` regex v open_db/delete_case
+- rel_path traversal → resolve()+prefix check; RFC 5987 Content-Disposition + CRLF hardening
+- RAM peak exportu → ranged read (seek+read) místo read_bytes()
+- Mrtvý kód sqlite_formatter wrapper; redundantní datetime importy v db.py
+- README test count; verze z jednoho zdroje (importlib.metadata)
+
+### Added
+- CI workflow od noly (ruff + pytest + JS DOM přes jsdom)
+- `tests/test_audit_fixes.py` — 15 testů audit oprav
+- Suite: **642 passed, 1 skipped**; ruff clean
