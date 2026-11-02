@@ -128,4 +128,6 @@ class ProcessResult(BaseModel):
     duplicates: int = 0
     hash_set_hits: int = 0
     artifacts_extracted: int = 0
+    # P0 Core C2: Evidence Lineage — ID extrahovaných artefaktů (output_refs kroku extract)
+    extracted_artifact_ids: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

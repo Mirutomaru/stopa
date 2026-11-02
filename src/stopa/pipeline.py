@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+import stopa as _stopa_pkg  # __version__ (single-source z pyproject)
 from stopa.artifacts.imessage_cloud import (
     PARSER_VERSION as IMESSAGE_CLOUD_VERSION,
 )
@@ -49,6 +50,7 @@ from stopa.data.ingest import WalkedFile, walk_source
 from stopa.domain.bad_extension import extension_of, is_bad_extension
 from stopa.domain.dedupe import Deduper
 from stopa.domain.hashing import hash_bytes, hash_file
+from stopa.domain.lineage import config_hash
 from stopa.domain.profiles import get_profile
 from stopa.domain.signatures import detect_signature
 from stopa.domain.timeline_anomaly import AnomalyContext, detect_anomalies
@@ -415,6 +417,8 @@ def process_source(
                         a.parser_version = parser_ver
                 db.replace_artifacts_for_file(file_id, arts)
                 result.artifacts_extracted += len(arts)
+                # P0 Core C2: Evidence Lineage — output_refs kroku extract (ID artefaktů)
+                result.extracted_artifact_ids.extend(a.id for a in arts)
 
                 # E2 Timeline Engine — materializace timeline + detekce nesrovnalostí.
                 for a in arts:
@@ -474,7 +478,30 @@ def process_source(
             "parser_versions": parser_versions(),
         },
     )
+    # P0 Core C2: Evidence Lineage — krok extrakce (zdroj → artefakty).
+    # Input = zdroj + zpracované soubory; output = ID extrahovaných artefaktů.
+    if result.artifacts_extracted or result.files_total:
+        db.log_lineage(
+            "extract",
+            case_id=_case_id_for_source(db, source_id),
+            tool_version=_stopa_pkg.__version__,
+            config_hash=config_hash({"profile": profile_name}),
+            input_refs=(source_id,),
+            output_refs=tuple(result.extracted_artifact_ids),
+            details={
+                "files_total": result.files_total,
+                "artifacts_extracted": result.artifacts_extracted,
+                "parser_versions": parser_versions(),
+            },
+        )
     return result
+
+
+def _case_id_for_source(db: CaseDB, source_id: str) -> str | None:
+    """Case ID zdroje pro lineage (None pokud zdroj neexistuje — defenzivní)."""
+    src = db.get_source(source_id)
+    return src.case_id if src else None
+
 
 
 def load_hash_sets(paths: list[Path]) -> dict[str, set[str]]:

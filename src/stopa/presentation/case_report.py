@@ -163,6 +163,8 @@ def generate_html_report(
         actor=data.examiner,
         details={"case_id": case_id, "format": "html", "path": str(out)},
     )
+    # P0 Core C2: Evidence Lineage — krok reportu (případ → výstupní soubor).
+    _log_report_lineage(db, case_id, "html", out)
     log.info("HTML report %s → %s", case_id, out)
     return out
 
@@ -190,8 +192,43 @@ def generate_pdf_report(
         "report_generated",
         details={"case_id": case_id, "format": "pdf", "path": str(out)},
     )
+    # P0 Core C2: Evidence Lineage — krok reportu (případ → výstupní soubor).
+    _log_report_lineage(db, case_id, "pdf", out)
     log.info("PDF report %s → %s", case_id, out)
     return out
+
+
+def _log_report_lineage(db: CaseDB, case_id: str, fmt: str, out: Path) -> None:
+    """P0 Core C2 — lineage krok pro vygenerovaný report.
+
+    Input = případ (jeho artefakty/korelace jsou výstupem předchozích kroků);
+    output = cesta k výstupnímu souboru. Defenzivní: selhání lineage nezastaví
+    samotný report (ten je už na disku).
+    """
+    try:
+        from stopa.domain.lineage import config_hash
+
+        db.log_lineage(
+            "report_generated",
+            case_id=case_id,
+            tool_version=_stopa_version(),
+            config_hash=config_hash({"format": fmt}),
+            input_refs=(f"case:{case_id}",),
+            output_refs=(str(out),),
+            details={"format": fmt},
+        )
+    except Exception:
+        log.warning("lineage krok reportu se nepodařilo zapsat", exc_info=True)
+
+
+def _stopa_version() -> str:
+    """Verze STOPA pro lineage (lazy import)."""
+    try:
+        from importlib.metadata import version
+
+        return version("stopa")
+    except Exception:  # noqa: BLE001 — dev run bez instalace / chybějící metadata
+        return "0.1.0"
 
 
 def default_report_name(case: str | None, fmt: str = "html") -> str:

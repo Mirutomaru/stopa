@@ -12,11 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from stopa.domain.evidence_model import ConfidenceLevel, Finding, Provenance
+from stopa.domain.lineage import LineageEvent
 from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -179,6 +180,23 @@ CREATE TABLE IF NOT EXISTS findings (
 );
 CREATE INDEX IF NOT EXISTS idx_findings_case ON findings(case_id);
 CREATE INDEX IF NOT EXISTS idx_findings_kind ON findings(kind);
+
+-- P0 Core C2: Evidence Lineage Engine — append-only řetězec původu zjištění.
+-- Každý krok (extract/correlate/finding/report) nese verzi nástroje, hash konfigurace
+-- a vstupní/výstupní reference → zpětné dohledání tvrzení v reportu až k důkazu.
+CREATE TABLE IF NOT EXISTS lineage_events (
+    id TEXT PRIMARY KEY,
+    case_id TEXT REFERENCES cases(id) ON DELETE CASCADE,  -- NULL = operace mimo konkrétní případ
+    op_type TEXT NOT NULL,  -- extract | correlate | finding_added | report_generated | …
+    tool_version TEXT,
+    config_hash TEXT,
+    input_refs_json TEXT NOT NULL DEFAULT '[]',
+    output_refs_json TEXT NOT NULL DEFAULT '[]',
+    details_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lineage_case ON lineage_events(case_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_op ON lineage_events(op_type);
 
 -- E1 Evidence Manager: custody items — metadata nabytí důkazu per source (průběžná evidence)
 CREATE TABLE IF NOT EXISTS custody_items (
@@ -990,6 +1008,25 @@ class CaseDB:
             ),
         )
         self.conn.commit()
+        # P0 Core C2: Evidence Lineage — krok finding_added (zdroj → zjištění).
+        # Input = source/file/record reference z provenance; output = ID findingu.
+        input_refs: list[str] = []
+        for p in finding.provenance:
+            if p.source_id:
+                input_refs.append(p.source_id)
+            if p.file_id:
+                input_refs.append(p.file_id)
+            if p.record_ref:  # reference na zdrojový záznam (řádek/klíč/event/artefakt ID)
+                input_refs.append(p.record_ref)
+        self.log_lineage(
+            "finding_added",
+            case_id=finding.case_id,
+            tool_version=None,  # finding je analytický krok bez konkrétního parseru
+            config_hash=None,
+            input_refs=tuple(dict.fromkeys(input_refs)),  # dedup + zachování pořadí
+            output_refs=(finding.id,),
+            details={"kind": finding.kind, "confidence_level": finding.confidence_level.value},
+        )
         return finding.id
 
     def list_findings(
@@ -1029,6 +1066,68 @@ class CaseDB:
         cur = self.conn.execute("DELETE FROM findings WHERE id = ?", (finding_id,))
         self.conn.commit()
         return cur.rowcount > 0
+
+    # ── P0 Core C2: Evidence Lineage Engine (lineage_events) ────────────────
+    def log_lineage(
+        self,
+        op_type: str,
+        *,
+        case_id: str | None = None,
+        tool_version: str | None = None,
+        config_hash: str | None = None,
+        input_refs: tuple[str, ...] | list[str] = (),
+        output_refs: tuple[str, ...] | list[str] = (),
+        details: dict | None = None,
+    ) -> str:
+        """Zaznamená jeden krok v řetězci důkazů (append-only). Vrací ID události."""
+        from stopa.domain.lineage import LineageEvent
+
+        ev = LineageEvent(
+            op_type=op_type,
+            case_id=case_id,
+            tool_version=tool_version,
+            config_hash=config_hash,
+            input_refs=tuple(input_refs),
+            output_refs=tuple(output_refs),
+            details_json=dict(details or {}),
+        )
+        self.conn.execute(
+            "INSERT INTO lineage_events (id, case_id, op_type, tool_version,"
+            " config_hash, input_refs_json, output_refs_json, details_json, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                ev.id,
+                ev.case_id,
+                ev.op_type,
+                ev.tool_version,
+                ev.config_hash,
+                json.dumps(list(ev.input_refs), ensure_ascii=False),
+                json.dumps(list(ev.output_refs), ensure_ascii=False),
+                json.dumps(ev.details_json, ensure_ascii=False),
+                _iso(ev.created_at) or datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        self.conn.commit()
+        return ev.id
+
+    def list_lineage(self, case_id: str | None = None) -> list[LineageEvent]:
+        """Všechny lineage události (volitelně jen pro případ), chronologicky."""
+        if case_id is not None:
+            rows = self.conn.execute(
+                "SELECT * FROM lineage_events WHERE case_id = ? ORDER BY created_at, id",
+                (case_id,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM lineage_events ORDER BY created_at, id"
+            ).fetchall()
+        return [_row_to_lineage_event(r) for r in rows]
+
+    def get_lineage_chain(self, ref: str) -> list[LineageEvent]:
+        """Zpětné dohledání řetězce pro referenci (vzor ``build_chain``)."""
+        from stopa.domain.lineage import build_chain
+
+        return build_chain(self, ref)
 
     # ── E2 Timeline Engine: materializovaná timeline (timeline_events) ───────
     def add_timeline_event(
@@ -1367,6 +1466,24 @@ def _row_to_finding(r: sqlite3.Row) -> Finding:
         confidence_level=ConfidenceLevel(r["confidence_level"]),
         provenance=[Provenance.model_validate(p) for p in json.loads(prov_raw or "[]")],
         details_json=json.loads(details_raw),
+        created_at=created if created is not None else datetime.now(timezone.utc),
+    )
+
+
+def _row_to_lineage_event(r: sqlite3.Row) -> LineageEvent:
+    """Řádek tabulky lineage_events → dataclass (P0 Core C2)."""
+    from stopa.domain.lineage import LineageEvent
+
+    created = datetime.fromisoformat(r["created_at"]) if r["created_at"] else None
+    return LineageEvent(
+        op_type=r["op_type"],
+        case_id=r["case_id"],
+        tool_version=r["tool_version"],
+        config_hash=r["config_hash"],
+        input_refs=tuple(json.loads(r["input_refs_json"] or "[]")),
+        output_refs=tuple(json.loads(r["output_refs_json"] or "[]")),
+        details_json=json.loads(r["details_json"] or "{}"),
+        id=r["id"],
         created_at=created if created is not None else datetime.now(timezone.utc),
     )
 

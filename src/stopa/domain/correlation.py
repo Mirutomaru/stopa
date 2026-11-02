@@ -25,7 +25,18 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from stopa.domain.entities import EntityOccurrence, collect_occurrences
+from stopa.domain.lineage import config_hash
 from stopa.models import FileRecord
+
+
+def _stopa_version() -> str:
+    """Verze STOPA pro lineage (lazy — domain zůstává bez tvrdé závislosti na metadatech)."""
+    try:
+        from importlib.metadata import version
+
+        return version("stopa")
+    except Exception:  # noqa: BLE001 — dev run bez instalace / chybějící metadata
+        return "0.1.0"
 
 # výchozí tolerance překryvu časových oken (aktivita na zařízeních se neshoduje v sekundu)
 DEFAULT_OVERLAP_TOLERANCE = timedelta(minutes=30)
@@ -292,8 +303,27 @@ def run_correlation(db, case_id: str, *, overlap_tolerance: timedelta = DEFAULT_
     n_entities = db.upsert_entities(case_id, entity_rows_from_occurrences(occurrences))
     results = correlate(occurrences, files, overlap_tolerance=overlap_tolerance)
     db.clear_correlations(case_id)
+    correlation_refs: list[str] = []
     for r in results:
-        db.add_correlation(case_id, r.entity_a, r.entity_b, r.relation, r.confidence, list(r.evidence))
+        row_id = db.add_correlation(case_id, r.entity_a, r.entity_b, r.relation, r.confidence, list(r.evidence))
+        correlation_refs.append(f"correlation:{row_id}")
+
+    # P0 Core C2: Evidence Lineage — krok korelace (artefakty → propojení).
+    # Input = artefakty z evidence listů; output = ID propojení.
+    artifact_refs: set[str] = set()
+    for r in results:
+        for ev in r.evidence:
+            if ev.get("artifact_id"):
+                artifact_refs.add(str(ev["artifact_id"]))
+    db.log_lineage(
+        "correlate",
+        case_id=case_id,
+        tool_version=_stopa_version(),
+        config_hash=config_hash({"overlap_tolerance_s": int(overlap_tolerance.total_seconds())}),
+        input_refs=tuple(sorted(artifact_refs)),
+        output_refs=tuple(correlation_refs),
+        details={"entities": n_entities, "correlations_total": len(results)},
+    )
 
     by_relation: dict[str, int] = {}
     for r in results:

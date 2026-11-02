@@ -1,4 +1,4 @@
-"""P0 Core C1 — Unified Evidence Model: modely, findings CRUD, migrace v6→v7."""
+"""P0 Core C1 — Unified Evidence Model: modely, findings CRUD, migrace v6→v8."""
 
 from __future__ import annotations
 
@@ -152,16 +152,16 @@ class TestFindingsCRUD:
             )
 
 
-# ── migrace v6 → v7 ────────────────────────────────────────────
+# ── migrace v6 → v8 ────────────────────────────────────────────
 
-class TestMigrationV7:
-    def test_new_db_at_v7(self, db: CaseDB):
-        assert db.schema_version() == SCHEMA_VERSION == 7
+class TestMigration:
+    def test_new_db_at_v8(self, db: CaseDB):
+        assert db.schema_version() == SCHEMA_VERSION == 8
         tables = {r[0] for r in db.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        assert "findings" in tables
+        assert "findings" in tables and "lineage_events" in tables
 
     def test_old_db_migrates_up(self, tmp_path: Path):
-        """Stará DB (v6 — bez findings a provenance sloupců) se migruje na v7."""
+        """Stará DB (v6 — bez findings a provenance sloupců) se migruje na aktuální schéma."""
         p = tmp_path / "old.db"
         conn = sqlite3.connect(p)
         # minimální v6 podmnožina: cases + artifacts bez nových sloupců

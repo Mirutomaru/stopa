@@ -4,6 +4,18 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (P0 Core C2 — Evidence Lineage Engine)
+- `domain/lineage.py` — `LineageEvent` (append-only krok: verze nástroje, hash konfigurace,
+  vstupní/výstupní reference), `config_hash()` (deterministický SHA-256 kanonické konfigurace),
+  `build_chain()` (zpětné dohledání řetězce zdroj → … → ref); čistá logika bez I/O
+- DB schéma **v8**: tabulka `lineage_events` + idempotentní migrace starých case DB
+- `CaseDB`: log_lineage / list_lineage (chronologicky) / get_lineage_chain (chain traversal)
+- Integrace do pipeline: krok `extract` (process_source, output_refs = ID artefaktů),
+  `correlate` (run_correlation, artefakty → propojení), `finding_added` (add_finding,
+  provenance refy → finding), `report_generated` (HTML/PDF report)
+- `ProcessResult.extracted_artifact_ids` — output refs extrakčního kroku
+- `tests/test_lineage.py` — 12 testů (model, CRUD, chain traversal, pipeline integrace, migrace v7→v8)
+
 ### Added (P0 Core C1 — Unified Evidence Model)
 - `domain/evidence_model.py` — ConfidenceLevel (5 úrovní AI grounding), Provenance, Finding
   (povinná provenance = doložitelnost); čistá logika bez I/O
