@@ -900,6 +900,13 @@ class CaseDB:
         rows = self.conn.execute(q, args).fetchall()
         return [_row_to_artifact(r) for r in rows]
 
+    def get_artifact(self, artifact_id: str) -> Artifact | None:
+        """Jeden artifact podle ID (E11 — AI explain režim); ``None`` = nenalezen."""
+        row = self.conn.execute(
+            "SELECT * FROM artifacts WHERE id = ?", (artifact_id,)
+        ).fetchone()
+        return _row_to_artifact(row) if row is not None else None
+
     # ── E2 Timeline Engine: materializovaná timeline (timeline_events) ───────
     def add_timeline_event(
         self,

@@ -32,6 +32,7 @@ async function renderModule() {
       case "entity-graph":    await renderEntityGraphModule(cid); break;
       case "correlation":     await renderCorrelation(cid); break;
       case "reporting":       await renderReporting(cid); break;
+      case "ai":              await renderAiModule(cid); break;
     }
   } catch (e) { toast(`⚠ ${e.message}`); }
 }

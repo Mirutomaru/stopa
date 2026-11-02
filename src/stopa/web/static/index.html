@@ -199,6 +199,25 @@
       <tbody></tbody>
     </table>
   </section>
+
+  <!-- ── AI ASSISTANT (E11) ─────────────────────── -->
+  <section id="mod-ai" class="module">
+    <div id="ai-status" class="card small"></div>
+    <div class="toolbar ai-toolbar">
+      <select id="ai-mode">
+        <option value="nl_search">🔎 Hledat (přirozená řeč)</option>
+        <option value="summary">📋 Shrnutí případu</option>
+        <option value="explain">💡 Vysvětlit artifact</option>
+      </select>
+      <input id="ai-question" placeholder="Např. „kde jsou fotky větší než 1 MB z března?“" autocomplete="off">
+      <button id="btn-ai-send" class="primary">▶ Zeptat se AI</button>
+    </div>
+    <div id="ai-explain-pick" class="hidden small muted">
+      Vyberte artifact v modulu Artifacts (kliknutím) nebo vložte jeho ID:
+      <input id="ai-artifact-id" placeholder="art-…" class="mono" autocomplete="off">
+    </div>
+    <div id="ai-chat"></div>
+  </section>
 </main>
 
 <!-- ══════════ PRAVÝ PANEL (FILE INSPECTOR drawer 360px) ══════════ -->
@@ -261,6 +280,7 @@
 <script src="/static/js/components/inspector.js"></script>
 <script src="/static/js/components/search.js"></script>
 <script src="/static/js/components/graph.js"></script>
+<script src="/static/js/components/ai.js"></script>
 <script src="/static/js/components/modules.js"></script>
 <script src="/static/app.js"></script>
 </body>

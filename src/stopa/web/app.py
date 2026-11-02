@@ -23,6 +23,15 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from stopa.data.db import CaseDB
+from stopa.data.lmstudio_client import LmStudioClient, LmStudioUnavailable
+from stopa.domain.ai_assistant import (
+    build_explain_prompt,
+    build_nl_search_prompt,
+    build_summary_prompt,
+    extract_citations,
+    parse_confidence,
+    parse_nl_search,
+)
 from stopa.domain.times import to_local_iso
 from stopa.models import Case, EvidenceSource
 from stopa.pipeline import process_source
@@ -48,6 +57,14 @@ class SourceIn(BaseModel):
     path: str
     profile: str = "forensic"
     resume: bool = False  # E3 checkpointing — přeskočit soubory už v DB
+
+
+class AiQueryIn(BaseModel):
+    """E11 — dotaz na AI asistenta (režim + parametry)."""
+
+    mode: str  # nl_search | summary | explain
+    question: str = ""  # nl_search: přirozená řeč; explain: volitelný kontext
+    artifact_id: str | None = None  # explain: který artifact vysvětlit
 
 
 def create_app(db_dir: Path | None = None) -> FastAPI:
@@ -523,6 +540,47 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
+    # ── E11 — AI Forensic Assistant (LM Studio) ───────────────
+    @app.get("/api/ai/status")
+    def ai_status() -> dict:
+        """Dostupnost LM Studio — GUI ukáže „AI nedostupná“ bez chyb."""
+        return LmStudioClient().health()
+
+    @app.post("/api/cases/{case_id}/ai/query")
+    def ai_query(case_id: str, body: AiQueryIn) -> dict:
+        """Jeden dotaz na AI asistenta (3 režimy).
+
+        - ``nl_search`` → vrácen i použitý STOPA FTS query + citace souborů
+        - ``summary``   → shrnutí případu s citacemi artifactů
+        - ``explain``   → vysvětlení jednoho artifactu (artifact_id)
+
+        Citace = validované ID (soubory/artifacty existují v DB); GUI je
+        vykreslí jako klikací odkazy na File Inspector.
+        """
+        if body.mode not in ("nl_search", "summary", "explain"):
+            raise HTTPException(400, f"neznámý režim: {body.mode}")
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            if case is None:
+                raise HTTPException(404, "případ neexistuje")
+
+            client = LmStudioClient()
+            health = client.health()
+            if not health["available"]:
+                raise HTTPException(503, "AI nedostupná — spusťte LM Studio (localhost:1234)")
+
+            try:
+                if body.mode == "nl_search":
+                    return _ai_nl_search(db, case_id, case.name, body.question, client)
+                if body.mode == "summary":
+                    return _ai_summary(db, case_id, case.name, client)
+                return _ai_explain(db, body.artifact_id, client)
+            except LmStudioUnavailable as exc:
+                raise HTTPException(503, str(exc)) from exc
+        finally:
+            db.close()
+
     # ── statická SPA ──────────────────────────────────────────
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -531,6 +589,85 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         return FileResponse(STATIC_DIR / "index.html")
 
     return app
+
+
+def _ai_nl_search(
+    db: CaseDB, case_id: str, case_name: str, question: str, client: LmStudioClient
+) -> dict:
+    """Režim ``nl_search`` — přirozená řeč → STOPA FTS query + výsledky.
+
+    Citace = soubory, které dotaz vrátil (GUI je propojí na File Inspector).
+    """
+    from stopa.domain.search_filters import SearchFilterError
+
+    if not question.strip():
+        raise HTTPException(400, "chybí otázka")
+    text = client.chat(build_nl_search_prompt(question, case_name))
+    query, explanation, confidence = parse_nl_search(text)
+    if not query:
+        raise HTTPException(502, f"AI nevrátila validní query (odpověď: {text[:160]!r})")
+
+    try:
+        records = db.search(query, limit=50)
+    except SearchFilterError as exc:
+        raise HTTPException(400, f"AI vygenerovala neplatný dotaz „{query}“: {exc}") from exc
+
+    citations = [
+        {"file_id": r.id, "rel_path": r.rel_path, "name": r.name} for r in records[:20]
+    ]
+    return {
+        "mode": "nl_search",
+        "answer": explanation or f"Vyhledáno: {query}",
+        "query": query,
+        "confidence": confidence,
+        "citations": citations,
+        "files": [r.model_dump(mode="json") for r in records],
+    }
+
+
+def _ai_summary(db: CaseDB, case_id: str, case_name: str, client: LmStudioClient) -> dict:
+    """Režim ``summary`` — shrnutí případu s citacemi artifactů ze vzorku."""
+    stats = db.stats()
+    art_stats = db.artifact_stats()
+    sample = [a.model_dump(mode="json") for a in db.list_artifacts(limit=15)]
+
+    text = client.chat(build_summary_prompt(case_name, stats, art_stats, sample))
+    valid_ids = {a["id"] for a in sample}
+    answer, cited = extract_citations(text, valid_ids)
+    by_id = {a["id"]: a for a in sample}
+    citations = [
+        {"artifact_id": aid, "title": by_id[aid].get("title"), "rel_path": by_id[aid].get("rel_path")}
+        for aid in cited
+    ]
+    return {
+        "mode": "summary",
+        "answer": answer or text.strip(),
+        "confidence": parse_confidence(text),
+        "citations": citations,
+    }
+
+
+def _ai_explain(db: CaseDB, artifact_id: str | None, client: LmStudioClient) -> dict:
+    """Režim ``explain`` — vysvětlení jednoho artifactu + citace na něj."""
+    if not artifact_id:
+        raise HTTPException(400, "chybí artifact_id")
+    art = db.get_artifact(artifact_id)
+    if art is None:
+        raise HTTPException(404, f"artifact {artifact_id} nenalezen")
+
+    payload = art.model_dump(mode="json")
+    text = client.chat(build_explain_prompt(payload))
+    answer, cited = extract_citations(text, {art.id})
+    return {
+        "mode": "explain",
+        "answer": answer or text.strip(),
+        "confidence": parse_confidence(text),
+        "citations": (
+            [{"artifact_id": art.id, "title": art.title, "rel_path": art.rel_path}]
+            if cited
+            else []
+        ),
+    }
 
 
 def build_report_data_safe(db: CaseDB, case_id: str):

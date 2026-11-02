@@ -15,7 +15,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.4"]
 pdf = ["weasyprint>=62"]  # FÁZE 7 — PDF reporty (volitelné; HTML vždy funguje)
-web = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]  # web GUI — FastAPI nad analyze()
+web = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "httpx>=0.27"]  # web GUI — FastAPI nad analyze() + E11 LM Studio klient
 fde = ["cryptography>=42"]  # FÁZE 6b — AES-256-CBC dešifrování mobilních FDE obrazů
 tsk = ["pytsk3>=20260715"]  # A2 — nativní TSK bindingy (primární backend; fallback na CLI binárky)
 xlsx = ["openpyxl>=3.1"]  # iMessage cloud — XLSX varianta iCloud Messages exportu (warrant return)
