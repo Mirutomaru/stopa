@@ -4,6 +4,18 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (P0 Core C3 — Parser Validation Registry)
+- `domain/validation_registry.py` — `ParserValidation` (parser_id, verze, formáty,
+  omezení, referenční dataset, test files), deklarativní registry pro všech 9 parserů
+  (sqlite, registry_hive, plist, lnk, win_prefetch, evtx, icloud_messages, win_jumplist,
+  win_usn) s formáty a omezeními dle docstringů parserů
+- `build_registry()` — synchronizace s pipeline (`parser_versions()`): každý extraktor má
+  záznam v registry a naopak, verze se shodují; nesoulad → `RegistryError`; lazy import
+  (domain bez tvrdé závislosti na pipeline)
+- `registry_report()` — shrnutí registry pro CLI/GUI
+- `tests/test_validation_registry.py` — 10 testů (sync s pipeline, verze, chybějící
+  extraktor/záznam, version mismatch, frozen model, report); suite 668 → 678 passed
+
 ### Added (P0 Core C2 — Evidence Lineage Engine)
 - `domain/lineage.py` — `LineageEvent` (append-only krok: verze nástroje, hash konfigurace,
   vstupní/výstupní reference), `config_hash()` (deterministický SHA-256 kanonické konfigurace),
