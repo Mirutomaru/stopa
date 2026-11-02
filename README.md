@@ -117,7 +117,7 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 
 > E13: benchmark engine + regresní sada + validační reporty = hotové v **P0 Core C6** (viz níže); zbývá externí reference validace (SWGDE/NIST datasety) jako P3, viz `docs/DEVELOPMENT_ROADMAP.md`.
 
-## Co umí (P0 Core — Evidence Model, Lineage, Integrity, Reproducibility & Benchmark, hotovo)
+## Co umí (P0 Core + P0 Intelligence — Evidence Model, Lineage, Integrity, Reproducibility, Benchmark & AI orchestrace, hotovo)
 
 | Funkce | Popis | Stav |
 |---|---|---|
@@ -127,8 +127,9 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 | C4 Evidence Integrity 2.0 | Hash chaining audit logu (v9, GENESIS→…); Ed25519 kontrolní body (po ingest/correlate/export + `stopa integrity --checkpoint`); podepsané export manifesty (deterministický hash) | ✅ |
 | C5 Reproducibility Engine | Každá extrakce se zaznamená (vstupy+SHA-256, verze parserů, config_hash, prostředí — v10 `analysis_operations`); `stopa replay <case> [op]` opakuje operaci v dočasné DB a porovná výsledek | ✅ |
 | C6 Benchmark Engine + validační reporty (E13) | Deterministické benchmarky (pipeline core + 9 parserů): čas, špičková RAM (tracemalloc), historie v `meta` + detekce regresí >20%; Evidence Validation Report per případ (parser × validace, coverage); `stopa benchmark`, `stopa validate` | ✅ |
+| I1 AI orchestrace (P0 Intelligence) | 5 deklarativních agentů (case/timeline/artifact/media/report analyst) s Pydantic výstupy; auto/explicitní routing; fail-closed validace LLM výstupu + citace `[art:<id>]`; read-only `CaseContext` snapshot; `stopa analyze`, `POST /api/cases/{id}/ai/analyze`; AI zůstává volitelná (injektovatelný `llm_call`) | ✅ |
 
-> P0 Core = doložitelnost + integrity důkazů: každý finding se dá dohledat ke zdroji, audit log je tamper-evidentní, exporty jsou reprodukovatelné a každou operaci lze opakovat a porovnat. Detail: `docs/STOPA_TARGET_ARCHITECTURE.md`, `docs/STOPA_SECURITY_MODEL.md`.
+> P0 Core = doložitelnost + integrity důkazů: každý finding se dá dohledat ke zdroji, audit log je tamper-evidentní, exporty jsou reprodukovatelné a každou operaci lze opakovat a porovnat. **P0 Intelligence** navazuje AI vrstvou nad jádrem (AI není povinná závislost). Detail: `docs/STOPA_TARGET_ARCHITECTURE.md`, `docs/STOPA_SECURITY_MODEL.md`, `docs/STOPA_AI_ARCHITECTURE.md`.
 
 ## Rychlý start
 
@@ -147,13 +148,14 @@ export STOPA_DB_DIR=~/stopa_cases   # kde se ukládají case DB (default: ./case
 .venv/bin/stopa replay <case_id> [op]                                  # P0 C5 — opakovat operaci + porovnání výsledků
 .venv/bin/stopa benchmark [case_id] [--suite core|parsers|all]         # P0 C6 — benchmarky + detekce regresí >20%
 .venv/bin/stopa validate <case_id> [--json]                            # P0 C6 — Evidence Validation Report (parser × validace)
+.venv/bin/stopa analyze <case_id> "dotaz" [--agent X] [--json]         # P0 Intelligence I1 — AI orchestrace (5 agentů, auto/explicitní routing)
 .venv/bin/stopa stats <case_id>
 ```
 
 ## Testy & lint
 
 ```bash
-.venv/bin/pytest -q        # 738 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze + P0 Core)
+.venv/bin/pytest -q        # 763 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze + P0 Core + P0 Intelligence)
 .venv/bin/ruff check src tests
 ```
 

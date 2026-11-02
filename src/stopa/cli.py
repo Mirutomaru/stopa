@@ -729,6 +729,65 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_analyze(args: argparse.Namespace) -> int:
+    """P0 Intelligence I1 — AI orchestrace (5 agentů, auto/explicitní routing)."""
+    import json as _json
+
+    from stopa.data.lmstudio_client import LmStudioClient, LmStudioUnavailable
+    from stopa.intelligence import OrchestrationError, build_case_context, orchestrate
+
+    db = _open_db(args.case_id)
+    try:
+        client = LmStudioClient()
+        health = client.health()
+        if not health["available"]:
+            print("AI nedostupná — spusťte LM Studio (localhost:1234)")
+            return 1
+
+        context = build_case_context(db, args.case_id)
+        try:
+            result = orchestrate(client.chat, context, args.question, agent_id=args.agent)
+        except LmStudioUnavailable as exc:
+            print(f"AI nedostupná: {exc}")
+            return 1
+        except OrchestrationError as exc:
+            print(f"AI orchestrace selhala: {exc}")
+            return 1
+
+        db.log_operation(
+            "ai_analyzed",
+            actor="cli",
+            details={
+                "agent": result.agent_id,
+                "question": args.question[:200],
+                "citations": result.citations,
+                "duration_ms": round(result.duration_ms, 1),
+            },
+        )
+
+        if args.json:
+            print(
+                _json.dumps(
+                    {
+                        "agent": result.agent_id,
+                        "output": result.output.model_dump(mode="json"),
+                        "citations": result.citations,
+                        "prompt_chars": result.prompt_chars,
+                        "duration_ms": round(result.duration_ms, 1),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        else:
+            print(f"Agent: {result.agent_id} ({result.duration_ms:.0f} ms)")
+            print(_json.dumps(result.output.model_dump(mode="json"), ensure_ascii=False, indent=2))
+            if result.citations:
+                print("Citace: " + ", ".join(result.citations))
+        return 0
+    finally:
+        db.close()
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     """E1 Evidence Manager: neměnná stopa operací (audit trail)."""
     db = _open_db(args.case_id)
@@ -919,6 +978,20 @@ def build_parser() -> argparse.ArgumentParser:
     val_p.add_argument("case_id")
     val_p.add_argument("--json", action="store_true", help="kompletní report jako JSON")
     val_p.set_defaults(func=cmd_validate)
+
+    ana_p = sub.add_parser(
+        "analyze", help="P0 Intelligence I1 — AI orchestrace (5 agentů, auto/explicitní routing)"
+    )
+    ana_p.add_argument("case_id")
+    ana_p.add_argument("question", help="analytický dotaz (čeština)")
+    ana_p.add_argument(
+        "--agent",
+        choices=["case_analyst", "timeline_analyst", "artifact_analyst", "media_analyst", "report_analyst"],
+        default=None,
+        help="explicitní agent (default: auto-routing podle dotazu)",
+    )
+    ana_p.add_argument("--json", action="store_true", help="výsledek jako JSON")
+    ana_p.set_defaults(func=cmd_analyze)
 
     aud_p = sub.add_parser("audit", help="E1 — neměnná stopa operací (audit trail)")
     aud_p.add_argument("case_id")

@@ -82,6 +82,16 @@ class AiQueryIn(BaseModel):
     artifact_id: str | None = None  # explain: který artifact vysvětlit
 
 
+class AiAnalyzeIn(BaseModel):
+    """P0 Intelligence I1 — analytický úkol pro AI orchestraci.
+
+    ``agent`` je volitelné (None = auto-routing podle dotazu).
+    """
+
+    question: str
+    agent: str | None = None  # case_analyst|timeline_analyst|artifact_analyst|media_analyst|report_analyst
+
+
 class SettingsIn(BaseModel):
     """E12 — uživatelská nastavení (jen zadaná pole se uloží)."""
 
@@ -621,6 +631,59 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 return _ai_explain(db, body.artifact_id, client)
             except LmStudioUnavailable as exc:
                 raise HTTPException(503, str(exc)) from exc
+        finally:
+            db.close()
+
+    # ── P0 Intelligence I1 — AI orchestrace (multi-agent) ───────────────
+    @app.post("/api/cases/{case_id}/ai/analyze")
+    def ai_analyze(case_id: str, body: AiAnalyzeIn) -> dict:
+        """Analytický úkol přes AI orchestraci (5 agentů).
+
+        Explicitní ``agent`` má přednost; jinak auto-routing podle dotazu.
+        Výstup = validovaný JSON modelu vybraného agenta + auditní metadata
+        (citace, délka promptu, doba inference). Fail-closed: nevalidní
+        odpověď LLM → 502 s úryvkem (auditovatelné).
+        """
+        from stopa.intelligence import OrchestrationError, build_case_context, orchestrate
+
+        if not body.question.strip():
+            raise HTTPException(400, "chybí otázka")
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            if case is None:
+                raise HTTPException(404, "případ neexistuje")
+
+            client = LmStudioClient()
+            health = client.health()
+            if not health["available"]:
+                raise HTTPException(503, "AI nedostupná — spusťte LM Studio (localhost:1234)")
+
+            context = build_case_context(db, case_id)
+            try:
+                result = orchestrate(client.chat, context, body.question, agent_id=body.agent)
+            except LmStudioUnavailable as exc:
+                raise HTTPException(503, str(exc)) from exc
+            except OrchestrationError as exc:
+                raise HTTPException(502, f"AI orchestrace selhala: {exc}") from exc
+
+            db.log_operation(
+                "ai_analyzed",
+                actor="web",
+                details={
+                    "agent": result.agent_id,
+                    "question": body.question[:200],
+                    "citations": result.citations,
+                    "duration_ms": round(result.duration_ms, 1),
+                },
+            )
+            return {
+                "agent": result.agent_id,
+                "output": result.output.model_dump(mode="json"),
+                "citations": result.citations,
+                "prompt_chars": result.prompt_chars,
+                "duration_ms": round(result.duration_ms, 1),
+            }
         finally:
             db.close()
 

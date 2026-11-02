@@ -4,6 +4,25 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (P0 Intelligence I1 — AI orchestrace, multi-agent)
+- `intelligence/agents.py` — 5 deklarativních `AgentProfile` (case_analyst,
+  timeline_analyst, artifact_analyst, media_analyst, report_analyst): system prompt,
+  popis vstupů, Pydantic výstupní model (`CaseAnalystOutput`, `TimelineAnalystOutput`,
+  `ArtifactAnalystOutput`, `MediaAnalystOutput`, `ReportAnalystOutput`), max_tokens/timeout;
+  žádná autonomní smyčka — jeden LLM call na úkol
+- `intelligence/case_context.py` — `CaseContext` (frozen read-only snapshot: stats,
+  findings, timeline events, sample artifacts) + `build_case_context(db, case_id)`
+  s limity velikosti pro prompt; čistá logika orchestrace DB nevidí
+- `intelligence/ai_orchestrator.py` — `route_agent()` (explicitní volba > auto-routing
+  podle klíčových slov), `build_prompt()`, `parse_output()` (**fail-closed**: JSON →
+  Pydantic validace, zvládne markdown fence + proza kolem), `extract_citations()`
+  ([art:<id>]/[file:<id>]), `AgentResult` (audit: prompt_chars, duration_ms, raw_text)
+  a `orchestrate(llm_call, context, question)` — `llm_call` je injektovatelný callable,
+  celá orchestrace se testuje offline bez LM Studio
+- Web: nový endpoint **`POST /api/cases/{case_id}/ai/analyze`** (agent volitelný,
+  audit záznam `ai_analyzed`, nevalidní výstup LLM → 502)
+- CLI: nový subpříkaz **`stopa analyze <case> "dotaz" [--agent X] [--json]`**
+
 ### Added (P0 Core C6 — Benchmark Engine + validační reporty / E13)
 - `domain/benchmark.py` — čistá logika bez I/O: `BenchmarkResult` (frozen dataclass:
   name, suite, duration_ms, ram_peak_bytes, artifacts, iterations), `RegressionWarning`,
