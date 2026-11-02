@@ -156,7 +156,7 @@ class TestFindingsCRUD:
 
 class TestMigration:
     def test_new_db_at_current(self, db: CaseDB):
-        assert db.schema_version() == SCHEMA_VERSION == 9
+        assert db.schema_version() == SCHEMA_VERSION
         tables = {r[0] for r in db.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert "findings" in tables and "lineage_events" in tables
 

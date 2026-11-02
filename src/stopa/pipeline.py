@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import logging
 import os
+import tempfile
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -52,6 +54,12 @@ from stopa.domain.dedupe import Deduper
 from stopa.domain.hashing import hash_bytes, hash_file
 from stopa.domain.lineage import config_hash
 from stopa.domain.profiles import get_profile
+from stopa.domain.reproducibility import (
+    AnalysisOperation,
+    ReplayResult,
+    compare_outputs,
+    verify_inputs,
+)
 from stopa.domain.signatures import detect_signature
 from stopa.domain.timeline_anomaly import AnomalyContext, detect_anomalies
 from stopa.models import Artifact, FileRecord, ProcessingProfile, ProcessResult
@@ -136,6 +144,26 @@ def parser_versions() -> dict[str, str]:
     """Verze všech registrovaných parserů — pro audit log (reprodukovatelnost)."""
     return {sig: ver for sig, (_fn, ver) in ARTIFACT_EXTRACTORS.items()} | {
         name: ver for name, (_fn, ver) in NAME_BASED_EXTRACTORS.items()
+    }
+
+
+def summarize_outputs(result: ProcessResult) -> dict:
+    """Deterministický souhrn výsledku pro porovnání při replay (P0 Core C5).
+
+    Obsahuje jen stabilní počty — ne ID ani časy, aby stejný vstup na stejném
+    prostředí vždy dal stejný souhrn (determinismus porovnání).
+    """
+    return {
+        "files_total": result.files_total,
+        "bytes_total": result.bytes_total,
+        "hashed_md5": result.hashed_md5,
+        "hashed_sha256": result.hashed_sha256,
+        "signatures_detected": result.signatures_detected,
+        "bad_extensions": result.bad_extensions,
+        "duplicates": result.duplicates,
+        "hash_set_hits": result.hash_set_hits,
+        "artifacts_extracted": result.artifacts_extracted,
+        "errors": len(result.errors),
     }
 
 
@@ -287,6 +315,7 @@ def process_source(
     """
     profile = get_profile(profile_name)
     result = ProcessResult(source_id=source_id, profile=profile.name)
+    _t0 = time.monotonic()  # P0 Core C5: čas zpracování operace (reproducibility)
 
     # E1 Evidence Manager: neměnná stopa operací (provenience — SWGDE-style)
     db.log_operation(
@@ -494,6 +523,27 @@ def process_source(
                 "parser_versions": parser_versions(),
             },
         )
+    # P0 Core C5: Reproducibility Engine — záznam operace pro opakování + porovnání.
+    # Vstupní soubory se SHA-256 (z DB po upsertu) → replay ověří, že se zpracovává totéž.
+    input_files = [
+        {"rel_path": r["rel_path"], "sha256": r["sha256"]}
+        for r in db.conn.execute(
+            "SELECT rel_path, sha256 FROM files WHERE source_id = ? ORDER BY rel_path",
+            (source_id,),
+        ).fetchall()
+    ]
+    db.record_operation(
+        "extract",
+        case_id=_case_id_for_source(db, source_id),
+        source_id=source_id,
+        input_files=input_files,
+        parser_versions=parser_versions(),
+        stopa_version=_stopa_pkg.__version__,
+        config_hash=config_hash({"profile": profile_name}),
+        params={"profile": profile_name},
+        outputs=summarize_outputs(result),
+        duration_ms=int((time.monotonic() - _t0) * 1000),
+    )
     return result
 
 
@@ -502,6 +552,61 @@ def _case_id_for_source(db: CaseDB, source_id: str) -> str | None:
     src = db.get_source(source_id)
     return src.case_id if src else None
 
+
+def replay_extract(
+    op: AnalysisOperation, root: Path, workdir: Path | None = None
+) -> ReplayResult:
+    """Opakuje zaznamenanou extrakci a porovná výsledek s původním (P0 Core C5).
+
+    1. ověří vstupní soubory (SHA-256 na disku vs. záznam operace),
+    2. spustí ``process_source`` do ČISTÉ dočasné DB (původní případ se nedotkne —
+       „nikdy neměň originální důkazní data"),
+    3. porovná deterministický souhrn výstupů s původním záznamem.
+
+    ``workdir`` — kde leží dočasná DB (default: systémový tmp). Volání zavře
+    dočasnou DB; soubor zůstává pro inspekcí (volající ho smaže, pokud chce).
+    """
+    from stopa.data.db import CaseDB as _CaseDB  # lokální — bez cyklu při importu
+    from stopa.models import Case, EvidenceSource
+
+    t0 = time.monotonic()
+    profile_name = op.params_json.get("profile", "forensic")
+
+    # 1) vstupní ověření — aktuální hashe na disku (jen soubory ze záznamu)
+    current_hashes: dict[str, str | None] = {}
+    for f in op.input_files:
+        p = root / f["rel_path"] if not root.is_file() else root
+        try:
+            digests = hash_file(p, ["sha256"])
+            current_hashes[f["rel_path"]] = digests.get("sha256")
+        except OSError:
+            current_hashes[f["rel_path"]] = None  # soubor zmizel / nečitelný
+    inputs_ok, input_diffs = verify_inputs(list(op.input_files), current_hashes)
+
+    # 2) čistá dočasná DB — původní případ se nedotkne (append-only evidence)
+    tmp_db_path = Path(workdir or tempfile.gettempdir()) / f"stopa-replay-{op.id}.db"
+    replay_db = _CaseDB(tmp_db_path)
+    try:
+        case = Case(name=f"replay {op.op_type} {op.id}")
+        replay_db.add_case(case)
+        src = EvidenceSource(
+            case_id=case.id, kind="folder", path=str(root), size_bytes=None
+        )
+        replay_db.add_source(src)
+        result = process_source(replay_db, src.id, root, profile_name=profile_name)
+    finally:
+        replay_db.close()
+
+    # 3) porovnání výstupů — deterministický souhrn vs. původní záznam
+    report = compare_outputs(op.outputs_json, summarize_outputs(result))
+    return ReplayResult(
+        op_id=op.id,
+        inputs_identical=inputs_ok,
+        input_diffs=input_diffs,
+        outputs_identical=report.identical,
+        output_diffs=report.diffs,
+        duration_ms=int((time.monotonic() - t0) * 1000),
+    )
 
 
 def load_hash_sets(paths: list[Path]) -> dict[str, set[str]]:

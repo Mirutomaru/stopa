@@ -4,6 +4,25 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (P0 Core C5 — Reproducibility Engine)
+- `domain/reproducibility.py` — čistá logika bez I/O: `AnalysisOperation` (frozen dataclass:
+  vstupní soubory + SHA-256, verze parserů, verze STOPA, config_hash, parametry, prostředí),
+  `env_snapshot()` (python/platform/sqlite), deterministické `compare_outputs()` →
+  `ComparisonReport`, `verify_inputs()` (změna/ztráta/přidání vstupního souboru)
+- DB schéma **v9 → v10**: nová tabulka `analysis_operations` + idempotentní migrace sloupce
+  `params_json`; metody `record_operation()` / `get_operation()` / `list_operations(case_id, op_type)`
+- `pipeline.process_source()` nyní zaznamenává každou extrakci: vstupní soubory se SHA-256,
+  verze parserů, config_hash profilu, parametry, deterministický souhrn výstupů
+  (`summarize_outputs()` — jen stabilní počty, bez ID/časů) + `duration_ms`
+- `pipeline.replay_extract(op, root)` — ověří hashe vstupů, spustí extrakci v dočasné DB
+  (původní případ se nedotkne), porovná souhrny → `ReplayResult(inputs_identical, outputs_identical, diffs)`
+- CLI: nový subpříkaz **`stopa replay <case_id> [op]`** — opakování zaznamenané operace +
+  lidsky čitelný report (vstupy OK/ZMĚNĚNY, výstup IDENTICKÝ/LIŠÍ), audit záznam
+  `operation_replayed`, exit code 0/1
+- `tests/test_reproducibility.py` — 20 testů (čistá logika: porovnání/ověření vstupů/model/env;
+  DB integrace: roundtrip/filtry/migrace v9→v10; pipeline: záznam operace, replay identický,
+  detekce změněného i zmizelého souboru, determinismus souhrnu); suite 700 → **720 passed**
+
 ### Added (P0 Core C4 — Evidence Integrity 2.0)
 - `domain/integrity.py` — čistá logika bez I/O: **hash chaining** audit logu
   (`compute_audit_hash`, `verify_chain` s detekcí rozbitého řetězce + ID prvního

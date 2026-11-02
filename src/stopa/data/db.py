@@ -21,11 +21,12 @@ from stopa.domain.integrity import (
     verify_chain,
 )
 from stopa.domain.lineage import LineageEvent
+from stopa.domain.reproducibility import AnalysisOperation, env_snapshot
 from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -222,6 +223,27 @@ CREATE TABLE IF NOT EXISTS integrity_checkpoints (
     reason TEXT                     -- ingest | correlate | export | manual | …
 );
 
+-- P0 Core C5: Reproducibility Engine — záznamy analytických operací.
+-- Každá operace nese vstupní soubory + hashe, verze parserů/STOPA, hash konfigurace,
+-- deterministický souhrn výstupů a prostředí → opakovatelnost + porovnání výsledků.
+CREATE TABLE IF NOT EXISTS analysis_operations (
+    id TEXT PRIMARY KEY,
+    case_id TEXT REFERENCES cases(id) ON DELETE CASCADE,  -- NULL = operace mimo konkrétní případ
+    op_type TEXT NOT NULL,          -- extract | correlate | …
+    source_id TEXT,                 -- zdroj operace (extract → evidence source)
+    input_files_json TEXT NOT NULL DEFAULT '[]',   -- [{rel_path, sha256}] vstupních souborů
+    parser_versions_json TEXT NOT NULL DEFAULT '{}',  -- verze všech parserů v době běhu
+    stopa_version TEXT,             -- verze STOPA (single-source z pyproject)
+    config_hash TEXT,               -- SHA-256 normalizované konfigurace (profil + parametry)
+    params_json TEXT NOT NULL DEFAULT '{}',  -- parametry operace pro replay (profil, …)
+    outputs_json TEXT NOT NULL DEFAULT '{}',  -- deterministický souhrn výsledku (porovnání replay)
+    duration_ms INTEGER,            -- čas zpracování v ms
+    env_json TEXT NOT NULL DEFAULT '{}',      -- prostředí: python / platforma / sqlite
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ops_case ON analysis_operations(case_id);
+CREATE INDEX IF NOT EXISTS idx_ops_type ON analysis_operations(op_type);
+
 -- E1 Evidence Manager: custody items — metadata nabytí důkazu per source (průběžná evidence)
 CREATE TABLE IF NOT EXISTS custody_items (
     source_id TEXT PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
@@ -319,6 +341,13 @@ class CaseDB:
                 self.conn.commit()
         # P0 Core C4: Evidence Integrity 2.0 — hash chaining audit logu (sloupce + backfill).
         self._migrate_audit_chain()
+        # P0 Core C5: Reproducibility Engine — stará DB bez sloupce params_json.
+        ops_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(analysis_operations)").fetchall()}
+        if "params_json" not in ops_cols:
+            self.conn.execute(
+                "ALTER TABLE analysis_operations ADD COLUMN params_json TEXT NOT NULL DEFAULT '{}'"
+            )
+            self.conn.commit()
         # FÁZE 3 backfill: staré case DB (bez FTS indexu) — jednou doindexovat existující řádky.
         # 'rebuild' u external-content FTS5 přečte obsah přímo z tabulky `files`.
         # Meta-flaga je spolehlivější než COUNT(*) (external-content stíny po delete).
@@ -1322,6 +1351,88 @@ class CaseDB:
 
         return build_chain(self, ref)
 
+    # ── P0 Core C5: Reproducibility Engine (analysis_operations) ───────────
+    def record_operation(
+        self,
+        op_type: str,
+        *,
+        case_id: str | None = None,
+        source_id: str | None = None,
+        input_files: list[dict[str, str | None]] | None = None,
+        parser_versions: dict[str, str] | None = None,
+        stopa_version: str | None = None,
+        config_hash: str | None = None,
+        params: dict | None = None,
+        outputs: dict | None = None,
+        duration_ms: int | None = None,
+    ) -> str:
+        """Zaznamená analytickou operaci pro opakování + porovnání (append-only).
+
+        Vrací ID operace. ``input_files`` — vstupní soubory se SHA-256 hashi;
+        ``outputs`` — deterministický souhrn výsledku (porovnání při replay).
+        """
+        op = AnalysisOperation(
+            op_type=op_type,
+            case_id=case_id,
+            source_id=source_id,
+            input_files=tuple(input_files or ()),
+            parser_versions=dict(parser_versions or {}),
+            stopa_version=stopa_version,
+            config_hash=config_hash,
+            params_json=dict(params or {}),
+            outputs_json=dict(outputs or {}),
+            duration_ms=duration_ms,
+            env_json=env_snapshot(),
+        )
+        self.conn.execute(
+            "INSERT INTO analysis_operations (id, case_id, op_type, source_id,"
+            " input_files_json, parser_versions_json, stopa_version, config_hash,"
+            " params_json, outputs_json, duration_ms, env_json, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                op.id,
+                op.case_id,
+                op.op_type,
+                op.source_id,
+                json.dumps(list(op.input_files), ensure_ascii=False),
+                json.dumps(op.parser_versions, ensure_ascii=False, sort_keys=True),
+                op.stopa_version,
+                op.config_hash,
+                json.dumps(op.params_json, ensure_ascii=False, sort_keys=True),
+                json.dumps(op.outputs_json, ensure_ascii=False, sort_keys=True),
+                op.duration_ms,
+                json.dumps(op.env_json, ensure_ascii=False, sort_keys=True),
+                _iso(op.created_at) or datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        self.conn.commit()
+        return op.id
+
+    def list_operations(
+        self, case_id: str | None = None, op_type: str | None = None
+    ) -> list[AnalysisOperation]:
+        """Záznamy operací (chronologicky); volitelně filtrované případem / typem."""
+        sql = "SELECT * FROM analysis_operations"
+        clauses: list[str] = []
+        params: list[str] = []
+        if case_id is not None:
+            clauses.append("case_id = ?")
+            params.append(case_id)
+        if op_type is not None:
+            clauses.append("op_type = ?")
+            params.append(op_type)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY created_at, id"
+        return [_row_to_analysis_operation(r) for r in self.conn.execute(sql, params).fetchall()]
+
+    def get_operation(self, op_id: str) -> AnalysisOperation | None:
+        """Jeden záznam operace podle ID (None pokud neexistuje)."""
+        row = self.conn.execute(
+            "SELECT * FROM analysis_operations WHERE id = ?", (op_id,)
+        ).fetchone()
+        return _row_to_analysis_operation(row) if row else None
+
     # ── E2 Timeline Engine: materializovaná timeline (timeline_events) ───────
     def add_timeline_event(
         self,
@@ -1676,6 +1787,26 @@ def _row_to_lineage_event(r: sqlite3.Row) -> LineageEvent:
         input_refs=tuple(json.loads(r["input_refs_json"] or "[]")),
         output_refs=tuple(json.loads(r["output_refs_json"] or "[]")),
         details_json=json.loads(r["details_json"] or "{}"),
+        id=r["id"],
+        created_at=created if created is not None else datetime.now(timezone.utc),
+    )
+
+
+def _row_to_analysis_operation(r: sqlite3.Row) -> AnalysisOperation:
+    """Řádek tabulky analysis_operations → dataclass (P0 Core C5)."""
+    created = datetime.fromisoformat(r["created_at"]) if r["created_at"] else None
+    return AnalysisOperation(
+        op_type=r["op_type"],
+        case_id=r["case_id"],
+        source_id=r["source_id"],
+        input_files=tuple(json.loads(r["input_files_json"] or "[]")),
+        parser_versions=json.loads(r["parser_versions_json"] or "{}"),
+        stopa_version=r["stopa_version"],
+        config_hash=r["config_hash"],
+        params_json=json.loads(r["params_json"] or "{}"),
+        outputs_json=json.loads(r["outputs_json"] or "{}"),
+        duration_ms=r["duration_ms"],
+        env_json=json.loads(r["env_json"] or "{}"),
         id=r["id"],
         created_at=created if created is not None else datetime.now(timezone.utc),
     )

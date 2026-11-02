@@ -603,6 +603,64 @@ def cmd_integrity(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def cmd_replay(args: argparse.Namespace) -> int:
+    """P0 Core C5 — Reproducibility Engine: opakovat zaznamenanou operaci + porovnání."""
+    from stopa.pipeline import replay_extract
+
+    db = _open_db(args.case_id)
+    ops = db.list_operations(case_id=args.case_id, op_type="extract")
+    if not ops:
+        print("Žádné zaznamenané extract operace (předtím `stopa add`)", file=sys.stderr)
+        db.close()
+        return 2
+
+    target = db.get_operation(args.op) if args.op else ops[-1]
+    if target is None:
+        print(f"Operace nenalezena: {args.op}", file=sys.stderr)
+        db.close()
+        return 2
+
+    src = db.get_source(target.source_id or "")
+    if src is None:
+        print(f"Zdroj operace neexistuje: {target.source_id}", file=sys.stderr)
+        db.close()
+        return 2
+    root = Path(src.path).expanduser()
+    if not root.exists():
+        print(f"Zdroj už není na disku: {root}", file=sys.stderr)
+        db.close()
+        return 2
+
+    print(f"Replay operace {target.id} (zdroj: {src.path})")
+    res = replay_extract(target, root)
+
+    if res.inputs_identical:
+        print("Vstupní soubory: OK (SHA-256 shodné se záznamem)")
+    else:
+        print(f"Vstupní soubory: ZMĚNĚNY ({len(res.input_diffs)} rozdílů)", file=sys.stderr)
+        for d in res.input_diffs[:10]:
+            print(f"  ! {d}", file=sys.stderr)
+
+    if res.outputs_identical:
+        print("Výstupní souhrn: IDENTICKÝ (operace je reprodukovatelná)")
+    else:
+        print(f"Výstupní souhrn: LIŠÍ ({len(res.output_diffs)} rozdílů)", file=sys.stderr)
+        for d in res.output_diffs[:10]:
+            print(f"  ! {d}", file=sys.stderr)
+
+    db.log_operation(
+        "operation_replayed",
+        actor=case_examiner(db, args.case_id),
+        details={
+            "op_id": target.id,
+            "inputs_identical": res.inputs_identical,
+            "outputs_identical": res.outputs_identical,
+        },
+    )
+    db.close()
+    return 0 if (res.inputs_identical and res.outputs_identical) else 1
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     """E1 Evidence Manager: neměnná stopa operací (audit trail)."""
     db = _open_db(args.case_id)
@@ -770,6 +828,14 @@ def build_parser() -> argparse.ArgumentParser:
     int_p.add_argument("--checkpoint", metavar="DUVOD", default=None,
                        help="uložit nový kontrolní bod s uvedeným důvodem")
     int_p.set_defaults(func=cmd_integrity)
+
+    rep_p = sub.add_parser(
+        "replay", help="P0 C5 — Reproducibility Engine (opakovat operaci + porovnání výsledků)"
+    )
+    rep_p.add_argument("case_id")
+    rep_p.add_argument("op", nargs="?", default=None,
+                       help="ID operace (default: poslední extract)")
+    rep_p.set_defaults(func=cmd_replay)
 
     aud_p = sub.add_parser("audit", help="E1 — neměnná stopa operací (audit trail)")
     aud_p.add_argument("case_id")

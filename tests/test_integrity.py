@@ -129,8 +129,8 @@ class TestEd25519AndManifests:
 # ── DB integrace: hash chaining v audit logu ────────────────────────────────
 
 class TestDbAuditChain:
-    def test_new_db_at_v9(self, db: CaseDB):
-        assert db.schema_version() == SCHEMA_VERSION == 9
+    def test_new_db_at_current(self, db: CaseDB):
+        assert db.schema_version() == SCHEMA_VERSION
         tables = {r[0] for r in db.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert "integrity_checkpoints" in tables
 
