@@ -22,7 +22,8 @@ class TestBuildRegistry:
 
         reg = build_registry()
         assert set(reg) == set(parser_versions())
-        assert len(reg) == 9  # 6 signature + 3 name-based
+        # registry obsahuje přesně deklarované záznamy (1:1 s PARSER_VALIDATIONS)
+        assert len(reg) == len(PARSER_VALIDATIONS)
 
     def test_versions_synced_with_pipeline(self):
         """Verze v registry se shodují s pipeline (zdroj pravdy)."""
@@ -45,8 +46,8 @@ class TestBuildRegistry:
 
     def test_missing_registry_record_raises(self):
         """Extraktor v pipeline bez záznamu v registry → RegistryError."""
-        versions = {pid: "1.0" for pid in PARSER_VALIDATIONS}  # 9 extraktorů
-        saved = PARSER_VALIDATIONS.pop("win_usn")  # schoveme záznam (8 zbývá)
+        versions = {pid: "1.0" for pid in PARSER_VALIDATIONS}  # všechny deklarované extraktory
+        saved = PARSER_VALIDATIONS.pop("win_usn")  # schoveme záznam (zbývá o jeden méně)
         try:
             with pytest.raises(RegistryError, match="nemá záznam v registry"):
                 build_registry(versions)
@@ -85,7 +86,8 @@ class TestRegistryReport:
         rows = registry_report()
         ids = [r["parser_id"] for r in rows]
         assert ids == sorted(ids)
-        assert len(rows) == 9
+        # report obsahuje přesně deklarované záznamy (1:1 s PARSER_VALIDATIONS)
+        assert len(rows) == len(PARSER_VALIDATIONS)
         for row in rows:
             assert row["version"]  # verze doplněna z pipeline
             assert isinstance(row["formats"], list) and row["formats"]

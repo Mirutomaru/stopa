@@ -55,7 +55,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         version="",
         formats=("Windows registry hive (.regf) — Run/RunOnce, MountedDevices, identita"),
         limitations=(
-            "běží generic + Amcache + ShimCache (sdílená regf magic)",
+            "běží generic + Amcache + ShimCache + Clipboard + SID (sdílená regf magic)",
             "závislost na regipy pro dekompozici klíčů",
         ),
         test_files=("tests/test_registry_extract.py",),
@@ -134,6 +134,59 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (header verze 2 kontextově ověřen parserem)",
         ),
         test_files=("tests/test_e7.py",),
+    ),
+    # ── ETAPA B vlna 1 — AXIOM port: email / WiFi / Scheduled Tasks / netstat ──
+    "email_mbox": ParserValidation(
+        parser_id="email_mbox",
+        version="",
+        formats=(
+            "mbox (Unix mailbox) — více zpráv, oddělené From řádky",
+            "EML/MSG — jednotlivé zprávy (RFC 822)",
+        ),
+        limitations=(
+            "detekce name-based (.eml/.mbox) + content check (From header)",
+            "Date parsování přes email.utils — neplatné datum → None",
+            "Body se truncuje na MAX_BODY_LEN pro detaily",
+        ),
+        test_files=("tests/test_email_mbox.py",),
+    ),
+    "wifi_wlan": ParserValidation(
+        parser_id="wifi_wlan",
+        version="",
+        formats=(
+            "Windows WLAN profile XML (C:\\ProgramData\\Microsoft\\WLAN\\Profile)",
+        ),
+        limitations=(
+            "detekce name-based (*.xml s WLANProfile root elementem)",
+            "SSID/autentizace z <network><SSIDConfig> a <authentication>",
+        ),
+        test_files=("tests/test_win_wlan.py",),
+    ),
+    "win_schedtask": ParserValidation(
+        parser_id="win_schedtask",
+        version="",
+        formats=(
+            "Windows Task Scheduler XML (C:\\Windows\\System32\\Tasks\\*.xml)",
+        ),
+        limitations=(
+            "detekce name-based (*.xml s Task root elementem)",
+            "Trigger/Action/Principal z <Triggers>/<Actions>/<Principal>",
+        ),
+        test_files=("tests/test_win_schedtask.py",),
+    ),
+    "net_connections": ParserValidation(
+        parser_id="net_connections",
+        version="",
+        formats=(
+            "Windows netstat -ano textový výstup",
+            "Unix ss/netstat -an textový výstup",
+        ),
+        limitations=(
+            "detekce name-based (netstat/connections/sockets) + content check (hlavička)",
+            "snapshot bez časového razítka — timestamp=None",
+            "limit MAX_CONNECTIONS_PER_FILE=5000 spojení",
+        ),
+        test_files=("tests/test_net_connections.py",),
     ),
 }
 

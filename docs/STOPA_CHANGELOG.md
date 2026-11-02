@@ -4,6 +4,38 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (ETAPA B vlna 1 — port AXIOM extraktorů, 6 nových parserů + 76 testů)
+- `artifacts/email_mbox.py` — **mbox/EML email parser** (AXIOM `CloudMboxEmailArtifact` /
+  `OfflineGmailArtifact`): rozdělení mbox na zprávy (`From ` řádky), hlavičky From/To/Cc/Bcc/
+  Subject/Date, MIME body (text/plain + base64/QP decode), UTF-8/UTF-16 detekce; artifact type
+  `email_message`. Detekce name/content-based (mbox nemá spolehlivou magiku).
+- `artifacts/win_wlan.py` — **WiFi WLAN profile XML parser** (AXIOM `WiFiLocationsArtifact`):
+  SSID (`<SSID><name>`), authentication/encryption, MAC adresy ze stationList; namespace-agnostické
+  helpery `_local()`/`_find_text()` (XML má `xmlns`). Artifact type `wifi_profile`.
+- `artifacts/win_schedtask.py` — **Scheduled Tasks XML parser** (AXIOM `ScheduledTasksArtifact`):
+  název, akce (Exec), triggery; detekce UTF-16 LE/BE s BOM (reálné task XML jsou UTF-16).
+  Artifact type `scheduled_task`.
+- `artifacts/net_connections.py` — **netstat/connstat text parser** (AXIOM `ConnscanArtifact` /
+  `NetScanArtifact` / `SockscanArtifact`): robustní token-based parser — Windows `netstat -ano`
+  (uppercase, PID), Unix `ss`/`netstat` (State/Recv-Q/Send-Q sloupce), IPv4/IPv6 v hranatých
+  závorkách, wildcard `*:*`. Artifact type `network_connection`.
+- `artifacts/win_clipboard.py` — **Clipboard registry parser** (AXIOM `ClipboardArtifact`):
+  sekundární průchod NTUSER.DAT (`Software\Microsoft\Windows\CurrentVersion\Clipboards\<fmt>`),
+  CF_* formáty, UTF-8/UTF-16LE detekce hodnot. Artifact type `clipboard_entry`.
+- `artifacts/win_sids.py` — **SID extraction parser** (AXIOM `GetsidsArtifact` / `SidsArtifact` /
+  `UserSidsArtifact`): SAM/SECURITY `Sam\Domains\Account\Users\<SID>` + NTUSER.DAT ProfileList;
+  zdroj rozlišen podle názvu souboru. Artifact type `user_sid`.
+- `pipeline.py` — importy všech 6 parserů; `NAME_BASED_EXTRACTORS` rozšířen o email/wlan/
+  schedtask/netstat; `_extract_registry_all` rozšířen o Clipboard + SID sekundární průchody
+  (sdílená regf magic, pattern Amcache/ShimCache).
+- `domain/validation_registry.py` — 4 nové C3 záznamy (`email_mbox`, `win_wlan`, `win_schedtask`,
+  `net_connections`) + aktualizované limitations u `registry_hive`; `build_registry()` nyní
+  **13 parserů** (1:1 sync s pipeline ověřen).
+- Testy: `tests/test_email_mbox.py` (17), `test_win_wlan.py` (12), `test_win_schedtask.py` (11),
+  `test_net_connections.py` (12), `test_win_clipboard.py` (12), `test_win_sids.py` (12) — celkem
+  **76 nových testů**, plně offline (syntetické fixtures + fake regipy objekty). Plná sada:
+  **895 passed, 1 skipped**; ruff clean.
+
 ### Added (FÁZE 1 — kompletní technický audit + FÁZE 15 coverage matrix CSV)
 - `docs/STOPA_TECHNICAL_AUDIT.md` — přepsán na aktuální stav (commit `2244d95`,
   schema v11, **819 testů**, ruff clean): 18 oblastí × (současný stav / funguje /

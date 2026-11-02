@@ -5,22 +5,26 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 22
-- **🔧 PORTABLE-LOCAL**: 49
+- **✅ COVERED**: 33
+- **🔧 PORTABLE-LOCAL**: 38
 - **☁️ CLOUD-EXPORT**: 112
 - **💾 MEMORY**: 15
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (22)
+## ✅ COVERED — STOPA už umí (existující parser) (33)
 
 - `AppleIMessageArtifact` — sqlite_extract → imessage
 - `AuditDriveEventsArtifact` — EVTX event log (evtx parser)
 - `AuditLoginEventsArtifact` — EVTX event log (evtx parser)
 - `CallLogsArtifact` — sqlite_extract → call_log
+- `ClipboardArtifact` — win_clipboard (sekundární registry průchod NTUSER.DAT)
 - `CloudGoogleChromeBrowserHistoryArtifact` — browser_history
+- `CloudMboxEmailArtifact` — email_mbox parser
+- `ConnscanArtifact` — net_connections parser
 - `DocumentMetadataExtractor` — OOXML metadata
+- `GetsidsArtifact` — win_sids (sekundární registry průchod SAM/SECURITY)
 - `GoogleBrowsingHistoryArtifact` — browser_history
 - `IeTypedUrlArtifact` — browser_history (chrome/firefox)
 - `ImageInfoArtifact` — magic bytes → image info
@@ -31,28 +35,31 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `MicrosoftTeamsMessagesArtifact` — sqlite generic (teams.db)
 - `MicrosoftTeamsMessagesBaseArtifact` — sqlite generic
 - `MicrosoftTeamsMessagesComputerArtifact` — sqlite generic
+- `NetScanArtifact` — net_connections parser
 - `OfficeArtifact` — OOXML document parser
+- `OfflineGmailArtifact` — email_mbox parser
 - `SamsungConnectionsArtifact` — mobile_extract → calllog
 - `SamsungContactArtifact` — mobile_extract → contacts2
 - `SamsungMessagesArtifact` — mobile_extract → sms
+- `ScheduledTasksArtifact` — win_schedtask parser (Task Scheduler XML)
+- `SidsArtifact` — win_sids (sekundární registry průchod SAM/SECURITY)
+- `SockscanArtifact` — net_connections parser
 - `TimelineArtifact` — timeline engine
+- `UserSidsArtifact` — win_sids (sekundární registry průchod + ProfileList)
+- `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (49)
+## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (38)
 
 - `AllowlistedWebSitesArtifact` — lokální parser (čistý Python)
 - `AttachmentExtractor` — lokální parser (čistý Python)
 - `BeboArtifact` — legacy mobile / messenger (SQLite)
 - `ChatrouletteArtifact` — legacy mobile / messenger (SQLite)
-- `ClipboardArtifact` — Windows registry / XML profil
-- `CloudMboxEmailArtifact` — existující parser
 - `CmdScanArtifact` — lokální parser (čistý Python)
-- `ConnscanArtifact` — text output (connstat/netstat)
 - `CurrentTabsArtifact` — lokální parser (čistý Python)
 - `DriveActivityArtifact` — lokální parser (čistý Python)
 - `DuckDuckGoCookiesArtifact` — browser cookies/bookmarks
 - `FileScanArtifact` — lokální parser (čistý Python)
-- `GetsidsArtifact` — registry SAM/Security
 - `GoogleAccountChangeHistoryArtifact` — lokální profil / takeout
 - `GoogleAccountInfoArtifact` — lokální profil / takeout
 - `GoogleAggregatedActivitiesArtifact` — lokální profil / takeout
@@ -78,17 +85,10 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `MailRuChatArtifact` — legacy mobile / messenger (SQLite)
 - `MailRuContactArtifact` — legacy mobile / messenger (SQLite)
 - `MailRuGroupArtifact` — legacy mobile / messenger (SQLite)
-- `NetScanArtifact` — text output (connstat/netstat)
-- `OfflineGmailArtifact` — existující parser
 - `OpenOfficeBaseArtifact` — lokální parser (čistý Python)
 - `ParkedCarLocationsArtifact` — lokální parser (čistý Python)
 - `SamsungVoiceRecordingArtifact` — legacy mobile / messenger (SQLite)
-- `ScheduledTasksArtifact` — Windows registry / XML profil
-- `SidsArtifact` — registry SAM/Security
-- `SockscanArtifact` — text output (connstat/netstat)
-- `UserSidsArtifact` — registry SAM/Security
 - `VoiceMailArtifact` — lokální parser (čistý Python)
-- `WiFiLocationsArtifact` — Windows registry / XML profil
 
 ## ☁️ CLOUD-EXPORT — JSON export / warrant return (112)
 

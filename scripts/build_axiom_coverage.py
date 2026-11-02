@@ -59,8 +59,18 @@ COVERED: dict[str, str] = {
     "MicrosoftTeamsMessagesArtifact": "covered",  # sqlite generic (teams.db)
     "MicrosoftTeamsMessagesBaseArtifact": "covered",
     "MicrosoftTeamsMessagesComputerArtifact": "covered",
-    "CloudMboxEmailArtifact": "portable-local",  # mbox parser (vlna 1)
-    "OfflineGmailArtifact": "portable-local",  # mbox parser (vlna 1)
+    # ETAPA B vlna 1 — port AXIOM extraktorů (6 nových parserů, testováno)
+    "CloudMboxEmailArtifact": "covered",  # email_mbox
+    "OfflineGmailArtifact": "covered",  # email_mbox
+    "WiFiLocationsArtifact": "covered",  # win_wlan
+    "ScheduledTasksArtifact": "covered",  # win_schedtask
+    "ClipboardArtifact": "covered",  # win_clipboard (sekundární registry průchod)
+    "ConnscanArtifact": "covered",  # net_connections
+    "NetScanArtifact": "covered",  # net_connections
+    "SockscanArtifact": "covered",  # net_connections
+    "GetsidsArtifact": "covered",  # win_sids (sekundární registry průchod)
+    "SidsArtifact": "covered",  # win_sids
+    "UserSidsArtifact": "covered",  # win_sids
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -113,20 +123,12 @@ def classify(name: str, dll: str) -> tuple[str, str]:
     # Instagram/Snapchat lokální (ne Cloud) — sqlite/DB export
     if name.startswith(("Instagram", "Snapchat")):
         return "cloud-export", "JSON/DB export"
-    # Windows registry-based (Clipboard/WiFi/ScheduledTasks/Audit*)
-    if name in ("ClipboardArtifact", "WiFiLocationsArtifact", "ScheduledTasksArtifact"):
-        return "portable-local", "Windows registry / XML profil"
+    # Audit* / GoogleAccessLog = EVTX event log
     if name.startswith(("Audit", "GoogleAccessLog")):
         return "covered", "EVTX event log (evtx parser)"
     # browser cookies / bookmarks lokální
     if "Cookies" in name or "Bookmarks" in name:
         return "portable-local", "browser cookies/bookmarks"
-    # network scan text output
-    if name in ("ConnscanArtifact", "NetScanArtifact", "SockscanArtifact"):
-        return "portable-local", "text output (connstat/netstat)"
-    # SID
-    if name in ("GetsidsArtifact", "SidsArtifact", "UserSidsArtifact"):
-        return "portable-local", "registry SAM/Security"
     # Skype warrant return
     if name.startswith("SkypeWarrantReturn"):
         return "cloud-export", "warrant return (JSON)"
@@ -156,6 +158,18 @@ def _covered_desc(name: str) -> str:
         "MicrosoftTeamsMessagesArtifact": "sqlite generic (teams.db)",
         "MicrosoftTeamsMessagesBaseArtifact": "sqlite generic",
         "MicrosoftTeamsMessagesComputerArtifact": "sqlite generic",
+        # ETAPA B vlna 1 — port AXIOM extraktorů
+        "CloudMboxEmailArtifact": "email_mbox parser",
+        "OfflineGmailArtifact": "email_mbox parser",
+        "WiFiLocationsArtifact": "win_wlan parser (WLAN profile XML)",
+        "ScheduledTasksArtifact": "win_schedtask parser (Task Scheduler XML)",
+        "ClipboardArtifact": "win_clipboard (sekundární registry průchod NTUSER.DAT)",
+        "ConnscanArtifact": "net_connections parser",
+        "NetScanArtifact": "net_connections parser",
+        "SockscanArtifact": "net_connections parser",
+        "GetsidsArtifact": "win_sids (sekundární registry průchod SAM/SECURITY)",
+        "SidsArtifact": "win_sids (sekundární registry průchod SAM/SECURITY)",
+        "UserSidsArtifact": "win_sids (sekundární registry průchod + ProfileList)",
     }
     return m.get(name, "existující parser")
 

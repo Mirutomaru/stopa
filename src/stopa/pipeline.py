@@ -22,10 +22,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import stopa as _stopa_pkg  # __version__ (single-source z pyproject)
+from stopa.artifacts.email_mbox import PARSER_VERSION as EMAIL_MBOX_VERSION
+from stopa.artifacts.email_mbox import extract_email_artifacts, is_email_file
 from stopa.artifacts.imessage_cloud import (
     PARSER_VERSION as IMESSAGE_CLOUD_VERSION,
 )
 from stopa.artifacts.imessage_cloud import extract_icloud_messages, is_icloud_messages_file
+from stopa.artifacts.net_connections import PARSER_VERSION as NETSTAT_VERSION
+from stopa.artifacts.net_connections import extract_netstat_artifacts, is_netstat_file
 from stopa.artifacts.plist_extract import PARSER_VERSION as PLIST_VERSION
 from stopa.artifacts.plist_extract import extract_plist_artifacts
 from stopa.artifacts.registry_extract import PARSER_VERSION as REGISTRY_VERSION
@@ -34,6 +38,7 @@ from stopa.artifacts.sqlite_extract import PARSER_VERSION as SQLITE_VERSION
 from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
 from stopa.artifacts.sqlite_recover import recover_deleted_rows
 from stopa.artifacts.win_amcache import extract_amcache_artifacts
+from stopa.artifacts.win_clipboard import extract_clipboard_artifacts
 from stopa.artifacts.win_eventlog import PARSER_VERSION as EVTX_VERSION
 from stopa.artifacts.win_eventlog import extract_evtx_artifacts
 from stopa.artifacts.win_jumplist import PARSER_VERSION as JUMPLIST_VERSION
@@ -42,11 +47,18 @@ from stopa.artifacts.win_lnk import PARSER_VERSION as LNK_VERSION
 from stopa.artifacts.win_lnk import extract_lnk_artifacts
 from stopa.artifacts.win_prefetch import PARSER_VERSION as PREFETCH_VERSION
 from stopa.artifacts.win_prefetch import extract_prefetch_artifacts
+from stopa.artifacts.win_schedtask import (
+    PARSER_VERSION as SCHEDTASK_VERSION,
+)
+from stopa.artifacts.win_schedtask import extract_scheduled_task_artifacts, is_scheduled_task_file
 from stopa.artifacts.win_shimcache import extract_shimcache_artifacts
+from stopa.artifacts.win_sids import extract_sid_artifacts
 from stopa.artifacts.win_usn import (
     PARSER_VERSION as USN_VERSION,
 )
 from stopa.artifacts.win_usn import extract_usn_artifacts, is_usn_journal_file
+from stopa.artifacts.win_wlan import PARSER_VERSION as WLAN_VERSION
+from stopa.artifacts.win_wlan import extract_wifi_artifacts, is_wlan_profile_file
 from stopa.data.db import CaseDB
 from stopa.data.ingest import WalkedFile, walk_source
 from stopa.domain.bad_extension import extension_of, is_bad_extension
@@ -83,12 +95,13 @@ def _extract_sqlite_all(path: Path) -> list[Artifact]:
 
 
 def _extract_registry_all(path: Path) -> list[Artifact]:
-    """Registry hive (regf) — generic + Amcache + ShimCache.
+    """Registry hive (regf) — generic + Amcache + ShimCache + Clipboard + SID.
 
-    Všechny tři extraktory sdílejí `regf` magic → jeden kombinovaný dispatch
+    Všechny extraktory sdílejí `regf` magic → jeden kombinovaný dispatch
     (pattern jako `_extract_sqlite_all`). Každá cesta je nezávislá: Amcache
     běží jen na Amcache.hve, ShimCache jen na SYSTEM hive; bez příslušného
-    klíče vrátí prázdný výsledek.
+    klíče vrátí prázdný výsledek. ETAPA B vlna 1: + Clipboard (NTUSER.DAT)
+    a SID extrakce (SAM/SECURITY/ProfileList).
     """
     arts = extract_registry_artifacts(path)
     try:
@@ -99,6 +112,14 @@ def _extract_registry_all(path: Path) -> list[Artifact]:
         arts.extend(extract_shimcache_artifacts(path))
     except Exception as e:  # noqa: BLE001 — ShimCache je bonus, nesmí potopit extrakci
         log.warning("ShimCache %s: %s", path, e)
+    try:
+        arts.extend(extract_clipboard_artifacts(path))
+    except Exception as e:  # noqa: BLE001 — Clipboard je bonus (ETAPA B vlna 1)
+        log.warning("Clipboard %s: %s", path, e)
+    try:
+        arts.extend(extract_sid_artifacts(path))
+    except Exception as e:  # noqa: BLE001 — SID je bonus (ETAPA B vlna 1)
+        log.warning("SID %s: %s", path, e)
     return arts
 
 
@@ -122,6 +143,11 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "win_jumplist": (extract_jump_list_artifacts, JUMPLIST_VERSION),
     # E7 NTFS USN Journal ($UsnJrnl) — metadata file bez spolehlivé magiky
     "win_usn": (extract_usn_artifacts, USN_VERSION),
+    # ETAPA B vlna 1 — AXIOM port: email / WiFi / Scheduled Tasks / netstat
+    "email_mbox": (extract_email_artifacts, EMAIL_MBOX_VERSION),
+    "wifi_wlan": (extract_wifi_artifacts, WLAN_VERSION),
+    "win_schedtask": (extract_scheduled_task_artifacts, SCHEDTASK_VERSION),
+    "net_connections": (extract_netstat_artifacts, NETSTAT_VERSION),
 }
 
 
@@ -130,6 +156,8 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
 
     iCloud Messages export a Jump Lists nemají spolehlivou magic; detekce
     podle názvu souboru, jen když signatura nic nenašla (viz _extract_artifacts_for).
+    ETAPA B vlna 1: + email (.eml/.mbox), WiFi WLAN profile XML, Scheduled Tasks
+    XML a netstat/connstat text — všechny bez spolehlivé magiky.
     """
     if is_icloud_messages_file(name):
         return NAME_BASED_EXTRACTORS["icloud_messages"]
@@ -137,6 +165,14 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["win_jumplist"]
     if is_usn_journal_file(name):
         return NAME_BASED_EXTRACTORS["win_usn"]
+    if is_email_file(name):
+        return NAME_BASED_EXTRACTORS["email_mbox"]
+    if is_wlan_profile_file(name):
+        return NAME_BASED_EXTRACTORS["wifi_wlan"]
+    if is_scheduled_task_file(name):
+        return NAME_BASED_EXTRACTORS["win_schedtask"]
+    if is_netstat_file(name):
+        return NAME_BASED_EXTRACTORS["net_connections"]
     return None
 
 
