@@ -10,6 +10,14 @@ Obsah reportu (Belkasoft/FTK style):
 - processing summary (soubory, bajty, signatury, bad-ext, duplikáty, hash sets)
 - přehled artifactů podle typu
 - flagované soubory (BAD-EXT / DUP / HASHSET) — hlavní nálezy
+- ručně označené soubory (Evidence / Report z GUI)
+- audit trail (neměnná stopa operací, E1)
+- **E10: timeline** — chronologické události (UTC + lokální čas case TZ)
+  s confidence štítky a detekovanými nesrovnalostmi
+- **E10: korelace entity** — propojení s evidence odkazy (rel_path + detail)
+
+**E10 i18n:** všechny viditelné texty jdou přes ``domain/i18n.py`` (cs/en);
+výchozí jazyk je čeština, přepnutí přes parametr ``lang``.
 """
 
 from __future__ import annotations
@@ -17,6 +25,8 @@ from __future__ import annotations
 import html
 from dataclasses import dataclass, field
 from datetime import datetime
+
+from stopa.domain.i18n import normalize_lang, t, t_fmt
 
 
 @dataclass(frozen=True)
@@ -71,6 +81,33 @@ class AuditEntry:
 
 
 @dataclass(frozen=True)
+class TimelineEvent:
+    """Jedna timeline událost pro report (E10).
+
+    ``ts_utc`` je ISO řetězec z case DB; lokální čas počítá build_html()
+    přes ``ReportData.timezone_name`` (case TZ, default Europe/Prague).
+    """
+
+    ts_utc: str | None
+    event_type: str
+    title: str | None = None
+    rel_path: str | None = None
+    confidence: float | None = None
+    anomaly_flags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CorrelationRow:
+    """Jedno propojení entity pro report (E10) — s evidence odkazy."""
+
+    entity_a: str
+    entity_b: str
+    relation: str
+    confidence: str  # "verified" | "inferred"
+    evidence: tuple[dict[str, object], ...] = ()
+
+
+@dataclass(frozen=True)
 class ReportData:
     """Všechny údaje pro report — presentation vrstva naplní z case DB."""
 
@@ -89,6 +126,10 @@ class ReportData:
     marked_files: tuple[MarkedFile, ...] = ()  # ručně označené v GUI (Evidence/Report)
     audit_entries: tuple[AuditEntry, ...] = ()  # E1 — neměnná stopa operací
     custody_metadata: dict[str, dict[str, str | None]] = field(default_factory=dict)
+    # E10 — timeline + korelace (UTC ISO z DB; lokální čas počítá build_html):
+    timeline_events: tuple[TimelineEvent, ...] = ()
+    correlations: tuple[CorrelationRow, ...] = ()
+    timezone_name: str = "Europe/Prague"
 
 
 def _esc(v: object) -> str:
@@ -124,10 +165,77 @@ def _audit_details_str(details: dict[str, object]) -> str:
     return " ".join(parts)
 
 
-def build_html(data: ReportData) -> str:
-    """Vygeneruje celý HTML dokument reportu (inline CSS, print-friendly)."""
+def _parse_iso(s: str | None) -> datetime | None:
+    """ISO řetězec z DB → datetime (neplatný formát → None, report nepadá)."""
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _fmt_local(ts_utc_iso: str | None, tz_name: str) -> str:
+    """UTC ISO → lokální čas v case TZ (E10 timeline; fallback UTC)."""
+    from stopa.domain.times import to_local_iso
+
+    dt = _parse_iso(ts_utc_iso)
+    if dt is None:
+        return "—"
+    local = to_local_iso(dt, tz_name)
+    if not local:
+        return "—"
+    # ISO → "YYYY-MM-DD HH:MM:SS" (bez offsetu — TZ je v hlavičce sloupce)
+    d = _parse_iso(local)
+    return d.strftime("%Y-%m-%d %H:%M:%S") if d else local
+
+
+def confidence_label(confidence: float | None) -> str:
+    """E10 — confidence → štítek důvěryhodnosti (i18n klíč).
+
+    Třírové škálování podle hodnoty ``Artifact.confidence`` (0.0–1.0):
+    - **≥ 0.8** → ``conf_verified`` [ověřeno] — výsledek s vysokou spolehlivostí
+      (křížově ověřený / plná provenience)
+    - **0.5 – 0.8** → ``conf_extracted`` [extrahováno] — přímá extrakce,
+      střední spolehlivost
+    - **< 0.5 nebo nevyhodnoceno (None)** → ``conf_hypothesis`` [hypotéza] —
+      odvozený výsledek / bez explicitního skóre = nejslabší tvrzení
+    """
+    if confidence is None or confidence < 0.5:
+        return "conf_hypothesis"
+    if confidence >= 0.8:
+        return "conf_verified"
+    return "conf_extracted"
+
+
+def _correlation_confidence_label(confidence: str) -> str:
+    """E10 — korelační confidence (verified/inferred) → i18n klíč."""
+    if confidence == "verified":
+        return "conf_verified"
+    if confidence == "inferred":
+        return "conf_inferred"
+    return confidence  # neznámá hodnota → zobrazení tak, jak je
+
+
+def _evidence_str(evidence: tuple[dict[str, object], ...]) -> str:
+    """Evidence list korelace → kompaktní řetězec `detail (rel_path)`."""
+    parts = []
+    for ev in evidence[:10]:  # limit — report nenechává utéct buňku
+        detail = str(ev.get("detail") or "")
+        path = str(ev.get("rel_path") or "")
+        parts.append(f"{detail} ({path})" if path else detail)
+    s = "; ".join(p for p in parts if p)
+    return s or "—"
+
+
+def build_html(data: ReportData, lang: str | None = None) -> str:
+    """Vygeneruje celý HTML dokument reportu (inline CSS, print-friendly).
+
+    ``lang`` — jazyk reportu (E10 i18n): "cs" (výchozí) nebo "en".
+    """
     from stopa import __version__  # lazy — verze nástroje pro court-ready hlavičku
 
+    L = normalize_lang(lang)
     generated = data.generated_at or datetime.now()
     from datetime import timezone
 
@@ -136,8 +244,8 @@ def build_html(data: ReportData) -> str:
 
     parts: list[str] = []
     parts.append(
-        "<!DOCTYPE html>\n<html lang='cs'><head><meta charset='utf-8'>"
-        f"<title>STOPA report — {_esc(data.case_name)}</title>"
+        f"<!DOCTYPE html>\n<html lang='{L}'><head><meta charset='utf-8'>"
+        f"<title>{t('report_title', L)} — {_esc(data.case_name)}</title>"
         "<style>"
         "body{font-family:'DejaVu Serif',Georgia,serif;font-size:10pt;color:#1a1a1a;"
         "margin:2.5cm 2cm;line-height:1.45}"
@@ -150,6 +258,7 @@ def build_html(data: ReportData) -> str:
         "tr:nth-child(even) td{background:#f7f7f7}"
         ".meta td:first-child{font-weight:bold;width:180px;background:#f2f2f2}"
         ".flag{color:#a00;font-weight:bold}"
+        ".conf{font-size:7.5pt;color:#444;white-space:nowrap}"
         ".mono{font-family:'DejaVu Sans Mono',monospace;font-size:8pt;word-break:break-all}"
         ".small{font-size:8pt;color:#555}"
         "@page{size:A4;margin:2cm 1.6cm}@media print{"
@@ -159,26 +268,30 @@ def build_html(data: ReportData) -> str:
     )
 
     # ── hlavička případu ───────────────────────────────────────
-    parts.append(f"<h1>Forenzní report — {_esc(data.case_name)}</h1>")
+    parts.append(f"<h1>{t('report_title', L)} — {_esc(data.case_name)}</h1>")
     parts.append("<table class='meta'>")
     rows = [
-        ("ID případu", data.case_id),
-        ("Znalec / zpracovatel", data.examiner or "—"),
-        ("Datum vytvoření případu", _fmt_dt(data.created_at)),
-        ("Poznámky", data.notes or "—"),
-        ("Report vygenerován", _fmt_dt(generated)),
-        ("Nástroj", f"STOPA v{__version__} (unifikovaná forenzní workbench)"),
+        (t("meta_case_id", L), data.case_id),
+        (t("meta_examiner", L), data.examiner or "—"),
+        (t("meta_created", L), _fmt_dt(data.created_at)),
+        (t("meta_notes", L), data.notes or "—"),
+        (t("meta_generated", L), _fmt_dt(generated)),
+        (t("meta_tool", L), f"STOPA v{__version__} (unifikovaná forenzní workbench)"),
     ]
     for k, v in rows:
         parts.append(f"<tr><td>{_esc(k)}</td><td>{_esc(v)}</td></tr>")
     parts.append("</table>")
 
     # ── chain of custody — evidence sources ────────────────────
-    parts.append("<h2>1. Chain of custody — evidence sources</h2>")
+    parts.append(f"<h2>1. {t('sec_coc', L)}</h2>")
     if data.sources:
         parts.append(
-            "<table><tr><th>#</th><th>Zdroj</th><th>Typ</th>"
-            "<th>Přidáno (UTC)</th><th>Velikost</th><th>Metoda nabytí</th><th>Evidoval</th></tr>"
+            f"<table><tr><th>#</th><th>{t('th_source', L)}</th>"
+            f"<th>{t('th_type', L)}</th>"
+            f"<th>{t('th_added_utc', L)}</th>"
+            f"<th>{t('th_size', L)}</th>"
+            f"<th>{t('th_method', L)}</th>"
+            f"<th>{t('th_custodian', L)}</th></tr>"
         )
         for i, s in enumerate(data.sources, 1):
             size = _fmt_bytes(s.size_bytes) if s.size_bytes is not None else "—"
@@ -192,15 +305,18 @@ def build_html(data: ReportData) -> str:
             )
         parts.append("</table>")
     else:
-        parts.append("<p class='small'>Žádné evidence sources.</p>")
+        parts.append(f"<p class='small'>{t('empty_sources', L)}</p>")
 
     # ── processing summary ─────────────────────────────────────
-    t = data.totals
-    parts.append("<h2>2. Processing summary</h2>")
+    t_ = data.totals
+    parts.append(f"<h2>2. {t('sec_processing', L)}</h2>")
     if data.sources:
         parts.append(
-            "<table><tr><th>Zdroj</th><th>Soubory</th><th>Bajty</th>"
-            "<th>Signatury</th><th>Bad-ext</th><th>Duplikáty</th></tr>"
+            f"<table><tr><th>{t('th_source', L)}</th>"
+            f"<th>{t('th_files', L)}</th><th>{t('th_bytes', L)}</th>"
+            f"<th>{t('th_signatures', L)}</th>"
+            f"<th>{t('th_bad_ext', L)}</th>"
+            f"<th>{t('th_dups', L)}</th></tr>"
         )
         for s in data.sources:
             st = data.per_source_stats.get(s.id, {})
@@ -213,31 +329,37 @@ def build_html(data: ReportData) -> str:
                 f"<td>{st.get('dups', 0):,}</td></tr>"
             )
         parts.append("</table>")
-    parts.append(
-        f"<p>CELKEM: <b>{t.get('files', 0):,}</b> souborů, "
-        f"<b>{_fmt_bytes(t.get('bytes', 0))}</b>, signatury {t.get('signed', 0):,}, "
-        f"bad-ext {t.get('bad_ext', 0):,}, duplikáty {t.get('dups', 0):,}.</p>"
+    total_line = t_fmt(
+        "total_line", L,
+        files=f"{t_.get('files', 0):,}",
+        bytes=_fmt_bytes(t_.get("bytes", 0)),
+        signed=t_.get("signed", 0),
+        bad_ext=t_.get("bad_ext", 0),
+        dups=t_.get("dups", 0),
     )
+    parts.append(f"<p>{total_line}</p>")
 
     # ── artifacts přehled ──────────────────────────────────────
-    parts.append("<h2>3. Extrahované artifacty</h2>")
+    parts.append(f"<h2>3. {t('sec_artifacts', L)}</h2>")
     if data.artifact_counts:
         total = sum(data.artifact_counts.values())
         parts.append(
-            f"<p>Celkem <b>{total:,}</b> artifactů. Rozložení podle typu:</p>"
-            "<table><tr><th>Typ</th><th>Počet</th></tr>"
+            f"<p>{t_fmt('artifacts_total', L, total=f'{total:,}')} "
+            f"</p><table><tr><th>{t('th_type', L)}</th>"
+            f"<th>{t('th_count', L)}</th></tr>"
         )
         for typ, n in sorted(data.artifact_counts.items(), key=lambda kv: -kv[1]):
             parts.append(f"<tr><td>{_esc(typ)}</td><td>{n:,}</td></tr>")
         parts.append("</table>")
     else:
-        parts.append("<p class='small'>Žádné extrahované artifacty.</p>")
+        parts.append(f"<p class='small'>{t('empty_artifacts', L)}</p>")
 
     # ── flagované soubory (hlavní nálezy) ──────────────────────
-    parts.append("<h2>4. Hlavní nálezy — flagované soubory</h2>")
+    parts.append(f"<h2>4. {t('sec_findings', L)}</h2>")
     if data.flagged_files:
         parts.append(
-            "<table><tr><th>Soubor</th><th>Flagy</th><th>SHA-256</th></tr>"
+            f"<table><tr><th>{t('th_file', L)}</th>"
+            f"<th>{t('th_flags', L)}</th><th>SHA-256</th></tr>"
         )
         for f in data.flagged_files[:500]:  # court-ready — nevtěsnat 10k řádků
             flags = " ".join(f"<span class='flag'>{_esc(x)}</span>" for x in f.flags)
@@ -248,18 +370,18 @@ def build_html(data: ReportData) -> str:
         parts.append("</table>")
         if len(data.flagged_files) > 500:
             parts.append(
-                f"<p class='small'>Zobrazeno prvních 500 z {len(data.flagged_files):,} "
-                "flagovaných souborů.</p>"
+                t_fmt("truncated_flagged", L, n=f"{len(data.flagged_files):,}")
             )
     else:
-        parts.append("<p class='small'>Žádné flagované soubory (bad-ext / duplikáty / hash sets).</p>")
+        parts.append(f"<p class='small'>{t('empty_flagged', L)}</p>")
 
     # ── ručně označené soubory (GUI File Inspector) ────────────
-    parts.append("<h2>5. Ručně označené soubory (Evidence / Report)</h2>")
+    parts.append(f"<h2>5. {t('sec_marked', L)}</h2>")
     if data.marked_files:
         parts.append(
-            "<table><tr><th>Soubor</th><th>Označení</th><th>Velikost</th>"
-            "<th>SHA-256</th></tr>"
+            f"<table><tr><th>{t('th_file', L)}</th>"
+            f"<th>{t('th_marks', L)}</th>"
+            f"<th>{t('th_size', L)}</th><th>SHA-256</th></tr>"
         )
         for m in data.marked_files[:500]:
             labels = " ".join(
@@ -275,15 +397,16 @@ def build_html(data: ReportData) -> str:
             )
         parts.append("</table>")
     else:
-        parts.append("<p class='small'>Žádné ručně označené soubory.</p>")
+        parts.append(f"<p class='small'>{t('empty_marked', L)}</p>")
 
     # ── hash manifest (důkaz integrity) ────────────────────────
-    parts.append("<h2>6. Hash manifest — SHA-256 / MD5</h2>")
+    parts.append(f"<h2>6. {t('sec_manifest', L)}</h2>")
     if data.custody_items:
         src_path = {s.id: s.path for s in data.sources}  # zdrojová úroveň CoC
         parts.append(
-            "<table><tr><th>Zdroj</th><th>Soubor</th><th>Velikost</th>"
-            "<th>SHA-256</th><th>MD5</th></tr>"
+            f"<table><tr><th>{t('th_source', L)}</th>"
+            f"<th>{t('th_file', L)}</th>"
+            f"<th>{t('th_size', L)}</th><th>SHA-256</th><th>MD5</th></tr>"
         )
         for c in data.custody_items[:5000]:  # limit — manifest může být velký
             sha = f"<td class='mono'>{_esc(c.sha256)}</td>" if c.sha256 else "<td>—</td>"
@@ -296,18 +419,20 @@ def build_html(data: ReportData) -> str:
         parts.append("</table>")
         if len(data.custody_items) > 5000:
             parts.append(
-                f"<p class='small'>Zobrazeno prvních 5 000 z {len(data.custody_items):,} "
-                "souborů (plný manifest v case DB).</p>"
+                t_fmt("truncated_manifest", L, n=f"{len(data.custody_items):,}")
             )
     else:
-        parts.append("<p class='small'>Žádné soubory s hashem.</p>")
+        parts.append(f"<p class='small'>{t('empty_manifest', L)}</p>")
 
     # ── E1 Evidence Manager: audit trail (neměnná stopa operací) ──
-    parts.append("<h2>7. Audit trail — neměnná stopa operací</h2>")
+    parts.append(f"<h2>7. {t('sec_audit', L)}</h2>")
     if data.audit_entries:
         parts.append(
-            "<table><tr><th>#</th><th>Čas (UTC)</th><th>Operace</th>"
-            "<th>Aktor</th><th>Detaily</th></tr>"
+            f"<table><tr><th>#</th>"
+            f"<th>{t('th_time_utc', L)}</th>"
+            f"<th>{t('th_action', L)}</th>"
+            f"<th>{t('th_actor', L)}</th>"
+            f"<th>{t('th_details', L)}</th></tr>"
         )
         for i, e in enumerate(data.audit_entries[:500], 1):  # limit — court-ready
             det = _esc(_audit_details_str(e.details)) if e.details else "—"
@@ -319,18 +444,77 @@ def build_html(data: ReportData) -> str:
         parts.append("</table>")
         if len(data.audit_entries) > 500:
             parts.append(
-                f"<p class='small'>Zobrazeno prvních 500 z {len(data.audit_entries):,} "
-                "operací (plná stopa v case DB — `stopa audit`).</p>"
+                t_fmt("truncated_audit", L, n=f"{len(data.audit_entries):,}")
             )
     else:
-        parts.append("<p class='small'>Žádné zaznamenané operace.</p>")
+        parts.append(f"<p class='small'>{t('empty_audit', L)}</p>")
+
+    # ── E10: timeline (UTC + lokální čas case TZ) ──────────────
+    parts.append(f"<h2>8. {t('sec_timeline', L)}</h2>")
+    if data.timeline_events:
+        tz_label = t("th_time_local", L).format(tz=data.timezone_name)
+        parts.append(
+            f"<table><tr>"
+            f"<th>{t('th_time_utc', L)}</th>"
+            f"<th>{_esc(tz_label)}</th>"
+            f"<th>{t('th_event_type', L)}</th>"
+            f"<th>{t('th_event', L)}</th>"
+            f"<th>{t('th_file', L)}</th>"
+            f"<th>{t('th_confidence', L)}</th>"
+            f"<th>{t('th_anomalies', L)}</th></tr>"
+        )
+        for ev in data.timeline_events[:500]:  # limit — court-ready
+            conf = t(confidence_label(ev.confidence), L)
+            conf_cell = (
+                f"[{_esc(conf)}] {ev.confidence:.2f}" if ev.confidence is not None
+                else f"[{_esc(conf)}]"
+            )
+            anomalies = ", ".join(ev.anomaly_flags) or "—"
+            parts.append(
+                f"<tr><td class='mono'>{_esc(_fmt_dt(_parse_iso(ev.ts_utc)))}</td>"
+                f"<td class='mono'>{_esc(_fmt_local(ev.ts_utc, data.timezone_name))}</td>"
+                f"<td>{_esc(ev.event_type)}</td>"
+                f"<td>{_esc((ev.title or '')[:120])}</td>"
+                f"<td class='mono small'>{_esc(ev.rel_path or '—')}</td>"
+                f"<td class='conf'>{conf_cell}</td>"
+                f"<td class='small'>{_esc(anomalies)}</td></tr>"
+            )
+        parts.append("</table>")
+        if len(data.timeline_events) > 500:
+            parts.append(
+                t_fmt("truncated_timeline", L, limit=500, n=f"{len(data.timeline_events):,}")
+            )
+    else:
+        parts.append(f"<p class='small'>{t('empty_timeline', L)}</p>")
+
+    # ── E10: korelace entity (s evidence odkazy) ───────────────
+    parts.append(f"<h2>9. {t('sec_correlations', L)}</h2>")
+    if data.correlations:
+        parts.append(
+            f"<table><tr>"
+            f"<th>{t('th_entity_a', L)}</th>"
+            f"<th>{t('th_entity_b', L)}</th>"
+            f"<th>{t('th_relation', L)}</th>"
+            f"<th>{t('th_confidence', L)}</th>"
+            f"<th>{t('th_evidence', L)}</th></tr>"
+        )
+        for c in data.correlations[:500]:  # limit — court-ready
+            conf = t(_correlation_confidence_label(c.confidence), L)
+            parts.append(
+                f"<tr><td class='mono'>{_esc(c.entity_a)}</td>"
+                f"<td class='mono'>{_esc(c.entity_b)}</td>"
+                f"<td>{_esc(c.relation)}</td>"
+                f"<td class='conf'>[{_esc(conf)}]</td>"
+                f"<td class='small'>{_esc(_evidence_str(c.evidence))}</td></tr>"
+            )
+        parts.append("</table>")
+    else:
+        parts.append(f"<p class='small'>{t('empty_correlations', L)}</p>")
 
     # ── patička ────────────────────────────────────────────────
     parts.append(
         f"<p class='small' style='margin-top:2em;border-top:1px solid #999;"
-        f"padding-top:6px'>STOPA report — případ <b>{_esc(data.case_id)}</b>, "
-        f"vygenerován {_fmt_dt(generated)}. Hash manifest slouží jako důkaz integrity "
-        "(SHA-256 + MD5); re-ingest je idempotentní podle (source, rel_path).</p>"
+        f"padding-top:6px'>{t_fmt('footer', L, case_id=_esc(data.case_id), ts=_fmt_dt(generated))}</p>"
     )
     parts.append("</body></html>")
     return "\n".join(parts)

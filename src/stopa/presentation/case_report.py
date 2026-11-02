@@ -16,11 +16,13 @@ from pathlib import Path
 from stopa.data.db import CaseDB
 from stopa.domain.report import (
     AuditEntry,
+    CorrelationRow,
     CustodyItem,
     FlaggedFile,
     MarkedFile,
     ReportData,
     SourceInfo,
+    TimelineEvent,
     build_html,
 )
 
@@ -99,6 +101,30 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
     audit_entries = tuple(reversed(audit_entries))
     custody_metadata = {c["source_id"]: c for c in db.list_custody_items()}
 
+    # E10: timeline (materializované události, chronologicky) + korelace entity.
+    # Lokální čas počítá build_html() přes case timezone_name — tady jen ISO UTC.
+    timeline_events = tuple(
+        TimelineEvent(
+            ts_utc=e["ts_utc"],
+            event_type=e["event_type"],
+            title=e.get("title"),
+            rel_path=e.get("rel_path"),
+            confidence=e.get("confidence"),
+            anomaly_flags=tuple(e.get("anomaly_flags") or ()),
+        )
+        for e in db.list_timeline_events(limit=500)
+    )
+    correlations = tuple(
+        CorrelationRow(
+            entity_a=c["entity_a"],
+            entity_b=c["entity_b"],
+            relation=c["relation"],
+            confidence=c["confidence"],
+            evidence=tuple(c.get("evidence") or ()),
+        )
+        for c in db.list_correlations(case_id)
+    )
+
     return ReportData(
         case_id=case.id,
         case_name=case.name,
@@ -114,13 +140,21 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
         marked_files=marked,
         audit_entries=audit_entries,
         custody_metadata=custody_metadata,
+        timeline_events=timeline_events,
+        correlations=correlations,
+        timezone_name=getattr(case, "timezone_name", None) or "Europe/Prague",
     )
 
 
-def generate_html_report(db: CaseDB, case_id: str, out_path: Path | str) -> Path:
-    """Vygeneruje HTML report a zapíše do `out_path`. Vrací cestu."""
+def generate_html_report(
+    db: CaseDB, case_id: str, out_path: Path | str, lang: str | None = None
+) -> Path:
+    """Vygeneruje HTML report a zapíše do `out_path`. Vrací cestu.
+
+    ``lang`` — jazyk reportu (E10 i18n): "cs" (výchozí) nebo "en".
+    """
     data = build_report_data(db, case_id)
-    html_doc = build_html(data)
+    html_doc = build_html(data, lang=lang)
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html_doc, encoding="utf-8")
@@ -134,10 +168,13 @@ def generate_html_report(db: CaseDB, case_id: str, out_path: Path | str) -> Path
 
 
 def generate_pdf_report(
-    db: CaseDB, case_id: str, out_path: Path | str
+    db: CaseDB, case_id: str, out_path: Path | str, lang: str | None = None
 ) -> Path:
-    """Vygeneruje PDF report (WeasyPrint). Bez WeasyPrintu → RuntimeError."""
-    html_doc = build_html(build_report_data(db, case_id))
+    """Vygeneruje PDF report (WeasyPrint). Bez WeasyPrintu → RuntimeError.
+
+    ``lang`` — jazyk reportu (E10 i18n): "cs" (výchozí) nebo "en".
+    """
+    html_doc = build_html(build_report_data(db, case_id), lang=lang)
     try:
         from weasyprint import HTML  # type: ignore[import-untyped]  # lazy — volitelná závislost
     except ImportError as e:

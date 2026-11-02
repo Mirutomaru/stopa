@@ -12,7 +12,8 @@ Použití:
   stopa verify <case_id> [--limit N]                     # E1 — re-hash + kontrola integrity (SHA-256/MD5)
   stopa audit <case_id> [--limit N] [-v]                 # E1 — neměnná stopa operací
   stopa backup <case_id> [--out DIR]                     # E1 — záloha case DB (SQLite .backup + integrity)
-  stopa report <case_id> [--format html|pdf] [--out DIR]    # court-ready report + chain of custody
+  stopa report <case_id> [--format html|pdf] [--out DIR] [--lang cs|en]  # court-ready report + chain of custody
+  stopa export <case_id> --what artifacts|timeline|correlations --format csv|json [--limit N] [--out SOUBOR]
   stopa serve [--port 8473]                                 # web GUI (FastAPI)
   stopa profiles
 
@@ -363,17 +364,62 @@ def cmd_report(args: argparse.Namespace) -> int:
     db = _open_db(args.case_id)
     out_dir = Path(args.out).expanduser() if args.out else _db_dir().parent / "reports"
     fmt = args.format
+    lang = getattr(args, "lang", None)  # E10 i18n — výchozí cs řeší report vrstva
     try:
         if fmt == "pdf":
-            path = generate_pdf_report(db, args.case_id, out_dir / default_report_name(args.case_id, "pdf"))
+            path = generate_pdf_report(
+                db, args.case_id, out_dir / default_report_name(args.case_id, "pdf"), lang=lang
+            )
         else:
-            path = generate_html_report(db, args.case_id, out_dir / default_report_name(args.case_id, "html"))
+            path = generate_html_report(
+                db, args.case_id, out_dir / default_report_name(args.case_id, "html"), lang=lang
+            )
     except RuntimeError as e:
         print(f"Report selhal: {e}", file=sys.stderr)
         db.close()
         return 2
     db.close()
     print(f"Report vygenerován ({fmt.upper()}): {path}")
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    """E10 — export dat případu do CSV/JSON (artifacts / timeline / correlations)."""
+    from stopa.domain.export import (
+        ARTIFACT_COLUMNS,
+        CORRELATION_COLUMNS,
+        TIMELINE_COLUMNS,
+        artifact_records,
+        correlation_records,
+        timeline_records,
+        to_csv,
+        to_json,
+    )
+
+    db = _open_db(args.case_id)
+    if args.what == "artifacts":
+        records = artifact_records(db.list_artifacts(limit=args.limit))
+        columns = ARTIFACT_COLUMNS
+    elif args.what == "timeline":
+        records = timeline_records(db.list_timeline_events(limit=args.limit))
+        columns = TIMELINE_COLUMNS
+    else:  # correlations
+        records = correlation_records(db.list_correlations(args.case_id))
+        columns = CORRELATION_COLUMNS
+
+    if args.format == "csv":
+        text = to_csv(records, columns)
+    else:
+        text = to_json(records)
+
+    out_path = Path(args.out).expanduser() if args.out else None
+    if out_path is not None:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(text, encoding="utf-8")
+        print(f"Export {len(records)} záznamů ({args.format.upper()}): {out_path}")
+    else:
+        sys.stdout.write(text if text.endswith("\n") or args.format == "json" else text + "\n")
+    db.close()
     return 0
 
 
@@ -646,7 +692,22 @@ def build_parser() -> argparse.ArgumentParser:
                        help="výstupní formát (default: html; pdf vyžaduje weasyprint)")
     rep_p.add_argument("--out", metavar="DIR",
                        help="výstupní složka (default: reports/ vedle case DB)")
+    rep_p.add_argument("--lang", choices=["cs", "en"], default=None,
+                       help="jazyk reportu (E10 i18n; default: cs)")
     rep_p.set_defaults(func=cmd_report)
+
+    exp_p = sub.add_parser("export", help="E10 — export dat případu do CSV/JSON")
+    exp_p.add_argument("case_id")
+    exp_p.add_argument("--what", choices=["artifacts", "timeline", "correlations"],
+                       default="artifacts",
+                       help="co exportovat (default: artifacts)")
+    exp_p.add_argument("--format", choices=["csv", "json"], default="csv",
+                       help="výstupní formát (default: csv)")
+    exp_p.add_argument("--limit", type=int, default=None,
+                       help="max. počet záznamů (artifacts/timeline; default: vše)")
+    exp_p.add_argument("--out", metavar="SOUBOR",
+                       help="výstupní soubor (default: stdout)")
+    exp_p.set_defaults(func=cmd_export)
 
     srv_p = sub.add_parser("serve", help="web GUI (FastAPI nad analyze())")
     srv_p.add_argument("--host", default="127.0.0.1")
