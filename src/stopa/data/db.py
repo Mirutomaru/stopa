@@ -12,12 +12,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from stopa.domain.evidence_model import ConfidenceLevel, Finding, Provenance
+from stopa.domain.integrity import (
+    GENESIS,
+    ChainRow,
+    compute_audit_hash,
+    generate_keypair,
+    sign_hash,
+    verify_chain,
+)
 from stopa.domain.lineage import LineageEvent
 from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -154,7 +162,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
     ts TEXT NOT NULL,
     action TEXT NOT NULL,
     actor TEXT,
-    details_json TEXT NOT NULL DEFAULT '{}'
+    details_json TEXT NOT NULL DEFAULT '{}',
+    -- P0 Core C4: Evidence Integrity 2.0 — hash chaining (prev_hash + vlastní hash)
+    prev_hash TEXT,
+    hash TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
 -- append-only: UPDATE/DELETE se tichom ignorují (RAISE(IGNORE)) — neměnná stopa
@@ -197,6 +208,19 @@ CREATE TABLE IF NOT EXISTS lineage_events (
 );
 CREATE INDEX IF NOT EXISTS idx_lineage_case ON lineage_events(case_id);
 CREATE INDEX IF NOT EXISTS idx_lineage_op ON lineage_events(op_type);
+
+-- P0 Core C4: Evidence Integrity 2.0 — Ed25519 kontrolní body.
+-- Kontrolní bod = podpis hashu posledního audit řádku; ukládá se po operacích
+-- měnících důkazy (ingest, correlate, export) + na požádání. Nezávislá kontrola:
+-- veřejný klíč + kontrolní body stačí k ověření integrity bez soukromého klíče.
+CREATE TABLE IF NOT EXISTS integrity_checkpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    audit_row_id INTEGER NOT NULL,  -- ID posledního audit řádku v okamžiku podpisu
+    last_hash TEXT NOT NULL,        -- hash posledního audit řádku (podepsaný)
+    signature_b64 TEXT NOT NULL,    -- Ed25519 podpis last_hash (base64)
+    reason TEXT                     -- ingest | correlate | export | manual | …
+);
 
 -- E1 Evidence Manager: custody items — metadata nabytí důkazu per source (průběžná evidence)
 CREATE TABLE IF NOT EXISTS custody_items (
@@ -293,6 +317,8 @@ class CaseDB:
             if col not in art_cols:
                 self.conn.execute(f"ALTER TABLE artifacts ADD COLUMN {col} {decl}")
                 self.conn.commit()
+        # P0 Core C4: Evidence Integrity 2.0 — hash chaining audit logu (sloupce + backfill).
+        self._migrate_audit_chain()
         # FÁZE 3 backfill: staré case DB (bez FTS indexu) — jednou doindexovat existující řádky.
         # 'rebuild' u external-content FTS5 přečte obsah přímo z tabulky `files`.
         # Meta-flaga je spolehlivější než COUNT(*) (external-content stíny po delete).
@@ -336,6 +362,194 @@ class CaseDB:
     def schema_version(self) -> int:
         """Aktuální verze schématu case DB (E1 — diagnostika / migrace)."""
         return _schema_version(self.conn)
+
+    # ── P0 Core C4: Evidence Integrity 2.0 ────────────────────
+    def _migrate_audit_chain(self) -> None:
+        """Stará case DB bez hash chaining sloupců (audit_log).
+
+        Idempotentní: přidá ``prev_hash``/``hash`` a backfillne existující řádky
+        (řetězec od GENESIS, chronologicky podle id). Nové DB mají sloupce ze SCHEMA.
+        """
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(audit_log)").fetchall()}
+        if "prev_hash" not in cols:
+            self.conn.execute("ALTER TABLE audit_log ADD COLUMN prev_hash TEXT")
+            self.conn.commit()
+        if "hash" not in cols:
+            self.conn.execute("ALTER TABLE audit_log ADD COLUMN hash TEXT")
+            self.conn.commit()
+        # Backfill: řádky bez hashu (staré DB) — doplnit řetězec od GENESIS.
+        rows = self.conn.execute(
+            "SELECT id, ts, action, actor, details_json FROM audit_log"
+            " WHERE hash IS NULL ORDER BY id ASC"
+        ).fetchall()
+        if not rows:
+            return
+        # append-only triggery (RAISE IGNORE) by UPDATE pohltily — na čas zrušit.
+        self.conn.execute("DROP TRIGGER IF EXISTS audit_no_update")
+        self.conn.execute("DROP TRIGGER IF EXISTS audit_no_delete")
+        prev = GENESIS
+        for r in rows:
+            h = compute_audit_hash(prev, r["ts"], r["action"], r["actor"], r["details_json"])
+            self.conn.execute(
+                "UPDATE audit_log SET prev_hash = ?, hash = ? WHERE id = ?",
+                (prev, h, r["id"]),
+            )
+            prev = h
+        # triggery obnovit (stejná definice jako v SCHEMA)
+        self.conn.executescript(
+            """
+            CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log BEGIN
+                SELECT RAISE(IGNORE);
+            END;
+            CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log BEGIN
+                SELECT RAISE(IGNORE);
+            END;
+            """
+        )
+        self.conn.commit()
+
+    def _last_audit_row(self) -> tuple[int | None, str]:
+        """ID posledního audit řádku + jeho hash (GENESIS pokud log prázdný)."""
+        row = self.conn.execute(
+            "SELECT id, hash FROM audit_log ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None, GENESIS
+        return int(row["id"]), str(row["hash"] or "")
+
+    def log_operation(
+        self, action: str, actor: str | None = None, details: dict | None = None
+    ) -> int:
+        """Neměnný záznam operace (append-only) + hash chaining (P0 Core C4). Vrací ID řádku.
+
+        `action` — kanonický verb: case_created / source_added / file_processed /
+        artifact_extracted / report_generated / hash_verified …
+        Každý řádek nese ``prev_hash`` (hash předchozího) a vlastní ``hash`` →
+        jakákoli změna starého řádku rozbití řetězec (ověřitelné bez klíče).
+        """
+        _, prev = self._last_audit_row()
+        ts = datetime.now(timezone.utc).isoformat()
+        details_json = json.dumps(details or {}, ensure_ascii=False)
+        h = compute_audit_hash(prev, ts, action, actor, details_json)
+        cur = self.conn.execute(
+            "INSERT INTO audit_log (ts, action, actor, details_json, prev_hash, hash)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (ts, action, actor, details_json, prev, h),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def verify_audit_chain(self):
+        """Ověří celý hash řetězec audit logu. Vrací :class:`ChainReport`."""
+        rows = [
+            ChainRow(
+                id=int(r["id"]),
+                ts=r["ts"],
+                action=r["action"],
+                actor=r["actor"],
+                details_json=r["details_json"] or "{}",
+                prev_hash=r["prev_hash"] or GENESIS,
+                hash=r["hash"] or "",
+            )
+            for r in self.conn.execute(
+                "SELECT id, ts, action, actor, details_json, prev_hash, hash"
+                " FROM audit_log ORDER BY id ASC"
+            ).fetchall()
+        ]
+        return verify_chain(rows)
+
+    # ── Ed25519 kontrolní body (P0 Core C4) ───────────────────
+    def ensure_integrity_key(self) -> tuple[str, str]:
+        """Vygeneruje Ed25519 klíčový pár případu (idempotentní).
+
+        Soukromý klíč v meta (case DB), veřejný do reportu. Vrací
+        ``(private_b64, public_b64)``. Vyžaduje balík ``cryptography``.
+        """
+        row = self.conn.execute(
+            "SELECT value FROM meta WHERE key = 'integrity_pub'"
+        ).fetchone()
+        if row is not None:
+            priv_row = self.conn.execute(
+                "SELECT value FROM meta WHERE key = 'integrity_priv'"
+            ).fetchone()
+            return (priv_row["value"] if priv_row else "", row["value"])
+        priv_b64, pub_b64 = generate_keypair()
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_priv', ?)",
+            (priv_b64,),
+        )
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_pub', ?)",
+            (pub_b64,),
+        )
+        self.conn.commit()
+        return priv_b64, pub_b64
+
+    def integrity_public_key(self) -> str | None:
+        """Veřejný Ed25519 klíč případu (base64), pokud byl vygenerován."""
+        row = self.conn.execute(
+            "SELECT value FROM meta WHERE key = 'integrity_pub'"
+        ).fetchone()
+        return row["value"] if row else None
+
+    def add_integrity_checkpoint(self, reason: str) -> int | None:
+        """Podpisne hash posledního audit řádku a uloží kontrolní bod.
+
+        Vrací ID kontrolního bodu; ``None`` pokud klíč nebyl vygenerován
+        (graceful degradation — bez balíku ``cryptography``).
+        """
+        pub = self.integrity_public_key()
+        if pub is None:
+            return None
+        row = self.conn.execute(
+            "SELECT value FROM meta WHERE key = 'integrity_priv'"
+        ).fetchone()
+        if row is None or not row["value"]:
+            return None
+        audit_id, last_hash = self._last_audit_row()
+        sig_b64 = sign_hash(row["value"], last_hash)
+        cur = self.conn.execute(
+            "INSERT INTO integrity_checkpoints (ts, audit_row_id, last_hash, signature_b64, reason)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (datetime.now(timezone.utc).isoformat(), audit_id or 0, last_hash, sig_b64, reason),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def list_integrity_checkpoints(self) -> list[dict]:
+        """Kontrolní body (chronologicky) — pro report / nezávislou kontrolu."""
+        rows = self.conn.execute(
+            "SELECT id, ts, audit_row_id, last_hash, signature_b64, reason"
+            " FROM integrity_checkpoints ORDER BY id ASC"
+        ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "ts": r["ts"],
+                "audit_row_id": r["audit_row_id"],
+                "last_hash": r["last_hash"],
+                "signature_b64": r["signature_b64"],
+                "reason": r["reason"],
+            }
+            for r in rows
+        ]
+
+    def verify_integrity_checkpoints(self) -> list[dict]:
+        """Ověří kontrolní body veřejným klíčem (nezávislá kontrola).
+
+        Každý bod: ``verify_signature(pub, last_hash, signature_b64)``. Vrací
+        seznam s ``ok`` per bod + souhrn.
+        """
+        pub = self.integrity_public_key()
+        from stopa.domain.integrity import verify_signature
+
+        out: list[dict] = []
+        if pub is None:
+            return [{"ok": False, "reason": "veřejný klíč nebyl vygenerován"}]
+        for cp in self.list_integrity_checkpoints():
+            ok = verify_signature(pub, cp["last_hash"], cp["signature_b64"])
+            out.append({"id": cp["id"], "ok": ok})
+        return out
 
     # ── cases ────────────────────────────────────────────────
     def add_case(self, case: Case) -> None:
@@ -611,27 +825,6 @@ class CaseDB:
         return out
 
     # ── E1 Evidence Manager: audit log + custody items ────────
-    def log_operation(
-        self, action: str, actor: str | None = None, details: dict | None = None
-    ) -> int:
-        """Neměnný záznam operace (append-only). Vrací ID řádku.
-
-        `action` — kanonický verb: case_created / source_added / file_processed /
-        artifact_extracted / report_generated / hash_verified …
-        """
-        cur = self.conn.execute(
-            "INSERT INTO audit_log (ts, action, actor, details_json)"
-            " VALUES (?, ?, ?, ?)",
-            (
-                datetime.now(timezone.utc).isoformat(),
-                action,
-                actor,
-                json.dumps(details or {}, ensure_ascii=False),
-            ),
-        )
-        self.conn.commit()
-        return int(cur.lastrowid)
-
     def list_audit_log(
         self, limit: int | None = 100, offset: int | None = None
     ) -> list[dict]:

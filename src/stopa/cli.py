@@ -57,6 +57,11 @@ def cmd_case_new(args: argparse.Namespace) -> int:
     case = Case(name=args.name, examiner=args.examiner, notes=args.notes)
     db = CaseDB(_db_dir() / f"{case.id}.db")
     db.add_case(case)
+    # P0 Core C4: Ed25519 klíčový pár případu (graceful degradation bez cryptography).
+    try:
+        db.ensure_integrity_key()
+    except RuntimeError:  # chybí balík 'cryptography' — kontrolní body se vypnou
+        pass
     # E1 Evidence Manager: neměnná stopa — vznik případu
     db.log_operation(
         "case_created",
@@ -133,6 +138,8 @@ def cmd_add(args: argparse.Namespace) -> int:
             print(f"    artifacty extrahovány: {result.artifacts_extracted}")
         for err in result.errors[:5]:
             print(f"    ! {err}", file=sys.stderr)
+    # P0 Core C4: kontrolní bod po ingestu (podpis hashu posledního audit řádku).
+    db.add_integrity_checkpoint("ingest")
     db.close()
     return rc
 
@@ -269,6 +276,8 @@ def cmd_correlate(args: argparse.Namespace) -> int:
                 for ev in c["evidence"][:5]:
                     path = ev.get("rel_path") or ""
                     print(f"      └─ {ev.get('detail', '')} {path}".rstrip())
+    # P0 Core C4: kontrolní bod po korelaci.
+    db.add_integrity_checkpoint("correlate")
     db.close()
     return 0
 
@@ -417,10 +426,55 @@ def cmd_export(args: argparse.Namespace) -> int:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(text, encoding="utf-8")
         print(f"Export {len(records)} záznamů ({args.format.upper()}): {out_path}")
+        # P0 Core C4: export manifest (deterministický hash + Ed25519 podpis).
+        _write_export_manifest(db, args.case_id, out_path, text.encode("utf-8"))
     else:
         sys.stdout.write(text if text.endswith("\n") or args.format == "json" else text + "\n")
+    db.log_operation(
+        "data_exported",
+        actor=case_examiner(db, args.case_id),
+        details={"what": args.what, "format": args.format, "records": len(records)},
+    )
+    # P0 Core C4: kontrolní bod po exportu.
+    db.add_integrity_checkpoint("export")
     db.close()
     return 0
+
+
+def _write_export_manifest(db: CaseDB, case_id: str, out_path: Path, content: bytes) -> None:
+    """P0 Core C4 — manifest vedle exportního souboru (reprodukovatelnost + podpis).
+
+    Deterministický hash (stejný vstup + verze STOPA = stejný hash); pokud případ
+    má Ed25519 klíč, manifest je podepsán (nezávislá kontrola veřejným klíčem).
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        tool_version = version("stopa")
+    except PackageNotFoundError:  # dev run bez instalace / chybějící metadata
+        tool_version = "0.1.0"
+    from stopa.domain.integrity import build_manifest, manifest_hash, sign_manifest
+
+    name = out_path.name
+    manifest = build_manifest(case_id, tool_version, [(name, content)])
+    payload: dict = {
+        "case_id": case_id,
+        "tool_version": tool_version,
+        "manifest_hash": manifest_hash(manifest),
+        "entries": [
+            {"name": e.name, "sha256": e.sha256, "size": e.size} for e in manifest.entries
+        ],
+    }
+    priv_row = db.conn.execute(
+        "SELECT value FROM meta WHERE key = 'integrity_priv'"
+    ).fetchone()
+    if priv_row is not None and priv_row["value"]:
+        payload["signature_b64"] = sign_manifest(manifest, priv_row["value"])
+    manifest_path = out_path.with_name(out_path.name + ".manifest.json")
+    manifest_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    print(f"Export manifest: {manifest_path}")
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
@@ -489,6 +543,64 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print(f"  … a dalších {len(problems) - args.limit}")
     db.close()
     return 1 if (mismatched or missing) else 0
+
+
+def cmd_integrity(args: argparse.Namespace) -> int:
+    """P0 Core C4 — Evidence Integrity 2.0: hash chaining + Ed25519 kontrolní body."""
+    db = _open_db(args.case_id)
+
+    # 1) Hash chaining audit logu (ověřitelné bez klíče).
+    report = db.verify_audit_chain()
+    if report.ok:
+        print(f"Hash řetězec audit logu: OK ({report.rows_checked} řádků)")
+    else:
+        print(
+            f"Hash řetězec audit logu: ROZBITÝ na řádku {report.broken_at_id}"
+            f" — {report.reason}",
+            file=sys.stderr,
+        )
+
+    # 2) Ed25519 klíč + kontrolní body.
+    pub = db.integrity_public_key()
+    if args.init_key and pub is None:
+        _, new_pub = db.ensure_integrity_key()
+        print(f"Ed25519 klíč vygenerován: {new_pub[:16]}…")
+        pub = new_pub
+    elif pub is not None:
+        print(f"Ed25519 veřejný klíč: {pub[:16]}… ({len(pub)} b64 znaků)")
+    else:
+        print("Ed25519 klíč: nevygenerován (použij --init-key)")
+
+    cps = db.list_integrity_checkpoints()
+    if not cps:
+        print("Kontrolní body: 0")
+    else:
+        results = db.verify_integrity_checkpoints()
+        ok_count = sum(1 for r in results if r.get("ok"))
+        print(f"Kontrolní body: {len(cps)} ({ok_count} platných podpisů)")
+        for cp, res in zip(cps, results):
+            mark = "✓" if res.get("ok") else "✗"
+            print(
+                f"  [{mark}] #{cp['id']} audit_row={cp['audit_row_id']} "
+                f"{cp['reason'] or '—'} {cp['ts']}"
+            )
+
+    # 3) Nový kontrolní bod na požádání.
+    if args.checkpoint:
+        if db.integrity_public_key() is None:
+            print("Klíč nevygenerován — použij --init-key", file=sys.stderr)
+            db.close()
+            return 2
+        cp_id = db.add_integrity_checkpoint(args.checkpoint)
+        if cp_id is None:
+            print("Kontrolní bod neuložen (chybí klíč)", file=sys.stderr)
+            db.close()
+            return 2
+        print(f"Nový kontrolní bod #{cp_id} ({args.checkpoint})")
+
+    db.close()
+    # exit code: 0 = řetězec OK, 1 = rozbitý řetězec
+    return 0 if report.ok else 1
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
@@ -648,6 +760,16 @@ def build_parser() -> argparse.ArgumentParser:
     ver_p.add_argument("--limit", type=int, default=20,
                        help="max. počet zobrazených problémů (default: 20)")
     ver_p.set_defaults(func=cmd_verify)
+
+    int_p = sub.add_parser(
+        "integrity", help="P0 C4 — Evidence Integrity 2.0 (hash chaining + Ed25519 kontrolní body)"
+    )
+    int_p.add_argument("case_id")
+    int_p.add_argument("--init-key", action="store_true",
+                       help="vygenerovat Ed25519 klíčový pár případu (idempotentní)")
+    int_p.add_argument("--checkpoint", metavar="DUVOD", default=None,
+                       help="uložit nový kontrolní bod s uvedeným důvodem")
+    int_p.set_defaults(func=cmd_integrity)
 
     aud_p = sub.add_parser("audit", help="E1 — neměnná stopa operací (audit trail)")
     aud_p.add_argument("case_id")

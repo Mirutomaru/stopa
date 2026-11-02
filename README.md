@@ -117,6 +117,17 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 
 > Reference validation (E13: benchmarky + regresní sada + SWGDE/NIST validace) = zbývající P3, viz `docs/DEVELOPMENT_ROADMAP.md`.
 
+## Co umí (P0 Core — Unified Evidence Model & Integrity, hotovo)
+
+| Funkce | Popis | Stav |
+|---|---|---|
+| C1 Unified Evidence Model | `Provenance` + `Finding` s povinnou doložitelností; 5 úrovní AI grounding (direct→unverified); DB schéma v7 (`findings`, provenance sloupce) | ✅ |
+| C2 Evidence Lineage Engine | Append-only `lineage_events` (v8): zdroj → extract → correlate → finding → report; chain traversal + verze nástroje + hash konfigurace | ✅ |
+| C3 Parser Validation Registry | Deklarativní registry 9 parserů (verze, formáty, omezení); synchronizace s pipeline (`RegistryError` při nesouladu) | ✅ |
+| C4 Evidence Integrity 2.0 | Hash chaining audit logu (v9, GENESIS→…); Ed25519 kontrolní body (po ingest/correlate/export + `stopa integrity --checkpoint`); podepsané export manifesty (deterministický hash) | ✅ |
+
+> P0 Core = doložitelnost + integrity důkazů: každý finding se dá dohledat ke zdroji, audit log je tamper-evidentní a exporty jsou reprodukovatelné. Detail: `docs/STOPA_TARGET_ARCHITECTURE.md`, `docs/STOPA_SECURITY_MODEL.md`.
+
 ## Rychlý start
 
 ```bash
@@ -130,13 +141,14 @@ export STOPA_DB_DIR=~/stopa_cases   # kde se ukládají case DB (default: ./case
 .venv/bin/stopa search <case_id> "dotaz" [--source ID]   # full-text (FTS5)
 .venv/bin/stopa timeline <case_id> [--type browser_history|imessage|sms_message|call_log] [--path text] [-v]
 .venv/bin/stopa image <case_id> /cesta/ke/obrazu.img [--no-carve]   # disk image (TSK)
+.venv/bin/stopa integrity <case_id> [--init-key | --checkpoint DUVOD]  # P0 C4 — hash chaining + Ed25519 kontrolní body
 .venv/bin/stopa stats <case_id>
 ```
 
 ## Testy & lint
 
 ```bash
-.venv/bin/pytest -q        # 678 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze)
+.venv/bin/pytest -q        # 700 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze + P0 Core)
 .venv/bin/ruff check src tests
 ```
 

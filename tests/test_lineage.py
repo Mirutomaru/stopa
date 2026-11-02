@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from stopa.data.db import CaseDB
+from stopa.data.db import SCHEMA_VERSION, CaseDB
 from stopa.domain.evidence_model import Finding, Provenance
 from stopa.domain.lineage import (
     LineageEvent,
@@ -160,11 +160,11 @@ class TestPipelineIntegration:
         assert ev.tool_version is not None  # verze STOPA zaznamenána
 
 
-# ── migrace v7→v8 ──────────────────────────────────────────────
+# ── migrace starého DB → aktuální schéma ───────────────────────
 
 class TestMigrationV8:
     def test_old_db_migrates_up(self, tmp_path: Path):
-        """DB bez lineage_events (schéma v7) → open → tabulka existuje."""
+        """DB bez lineage_events (schéma v7) → open → tabulka existuje + migruje na aktuální."""
         p = tmp_path / "case.db"
         conn = sqlite3.connect(p)
         conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
@@ -184,7 +184,7 @@ class TestMigrationV8:
 
         d = CaseDB(p)
         try:
-            assert d.schema_version() == 8
+            assert d.schema_version() == SCHEMA_VERSION
             cols = {r["name"] for r in d.conn.execute("PRAGMA table_info(lineage_events)").fetchall()}
             assert {"id", "op_type", "input_refs_json", "output_refs_json"} <= cols
             # lineage funguje i po migraci

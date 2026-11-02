@@ -1,4 +1,4 @@
-"""P0 Core C1 — Unified Evidence Model: modely, findings CRUD, migrace v6→v8."""
+"""P0 Core C1 — Unified Evidence Model: modely, findings CRUD, migrace v6→v9."""
 
 from __future__ import annotations
 
@@ -152,11 +152,11 @@ class TestFindingsCRUD:
             )
 
 
-# ── migrace v6 → v8 ────────────────────────────────────────────
+# ── migrace v6 → aktuální schéma ───────────────────────────────
 
 class TestMigration:
-    def test_new_db_at_v8(self, db: CaseDB):
-        assert db.schema_version() == SCHEMA_VERSION == 8
+    def test_new_db_at_current(self, db: CaseDB):
+        assert db.schema_version() == SCHEMA_VERSION == 9
         tables = {r[0] for r in db.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert "findings" in tables and "lineage_events" in tables
 

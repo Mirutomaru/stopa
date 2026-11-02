@@ -4,6 +4,27 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 
+### Added (P0 Core C4 — Evidence Integrity 2.0)
+- `domain/integrity.py` — čistá logika bez I/O: **hash chaining** audit logu
+  (`compute_audit_hash`, `verify_chain` s detekcí rozbitého řetězce + ID prvního
+  špatného řádku), **Ed25519** kontrolní body (lazy import `cryptography` — volitelná
+  závislost, graceful degradation jako FDE: `generate_keypair`, `sign_hash`,
+  `verify_signature`), **export manifesty** (`build_manifest` + deterministický
+  `manifest_hash` — stejný vstup = stejný hash + Ed25519 podpis)
+- DB schéma **v8 → v9**: audit_log +sloupce `prev_hash`/`hash`, nová tabulka
+  `integrity_checkpoints`; idempotentní `_migrate_audit_chain()` (ALTER + backfill
+  řetězce od GENESIS pro staré DB, triggery append-only dočasně zrušeny a obnoveny)
+- `CaseDB.log_operation()` nyní chainuje; metody `ensure_integrity_key` /
+  `add_integrity_checkpoint` / `verify_integrity_checkpoints`; odstraněna duplicitní
+  stará `log_operation`
+- CLI: nový subpříkaz **`stopa integrity <case>`** (ověření řetězce + klíč + kontrolní
+  body, `--init-key`, `--checkpoint DŮVOD`); Ed25519 pár generován při `case new`;
+  kontrolní body automaticky po ingest / correlate / export; `_write_export_manifest()`
+  — podepsaný manifest vedle exportního souboru (reprodukovatelnost)
+- `tests/test_integrity.py` — 22 testů (čistá logika: chain/tamper/Ed25519 roundtrip/
+  manifest determinismus; DB integrace: chaining, backfill staré DB, kontrolní body,
+  export manifest); suite 678 → **700 passed**
+
 ### Added (P0 Core C3 — Parser Validation Registry)
 - `domain/validation_registry.py` — `ParserValidation` (parser_id, verze, formáty,
   omezení, referenční dataset, test files), deklarativní registry pro všech 9 parserů
