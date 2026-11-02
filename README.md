@@ -86,6 +86,37 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 > The Sleuth Kit 4.12 se staví ze zdroje do `~/tsk-install` (bez sudo); cesta se nastavuje přes `STOPA_TSK_BIN`.
 > Čisté moduly (`domain/image_types.py`, `domain/carving.py`) běží bez TSK — IO vrstva je defenzivní (`TskError`).
 
+## Co umí (FÁZE 5b+ — pokročilé extraktoři, hotovo)
+
+| Funkce | Z jakého nástroje | Stav |
+|---|---|---|
+| ZIP/OOXML/RAR carving (`_zip_size` EOCD validace + RAR4/5 block walking) | FTK / X-Ways carving | ✅ |
+| Apple-style GUI: modulární SPA (Store pub/sub, data grid s nekonečným skrolováním, inspector drawer s hex dumpem, Cmd+K search) | AXIOM UI | ✅ |
+| Mobilní extrakce 6a — logická (Android contacts2, iOS AddressBook, WhatsApp msgstore, iOS Safari History) | UFED logical extraction | ✅ |
+| Mobilní extrakce 6b — physical/FDE: STOPAFDE + PBKDF2→AES-256-CBC, `stopa mobile <case> /obraz.img --password X` | UFED FDE unlock | ✅ |
+| Produkční FDE formáty (B2): LUKS1/2 (cryptsetup) + Android FBE (AES-256-XTS, čistý Python), keyfile import | Belkasoft X / UFED FDE | ✅ |
+| E01/AFF4 kontejnery — rootless ctypes wrapper (libewf/libafflib), chunked read 1 MiB | AXIOM / X-Ways image formats | ✅ |
+| iCloud Messages extraktor (warrant return `MessagesInICloud.csv` = XLSX/delimited) | AXIOM CloudAppleIMessageArtifact | ✅ |
+
+## Co umí (E-fáze — inženýrské vylepšení, hotovo)
+
+| Fáze | Funkce | Stav |
+|---|---|---|
+| E1 | Evidence Manager — audit log operací (SWGDE-style), custody items, verze parserů | ✅ |
+| E2 | Timeline Engine — materializovaná timeline, TZ konverze, detekce nesrovnalostí | ✅ |
+| E3 | Paralelizace pipeline + streaming FDE (RAM peak ~420→~17 MB) + checkpointing `--resume` | ✅ |
+| E4 | Entity + Correlation Engine — kanonické tvary, same_contact/temporal_overlap/hash_match | ✅ |
+| E5 | Entity Graph GUI (SVG force-directed) + Correlation sekce s důkazy | ✅ |
+| E6 | Windows parsery vlna 1: MS-LNK, MS-PREFETCH (MAM + LZXPRESS Huffman), Jump Lists | ✅ |
+| E7 | Windows parsery vlna 2: Event Log .evtx (i ElfFile varianta), Amcache, ShimCache, USN Journal | ✅ |
+| E8 | File Inspector metadata — PDF/OOXML/ID3v2/MP4/EXIF + porovnání dvou souborů | ✅ |
+| E9 | Search rozšíření — hash lookup, filtry `size:`/`mtime:`/`ext:`, artifact fulltext (`in-artifact:`) | ✅ |
+| E10 | Reporting — timeline+korelace v reportu, confidence štítky, export CSV/JSON, i18n cs/en | ✅ |
+| E11 | AI Forensic Assistant (LM Studio) — nl_search/summary/explain s validovanými citacemi | ✅ |
+| E12 | GUI doplnění — System Diagnostics, Settings persistence, Cases CRUD | ✅ |
+
+> Reference validation (E13: benchmarky + regresní sada + SWGDE/NIST validace) = zbývající P3, viz `docs/DEVELOPMENT_ROADMAP.md`.
+
 ## Rychlý start
 
 ```bash
@@ -105,7 +136,7 @@ export STOPA_DB_DIR=~/stopa_cases   # kde se ukládají case DB (default: ./case
 ## Testy & lint
 
 ```bash
-.venv/bin/pytest -q        # 200 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving)
+.venv/bin/pytest -q        # 627 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze)
 .venv/bin/ruff check src tests
 ```
 
@@ -136,13 +167,20 @@ src/stopa/
 └── cli.py             # argparse subpříkazy (case/add/files/search/timeline/image/stats/profiles)
 ```
 
-## Plán — zbývající fáze
+## Plán — stav fází
 
-- **FÁZE 2**: Web GUI (FastAPI + React/htmx) — case přehled, file browser s filtry, progress
+- **FÁZE 1**: ✅ Core pipeline (hashing, signatury, bad-ext, dedupe, hash sets, profily)
+- **FÁZE 2**: ✅ Web GUI (FastAPI + vanilla JS SPA bez build kroku) — case přehled, file browser s filtry, hex inspector, AI asistent; `stopa serve [--port 8473]`
 - **FÁZE 3**: ✅ Full-text search (SQLite FTS5) — `stopa search`, backfill starých DB
 - **FÁZE 4a**: ✅ SQLite extraktoři + timeline CLI
 - **FÁZE 4b**: ✅ Registry hives (regf/regipy: Run/MountedDevices/User/Environment) + Apple plists (binární i XML, date artifacty); dispatch `signatura → extraktor`
 - **FÁZE 4c**: ✅ Messaging — Apple iMessage (`chat.db`, CFAbsoluteTime), Android SMS/MMS (`mmssms.db`), call logy (`calls`)
 - **FÁZE 5**: ✅ Disk images — detekce typu (E01/AFF4/RAW-DD + FS), partice (TSK mmls), soubory (fls/icat), carving engine, CLI `stopa image`; TSK 4.12 ze zdroje do `~/tsk-install`
-- **FÁZE 6**: Mobilní extrakce (UFED-style: physical/file system/logical, FDE/FBE unlock)
-- **FÁZE 7**: Reporty (HTML/PDF court-ready, chain of custody — Belkasoft/FTK style)
+- **FÁZE 6**: ✅ Mobilní extrakce — logická (contacts/AddressBook/WhatsApp/Safari) + physical/FDE (STOPAFDE, LUKS, Android FBE, keyfile)
+- **FÁZE 7**: ✅ Reporty (HTML/PDF court-ready, chain of custody — Belkasoft/FTK style), i18n cs/en
+- **E-fáze E1–E12**: ✅ viz tabulka výše (Evidence Manager → GUI doplnění)
+
+### Zbývá (P3 / tech-debt backlog)
+
+- **E13**: Benchmarky + regresní sada + SWGDE/NIST validace (`docs/DEVELOPMENT_ROADMAP.md`)
+- Tech-debt: viz `docs/improvement-plan.md`

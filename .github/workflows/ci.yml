@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install ruff
+        run: |
+          python -m pip install --upgrade pip
+          pip install "ruff>=0.4"
+
+      - name: Ruff check
+        run: ruff check src tests
+
+  test:
+    name: Tests (pytest + JS DOM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies (dev + web)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,web]"
+
+      - name: Run offline test suite
+        # python -m pytest (ne holý pytest) — root na sys.path pro cross-test importy
+        run: python -m pytest -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: JS DOM tests (graph.js přes jsdom)
+        working-directory: tests/js
+        run: |
+          npm ci --no-audit --no-fund
+          node graph.test.mjs

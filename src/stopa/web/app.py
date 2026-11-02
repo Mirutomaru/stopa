@@ -15,14 +15,17 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from stopa import __version__
 from stopa.data.db import CaseDB
 from stopa.data.lmstudio_client import LmStudioClient, LmStudioUnavailable
 from stopa.domain.ai_assistant import (
@@ -46,6 +49,17 @@ def _db_dir() -> Path:
     d = Path(os.environ.get("STOPA_DB_DIR", "cases"))
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+# audit P1 — case_id z URL jde přímo do cesty; bez sanitace uniká `../secret.db`
+# mimo STOPA_DB_DIR (path traversal). Legitní ID = `case-<hex>` → strict regex.
+_CASE_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def validate_case_id(case_id: str) -> None:
+    """Odmítne case_id, které by mohly uniknout DB adresáře (path traversal)."""
+    if not _CASE_ID_RE.match(case_id):
+        raise HTTPException(400, f"neplatné ID případu: {case_id!r}")
 
 
 class CaseIn(BaseModel):
@@ -88,11 +102,12 @@ class CaseUpdateIn(BaseModel):
 
 def create_app(db_dir: Path | None = None) -> FastAPI:
     """App factory — `db_dir` pro testy (tmp), default z env STOPA_DB_DIR."""
-    app = FastAPI(title="STOPA", version="0.1.0")
+    app = FastAPI(title="STOPA", version=__version__)
     base = db_dir or _db_dir()
     app.state.db_dir = base  # pro testy (TestClient)
 
     def open_db(case_id: str) -> CaseDB:
+        validate_case_id(case_id)
         path = base / f"{case_id}.db"
         if not path.exists():
             raise HTTPException(404, f"případ {case_id} nenalezen")
@@ -515,11 +530,19 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             if rec is None:
                 raise HTTPException(404, f"soubor {file_id} nenalezen")
             data = _read_file_bytes(db, rec, offset=0, length=None)
+            # audit P1 — RFC 5987 quoting: nequoted `"` v názvu = header injection;
+            # filename* nese UTF-8 (české názvy), fallback filename je ASCII-safe.
+            name = rec.name or "soubor"
+            ascii_name = "".join(c if c.isascii() and c not in '"\\' else "_" for c in name)
             return Response(
                 content=data,
                 media_type="application/octet-stream",
-                headers={"Content-Disposition":
-                         f'attachment; filename="{rec.name}"'},
+                headers={
+                    "Content-Disposition": (
+                        f'attachment; filename="{ascii_name}"; '
+                        f"filename*=UTF-8''{quote(name)}"
+                    )
+                },
             )
         finally:
             db.close()
@@ -695,6 +718,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     @app.delete("/api/cases/{case_id}")
     def delete_case(case_id: str) -> dict:
         """Smaže případ i zdroje (kaskáda na files/artifacts/timeline)."""
+        validate_case_id(case_id)
         path = base / f"{case_id}.db"
         db = CaseDB(path) if path.exists() else None
         try:
@@ -845,14 +869,26 @@ def _read_file_bytes(db: CaseDB, rec, offset: int = 0, length: int | None = None
                 continue  # jiná partice / obraz bez TSK — zkus další
         if data is None:
             raise HTTPException(502, "TSK icat se nedaří přečíst soubor z obrazu")
-    else:
-        p = root / rec.rel_path if not root.is_file() else root
-        if not p.exists():
-            raise HTTPException(404, f"soubor na disku neexistuje: {p}")
-        data = p.read_bytes()
+        end = len(data) if length is None else min(len(data), offset + length)
+        return data[offset:end]
 
-    end = len(data) if length is None else min(len(data), offset + length)
-    return data[offset:end]
+    # diskový zdroj — audit P1: rel_path s `..` (symlink ve zdroji) unikne kořene
+    p = root / rec.rel_path if not root.is_file() else root
+    try:
+        resolved = p.resolve(strict=True)
+    except OSError:
+        raise HTTPException(404, f"soubor na disku neexistuje: {p}") from None
+    root_resolved = root.resolve()
+    if resolved != root_resolved and not str(resolved).startswith(str(root_resolved) + os.sep):
+        # soubor je mimo kořen zdroje (.. nebo symlink ven) → 404, ne 500
+        raise HTTPException(404, f"soubor uniká kořene zdroje: {rec.rel_path}")
+
+    # audit P1 — RAM peak: ranged read (seek + read) místo read_bytes() celého souboru
+    with open(p, "rb") as fh:
+        if offset:
+            fh.seek(offset)
+        data = fh.read(length) if length is not None else fh.read()
+    return data
 
 
 def _hex_dump(data: bytes) -> list[str]:

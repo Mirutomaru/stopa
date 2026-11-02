@@ -324,8 +324,6 @@ class CaseDB:
             if "timezone_name" in cols:
                 c.timezone_name = r["timezone_name"] or "Europe/Prague"
             if r["created_at"]:
-                from datetime import datetime
-
                 try:
                     c.created_at = datetime.fromisoformat(r["created_at"])
                 except ValueError:
@@ -337,8 +335,6 @@ class CaseDB:
         row = self.conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
         if row is None:
             return None
-        from datetime import datetime
-
         return Case(
             id=row["id"],
             name=row["name"],
@@ -419,8 +415,6 @@ class CaseDB:
         row = self.conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
         if row is None:
             return None
-        from datetime import datetime
-
         return EvidenceSource(
             id=row["id"],
             case_id=row["case_id"],
@@ -434,8 +428,6 @@ class CaseDB:
         rows = self.conn.execute(
             "SELECT * FROM sources WHERE case_id = ? ORDER BY added_at", (case_id,)
         ).fetchall()
-        from datetime import datetime
-
         return [
             EvidenceSource(
                 id=r["id"],
@@ -548,8 +540,6 @@ class CaseDB:
         """Přepne flag souboru („evidence“ / „report“). Idempotentní."""
         flags = self.get_file_flags(file_id)
         new = (flags + (flag,)) if (on and flag not in flags) else tuple(f for f in flags if f != flag)
-        from datetime import datetime
-
         if new:
             self.conn.execute(
                 "INSERT OR REPLACE INTO evidence_marks (file_id, marked_at, flags)"
@@ -588,8 +578,6 @@ class CaseDB:
         `action` — kanonický verb: case_created / source_added / file_processed /
         artifact_extracted / report_generated / hash_verified …
         """
-        from datetime import datetime
-
         cur = self.conn.execute(
             "INSERT INTO audit_log (ts, action, actor, details_json)"
             " VALUES (?, ?, ?, ?)",
@@ -633,9 +621,7 @@ class CaseDB:
         notes: str | None = None,
     ) -> None:
         """Metadata nabytí důkazu pro jeden source (idempotentní upsert)."""
-        from datetime import datetime as _dt
-
-        ts = acquired_at or _dt.now(timezone.utc)
+        ts = acquired_at or datetime.now(timezone.utc)
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         self.conn.execute(
@@ -1080,10 +1066,9 @@ class CaseDB:
                 f"SELECT MIN(timestamp) AS lo, MAX(timestamp) AS hi FROM artifacts {where_a}",
                 args_a,
             ).fetchone()
-        from datetime import datetime as _dt
 
         def parse(v):
-            return _dt.fromisoformat(v) if v else None
+            return datetime.fromisoformat(v) if v else None
 
         return {"window_start": parse(row["lo"]), "window_end": parse(row["hi"])}
 
@@ -1221,8 +1206,6 @@ def _iso(dt) -> str | None:
 
 
 def _row_to_record(r: sqlite3.Row) -> FileRecord:
-    from datetime import datetime
-
     def parse(v):
         return datetime.fromisoformat(v) if v else None
 
@@ -1247,8 +1230,6 @@ def _row_to_record(r: sqlite3.Row) -> FileRecord:
 
 
 def _row_to_artifact(r: sqlite3.Row) -> Artifact:
-    from datetime import datetime
-
     def parse(v):
         return datetime.fromisoformat(v) if v else None
 
