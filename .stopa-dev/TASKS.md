@@ -193,7 +193,7 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
   SHA-256 promptu + citace, agent `e11:<režim>`) i všechny tři režimy E11. Settings toggle
   `ai_redact_pii` (default ON): GET/PUT `/api/settings`, CLI čte `settings.json`.
   **23 nových testů** (`tests/test_pii_redaction.py`); full suite **1110 passed, 1 skipped**, ruff clean.
-- **Dokončeno:** 2026-11-03 | Commit: (tento commit)
+- **Dokončeno:** 2026-11-03 | Commit: `6d74ab3`
 
 ## STP-020 — Report engine: 9 → 20 sekcí
 - **Oblast:** L | **Priorita:** P1 | **Stav:** DONE

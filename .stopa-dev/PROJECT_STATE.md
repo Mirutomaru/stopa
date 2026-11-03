@@ -33,7 +33,7 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-019 — AI governance + PII redaktor** (oblast H/M, P2) | Commit: (tento commit)
+**STP-019 — AI governance + PII redaktor** (oblast H/M, P2) | Commit: `6d74ab3`
 `domain/pii_redaction.py` — deterministický PII redaktor (bez I/O): maskuje telefony, e-maily,
 WhatsApp JID a platformní handle ve všech LLM prompt messages PŘED inference; stavební kameny
 opakovány z `entities.py`/`entity_resolution.py`; priorita překryvu JID > e-mail > handle > telefon.

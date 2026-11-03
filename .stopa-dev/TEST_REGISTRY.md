@@ -65,7 +65,7 @@ Povinná pole dle DEV OS promptu §3.7:
 | T-053 | tests/test_intelligence.py (25) | F-042 AI orchestrace | 5 agentů, routing, fail-closed validace + citace | PASS | commit `61f9a03` |
 | T-054 | tests/test_rag.py (30) | F-043 Forensic RAG | 3 vrstvy, chunking, prompt injection ochrana | PASS | commit `97cd4d6` |
 | T-055 | tests/test_e11.py (19) | LM Studio klient | mockovaný LLM endpoint port 1234 | PASS | — |
-| T-072 | tests/test_pii_redaction.py (23) | F-044 PII redaktor + audit AI volání | maskování phone/email/JID/handle, I1 orchestrace, E11 buildery, web E2E s mock LM Studio, toggle ai_redact_pii | PASS | STP-019 (tento commit) |
+| T-072 | tests/test_pii_redaction.py (23) | F-044 PII redaktor + audit AI volání | maskování phone/email/JID/handle, I1 orchestrace, E11 buildery, web E2E s mock LM Studio, toggle ai_redact_pii | PASS | STP-019 `6d74ab3` |
 
 ## Pipeline & UI & ostatní
 
