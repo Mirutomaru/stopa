@@ -15,6 +15,8 @@ pipeline kontejner jednoduše přeskočí (stejný pattern jako TSK/FDE extras).
 Veřejné API:
 - ``ewf_available() -> bool`` — True pokud se obě knihovny dají načíst
 - ``read_container(path, typ) -> bytes`` — celý obsah kontejneru (typ "e01"/"aff4")
+- ``stream_to_raw(path, typ, dest) -> int`` — STP-021: pravý stream (chunk → disk),
+  RAM peak = jedna chunka (1 MiB), ne celý obraz; vrací počet zapsaných bajtů
 - ``extract_to_raw(path, typ, dest) -> int`` — streamuje obsah do RAW souboru, vrací počet bajtů
 
 Interní detaily: knihovny se načítají lazy a cachují; handle je opaque
@@ -26,6 +28,7 @@ from __future__ import annotations
 import ctypes
 import logging
 import os
+from collections.abc import Callable
 from ctypes import (
     POINTER,
     byref,
@@ -110,8 +113,13 @@ def ewf_available() -> bool:
 
 # --- E01 / Expert Witness Format ----------------------------------------------
 
-def _ewf_read(path: Path) -> bytes:
-    """Přečte celý obsah E01 kontejneru (libewf_handle_* API)."""
+def _ewf_chunks(path: Path):
+    """Streamuje obsah E01 kontejneru po 1 MiB chunkách (STP-021).
+
+    Yields raw bajty jednotlivých chunk; handle se otevírá/zavírá interně.
+    ``_ewf_read`` = join chunk, ``stream_to_raw`` = přímý zápis na disk —
+    RAM peak je tak vždy jen jedna chunka (ne celý obraz).
+    """
     ewf = _load("libewf")
     if ewf is None:
         raise EwfError("libewf není dostupná")
@@ -151,7 +159,6 @@ def _ewf_read(path: Path) -> bytes:
         if h_size(handle, byref(size), byref(err)) != 1 or size.value < 0:
             raise EwfError("libewf_handle_get_media_size selhalo")
         total = int(size.value)
-        out = bytearray()
         offset = 0
         while offset < total:
             want = min(_CHUNK, total - offset)
@@ -159,18 +166,27 @@ def _ewf_read(path: Path) -> bytes:
             n = h_read(handle, buf, c_size_t(want), c_longlong(offset), byref(err))
             if n <= 0:
                 raise EwfError(f"libewf_handle_read_random selhalo @ {offset}")
-            out += buf.raw[:n]
+            yield buf.raw[:n]
             offset += n
-        return bytes(out)
     finally:
         h_close(handle, byref(err))
         h_free(byref(handle), byref(err))
 
 
+def _ewf_read(path: Path) -> bytes:
+    """Přečte celý obsah E01 kontejneru (libewf_handle_* API)."""
+    return b"".join(_ewf_chunks(path))
+
+
 # --- AFF4 / Autopsy Forensic File Format ---------------------------------------
 
-def _aff_read(path: Path) -> bytes:
-    """Přečte celý obsah AFF4 kontejneru (af_* API, sekvenční čtení)."""
+def _aff_chunks(path: Path):
+    """Streamuje obsah AFF4 kontejneru po 1 MiB chunkách (STP-021).
+
+    Yields raw bajty jednotlivých chunk; handle se otevírá/zavírá interně.
+    ``_aff_read`` = join chunk, ``stream_to_raw`` = přímý zápis na disk —
+    RAM peak je tak vždy jen jedna chunka (ne celý obraz).
+    """
     aff = _load("libafflib")
     if aff is None:
         raise EwfError("libafflib není dostupná")
@@ -196,17 +212,22 @@ def _aff_read(path: Path) -> bytes:
         total = int(af_size(handle))
         if total < 0:
             raise EwfError("af_get_imagesize vrátilo zápornou hodnotu")
-        out = bytearray()
-        while len(out) < total:
-            want = min(_CHUNK, total - len(out))
+        offset = 0
+        while offset < total:
+            want = min(_CHUNK, total - offset)
             buf = ctypes.create_string_buffer(want)
             n = af_read(handle, buf, c_ssize_t(want))
             if n <= 0:
-                raise EwfError(f"af_read selhalo @ {len(out)}")
-            out += buf.raw[:n]
-        return bytes(out)
+                raise EwfError(f"af_read selhalo @ {offset}")
+            yield buf.raw[:n]
+            offset += n
     finally:
         af_close(handle)
+
+
+def _aff_read(path: Path) -> bytes:
+    """Přečte celý obsah AFF4 kontejneru (af_* API, sekvenční čtení)."""
+    return b"".join(_aff_chunks(path))
 
 
 # --- veřejné API ---------------------------------------------------------------
@@ -225,12 +246,126 @@ def read_container(path: Path | str, typ: str) -> bytes:
     raise EwfError(f"Neznámý kontejnerový typ: {typ!r}")
 
 
+def stream_to_raw(
+    path: Path | str,
+    typ: str,
+    dest: Path | str,
+    progress: Callable[[int, int], None] | None = None,
+) -> int:
+    """STP-021 — pravý stream: obsah kontejneru → RAW soubor ``dest`` po chunkách.
+
+    Na rozdíl od ``extract_to_raw`` (který drží celý obraz v paměti) čte
+    1 MiB chunky a rovnou je zapisuje na disk → RAM peak = jedna chunka,
+    ne velikost celého E01/AFF4. Vrací počet zapsaných bajtů.
+
+    ``progress`` — volitelný callback ``(zapsáno_bajtů, celkem_bajtů)`` po
+    každé chunkě (None = bez monitoringu). Celková velikost se zjistí z
+    hlavičky kontejneru před prvním čtením.
+    """
+    path = Path(path)
+    dest = Path(dest)
+    if typ == "e01":
+        chunks = _ewf_chunks(path)
+    elif typ == "aff4":
+        chunks = _aff_chunks(path)
+    else:
+        raise EwfError(f"Neznámý kontejnerový typ: {typ!r}")
+
+    # celková velikost pro progress — z hlavičky (bez načtení obsahu do paměti)
+    total = 0
+    if progress is not None:
+        try:
+            total = _container_size(path, typ)
+        except EwfError:
+            total = 0
+
+    written = 0
+    with dest.open("wb") as f:
+        for chunk in chunks:
+            f.write(chunk)
+            written += len(chunk)
+            if progress is not None and total > 0:
+                progress(written, total)
+    return written
+
+
+def _container_size(path: Path, typ: str) -> int:
+    """Velikost podkladového obrazu z hlavičky kontejneru (bez čtení obsahu).
+
+    E01 — ``libewf_handle_get_media_size``; AFF4 — ``af_get_imagesize``.
+    Chyba → ``EwfError`` (volající může ignorovat a streamovat bez progressu).
+    """
+    if typ == "e01":
+        ewf = _load("libewf")
+        if ewf is None:
+            raise EwfError("libewf není dostupná")
+        err_t = POINTER(c_void_p)
+        h_init = ewf.libewf_handle_initialize
+        h_init.restype = c_int
+        h_init.argtypes = [POINTER(c_void_p), err_t]
+        h_open = ewf.libewf_handle_open
+        h_open.restype = c_int
+        h_open.argtypes = [c_void_p, POINTER(c_char_p), c_int, c_int, err_t]
+        h_close = ewf.libewf_handle_close
+        h_close.restype = c_int
+        h_close.argtypes = [c_void_p, err_t]
+        h_free = ewf.libewf_handle_free
+        h_free.restype = c_int
+        h_free.argtypes = [POINTER(c_void_p), err_t]
+        h_size = ewf.libewf_handle_get_media_size
+        h_size.restype = c_int
+        h_size.argtypes = [c_void_p, POINTER(c_longlong), err_t]
+        flags_read = ewf.libewf_get_access_flags_read
+        flags_read.restype = c_int
+        flags_read.argtypes = []
+
+        handle = c_void_p()
+        err = c_void_p()
+        if h_init(byref(handle), byref(err)) != 1:
+            raise EwfError("libewf_handle_initialize selhalo")
+        try:
+            names = (c_char_p * 1)(str(path).encode())
+            if h_open(handle, names, 1, flags_read(), byref(err)) != 1:
+                raise EwfError(f"libewf_handle_open selhalo pro {path.name}")
+            size = c_longlong(0)
+            if h_size(handle, byref(size), byref(err)) != 1 or size.value < 0:
+                raise EwfError("libewf_handle_get_media_size selhalo")
+            return int(size.value)
+        finally:
+            h_close(handle, byref(err))
+            h_free(byref(handle), byref(err))
+
+    if typ == "aff4":
+        aff = _load("libafflib")
+        if aff is None:
+            raise EwfError("libafflib není dostupná")
+        af_open = aff.af_open
+        af_open.restype = c_void_p
+        af_open.argtypes = [c_char_p, c_int, c_int]
+        af_close = aff.af_close
+        af_close.restype = c_int
+        af_close.argtypes = [c_void_p]
+        af_size = aff.af_get_imagesize
+        af_size.restype = c_longlong
+        af_size.argtypes = [c_void_p]
+        handle = af_open(str(path).encode(), 0, 0)
+        if not handle:
+            raise EwfError(f"af_open selhalo pro {path.name}")
+        try:
+            total = int(af_size(handle))
+            if total < 0:
+                raise EwfError("af_get_imagesize vrátilo zápornou hodnotu")
+            return total
+        finally:
+            af_close(handle)
+
+    raise EwfError(f"Neznámý kontejnerový typ: {typ!r}")
+
+
 def extract_to_raw(path: Path | str, typ: str, dest: Path | str) -> int:
     """Streamuje obsah kontejneru do RAW souboru ``dest``.
 
     Vrací počet zapsaných bajtů (== velikost podkladového obrazu).
+    STP-021 — implementace přes ``stream_to_raw`` (chunked, ne celý obraz v RAM).
     """
-    data = read_container(path, typ)
-    dest = Path(dest)
-    dest.write_bytes(data)
-    return len(data)
+    return stream_to_raw(path, typ, dest)

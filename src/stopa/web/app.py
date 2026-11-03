@@ -16,6 +16,8 @@ import json
 import logging
 import os
 import re
+import threading
+import uuid
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -72,6 +74,7 @@ class SourceIn(BaseModel):
     path: str
     profile: str = "forensic"
     resume: bool = False  # E3 checkpointing — přeskočit soubory už v DB
+    background: bool = False  # STP-021 — async ingest (default sync = backward compat)
 
 
 class AiQueryIn(BaseModel):
@@ -116,6 +119,18 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     app = FastAPI(title="STOPA", version=__version__)
     base = db_dir or _db_dir()
     app.state.db_dir = base  # pro testy (TestClient)
+
+    # STP-021 — Processing Monitor: registry běhů ingestu (in-memory, per-app).
+    # Job = {id, case_id, source_id, status, done, total, error, result}.
+    # Sync POST /sources (default) se do registru taky zapisuje → GUI vidí i
+    # právě probíhající synchronní ingest přes poll endpoint.
+    _jobs: dict[str, dict] = {}
+    _jobs_lock = threading.Lock()
+
+    def _job_update(job_id: str, **fields) -> None:
+        with _jobs_lock:
+            if job_id in _jobs:
+                _jobs[job_id].update(fields)
 
     def open_db(case_id: str) -> CaseDB:
         validate_case_id(case_id)
@@ -200,6 +215,54 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         if not root.exists():
             raise HTTPException(400, f"zdroj neexistuje: {root}")
         db = open_db(case_id)
+
+        # STP-021 — Processing Monitor: registrovat běh (sync i async).
+        job_id = uuid.uuid4().hex[:12]
+        with _jobs_lock:
+            _jobs[job_id] = {
+                "id": job_id,
+                "case_id": case_id,
+                "source_id": None,
+                "status": "running",
+                "done": 0,
+                "total": 0,
+                "error": None,
+                "result": None,
+            }
+
+        def _progress(done: int, total: int) -> None:
+            _job_update(job_id, done=done, total=total)
+
+        if body.background:
+            # STP-021 — async ingest: background thread se VLASTNÍ DB spojením
+            # (per-thread sqlite3.connect; hlavní request vrací 201 okamžitě).
+            db.close()
+
+            def _run() -> None:
+                tdb = CaseDB(base / f"{case_id}.db")
+                try:
+                    source = EvidenceSource(
+                        case_id=case_id,
+                        kind="folder" if root.is_dir() else "file",
+                        path=str(root),
+                    )
+                    tdb.add_source(source)
+                    _job_update(job_id, source_id=source.id)
+                    result = process_source(
+                        tdb, source.id, root, body.profile,
+                        progress=_progress, resume=body.resume,
+                    )
+                    _job_update(job_id, status="done", result=result.model_dump())
+                except Exception as exc:  # defenzivně — thread nesmí umlčet chybu
+                    log.exception("background ingest %s selhal", job_id)
+                    _job_update(job_id, status="error", error=str(exc))
+                finally:
+                    tdb.close()
+
+            threading.Thread(target=_run, name=f"stopa-ingest-{job_id}", daemon=True).start()
+            return {"source_id": None, "job_id": job_id, "status": "running"}
+
+        # sync ingest (default — backward compat): request čeká na dokončení
         try:
             source = EvidenceSource(
                 case_id=case_id,
@@ -207,13 +270,32 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 path=str(root),
             )
             db.add_source(source)
-            result = process_source(db, source.id, root, body.profile, resume=body.resume)
+            _job_update(job_id, source_id=source.id)
+            result = process_source(db, source.id, root, body.profile, progress=_progress, resume=body.resume)
+            _job_update(job_id, status="done", result=result.model_dump())
             return {
                 "source_id": source.id,
+                "job_id": job_id,
                 **result.model_dump(),
             }
+        except Exception:
+            _job_update(job_id, status="error")
+            raise
         finally:
             db.close()
+
+    # ── STP-021 — Processing Monitor (živý progress ingestu) ───────────────
+    @app.get("/api/cases/{case_id}/processing")
+    def processing_status(case_id: str) -> dict:
+        """STP-021 — stav běhů ingestu pro případ (live progress).
+
+        `active` = právě probíhající job (GUI polluje tento endpoint během
+        async ingestu); `recent` = poslední 10 běhů (nejnovější první).
+        """
+        with _jobs_lock:
+            mine = [dict(j) for j in _jobs.values() if j["case_id"] == case_id]
+        active = next((j for j in reversed(mine) if j["status"] == "running"), None)
+        return {"active": active, "recent": list(reversed(mine[-10:]))}
 
     # ── files / search / timeline ─────────────────────────────
     @app.get("/api/cases/{case_id}/files")

@@ -72,14 +72,14 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 - **Nedokončeno:** RBAC, pip-audit v CI, izolace parserů (sandbox).
 
 ## N. Performance
-- **Stav:** 🔧 částečně | **Priorita:** P2
-- **Dokončeno:** ThreadPoolExecutor paralelizace pipeline, benchmark engine s detekcí regresí.
-- **Nedokončeno:** stream parsing velkých E01 (RAM peak), progress monitoring v web UI, CI běh benchmarku.
+- **Stav:** ✅ hotovo | **Priorita:** P2
+- **Dokončeno:** ThreadPoolExecutor paralelizace pipeline, benchmark engine s detekcí regresí. STP-021: stream parsing velkých E01/AFF4 (`stream_to_raw` — chunked 1 MiB, RAM peak z GB na ~1 MiB), byte-level progress v `process_disk_image`.
+- **Nedokončeno:** CI běh benchmarku.
 
 ## O. User Interface
 - **Stav:** ✅ základ hotov | **Priorita:** P3
-- **Dokončeno:** FastAPI 30 endpointů + vanilla JS SPA (dark mode), graph.js.
-- **Nedokončeno:** Processing Monitor / Validation Center / Audit Center moduly.
+- **Dokončeno:** FastAPI 30 endpointů + vanilla JS SPA (dark mode), graph.js. STP-021: Processing Monitor — `GET /api/cases/{id}/processing` + async ingest (`background=true`) s živým progress v status baru.
+- **Nedokončeno:** Validation Center / Audit Center moduly.
 
 ## P. Quality Assurance
 - **Stav:** ✅ hotovo | **Priorita:** P1

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -65,11 +66,14 @@ def process_disk_image(
     image_path: Path | str,
     profile: ProcessingProfile,
     carve_free: bool = False,
+    extract_progress: Callable[[int, int], None] | None = None,
 ) -> ImageSummary:
     """Zpracuje diskový obraz a zapíše soubory + artifact do case DB.
 
     ``carve_free`` — pokud True, prohledá celý obraz carving engine (magic bytes)
     a přidá počet kandidátů (pro nealokovaný prostor / smazané soubory).
+    ``extract_progress`` — STP-021: volitelný callback ``(zapsáno_bajtů, celkem)``
+    pro extrakci E01/AFF4 kontejneru (byte-level progress; None = bez monitoringu).
     """
     image_path = Path(image_path).expanduser()
     summary = ImageSummary()
@@ -93,7 +97,7 @@ def process_disk_image(
     work_path = image_path
     extracted_raw: Path | None = None
     if is_container(summary.image_type):
-        from stopa.data.ewf_container import EwfError, ewf_available, read_container
+        from stopa.data.ewf_container import EwfError, ewf_available, stream_to_raw
 
         if not ewf_available():
             summary.errors.append(
@@ -101,20 +105,17 @@ def process_disk_image(
                 "nedostupné (nainstalujte runtime knihovny)"
             )
             return summary
-        try:
-            raw = read_container(image_path, summary.image_type)
-        except EwfError as e:
-            summary.errors.append(f"Čtení kontejneru ({summary.image_type}): {e}")
-            return summary
         import tempfile
 
         fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-ewf-")
         os.close(fd)
         extracted_raw = Path(tmp_name)
         try:
-            extracted_raw.write_bytes(raw)
-        except OSError as e:
-            summary.errors.append(f"Zápis extrahovaného obrazu: {e}")
+            # STP-021 — stream po 1 MiB chunkách (RAM peak = chunka, ne celý obraz);
+            # volitelný byte-level progress callback pro Processing Monitor.
+            stream_to_raw(image_path, summary.image_type, extracted_raw, extract_progress)
+        except EwfError as e:
+            summary.errors.append(f"Čtení kontejneru ({summary.image_type}): {e}")
             return summary
         work_path = extracted_raw
 

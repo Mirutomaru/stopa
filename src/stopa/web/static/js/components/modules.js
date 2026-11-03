@@ -195,7 +195,7 @@ async function renderDashboard(cid) {
         `<span class="n">${n}</span></div>`).join("")
     : '<p class="muted small">Zatím žádné artifacty.</p>';
 
-  // přidat zdroj
+  // přidat zdroj (STP-021: volitelný background ingest s živým progress)
   document.getElementById("btn-add-source").onclick = async () => {
     const path = document.getElementById("src-path").value.trim();
     if (!path || !Store.get("caseId")) return;
@@ -206,14 +206,44 @@ async function renderDashboard(cid) {
       const r = await api(`/api/cases/${Store.get("caseId")}/sources`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path, profile: document.getElementById("src-profile").value }),
+        body: JSON.stringify({
+          path,
+          profile: document.getElementById("src-profile").value,
+          background: !!document.getElementById("src-background").checked,
+        }),
       });
-      out.textContent = `✓ soubory: ${r.files_total}, duplikáty: ${r.duplicates ?? 0}` +
-        (r.errors?.length ? `\n⚠ ${r.errors.join("\n")}` : "");
-      toast(`✓ Zdroj zpracován (${r.files_total} souborů)`);
+      if (r.job_id && r.status === "running") {
+        // STP-021 — async ingest: poll progress monitoru dokud job nedokončí
+        out.textContent = `⏳ Zpracování běží na pozadí…`;
+        await pollProcessing(Store.get("caseId"), (done, total) => {
+          setTaskLabel(`Zpracovávám zdroj: ${path} — ${done}/${total ?? "?"}`);
+          out.textContent = `⏳ Zpracování běží na pozadí… ${done}/${total ?? "?"} souborů`;
+        });
+      } else {
+        // sync cesta (default) — stejná odpověď jako před STP-021
+        out.textContent = `✓ soubory: ${r.files_total}, duplikáty: ${r.duplicates ?? 0}` +
+          (r.errors?.length ? `\n⚠ ${r.errors.join("\n")}` : "");
+      }
+      toast(`✓ Zdroj zpracován (${r.files_total ?? "?"} souborů)`);
       await openCase(Store.get("caseId")); // refresh statistik + aktuální modul
     } catch (e) { out.textContent = `⚠ ${e.message}`; }
   };
+
+  /* STP-021 — poll /processing: živý progress background ingestu */
+  async function pollProcessing(cid, onProgress) {
+    const started = Date.now();
+    for (;;) {
+      await new Promise((res) => setTimeout(res, 500));
+      let st;
+      try { st = await api(`/api/cases/${cid}/processing`); } catch { continue; }
+      const job = st.active || (st.recent?.[0]);
+      if (!job) break; // job zmizel (app restart) — ukončíme poll
+      onProgress(job.done ?? 0, job.total ?? null);
+      if (job.status === "done") { setTaskLabel("Zdroj zpracován"); return; }
+      if (job.status === "error") throw new Error(job.error || "chyba ingestu");
+      if (Date.now() - started > 30 * 60 * 1000) break; // safety: 30 min
+    }
+  }
 
   // E12 — dashboard rozšíření: AI status + poslední operace (audit log)
   try {

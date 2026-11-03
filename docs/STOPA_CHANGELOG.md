@@ -4,6 +4,38 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-03 (STP-021 Performance: stream parsing velkých E01 + progress monitoring)
+
+### Added (oblast N/O, priorita P2 — výkon ingestu + viditelnost zpracování)
+- **Stream parsing E01/AFF4** (`data/ewf_container.py`): nové veřejné API
+  `stream_to_raw(path, typ, dest, progress=None)` — pravý chunked stream
+  (1 MiB chunky přímo z kontejneru do RAW souboru). `_ewf_read()`/`_aff_read()`
+  refaktorovány na generátory `_ewf_chunks()`/`_aff_chunks()`; `read_container()`
+  zůstává jako tenký wrapper (backward compat). **RAM peak klesá z velikosti
+  celého obrazu (GB) na jednu chunku (~1 MiB)** — klíčové pro velké E01.
+- **Byte-level progress** (`data/image_pipeline.py`): `process_disk_image()`
+  dostal keyword-only parametr `extract_progress: Callable[[int, int], None]`;
+  extrakce kontejneru jde přes `stream_to_raw(..., progress=...)`.
+- **Web Processing Monitor** (`web/app.py`): in-memory job registry + nový
+  endpoint `GET /api/cases/{case_id}/processing` (aktivní běh + poslední 10).
+  `POST /sources` dostal opt-in flag `background: bool = False`:
+  - **sync (default)** — backward compat, stejná pole odpovědi (+ `job_id`);
+    progress se zapisuje do registru;
+  - **async** — request vrací 201 okamžitě (`source_id=null`, `job_id`,
+    `status=running`), ingest běží v daemon threadu s vlastním DB spojením
+    (per-thread `sqlite3.connect` → thread-safe bez globálního locku).
+- **GUI progress** (`static/index.html`, `js/components/modules.js`): checkbox
+  „pozadí" ve formuláři zdroje; při async ingestu frontend polluje
+  `/processing` každých 500 ms a status bar zobrazuje živý progress
+  („Zpracovávám zdroj: … — 42/180").
+
+### Testy
+- 7 nových testů (`tests/test_stp021.py`): stream roundtrip E01/AFF4
+  (byte-for-byte shoda s `read_container`, přes 2 chunky), progress callback
+  (monotónní done, finální total == velikost obrazu), neznámý typ → EwfError,
+  web sync ingest (backward compat pole + job registry) a **web async ingest**
+  (201 okamžitě → poll /processing až `done`, source zapsán do DB).
+
 ## [Unreleased] — 2026-11-03 (STP-019 AI governance + PII redaktor)
 
 ### Added (oblast H/M, priorita P2 — důvěryhodnost AI vrstvy)
