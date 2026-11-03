@@ -1,7 +1,37 @@
 # STOPA — Changelog
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
-**Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
+
+> **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
+
+## [Unreleased] — 2026-11-03 (ETAPA B vlna 2)
+
+### Added (ETAPA B vlna 2 — port AXIOM extraktorů, 7 nových parserů + 71 testů)
+- `artifacts/google_search_history.py` — **Google Search History parser** (AXIOM
+  `GoogleSearchHistoryArtifact`): My Activity / Takeout JSON (`searches[]`, epoch s),
+  query/URL/device; artifact type `google_search`. Detekce name/content-based.
+- `artifacts/google_location_history.py` — **Google Location History parser** (AXIOM
+  `GoogleLocationHistoryArtifact` + cloud `CloudGoogleLocationHistoryArtifact`): Takeout JSON
+  (`latitudeE7`/`longitudeE7`, epoch ms) i warrant return CSV (epoch s/ms, ISO fallback);
+  artifact type `google_location`.
+- `artifacts/google_login_history.py` — **Google Login/Sign-in History parser** (AXIOM
+  `GoogleLoginHistoryArtifact`): sign-ins JSON (`signIns[]`) i CSV; device/IP/location/
+  timestamp; artifact type `google_login`.
+- `artifacts/google_account_info.py` — **Google Account Info parser** (AXIOM
+  `GoogleAccountInfoArtifact`): `account_info.json` (e-mail, jméno, telefon, adresa);
+  artifact type `google_account`.
+- `artifacts/mem_scan.py` — **Memory scan text output parser** (AXIOM `CmdScanArtifact` +
+  `FileScanArtifact`): Volatility-style textové výstupy — CmdScan (procesy: offset, PID,
+  cmdline) a FileScan (souborové cesty v paměti); artifact typy `mem_process` / `mem_file`.
+- `artifacts/ddg_current_tabs.py` — **DuckDuckGo Current Tabs parser** (AXIOM
+  `CurrentTabsArtifact`): JSON (`tabs[]`) i textový export; dedupe URL, limit 500;
+  artifact type `browser_tab`.
+- `artifacts/msn_messenger.py` — **MSN/Windows Live Messenger chat log parser** (AXIOM
+  `MSNArtifact`): textové chat logy (`Chat started on`, per-message řádky s odesílatelem);
+  artifact type `msn_message`.
+- Registrace: pipeline `NAME_BASED_EXTRACTORS` + `_name_based_match` (7 nových name-based
+  detekcí) i C3 Parser Validation Registry (+7 záznamů, celkem **20 parserů**).
+- Coverage matrix: covered **33 → 42** unikátních AXIOM typů (+9), deterministická.
 
 ## [Unreleased] — 2026-11-02 (ETAPA A–C)
 

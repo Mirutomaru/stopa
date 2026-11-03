@@ -5,15 +5,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 33
-- **🔧 PORTABLE-LOCAL**: 38
-- **☁️ CLOUD-EXPORT**: 112
+- **✅ COVERED**: 42
+- **🔧 PORTABLE-LOCAL**: 30
+- **☁️ CLOUD-EXPORT**: 111
 - **💾 MEMORY**: 15
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (33)
+## ✅ COVERED — STOPA už umí (existující parser) (42)
 
 - `AppleIMessageArtifact` — sqlite_extract → imessage
 - `AuditDriveEventsArtifact` — EVTX event log (evtx parser)
@@ -21,14 +21,23 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CallLogsArtifact` — sqlite_extract → call_log
 - `ClipboardArtifact` — win_clipboard (sekundární registry průchod NTUSER.DAT)
 - `CloudGoogleChromeBrowserHistoryArtifact` — browser_history
+- `CloudGoogleLocationHistoryArtifact` — google_location_history parser (warrant return CSV/JSON)
 - `CloudMboxEmailArtifact` — email_mbox parser
+- `CmdScanArtifact` — mem_scan parser (textový výstup — procesy v paměti)
 - `ConnscanArtifact` — net_connections parser
+- `CurrentTabsArtifact` — ddg_current_tabs parser (JSON/text záložky)
 - `DocumentMetadataExtractor` — OOXML metadata
+- `FileScanArtifact` — mem_scan parser (textový výstup — soubory v paměti)
 - `GetsidsArtifact` — win_sids (sekundární registry průchod SAM/SECURITY)
+- `GoogleAccountInfoArtifact` — google_account_info parser (account_info.json)
 - `GoogleBrowsingHistoryArtifact` — browser_history
+- `GoogleLocationHistoryArtifact` — google_location_history parser (JSON Takeout + CSV)
+- `GoogleLoginHistoryArtifact` — google_login_history parser (sign-ins JSON/CSV)
+- `GoogleSearchHistoryArtifact` — google_search_history parser (JSON Takeout)
 - `IeTypedUrlArtifact` — browser_history (chrome/firefox)
 - `ImageInfoArtifact` — magic bytes → image info
 - `JumpListsArtifact` — win_jumplist parser
+- `MSNArtifact` — msn_messenger parser (chat log text)
 - `MapArtifact` — timeline / map
 - `MediaMetadataExtractor` — media family
 - `MftArtifact` — TSK disk image MFT
@@ -49,19 +58,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (38)
+## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (30)
 
 - `AllowlistedWebSitesArtifact` — lokální parser (čistý Python)
 - `AttachmentExtractor` — lokální parser (čistý Python)
 - `BeboArtifact` — legacy mobile / messenger (SQLite)
 - `ChatrouletteArtifact` — legacy mobile / messenger (SQLite)
-- `CmdScanArtifact` — lokální parser (čistý Python)
-- `CurrentTabsArtifact` — lokální parser (čistý Python)
 - `DriveActivityArtifact` — lokální parser (čistý Python)
 - `DuckDuckGoCookiesArtifact` — browser cookies/bookmarks
-- `FileScanArtifact` — lokální parser (čistý Python)
 - `GoogleAccountChangeHistoryArtifact` — lokální profil / takeout
-- `GoogleAccountInfoArtifact` — lokální profil / takeout
 - `GoogleAggregatedActivitiesArtifact` — lokální profil / takeout
 - `GoogleAggregatedActivitiesIdentitySessionsArtifact` — lokální profil / takeout
 - `GoogleBarArtifact` — lokální profil / takeout
@@ -69,19 +74,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GoogleDevicesArtifact` — lokální profil / takeout
 - `GoogleExportSummaryArtifact` — lokální profil / takeout
 - `GoogleHangoutsArtifact` — lokální profil / takeout
-- `GoogleLocationHistoryArtifact` — lokální profil / takeout
-- `GoogleLoginHistoryArtifact` — lokální profil / takeout
 - `GoogleMailMessageInformationArtifact` — lokální profil / takeout
 - `GoogleMapsActivityArtifact` — lokální profil / takeout
 - `GooglePhotosArtifact` — lokální profil / takeout
 - `GooglePlusChatArtifact` — lokální profil / takeout
-- `GoogleSearchHistoryArtifact` — lokální profil / takeout
 - `GoogleTalkArtifact` — lokální profil / takeout
 - `KikLocalUserExtractor` — legacy mobile / messenger (SQLite)
 - `LimerunnerArtifact` — legacy mobile / messenger (SQLite)
 - `LimewireArtifact` — legacy mobile / messenger (SQLite)
 - `LuckywireArtifact` — legacy mobile / messenger (SQLite)
-- `MSNArtifact` — lokální parser (čistý Python)
 - `MailRuChatArtifact` — legacy mobile / messenger (SQLite)
 - `MailRuContactArtifact` — legacy mobile / messenger (SQLite)
 - `MailRuGroupArtifact` — legacy mobile / messenger (SQLite)
@@ -90,7 +91,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `SamsungVoiceRecordingArtifact` — legacy mobile / messenger (SQLite)
 - `VoiceMailArtifact` — lokální parser (čistý Python)
 
-## ☁️ CLOUD-EXPORT — JSON export / warrant return (112)
+## ☁️ CLOUD-EXPORT — JSON export / warrant return (111)
 
 - `CloudAccountsInfoArtifact` — JSON export / warrant return
 - `CloudAmazonCloudTrailEventsArtifact` — JSON export / warrant return
@@ -137,7 +138,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudGoogleChromeSyncSettingsPreferencesArtifact` — JSON export / warrant return
 - `CloudGoogleContactsArtifact` — JSON export / warrant return
 - `CloudGoogleKeepArtifact` — JSON export / warrant return
-- `CloudGoogleLocationHistoryArtifact` — JSON export / warrant return
 - `CloudGooglePhotosArtifact` — JSON export / warrant return
 - `CloudGooglePhotosAxiom2Pt8Artifact` — JSON export / warrant return
 - `CloudGoogleSemanticLocationHistoryActivitySegmentArtifact` — JSON export / warrant return

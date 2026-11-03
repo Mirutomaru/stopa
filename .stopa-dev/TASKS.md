@@ -122,14 +122,20 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dokončeno:** 2026-11 | Commit: `afc49a0`
 
 ## STP-016 — ETAPA B vlna 2: Google lokální profily + scan text outputy
-- **Oblast:** D | **Priorita:** P0 | **Stav:** READY
+- **Oblast:** D | **Priorita:** P0 | **Stav:** DONE
 - **Popis:** Port zbývajících nejvyšší-hodnotových portable-local typů: Google SearchHistory/
   LocationHistory/LoginHistory/AccountInfo, CmdScan/FileScan text outputy, CurrentTabs, MSNArtifact.
 - **Závislosti:** STP-013..015 (vzory parserů hotové)
-- **Dotčené moduly:** `src/stopa/artifacts/*` (nové), `pipeline.py`, `validation_registry.py`
+- **Dotčené moduly:** `src/stopa/artifacts/*` (7 nových), `pipeline.py`, `validation_registry.py`,
+  `scripts/build_axiom_coverage.py`
 - **Akceptační kritéria:** každý typ = parser + detekce + registrace pipeline+C3 + testy;
   coverage covered count vzrostl; plná sada bez regresí.
 - **Testovací požadavky:** syntetické fixtures, pattern `test_win_wlan.py`/`test_net_connections.py`.
+- **Výsledek:** 7 nových parserů (`google_search_history`, `google_location_history`,
+  `google_login_history`, `google_account_info`, `mem_scan`, `ddg_current_tabs`, `msn_messenger`) +
+  71 testů; C3 registry 13 → **20 parserů**; coverage covered **33 → 42** (+9 typů, deterministická);
+  full suite **966 passed, 1 skipped**, ruff clean.
+- **Dokončeno:** 2026-11-03 | Commit: (vlna 2)
 
 ## STP-017 — ETAPA B vlna 3: legacy mobile/messenger SQLite typy
 - **Oblast:** D | **Priorita:** P1 | **Stav:** BACKLOG

@@ -188,6 +188,102 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_net_connections.py",),
     ),
+    # ETAPA B vlna 2 — AXIOM port: Google lokální profily + scan outputy + CurrentTabs + MSN
+    "google_search_history": ParserValidation(
+        parser_id="google_search_history",
+        version="",
+        formats=(
+            "Google Search History JSON (My Activity / Takeout)",
+        ),
+        limitations=(
+            "detekce name-based (my activity/search_history) + content check (JSON pole)",
+            "timestamp z time.timestamp (epoch s); neplatné → None",
+            "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_google_search_history.py",),
+    ),
+    "google_location_history": ParserValidation(
+        parser_id="google_location_history",
+        version="",
+        formats=(
+            "Google Location History JSON Takeout (latitudeE7/longitudeE7)",
+            "Warrant return CSV (Timestamp,Latitude,Longitude,...)",
+        ),
+        limitations=(
+            "detekce name-based (location_history) + content check (JSON/CSV hlavička)",
+            "souřadnice E7 (×1e-7) → stupně; epoch ms/s konverze",
+            "limit MAX_POINTS_PER_FILE=5000 bodů",
+        ),
+        test_files=("tests/test_google_location_history.py",),
+    ),
+    "google_login_history": ParserValidation(
+        parser_id="google_login_history",
+        version="",
+        formats=(
+            "Google Login/Sign-in History JSON Takeout (sign-ins.json)",
+            "Warrant return CSV (Time,Device Name,IP Address,...)",
+        ),
+        limitations=(
+            "detekce name-based (sign-in/login_history) + content check",
+            "epoch s/ms konverze; ISO text → display_time bez timestampu",
+            "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_google_login_history.py",),
+    ),
+    "google_account_info": ParserValidation(
+        parser_id="google_account_info",
+        version="",
+        formats=(
+            "Google Account Info JSON (account_info.json / profile)",
+        ),
+        limitations=(
+            "detekce name-based (account_info) + content check (JSON objekt s name/email/phone)",
+            "snapshot profilu bez času — timestamp=None",
+            "neznámá pole do details.extra",
+        ),
+        test_files=("tests/test_google_account_info.py",),
+    ),
+    "mem_scan": ParserValidation(
+        parser_id="mem_scan",
+        version="",
+        formats=(
+            "CmdScan textový výstup (paměťové procesy: offset + process + cmdline)",
+            "FileScan textový výstup (soubory v paměti: cesty)",
+        ),
+        limitations=(
+            "detekce name-based (cmdscan/filescan) + content check (hlavička tabulky)",
+            "paměťový snapshot bez času — timestamp=None",
+            "limit MAX_ENTRIES_PER_FILE=5000 záznamů; dedupe cest v filescan",
+        ),
+        test_files=("tests/test_mem_scan.py",),
+    ),
+    "ddg_current_tabs": ParserValidation(
+        parser_id="ddg_current_tabs",
+        version="",
+        formats=(
+            "DuckDuckGo Current Tabs JSON (pole záložek url/title)",
+            "Textový export — jeden URL na řádek",
+        ),
+        limitations=(
+            "detekce name-based (current_tabs/ddg/tabs.json) + content check",
+            "snapshot otevřených záložek bez času — timestamp=None",
+            "limit MAX_TABS_PER_FILE=2000; dedupe URL v textovém formátu",
+        ),
+        test_files=("tests/test_ddg_current_tabs.py",),
+    ),
+    "msn_messenger": ParserValidation(
+        parser_id="msn_messenger",
+        version="",
+        formats=(
+            "MSN/Windows Live Messenger chat log text (.txt export)",
+        ),
+        limitations=(
+            "detekce name-based (msn/messenger/chatlog) + content check (nadpis s verzí)",
+            "per-message čas chybí — timestamp=None (jen „Chat started on“ v hlavičce)",
+            "limit MAX_MESSAGES_PER_FILE=5000 zpráv",
+        ),
+        test_files=("tests/test_msn_messenger.py",),
+    ),
 }
 
 

@@ -22,12 +22,36 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import stopa as _stopa_pkg  # __version__ (single-source z pyproject)
+from stopa.artifacts.ddg_current_tabs import PARSER_VERSION as DDG_TABS_VERSION
+from stopa.artifacts.ddg_current_tabs import extract_current_tabs_artifacts, is_current_tabs_file
 from stopa.artifacts.email_mbox import PARSER_VERSION as EMAIL_MBOX_VERSION
 from stopa.artifacts.email_mbox import extract_email_artifacts, is_email_file
+from stopa.artifacts.google_account_info import PARSER_VERSION as GOOGLE_ACCT_VERSION
+from stopa.artifacts.google_account_info import extract_account_artifacts, is_account_info_file
+from stopa.artifacts.google_location_history import (
+    PARSER_VERSION as GOOGLE_LOC_VERSION,
+)
+from stopa.artifacts.google_location_history import (
+    extract_location_artifacts,
+    is_location_history_file,
+)
+from stopa.artifacts.google_login_history import PARSER_VERSION as GOOGLE_LOGIN_VERSION
+from stopa.artifacts.google_login_history import extract_login_artifacts, is_login_history_file
+from stopa.artifacts.google_search_history import (
+    PARSER_VERSION as GOOGLE_SEARCH_VERSION,
+)
+from stopa.artifacts.google_search_history import (
+    extract_google_search_artifacts,
+    is_google_search_history_file,
+)
 from stopa.artifacts.imessage_cloud import (
     PARSER_VERSION as IMESSAGE_CLOUD_VERSION,
 )
 from stopa.artifacts.imessage_cloud import extract_icloud_messages, is_icloud_messages_file
+from stopa.artifacts.mem_scan import PARSER_VERSION as MEMSCAN_VERSION
+from stopa.artifacts.mem_scan import extract_mem_scan_artifacts, is_mem_scan_file
+from stopa.artifacts.msn_messenger import PARSER_VERSION as MSN_VERSION
+from stopa.artifacts.msn_messenger import extract_msn_artifacts, is_msn_chat_file
 from stopa.artifacts.net_connections import PARSER_VERSION as NETSTAT_VERSION
 from stopa.artifacts.net_connections import extract_netstat_artifacts, is_netstat_file
 from stopa.artifacts.plist_extract import PARSER_VERSION as PLIST_VERSION
@@ -148,6 +172,14 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "wifi_wlan": (extract_wifi_artifacts, WLAN_VERSION),
     "win_schedtask": (extract_scheduled_task_artifacts, SCHEDTASK_VERSION),
     "net_connections": (extract_netstat_artifacts, NETSTAT_VERSION),
+    # ETAPA B vlna 2 — AXIOM port: Google lokální profily + scan outputy + CurrentTabs + MSN
+    "google_search_history": (extract_google_search_artifacts, GOOGLE_SEARCH_VERSION),
+    "google_location_history": (extract_location_artifacts, GOOGLE_LOC_VERSION),
+    "google_login_history": (extract_login_artifacts, GOOGLE_LOGIN_VERSION),
+    "google_account_info": (extract_account_artifacts, GOOGLE_ACCT_VERSION),
+    "mem_scan": (extract_mem_scan_artifacts, MEMSCAN_VERSION),
+    "ddg_current_tabs": (extract_current_tabs_artifacts, DDG_TABS_VERSION),
+    "msn_messenger": (extract_msn_artifacts, MSN_VERSION),
 }
 
 
@@ -158,6 +190,9 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
     podle názvu souboru, jen když signatura nic nenašla (viz _extract_artifacts_for).
     ETAPA B vlna 1: + email (.eml/.mbox), WiFi WLAN profile XML, Scheduled Tasks
     XML a netstat/connstat text — všechny bez spolehlivé magiky.
+    ETAPA B vlna 2: + Google lokální profily (Search/Location/Login History,
+    Account Info JSON/CSV), cmdscan/filescan paměťové skeny, DuckDuckGo Current
+    Tabs a MSN/Messenger chat logy — všechny bez spolehlivé magiky.
     """
     if is_icloud_messages_file(name):
         return NAME_BASED_EXTRACTORS["icloud_messages"]
@@ -173,6 +208,22 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["win_schedtask"]
     if is_netstat_file(name):
         return NAME_BASED_EXTRACTORS["net_connections"]
+    # ETAPA B vlna 2 — Google profily (specifické názvy PŘED obecnějšími)
+    if is_google_search_history_file(name):
+        return NAME_BASED_EXTRACTORS["google_search_history"]
+    if is_location_history_file(name):
+        return NAME_BASED_EXTRACTORS["google_location_history"]
+    if is_login_history_file(name):
+        return NAME_BASED_EXTRACTORS["google_login_history"]
+    if is_account_info_file(name):
+        return NAME_BASED_EXTRACTORS["google_account_info"]
+    # ETAPA B vlna 2 — paměťové skeny / záložky / MSN chat logy
+    if is_mem_scan_file(name):
+        return NAME_BASED_EXTRACTORS["mem_scan"]
+    if is_current_tabs_file(name):
+        return NAME_BASED_EXTRACTORS["ddg_current_tabs"]
+    if is_msn_chat_file(name):
+        return NAME_BASED_EXTRACTORS["msn_messenger"]
     return None
 
 

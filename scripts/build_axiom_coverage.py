@@ -71,6 +71,16 @@ COVERED: dict[str, str] = {
     "GetsidsArtifact": "covered",  # win_sids (sekundární registry průchod)
     "SidsArtifact": "covered",  # win_sids
     "UserSidsArtifact": "covered",  # win_sids
+    # ETAPA B vlna 2 — port AXIOM extraktorů (7 nových parserů, testováno)
+    "GoogleSearchHistoryArtifact": "covered",  # google_search_history
+    "CloudGoogleLocationHistoryArtifact": "covered",  # google_location_history (warrant return)
+    "GoogleLocationHistoryArtifact": "covered",  # google_location_history
+    "GoogleLoginHistoryArtifact": "covered",  # google_login_history
+    "GoogleAccountInfoArtifact": "covered",  # google_account_info
+    "CmdScanArtifact": "covered",  # mem_scan (textový výstup)
+    "FileScanArtifact": "covered",  # mem_scan (textový výstup)
+    "CurrentTabsArtifact": "covered",  # ddg_current_tabs
+    "MSNArtifact": "covered",  # msn_messenger
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -170,6 +180,16 @@ def _covered_desc(name: str) -> str:
         "GetsidsArtifact": "win_sids (sekundární registry průchod SAM/SECURITY)",
         "SidsArtifact": "win_sids (sekundární registry průchod SAM/SECURITY)",
         "UserSidsArtifact": "win_sids (sekundární registry průchod + ProfileList)",
+        # ETAPA B vlna 2 — port AXIOM extraktorů
+        "GoogleSearchHistoryArtifact": "google_search_history parser (JSON Takeout)",
+        "CloudGoogleLocationHistoryArtifact": "google_location_history parser (warrant return CSV/JSON)",
+        "GoogleLocationHistoryArtifact": "google_location_history parser (JSON Takeout + CSV)",
+        "GoogleLoginHistoryArtifact": "google_login_history parser (sign-ins JSON/CSV)",
+        "GoogleAccountInfoArtifact": "google_account_info parser (account_info.json)",
+        "CmdScanArtifact": "mem_scan parser (textový výstup — procesy v paměti)",
+        "FileScanArtifact": "mem_scan parser (textový výstup — soubory v paměti)",
+        "CurrentTabsArtifact": "ddg_current_tabs parser (JSON/text záložky)",
+        "MSNArtifact": "msn_messenger parser (chat log text)",
     }
     return m.get(name, "existující parser")
 

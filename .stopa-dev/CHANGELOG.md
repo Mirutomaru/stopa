@@ -2,6 +2,11 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
+## 2026-11-03 — STP-016 ETAPA B vlna 2 (Google lokální profily + scan text outputy)
+**Změněné soubory:** nové parsery `src/stopa/artifacts/{google_search_history,google_location_history,google_login_history,google_account_info,mem_scan,ddg_current_tabs,msn_messenger}.py`; `pipeline.py` (importy + NAME_BASED_EXTRACTORS 7 položek + `_name_based_match`); `domain/validation_registry.py` (+7 záznamů → **20 parserů**); nové testy `tests/test_{google_search_history,google_location_history,google_login_history,google_account_info,mem_scan,ddg_current_tabs,msn_messenger}.py`; `scripts/build_axiom_coverage.py` (COVERED +9 typů + `_covered_desc`); `STOPA_COVERAGE_MATRIX.csv` (regenerace), README.md (řádek vlny 2 + test count), STOPA_CHANGELOG.md (+docs zrcadlo).
+**Přidané funkce:** Google Search/Location/Login History + Account Info (JSON Takeout i CSV warrant return, epoch s/ms konverze přes `domain/times`); CmdScan/FileScan memory scan text outputy; DuckDuckGo Current Tabs; MSN Messenger chat log.
+**Testy:** 71 nových testů zelených; full suite **966 passed, 1 skipped**; ruff clean; coverage covered **33 → 42** (+9 typů), deterministická (SHA-256 diff ✓).
+
 ## 2026-11-03 — STP-012c kořenové výstupy MASTER promptu (9/9)
 **Změněné soubory:** nové v kořeni `STOPA_TECHNICAL_AUDIT.md` (131 ř.), `STOPA_ARCHITECTURE.md` (96), `STOPA_ROADMAP.md` (92, A–Q), `STOPA_CHANGELOG.md` (245, autoritativní kopie + pointer v docs/), `STOPA_TEST_REPORT.md` (97, tabulka 53 souborů / 896 testů doloženo collect-only), `STOPA_SECURITY_REPORT.md` (49, T1–T10), `STOPA_AI_GOVERNANCE.md` (66, nový — F-044), `STOPA_VALIDATION_REPORT.md` (70, C3 registry 13 parserů živě ověřeno); `docs/STOPA_CHANGELOG.md` + pointer na kořen.
 **Výsledek:** všech 9 povinných kořenových výstupů MASTER DEVELOPMENT PROMPT existuje; ruff clean; testy nedotčeny (895 passed, 1 skipped).
