@@ -6,6 +6,9 @@ AXIOM-style: každý soubor se SQLite signaturou projde schema detektorem.
 - Apple iMessage chat.db: `message`(text, date=CFAbsoluteTime od 2001) + `handle`
 - Android mmssms.db: `sms`(address, body, date=unix ms)
 - Android calllog.db: `calls`(number, date=unix ms, duration, type)
+- ETAPA B vlna 4: DuckDuckGo cookies (Chromium `cookies`), iOS voicemail.db
+  (`voicemail`, unix s + CFAbsoluteTime), iOS Local.sqlite parked car locations
+  (`ZRTVEHICLEEVENTMO`, CFAbsoluteTime) — schéma-based, lazy import
 - ostatní SQLite DB: jeden triage artifact se seznamem tabulek a počty řádků
 
 IO je jen v `extract_sqlite_artifacts()`; schema matchery jsou čisté funkce.
@@ -271,17 +274,47 @@ def extract_sqlite_artifacts(path: Path) -> list[Artifact]:
         elif _is_call_log(conn):
             arts = _extract_call_log(conn)
         else:
-            # ETAPA B vlna 3 — Kik Messenger (schéma-based, iOS ZKIK* / Android users+messages)
-            from stopa.artifacts.kik_messenger import extract_kik_artifacts, is_kik_database
+            # ETAPA B vlna 4 — DuckDuckGo cookies (Chromium `cookies` schéma)
+            from stopa.artifacts.ddg_cookies import (
+                extract_ddg_cookie_artifacts,
+                is_cookies_database,
+            )
 
-            if is_kik_database(conn):
-                arts = extract_kik_artifacts(conn)
+            if is_cookies_database(conn):
+                arts = extract_ddg_cookie_artifacts(conn)
             else:
-                # FÁZE 6a — mobilní logická extrakce (kontakty/WhatsApp/iOS Safari),
-                # jinak generic triage (tabulky + počty řádků)
-                from stopa.artifacts.mobile_extract import extract_mobile_artifacts
+                # ETAPA B vlna 4 — iOS voicemail.db (`voicemail`, unix s + CFAbsoluteTime)
+                from stopa.artifacts.ios_voicemail import (
+                    extract_ios_voicemail_artifacts,
+                    is_ios_voicemail_database,
+                )
 
-                arts = extract_mobile_artifacts(conn) or _extract_generic_sqlite(conn)
+                if is_ios_voicemail_database(conn):
+                    arts = extract_ios_voicemail_artifacts(conn)
+                else:
+                    # ETAPA B vlna 4 — iOS Local.sqlite parked car locations
+                    from stopa.artifacts.parked_car_locations import (
+                        extract_parked_car_artifacts,
+                        is_parked_car_database,
+                    )
+
+                    if is_parked_car_database(conn):
+                        arts = extract_parked_car_artifacts(conn)
+                    else:
+                        # ETAPA B vlna 3 — Kik Messenger (schéma-based, iOS ZKIK* / Android users+messages)
+                        from stopa.artifacts.kik_messenger import (
+                            extract_kik_artifacts,
+                            is_kik_database,
+                        )
+
+                        if is_kik_database(conn):
+                            arts = extract_kik_artifacts(conn)
+                        else:
+                            # FÁZE 6a — mobilní logická extrakce (kontakty/WhatsApp/iOS Safari),
+                            # jinak generic triage (tabulky + počty řádků)
+                            from stopa.artifacts.mobile_extract import extract_mobile_artifacts
+
+                            arts = extract_mobile_artifacts(conn) or _extract_generic_sqlite(conn)
         return arts
     except sqlite3.Error as e:
         log.warning("SQLite extract %s: %s", path, e)

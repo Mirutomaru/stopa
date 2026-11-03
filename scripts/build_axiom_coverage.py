@@ -91,6 +91,12 @@ COVERED: dict[str, str] = {
     "LimewireArtifact": "covered",  # limewire_p2p
     "LimerunnerArtifact": "covered",  # limewire_p2p
     "LuckywireArtifact": "covered",  # limewire_p2p
+    # ETAPA B vlna 4 — port AXIOM extraktorů (6 nových parserů, testováno)
+    "DuckDuckGoCookiesArtifact": "covered",  # ddg_cookies (Chromium cookies SQLite)
+    "AllowlistedWebSitesArtifact": "covered",  # allowlisted_websites (DDG JSON)
+    "OpenOfficeBaseArtifact": "covered",  # openoffice_base (.odb ZIP kontejner)
+    "ParkedCarLocationsArtifact": "covered",  # parked_car_locations (iOS Local.sqlite)
+    "VoiceMailArtifact": "covered",  # ios_voicemail (voicemail.db)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -210,6 +216,12 @@ def _covered_desc(name: str) -> str:
         "LimewireArtifact": "limewire_p2p parser (P2P shared files JSON/pipe)",
         "LimerunnerArtifact": "limewire_p2p parser (P2P shared files JSON/pipe)",
         "LuckywireArtifact": "limewire_p2p parser (P2P shared files JSON/pipe)",
+        # ETAPA B vlna 4 — port AXIOM extraktorů
+        "DuckDuckGoCookiesArtifact": "ddg_cookies parser (Chromium cookies SQLite, µs od 1601)",
+        "AllowlistedWebSitesArtifact": "allowlisted_websites parser (DDG tracker exceptions JSON)",
+        "OpenOfficeBaseArtifact": "openoffice_base parser (.odb = ZIP/ODF kontejner + DC metadata)",
+        "ParkedCarLocationsArtifact": "parked_car_locations parser (iOS Local.sqlite ZRTVEHICLEEVENTMO, CFAbsoluteTime)",
+        "VoiceMailArtifact": "ios_voicemail parser (voicemail.db, date=unix s / trashed_date=CFAbsoluteTime)",
     }
     return m.get(name, "existující parser")
 

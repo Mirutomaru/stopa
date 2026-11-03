@@ -43,6 +43,9 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "Firefox (moz_places, ms od Unix epochy)",
             "Apple iMessage chat.db (CFAbsoluteTime od 2001)",
             "Android mmssms.db / calllog.db (unix ms)",
+            "DuckDuckGo cookies — Chromium `cookies` schéma (ETAPA B vlna 4)",
+            "iOS voicemail.db (`voicemail`, unix s + CFAbsoluteTime) (ETAPA B vlna 4)",
+            "iOS Local.sqlite parked car locations (`ZRTVEHICLEEVENTMO`) (ETAPA B vlna 4)",
         ),
         limitations=(
             "časové epochy se liší dle databáze — detekce podle schématu",
@@ -53,9 +56,12 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
     "registry_hive": ParserValidation(
         parser_id="registry_hive",
         version="",
-        formats=("Windows registry hive (.regf) — Run/RunOnce, MountedDevices, identita"),
+        formats=(
+            "Windows registry hive (.regf) — Run/RunOnce, MountedDevices, identita",
+            "UserAssist MRU (NTUSER.DAT — spuštěné aplikace / dokumenty) (ETAPA B vlna 4)",
+        ),
         limitations=(
-            "běží generic + Amcache + ShimCache + Clipboard + SID (sdílená regf magic)",
+            "běží generic + Amcache + ShimCache + Clipboard + SID + UserAssist (sdílená regf magic)",
             "závislost na regipy pro dekompozici klíčů",
         ),
         test_files=("tests/test_registry_extract.py",),
@@ -340,6 +346,33 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "limit MAX_FILES_PER_FILE=20000 souborů",
         ),
         test_files=("tests/test_limewire_p2p.py",),
+    ),
+    # ── ETAPA B vlna 4 — AXIOM port: portable-local typy (DDG allowlist, OpenOffice Base) ──
+    "allowlisted_websites": ParserValidation(
+        parser_id="allowlisted_websites",
+        version="",
+        formats=(
+            "DuckDuckGo Allowlisted Websites JSON (seznam povolených domén / tracker exceptions)",
+        ),
+        limitations=(
+            "detekce name-based (allowlist/allowlisted/tracker_exceptions) + content check (JSON pole/stringy)",
+            "snapshot seznamu bez času — timestamp=None",
+            "limit MAX_DOMAINS_PER_FILE=5000; dedupe domén",
+        ),
+        test_files=("tests/test_w4_parsers.py",),
+    ),
+    "openoffice_base": ParserValidation(
+        parser_id="openoffice_base",
+        version="",
+        formats=(
+            "OpenOffice/LibreOffice Base (.odb) — OpenDocument ZIP kontejner s metadata (content.xml/mimetype)",
+        ),
+        limitations=(
+            "detekce name-based (*.odb) + content check (ZIP magic + mimetype/content.xml)",
+            "metadata z ODF hlavičky; samotné tabulky DB se neparsují",
+            "poškozený ZIP → prázdný výsledek, ne výjimka",
+        ),
+        test_files=("tests/test_w4_parsers.py",),
     ),
 }
 

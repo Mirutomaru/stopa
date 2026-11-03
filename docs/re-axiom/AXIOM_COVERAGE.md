@@ -5,16 +5,17 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 51
-- **🔧 PORTABLE-LOCAL**: 21
+- **✅ COVERED**: 56
+- **🔧 PORTABLE-LOCAL**: 16
 - **☁️ CLOUD-EXPORT**: 111
 - **💾 MEMORY**: 15
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (51)
+## ✅ COVERED — STOPA už umí (existující parser) (56)
 
+- `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
 - `AppleIMessageArtifact` — sqlite_extract → imessage
 - `AuditDriveEventsArtifact` — EVTX event log (evtx parser)
 - `AuditLoginEventsArtifact` — EVTX event log (evtx parser)
@@ -29,6 +30,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `ConnscanArtifact` — net_connections parser
 - `CurrentTabsArtifact` — ddg_current_tabs parser (JSON/text záložky)
 - `DocumentMetadataExtractor` — OOXML metadata
+- `DuckDuckGoCookiesArtifact` — ddg_cookies parser (Chromium cookies SQLite, µs od 1601)
 - `FileScanArtifact` — mem_scan parser (textový výstup — soubory v paměti)
 - `GetsidsArtifact` — win_sids (sekundární registry průchod SAM/SECURITY)
 - `GoogleAccountInfoArtifact` — google_account_info parser (account_info.json)
@@ -56,6 +58,8 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `NetScanArtifact` — net_connections parser
 - `OfficeArtifact` — OOXML document parser
 - `OfflineGmailArtifact` — email_mbox parser
+- `OpenOfficeBaseArtifact` — openoffice_base parser (.odb = ZIP/ODF kontejner + DC metadata)
+- `ParkedCarLocationsArtifact` — parked_car_locations parser (iOS Local.sqlite ZRTVEHICLEEVENTMO, CFAbsoluteTime)
 - `SamsungConnectionsArtifact` — mobile_extract → calllog
 - `SamsungContactArtifact` — mobile_extract → contacts2
 - `SamsungMessagesArtifact` — mobile_extract → sms
@@ -64,15 +68,14 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `SockscanArtifact` — net_connections parser
 - `TimelineArtifact` — timeline engine
 - `UserSidsArtifact` — win_sids (sekundární registry průchod + ProfileList)
+- `VoiceMailArtifact` — ios_voicemail parser (voicemail.db, date=unix s / trashed_date=CFAbsoluteTime)
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (21)
+## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (16)
 
-- `AllowlistedWebSitesArtifact` — lokální parser (čistý Python)
 - `AttachmentExtractor` — lokální parser (čistý Python)
 - `DriveActivityArtifact` — lokální parser (čistý Python)
-- `DuckDuckGoCookiesArtifact` — browser cookies/bookmarks
 - `GoogleAccountChangeHistoryArtifact` — lokální profil / takeout
 - `GoogleAggregatedActivitiesArtifact` — lokální profil / takeout
 - `GoogleAggregatedActivitiesIdentitySessionsArtifact` — lokální profil / takeout
@@ -86,10 +89,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GooglePhotosArtifact` — lokální profil / takeout
 - `GooglePlusChatArtifact` — lokální profil / takeout
 - `GoogleTalkArtifact` — lokální profil / takeout
-- `OpenOfficeBaseArtifact` — lokální parser (čistý Python)
-- `ParkedCarLocationsArtifact` — lokální parser (čistý Python)
 - `SamsungVoiceRecordingArtifact` — legacy mobile / messenger (SQLite)
-- `VoiceMailArtifact` — lokální parser (čistý Python)
 
 ## ☁️ CLOUD-EXPORT — JSON export / warrant return (111)
 

@@ -22,6 +22,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import stopa as _stopa_pkg  # __version__ (single-source z pyproject)
+from stopa.artifacts.allowlisted_websites import PARSER_VERSION as ALLOWLISTED_WEBSITES_VERSION
+from stopa.artifacts.allowlisted_websites import (
+    extract_allowlisted_websites_artifacts,
+    is_allowlisted_websites_file,
+)
 from stopa.artifacts.bebo_chat import PARSER_VERSION as BEBO_CHAT_VERSION
 from stopa.artifacts.bebo_chat import extract_bebo_artifacts, is_bebo_chat_file
 from stopa.artifacts.chatroulette import PARSER_VERSION as CHATROULETTE_VERSION
@@ -68,6 +73,11 @@ from stopa.artifacts.msn_messenger import PARSER_VERSION as MSN_VERSION
 from stopa.artifacts.msn_messenger import extract_msn_artifacts, is_msn_chat_file
 from stopa.artifacts.net_connections import PARSER_VERSION as NETSTAT_VERSION
 from stopa.artifacts.net_connections import extract_netstat_artifacts, is_netstat_file
+from stopa.artifacts.openoffice_base import PARSER_VERSION as OPENOFFICE_BASE_VERSION
+from stopa.artifacts.openoffice_base import (
+    extract_openoffice_base_artifacts,
+    is_openoffice_base_file,
+)
 from stopa.artifacts.plist_extract import PARSER_VERSION as PLIST_VERSION
 from stopa.artifacts.plist_extract import extract_plist_artifacts
 from stopa.artifacts.registry_extract import PARSER_VERSION as REGISTRY_VERSION
@@ -91,6 +101,7 @@ from stopa.artifacts.win_schedtask import (
 from stopa.artifacts.win_schedtask import extract_scheduled_task_artifacts, is_scheduled_task_file
 from stopa.artifacts.win_shimcache import extract_shimcache_artifacts
 from stopa.artifacts.win_sids import extract_sid_artifacts
+from stopa.artifacts.win_userassist import extract_userassist_artifacts
 from stopa.artifacts.win_usn import (
     PARSER_VERSION as USN_VERSION,
 )
@@ -135,13 +146,14 @@ def _extract_sqlite_all(path: Path) -> list[Artifact]:
 
 
 def _extract_registry_all(path: Path) -> list[Artifact]:
-    """Registry hive (regf) — generic + Amcache + ShimCache + Clipboard + SID.
+    """Registry hive (regf) — generic + Amcache + ShimCache + Clipboard + SID + UserAssist.
 
     Všechny extraktory sdílejí `regf` magic → jeden kombinovaný dispatch
     (pattern jako `_extract_sqlite_all`). Každá cesta je nezávislá: Amcache
     běží jen na Amcache.hve, ShimCache jen na SYSTEM hive; bez příslušného
     klíče vrátí prázdný výsledek. ETAPA B vlna 1: + Clipboard (NTUSER.DAT)
-    a SID extrakce (SAM/SECURITY/ProfileList).
+    a SID extrakce (SAM/SECURITY/ProfileList). ETAPA B vlna 4: + UserAssist MRU
+    (NTUSER.DAT — spuštěné aplikace / otevřené dokumenty).
     """
     arts = extract_registry_artifacts(path)
     try:
@@ -160,6 +172,10 @@ def _extract_registry_all(path: Path) -> list[Artifact]:
         arts.extend(extract_sid_artifacts(path))
     except Exception as e:  # noqa: BLE001 — SID je bonus (ETAPA B vlna 1)
         log.warning("SID %s: %s", path, e)
+    try:
+        arts.extend(extract_userassist_artifacts(path))
+    except Exception as e:  # noqa: BLE001 — UserAssist je bonus (ETAPA B vlna 4)
+        log.warning("UserAssist %s: %s", path, e)
     return arts
 
 
@@ -201,6 +217,9 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "chatroulette": (extract_chatroulette_artifacts, CHATROULETTE_VERSION),
     "mailru_agent": (extract_mailru_artifacts, MAILRU_AGENT_VERSION),
     "limewire_p2p": (extract_shared_files_artifacts, LIMEWIRE_P2P_VERSION),
+    # ETAPA B vlna 4 — AXIOM port: DDG allowlisted websites + OpenOffice Base (.odb)
+    "allowlisted_websites": (extract_allowlisted_websites_artifacts, ALLOWLISTED_WEBSITES_VERSION),
+    "openoffice_base": (extract_openoffice_base_artifacts, OPENOFFICE_BASE_VERSION),
 }
 
 
@@ -217,7 +236,8 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
     ETAPA B vlna 3: + Bebo Live Chat, Chatroulette video chat, Mail.Ru Agent
     (chat/kontakty) a P2P shared files (LimeWire/Limerunner/Luckywire) —
     textové/JSON logy bez spolehlivé magiky. Kik běží schéma-based v SQLite
-    dispatch chainu (viz sqlite_extract), ne zde.
+    dispatch chainu (viz sqlite_extract), ne zde. ETAPA B vlna 4: + DuckDuckGo
+    Allowlisted Websites (JSON) a OpenOffice/LibreOffice Base (.odb ZIP kontejner).
     """
     if is_icloud_messages_file(name):
         return NAME_BASED_EXTRACTORS["icloud_messages"]
@@ -258,6 +278,11 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["mailru_agent"]
     if is_limewire_family_file(name):
         return NAME_BASED_EXTRACTORS["limewire_p2p"]
+    # ETAPA B vlna 4 — DDG allowlisted websites (JSON) + OpenOffice Base (.odb ZIP)
+    if is_allowlisted_websites_file(name):
+        return NAME_BASED_EXTRACTORS["allowlisted_websites"]
+    if is_openoffice_base_file(name):
+        return NAME_BASED_EXTRACTORS["openoffice_base"]
     return None
 
 

@@ -20,9 +20,9 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 
 ## D. Artifact Engine
 - **Stav:** 🔧 v průběhu (ETAPA B) | **Priorita:** P0
-- **Dokončeno:** 20 parser modulů; C3 registry 13 verzovaných parserů; ETAPA B vlna 1 hotová (email mbox/EML, WiFi WLAN XML, Scheduled Tasks XML, netstat/connstat text, Clipboard registry, SID extraction) — commit `afc49a0`. Coverage: **covered 33 / 232** unikátních AXIOM typů.
-- **Nedokončeno:** portable-local zbývá **38 typů** (vlny 2+), cloud-export 112, memory 15.
-- **Závislosti:** pipeline dispatch + C3 registry sync | **Nejbližší úkol:** STP-016 (vlna 2)
+- **Dokončeno:** 26 parser modulů; C3 registry **26 verzovaných parserů**; ETAPA B vlny 1–4 hotové — vlna 1 (email mbox/EML, WiFi WLAN XML, Scheduled Tasks XML, netstat/connstat text, Clipboard registry, SID extraction) `afc49a0`; vlna 2 (Google Search/Location/Login History + Account Info, memory scan CmdScan/FileScan, DDG Current Tabs, MSN Messenger); vlna 3 (Kik Messenger, Mail.ru Agent, Bebo Live Chat, Chatroulette, LimeWire/Limerunner/Luckywire P2P); **vlna 4** (STP-026): DDG cookies, DDG allowlisted websites, OpenOffice/LibreOffice Base (.odb), iOS parked car locations, iOS voicemail, Windows UserAssist MRU. Coverage: **covered 56 / 232** unikátních AXIOM typů.
+- **Nedokončeno:** portable-local zbývá **16 typů** (vlna 5+), cloud-export 111, memory 15.
+- **Závislosti:** pipeline dispatch + C3 registry sync | **Nejbližší úkol:** STP-027 (ETAPA B vlna 5)
 
 ## E. Advanced Timeline
 - **Stav:** ✅ základ hotov | **Priorita:** P2

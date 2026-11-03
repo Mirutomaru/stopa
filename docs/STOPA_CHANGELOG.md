@@ -4,6 +4,56 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-03 (ETAPA B vlna 4: portable-local AXIOM porty)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 6 nových parserů)
+- **DuckDuckGo Cookies** (`artifacts/ddg_cookies.py`) — Chromium cookies SQLite
+  schéma (`host_key/name/value/expires_utc` µs od Windows epochy 1601); detekce
+  schéma-based (tabulka `cookies` s `host_key`+`name`), hodnota plaintext jen když
+  existuje (Chromium v10+ AES-GCM `encrypted_value` neinterpretujeme). AXIOM
+  `DuckDuckGoCookiesArtifact`. Artifact type `browser_cookie`.
+- **DDG Allowlisted Websites** (`artifacts/allowlisted_websites.py`) — JSON seznam
+  webů s vypnutou tracker protection (pole domén nebo objekt s klíčem
+  `exceptions`/`allowlist`/…). Name-based detekce. AXIOM `AllowlistedWebSitesArtifact`.
+- **OpenOffice/LibreOffice Base** (`artifacts/openoffice_base.py`) — `.odb` = ZIP/ODF
+  kontejner; potvrzení přes `mimetype` + DC metadata (title/creator/date) z
+  `content.xml`. Name-based detekce. AXIOM `OpenOfficeBaseArtifact`.
+- **iOS Parked Car Locations** (`artifacts/parked_car_locations.py`) — iOS
+  `Local.sqlite` tabulka `ZRTVEHICLEEVENTMO` (Routined Location Services); čas
+  CFAbsoluteTime, souřadnice `ZLOCLATITUDE/ZLOCLONGITUDE`. Schéma-based. AXIOM
+  `ParkedCarLocationsArtifact`. Artifact type `location_data`.
+- **iOS Voicemail** (`artifacts/ios_voicemail.py`) — iOS `voicemail.db` tabulka
+  `voicemail`; `date`=unix s, `trashed_date`=CFAbsoluteTime (0 = nedělaná).
+  Schéma-based. AXIOM `VoiceMailArtifact`. Artifact type `voicemail`.
+- **Windows UserAssist MRU** (`artifacts/win_userassist.py`) — NTUSER.DAT registry:
+  ROT13 value names + binární payload (run count u32@0, focus time ms u32@4,
+  last run FILETIME q64@8); GUID `{CEBFF5CD…}` = programy / `{F4E57C4B…}` = dokumenty.
+  Běží v registry chainu (sdílená `regf` magic). Artifact type `app_execution`.
+
+### Pipeline dispatch + C3 registry
+- SQLite parsery (ddg_cookies, parked_car_locations, ios_voicemail) napojeni do
+  `sqlite_extract.py` dispatch chainu (schéma-based, pattern jako Kik).
+- UserAssist přidán do `_extract_registry_all()` (bonus průchod NTUSER.DAT).
+- Name-based extraktory: `allowlisted_websites`, `openoffice_base` do
+  `NAME_BASED_EXTRACTORS` + `_name_based_match()`.
+- C3 registry (`validation_registry.py`): nové záznamy `allowlisted_websites`,
+  `openoffice_base`; sdílené `sqlite`/`registry_hive` rozšířeny o vlna 4 formáty.
+
+### Coverage matice (FÁZE 15)
+- **5 přímých AXIOM flipů NOT_SUPPORTED → SUPPORTED**: DuckDuckGoCookies,
+  AllowlistedWebSites, OpenOfficeBase, ParkedCarLocations, VoiceMail.
+- **Coverage: 51 → 56 / 232** (SUPPORTED), NOT_SUPPORTED 147 → 142.
+
+### Testy
+- **33 nových testů** (`tests/test_w4_parsers.py`) — syntetické fixtures plně offline:
+  in-memory SQLite pro DB parsery, FakeHive/FakeKey pro UserAssist (pattern
+  `test_win_sids`), ZIP kontejner pro .odb; detekce + extrakce + pipeline dispatch.
+
+### Backward compat
+- Žádné breaking changes — nové artifact typy (`browser_cookie`, `location_data`,
+  `voicemail`, `app_execution`) do volného TEXT sloupce `artifacts.artifact_type`
+  bez migrace; stávající parsery nezměněni.
+
 ## [Unreleased] — 2026-11-03 (STP-023 Export: JSONL/XML/STIX formáty)
 
 ### Added (oblast K/Q, P3)

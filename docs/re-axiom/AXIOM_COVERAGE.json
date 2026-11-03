@@ -3,8 +3,8 @@
   "unique_types": 232,
   "counts": {
     "base-class": 34,
-    "covered": 51,
-    "portable-local": 21,
+    "covered": 56,
+    "portable-local": 16,
     "memory": 15,
     "cloud-export": 111
   },
@@ -46,6 +46,7 @@
       "XmlArtifact"
     ],
     "covered": [
+      "AllowlistedWebSitesArtifact",
       "AppleIMessageArtifact",
       "AuditDriveEventsArtifact",
       "AuditLoginEventsArtifact",
@@ -60,6 +61,7 @@
       "ConnscanArtifact",
       "CurrentTabsArtifact",
       "DocumentMetadataExtractor",
+      "DuckDuckGoCookiesArtifact",
       "FileScanArtifact",
       "GetsidsArtifact",
       "GoogleAccountInfoArtifact",
@@ -87,6 +89,8 @@
       "NetScanArtifact",
       "OfficeArtifact",
       "OfflineGmailArtifact",
+      "OpenOfficeBaseArtifact",
+      "ParkedCarLocationsArtifact",
       "SamsungConnectionsArtifact",
       "SamsungContactArtifact",
       "SamsungMessagesArtifact",
@@ -95,14 +99,13 @@
       "SockscanArtifact",
       "TimelineArtifact",
       "UserSidsArtifact",
+      "VoiceMailArtifact",
       "WiFiLocationsArtifact",
       "WorldMapArtifact"
     ],
     "portable-local": [
-      "AllowlistedWebSitesArtifact",
       "AttachmentExtractor",
       "DriveActivityArtifact",
-      "DuckDuckGoCookiesArtifact",
       "GoogleAccountChangeHistoryArtifact",
       "GoogleAggregatedActivitiesArtifact",
       "GoogleAggregatedActivitiesIdentitySessionsArtifact",
@@ -116,10 +119,7 @@
       "GooglePhotosArtifact",
       "GooglePlusChatArtifact",
       "GoogleTalkArtifact",
-      "OpenOfficeBaseArtifact",
-      "ParkedCarLocationsArtifact",
-      "SamsungVoiceRecordingArtifact",
-      "VoiceMailArtifact"
+      "SamsungVoiceRecordingArtifact"
     ],
     "memory": [
       "ApiHooksArtifact",
