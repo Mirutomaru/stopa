@@ -129,6 +129,29 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
         for c in db.list_correlations(case_id)
     )
 
+    # STP-020 — sekce 10–20: rejstřík entit, lineage kroky, integrity klíč + body.
+    # Všechny volání jsou defenzivní (staré DB / chybějící tabulky → prázdná data).
+    try:
+        entities = tuple(db.list_entities(case_id))
+    except Exception:
+        log.warning("sekce entit se nepodařilo načíst", exc_info=True)
+        entities = ()
+    try:
+        lineage_steps = len(db.list_lineage(case_id))
+    except Exception:
+        log.warning("lineage kroky se nepodařilo načíst", exc_info=True)
+        lineage_steps = 0
+    try:
+        integrity_pub_key = db.integrity_public_key()
+    except Exception:
+        log.warning("integrity klíč se nepodařilo načíst", exc_info=True)
+        integrity_pub_key = None
+    try:
+        integrity_checkpoints = tuple(db.list_integrity_checkpoints())
+    except Exception:
+        log.warning("integrity kontrolní body se nepodařilo načíst", exc_info=True)
+        integrity_checkpoints = ()
+
     return ReportData(
         case_id=case.id,
         case_name=case.name,
@@ -147,6 +170,11 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
         timeline_events=timeline_events,
         correlations=correlations,
         timezone_name=getattr(case, "timezone_name", None) or "Europe/Prague",
+        # STP-020 — sekce 10–20 (defenzivně naplněno výše)
+        entities=entities,
+        lineage_steps=lineage_steps,
+        integrity_pub_key=integrity_pub_key,
+        integrity_checkpoints=integrity_checkpoints,
     )
 
 

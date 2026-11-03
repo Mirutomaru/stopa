@@ -3,18 +3,16 @@
 ČISTÉ funkce nad daty — žádný IO → 100% offline testovatelné. IO wrapper
 (čtení case DB + zápis souborů) žije v ``presentation/case_report.py``.
 
-Obsah reportu (Belkasoft/FTK style):
-- hlavička případu (název, ID, znalec, datum vytvoření, generování)
-- **chain of custody** — evidence items: zdroj + každý soubor s SHA-256/MD5
-  (hash manifest = důkaz integrity; re-ingest je idempotentní podle rel_path)
-- processing summary (soubory, bajty, signatury, bad-ext, duplikáty, hash sets)
-- přehled artifactů podle typu
-- flagované soubory (BAD-EXT / DUP / HASHSET) — hlavní nálezy
-- ručně označené soubory (Evidence / Report z GUI)
-- audit trail (neměnná stopa operací, E1)
-- **E10: timeline** — chronologické události (UTC + lokální čas case TZ)
-  s confidence štítky a detekovanými nesrovnalostmi
-- **E10: korelace entity** — propojení s evidence odkazy (rel_path + detail)
+Obsah reportu (Belkasoft/FTK style) — **20 sekcí** (STP-020):
+- titulní strana: název případu, ID, znalec, datum vytvoření/generování, verze nástroje
+- 1–9 (původní, backward compat): chain of custody, processing summary, artifacty,
+  flagované soubory, ručně označené, hash manifest SHA-256/MD5, audit trail (E1),
+  timeline + Timeline Intelligence 2.0 podsekce (STP-018), korelace entity (E10)
+- **10–20 (STP-020):** metodika analýzy, nástroje a verze, omezení analýzy, závěr,
+  provenience timestampů (source vs derived, STP-018), evidence lineage (C2),
+  integrity Ed25519 kontrolní body (C4), rejstřík entit (E4/I3),
+  Příloha A validace parserů (C3), Příloha B reprodukční prostředí (C5),
+  Příloha C rozložení důvěryhodnosti
 
 **E10 i18n:** všechny viditelné texty jdou přes ``domain/i18n.py`` (cs/en);
 výchozí jazyk je čeština, přepnutí přes parametr ``lang``.
@@ -137,6 +135,11 @@ class ReportData:
     timeline_events: tuple[TimelineEvent, ...] = ()
     correlations: tuple[CorrelationRow, ...] = ()
     timezone_name: str = "Europe/Prague"
+    # STP-020 — sekce 10–20 (defaulty = prázdné → sekce se vykreslí jako „žádná data"):
+    entities: tuple[dict[str, object], ...] = ()  # rejstřík entit (E4/I3) z list_entities()
+    lineage_steps: int = 0  # počet kroků evidence lineage (C2) pro případ
+    integrity_pub_key: str | None = None  # Ed25519 veřejný klíč případu (C4), b64
+    integrity_checkpoints: tuple[dict[str, object], ...] = ()  # kontrolní body (C4)
 
 
 def _esc(v: object) -> str:
@@ -282,15 +285,21 @@ def build_html(data: ReportData, lang: str | None = None) -> str:
         ".conf{font-size:7.5pt;color:#444;white-space:nowrap}"
         ".mono{font-family:'DejaVu Sans Mono',monospace;font-size:8pt;word-break:break-all}"
         ".small{font-size:8pt;color:#555}"
+        # STP-020 — titulní strana (cover)
+        ".cover{text-align:center}"
+        ".case-name{font-size:14pt;font-weight:bold;margin-top:-8px}"
+        ".cover-meta{width:auto;min-width:75%;margin-left:auto;margin-right:auto;text-align:left}"
         "@page{size:A4;margin:2cm 1.6cm}@media print{"
         "h2{page-break-after:avoid}table{page-break-inside:auto}"
         "tr{page-break-inside:avoid}}"
         "</style></head><body>"
     )
 
-    # ── hlavička případu ───────────────────────────────────────
-    parts.append(f"<h1>{t('report_title', L)} — {_esc(data.case_name)}</h1>")
-    parts.append("<table class='meta'>")
+    # ── STP-020: titulní strana (cover) — název, ID, znalec, data, verze nástroje ──
+    parts.append("<div class='cover'>")
+    parts.append(f"<h1>{t('report_title', L)}</h1>")
+    parts.append(f"<p class='case-name'>{_esc(data.case_name)}</p>")
+    parts.append("<table class='meta cover-meta'>")
     rows = [
         (t("meta_case_id", L), data.case_id),
         (t("meta_examiner", L), data.examiner or "—"),
@@ -302,6 +311,7 @@ def build_html(data: ReportData, lang: str | None = None) -> str:
     for k, v in rows:
         parts.append(f"<tr><td>{_esc(k)}</td><td>{_esc(v)}</td></tr>")
     parts.append("</table>")
+    parts.append("</div>")
 
     # ── chain of custody — evidence sources ────────────────────
     parts.append(f"<h2>1. {t('sec_coc', L)}</h2>")
@@ -585,6 +595,253 @@ def build_html(data: ReportData, lang: str | None = None) -> str:
         parts.append("</table>")
     else:
         parts.append(f"<p class='small'>{t('empty_correlations', L)}</p>")
+
+    # ── STP-020: sekce 10–20 (report engine 9 → 20 sekcí) ───────
+    # Lazy importy — domain zůstává bez tvrdé závislosti na pipeline/data při
+    # importu modulu (stejný vzor jako build_registry v C3).
+
+    def _parser_count() -> int | None:
+        try:
+            from stopa.domain.validation_registry import build_registry
+
+            return len(build_registry())
+        except Exception:  # noqa: BLE001 — nesoulad registry nepadá report
+            return None
+
+    def _env_info() -> dict[str, str]:
+        """Příloha B (C5) + sekce 11 — snapshot prostředí (čistá logika)."""
+        try:
+            from stopa.domain.reproducibility import env_snapshot
+
+            snap = env_snapshot()
+            return {str(k): str(v) for k, v in snap.items()}
+        except Exception:  # noqa: BLE001 — snapshot je doplňkový údaj
+            return {}
+
+    def _components_status() -> dict[str, bool]:
+        """Sekce 11 — dostupnost volitelných komponent (E12 diagnostics)."""
+        try:
+            from stopa.data.diagnostics import collect_diagnostics
+
+            comps = collect_diagnostics().get("components", {})
+            return {str(k): bool(v) for k, v in comps.items()}
+        except Exception:  # noqa: BLE001 — defenzivní fallback (komponenty volitelné)
+            return {}
+
+    n_parsers = _parser_count()
+    env_info = _env_info()
+    components = _components_status()
+
+    # ── sekce 10 — metodika analýzy (deterministicky z dat) ─────
+    parts.append(f"<h2>10. {t('sec_methodology', L)}</h2>")
+    t_ = data.totals
+    parts.append(
+        "<p>"
+        + t_fmt(
+            "meth_sources", L,
+            n=len(data.sources),
+            files=f"{t_.get('files', 0):,}",
+            bytes=_fmt_bytes(t_.get("bytes", 0)),
+        )
+        + "</p>"
+    )
+    parts.append(f"<p>{t_fmt('meth_signatures', L, signed=t_.get('signed', 0))}</p>")
+    if n_parsers is not None:
+        parts.append(f"<p>{t_fmt('meth_artifacts', L, n=n_parsers)}</p>")
+    else:
+        parts.append(f"<p class='small'>{t('parsers_none', L)}</p>")
+    parts.append(
+        f"<p>{t_fmt('meth_correlation', L, n=len(data.correlations))}</p>"
+    )
+    parts.append(f"<p>{t_fmt('meth_timeline', L, w=60)}</p>")
+
+    # ── sekce 11 — nástroje a verze ─────────────────────────────
+    parts.append(f"<h2>11. {t('sec_tools', L)}</h2>")
+    tool_rows: list[tuple[str, str]] = [
+        (t("tool_stopa", L), f"v{__version__}"),
+        (t("tool_python", L), env_info.get("python", "—")),
+        (t("tool_sqlite", L), env_info.get("sqlite", "—")),
+        (t("tool_platform", L), env_info.get("platform", "—")),
+    ]
+    for comp_key, label in (("tsk", "tool_tsk"), ("ewf", "tool_ewf"), ("cryptsetup", "tool_cryptsetup")):
+        if comp_key in components:
+            status = t("avail_yes", L) if components[comp_key] else t("avail_no", L)
+            tool_rows.append((t(label, L), status))
+    parts.append(f"<table><tr><th>{t('th_component', L)}</th><th>{t('th_version', L)}</th></tr>")
+    for name, ver in tool_rows:
+        parts.append(f"<tr><td>{_esc(name)}</td><td class='mono'>{_esc(ver)}</td></tr>")
+    parts.append("</table>")
+
+    # ── sekce 12 — omezení analýzy ──────────────────────────────
+    parts.append(f"<h2>12. {t('sec_limitations', L)}</h2>")
+    parts.append(f"<ul><li>{t('lim_ram', L)}</li>")
+    parts.append(f"<li>{t('lim_confidence', L)}</li>")
+    if len(data.timeline_events) > 500:
+        parts.append(f"<li>{t_fmt('lim_trunc_timeline', L, n=500)}</li>")
+    if len(data.flagged_files) > 500:
+        parts.append(f"<li>{t_fmt('lim_trunc_flagged', L, n=500)}</li>")
+    if len(data.custody_items) > 5000:
+        parts.append(f"<li>{t_fmt('lim_trunc_manifest', L, n=5000)}</li>")
+    parts.append("</ul>")
+
+    # ── sekce 13 — závěr (souhrn findings + timeline intel) ─────
+    parts.append(f"<h2>13. {t('sec_conclusion', L)}</h2>")
+    total_artifacts = sum(data.artifact_counts.values())
+    contra_groups = {e.contradiction_group_id for e in data.timeline_events if e.contradiction_group_id}
+    dup_groups = {e.dup_group_id for e in data.timeline_events if e.dup_group_id}
+    parts.append(
+        "<p>"
+        + t_fmt(
+            "concl_summary", L,
+            artifacts=f"{total_artifacts:,}",
+            flagged=len(data.flagged_files),
+            marked=len(data.marked_files),
+            corr=len(data.correlations),
+            entities=len(data.entities),
+            events=len(data.timeline_events),
+        )
+        + "</p>"
+    )
+    if contra_groups:
+        parts.append(f"<p>{t_fmt('concl_contra', L, n=len(contra_groups))}</p>")
+    if dup_groups:
+        parts.append(f"<p>{t_fmt('concl_dup', L, n=len(dup_groups))}</p>")
+    if not (total_artifacts or data.flagged_files or data.marked_files
+            or data.correlations or contra_groups or dup_groups):
+        parts.append(f"<p class='small'>{t('concl_none', L)}</p>")
+
+    # ── sekce 14 — provenience timestampů (STP-018) ─────────────
+    parts.append(f"<h2>14. {t('sec_provenance', L)}</h2>")
+    src_ts = sum(1 for e in data.timeline_events if e.ts_origin == "source")
+    der_ts = sum(1 for e in data.timeline_events if e.ts_origin == "derived")
+    if src_ts or der_ts:
+        parts.append(f"<p>{t_fmt('prov_source', L, n=src_ts)}</p>")
+        parts.append(f"<p>{t_fmt('prov_derived', L, n=der_ts)}</p>")
+    else:
+        parts.append(f"<p class='small'>{t('prov_none', L)}</p>")
+
+    # ── sekce 15 — evidence lineage (C2) ────────────────────────
+    parts.append(f"<h2>15. {t('sec_lineage', L)}</h2>")
+    if data.lineage_steps:
+        parts.append(f"<p>{t_fmt('lineage_steps', L, n=data.lineage_steps)}</p>")
+    else:
+        parts.append(f"<p class='small'>{t('lineage_none', L)}</p>")
+
+    # ── sekce 16 — integrity Ed25519 kontrolní body (C4) ────────
+    parts.append(f"<h2>16. {t('sec_integrity', L)}</h2>")
+    if data.integrity_pub_key:
+        parts.append(
+            f"<table class='meta'><tr><td>{_esc(t('th_pubkey', L))}</td>"
+            f"<td class='mono'>{_esc(data.integrity_pub_key)}</td></tr></table>"
+        )
+    else:
+        parts.append(f"<p class='small'>{t('integrity_none_key', L)}</p>")
+    if data.integrity_checkpoints:
+        parts.append(
+            f"<table><tr><th>{t('th_time_utc', L)}</th>"
+            f"<th>{t('th_audit_row', L)}</th>"
+            f"<th>{t('th_last_hash', L)}</th>"
+            f"<th>{t('th_reason', L)}</th></tr>"
+        )
+        for cp in data.integrity_checkpoints[:100]:  # limit — court-ready
+            parts.append(
+                f"<tr><td class='mono'>{_esc(str(cp.get('ts') or '—'))}</td>"
+                f"<td>{int(cp.get('audit_row_id') or 0):,}</td>"
+                f"<td class='mono small'>{_esc(str(cp.get('last_hash') or '—'))[:16]}…</td>"
+                f"<td>{_esc(str(cp.get('reason') or '—'))}</td></tr>"
+            )
+        parts.append("</table>")
+    else:
+        parts.append(f"<p class='small'>{t('integrity_none_cp', L)}</p>")
+
+    # ── sekce 17 — rejstřík entit (E4/I3) ───────────────────────
+    parts.append(f"<h2>17. {t('sec_entities', L)}</h2>")
+    if data.entities:
+        parts.append(
+            f"<table><tr>"
+            f"<th>{t('th_entity_kind', L)}</th>"
+            f"<th>{t('th_entity_value', L)}</th>"
+            f"<th>{t('th_first_seen', L)}</th>"
+            f"<th>{t('th_last_seen', L)}</th></tr>"
+        )
+        for ent in data.entities[:500]:  # limit — court-ready
+            parts.append(
+                f"<tr><td>{_esc(str(ent.get('kind') or '—'))}</td>"
+                f"<td class='mono'>{_esc(str(ent.get('value') or '—'))}</td>"
+                f"<td class='mono small'>{_esc(_fmt_dt(_parse_iso(str(ent.get('first_seen') or None))))}</td>"
+                f"<td class='mono small'>{_esc(_fmt_dt(_parse_iso(str(ent.get('last_seen') or None))))}</td></tr>"
+            )
+        parts.append("</table>")
+        if len(data.entities) > 500:
+            parts.append(t_fmt("truncated_entities", L, n=f"{len(data.entities):,}"))
+    else:
+        parts.append(f"<p class='small'>{t('empty_entities', L)}</p>")
+
+    # ── sekce 18 — Příloha A: validace parserů (C3) ─────────────
+    parts.append(f"<h2>18. {t('sec_app_parsers', L)}</h2>")
+    if n_parsers is not None:
+        try:
+            from stopa.domain.validation_registry import build_registry
+
+            registry = build_registry()
+            parts.append(
+                f"<table><tr><th>{t('th_parser', L)}</th>"
+                f"<th>{t('th_version', L)}</th>"
+                f"<th>{t('th_formats', L)}</th></tr>"
+            )
+            for pid in sorted(registry):  # deterministické pořadí
+                pv = registry[pid]
+                formats = "; ".join(pv.formats) or "—"
+                parts.append(
+                    f"<tr><td class='mono'>{_esc(pid)}</td>"
+                    f"<td>{_esc(pv.version)}</td>"
+                    f"<td class='small'>{_esc(formats[:200])}</td></tr>"
+                )
+            parts.append("</table>")
+        except Exception:  # noqa: BLE001 — registry se už počítala výše; fallback
+            parts.append(f"<p class='small'>{t('parsers_none', L)}</p>")
+    else:
+        parts.append(f"<p class='small'>{t('parsers_none', L)}</p>")
+
+    # ── sekce 19 — Příloha B: reprodukční prostředí (C5) ────────
+    parts.append(f"<h2>19. {t('sec_app_env', L)}</h2>")
+    if env_info:
+        parts.append(
+            "<table class='meta'>"
+            + "".join(
+                f"<tr><td>{_esc(k)}</td><td class='mono'>{_esc(v)}</td></tr>"
+                for k, v in sorted(env_info.items())
+            )
+            + "</table>"
+        )
+    else:
+        parts.append("<p class='small'>—</p>")
+    parts.append(f"<p class='small'>{t('env_note', L)}</p>")
+
+    # ── sekce 20 — Příloha C: rozložení důvěryhodnosti ──────────
+    parts.append(f"<h2>20. {t('sec_app_confidence', L)}</h2>")
+    conf_counts: dict[str, int] = {}
+    for ev in data.timeline_events:
+        label = confidence_label(ev.confidence)
+        conf_counts[label] = conf_counts.get(label, 0) + 1
+    corr_counts: dict[str, int] = {}
+    for c in data.correlations:
+        label = _correlation_confidence_label(c.confidence)
+        corr_counts[label] = corr_counts.get(label, 0) + 1
+    if conf_counts or corr_counts:
+        parts.append(
+            f"<table><tr><th>{t('th_level', L)}</th>"
+            f"<th>Timeline</th><th>Korelace</th></tr>"
+        )
+        for label in sorted(set(conf_counts) | set(corr_counts)):
+            parts.append(
+                f"<tr><td>[{_esc(t(label, L))}]</td>"
+                f"<td>{conf_counts.get(label, 0):,}</td>"
+                f"<td>{corr_counts.get(label, 0):,}</td></tr>"
+            )
+        parts.append("</table>")
+    else:
+        parts.append("<p class='small'>—</p>")
 
     # ── patička ────────────────────────────────────────────────
     parts.append(

@@ -175,12 +175,12 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dokončeno:** 2026-11-03 | Commit: `cd5aa25`
 
 ## STP-019 — AI governance + PII redaktor
-- **Oblast:** H/M | **Priorita:** P2 | **Stav:** BACKLOG
+- **Oblast:** H/M | **Priorita:** P2 | **Stav:** READY
 - **Popis:** `STOPA_AI_GOVERNANCE.md` (kořen), PII redaktor před LLM inference, explicitní oddělení případů.
 - **Závislosti:** —
 
 ## STP-020 — Report engine: 9 → 20 sekcí
-- **Oblast:** L | **Priorita:** P1 | **Stav:** READY
+- **Oblast:** L | **Priorita:** P1 | **Stav:** DONE
 - **Popis:** Titulní strana, metodika, nástroje+verze, omezení, závěr + další sekce.
 - **Závislosti:** —
 - **Dotčené moduly:** `src/stopa/domain/report.py` (SECTIONS + build_html),
@@ -189,6 +189,15 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Akceptační kritéria:** report obsahuje nové sekce (titulní strana, metodika,
   nástroje+verze, omezení, závěr); existující 9 sekcí se nemění (backward compat);
   i18n cs/en; testy na syntetickém případě; plná sada bez regresí.
+- **Výsledek:** report rozšířen z 9 na **20 sekcí** — titulní strana (cover),
+  10 Metodika analýzy, 11 Nástroje a verze (env_snapshot C5 + E12 diagnostics),
+  12 Omezení analýzy, 13 Závěr, 14 Provenience timestampů, 15 Evidence lineage,
+  16 Integrity Ed25519, 17 Rejstřík entit, 18 Příloha A (validace parserů C3),
+  19 Příloha B (reprodukční prostředí C5), 20 Příloha C (rozložení důvěryhodnosti);
+  backward compat sekcí 1–9 zachována; ~60 nových i18n klíčů cs/en; defenzivní
+  naplnění z case DB; **14 nových testů** (`tests/test_report.py`, třída
+  `TestStp020Sections`); full suite **1087 passed, 1 skipped**, ruff clean.
+- **Dokončeno:** 2026-11-03 | Commit: (STP-020)
 
 ## STP-021 — Performance: stream parsing velkých E01 + progress monitoring
 - **Oblast:** N/O | **Priorita:** P2 | **Stav:** BACKLOG

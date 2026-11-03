@@ -1,49 +1,55 @@
 # STOPA CHECKPOINT — latest
 
 **Datum:** 2026-11-03
-**Verze projektu:** 0.1.0, commit `cd5aa25` (STP-018) + předchozí `025c6c0` (vlna 3), `1b046ee` (vlna 2), `afc49a0` (vlna 1)
-**Poslední dokončený úkol:** STP-018 (Timeline Intelligence 2.0 — oblast E, P2) — před ním STP-017 (ETAPA B vlna 3), STP-016 (vlna 2, `1b046ee`), STP-012c (`2549ce6`), STP-012b (`19a458d`), STP-012 (`e227929`), STP-013..015 (vlna 1, `afc49a0`)
-**Aktuální fáze:** Oblast L (Report Engine) — příprava STP-020 (9 → 20 sekcí); ETAPA B vlny 1–3 hotové
+**Verze projektu:** 0.1.0, commit (STP-020) + předchozí `cd5aa25` (STP-018), `025c6c0` (vlna 3), `1b046ee` (vlna 2), `afc49a0` (vlna 1)
+**Poslední dokončený úkol:** STP-020 (Report engine 9 → 20 sekcí — oblast L, P1) — před ním STP-018 (Timeline Intelligence 2.0), STP-017 (ETAPA B vlna 3), STP-016 (vlna 2), STP-012c (`2549ce6`), STP-012b (`19a458d`), STP-012 (`e227929`), STP-013..015 (vlna 1)
+**Aktuální fáze:** Oblast L hotová — čeká na zahájení **STP-019** (AI governance + PII redaktor, oblast H/M, P2); ETAPA B vlny 1–3 hotové
 
 ## Aktuální stav
 | Metrika | Hodnota |
 |---|---|
-| Dokončené úkoly (TASKS.md) | **20** |
-| Čekající (BACKLOG/READY) | **5** (READY: STP-020; BACKLOG: 4) |
+| Dokončené úkoly (TASKS.md) | **21** |
+| Čekající (BACKLOG/READY) | **4** (READY: STP-019; BACKLOG: 3) |
 | Blokované | 0 |
-| Full suite | **1073 passed, 1 skipped** (~13s) |
+| Full suite | **1087 passed, 1 skipped** (~13s) |
 | Ruff | clean (`src/stopa tests scripts`) |
 | Coverage matice | covered **51 / 232**, deterministická (SHA-256 diff ✓) |
 | C3 registry | **24 parserů** (`build_registry()`) |
 
-## STP-018 — co se provedlo
-Tři analytické vrstvy nad materializovanou timeline:
-1. **Rozpory `concurrent_activity`** — stejná normalizovaná entita ve dvou událostech v okně 60 s + odlišný typ/soubor → union-find tranzitivní uzavření, deterministické group ID (SHA-256).
-2. **Duplikáty napříč zdroji `cross_source_duplicate`** — stejný obsah (typ+title) z ≥2 různých (source_id, rel_path), provenance všech výskytů zachována.
-3. **Timestamp provenance** — `ts_origin` (source vs derived) + klasifikace přesnosti (`classify_precision`: second/millisecond/microsecond/file_metadata/unknown).
+## STP-020 — co se provedlo
+Rozšíření HTML/PDF reportu z 9 na **20 sekcí**:
+1. **Titulní strana (cover)** — název případu, ID, znalec, datum vytvoření/generování, verze nástroje; nová CSS třída `.cover`.
+2. **Sekce 10 — Metodika analýzy** — deterministicky z dat (zdroje/soubory/bajty, signatury, počet parserů C3, korelace, Timeline Intel okno).
+3. **Sekce 11 — Nástroje a verze** — STOPA/Python/SQLite/platforma (`env_snapshot()` C5) + dostupnost TSK/EWF/cryptsetup (E12 diagnostics).
+4. **Sekce 12 — Omezení analýzy** — RAM peak (BLK-001), confidence omezení, truncation limity.
+5. **Sekce 13 — Závěr** — souhrn findings + počty rozporových/duplikátových skupin (STP-018).
+6. **Sekce 14 — Provenience timestampů** — source vs derived (STP-018).
+7. **Sekce 15 — Evidence lineage** (C2, počet kroků).
+8. **Sekce 16 — Integrity Ed25519** (C4, veřejný klíč + kontrolní body).
+9. **Sekce 17 — Rejstřík entit** (E4/I3).
+10. **Sekce 18 — Příloha A: validace parserů** (C3 registry, deterministické pořadí).
+11. **Sekce 19 — Příloha B: reprodukční prostředí** (C5 snapshot).
+12. **Sekce 20 — Příloha C: rozložení důvěryhodnosti** (timeline + korelace).
 
-## Změněné soubory (STP-018)
-- nový: `src/stopa/domain/timeline_intel.py` (čistá logika bez IO, ~301 ř.)
-- `data/db.py`: SCHEMA_VERSION 11→**12**, nové sloupce `timeline_events` (`ts_origin`, `subject_values_json`, `contradiction_group_id`, `dup_group_id`), migrace `_migrate_timeline_intel()`, metody `set/clear_timeline_intel_groups()`
-- `models.py`: `Artifact.ts_origin = "source"` default
-- `pipeline.py`: insert subject_values+ts_origin, post-pass `run_timeline_intel(db, window_seconds=60)`
-- `cli.py`: `add` post-pass po ingestu; `timeline --intel [--window N]`
-- `web/app.py`: POST `/api/cases/{id}/timeline/intel?window_seconds=60`
-- `domain/report.py`: podsekce Timeline Intelligence 2.0 (8.1) — rozpory + duplikáty s provenance
-- `domain/i18n.py`, `presentation/case_report.py`, `domain/export.py` (TIMELINE_COLUMNS + timeline_records)
-- nový test: `tests/test_timeline_intel.py` (**32 testů**)
-- `tests/test_entity_resolution.py` + `tests/test_reproducibility.py`: SCHEMA_VERSION aserty → konstanta (robustní vůči bumpům)
-- README.md, STOPA_CHANGELOG.md (+docs zrcadlo), `.stopa-dev/*`
+Backward compat sekcí 1–9 zachována (testy asertují texty, ne čísla). ~60 nových i18n klíčů cs/en. Defenzivní naplnění z case DB (`case_report.py`).
 
-## Jak pokračovat (STP-020)
-1. Přečíst `src/stopa/domain/report.py` — SECTIONS list + build_html (9 sekcí)
-2. Přečíst `src/stopa/presentation/case_report.py` — stavba ReportData z case DB
-3. Přečíst `src/stopa/domain/i18n.py` — struktura klíčů cs/en
-4. Audit existujících 9 sekcí → definovat rozsah 20 sekcí (titulní strana, metodika, nástroje+verze, omezení, závěr + další)
-5. Implementace + testy na syntetickém případě; dokumentace; changelog update
+## Změněné soubory (STP-020)
+- `src/stopa/domain/report.py` — docstring, `ReportData` +4 pole (entities/lineage_steps/integrity_pub_key/integrity_checkpoints), CSS `.cover`, titulní strana, render sekcí 10–20
+- `src/stopa/domain/i18n.py` — ~60 nových klíčů cs/en pro sekce 10–20
+- `src/stopa/presentation/case_report.py` — defenzivní naplnění nová pole z case DB (entity, lineage, integrity checkpoints + veřejný klíč)
+- `tests/test_report.py` — +fixture `rich_data`, třída `TestStp020Sections` (**14 testů**)
+- README.md (řádek STP-020 + test count 1087), STOPA_CHANGELOG.md (+docs zrcadlo)
+- `.stopa-dev/*` — NEXT_ACTION, PROJECT_STATE, TASKS, CHANGELOG, checkpoint
+
+## Jak pokračovat (STP-019)
+1. Přečíst `STOPA_AI_GOVERNANCE.md` (kořen) — existující governance dokumentace
+2. Přečíst `src/stopa/intelligence/ai_orchestrator.py` — audit AI volání, citace
+3. PII redaktor: detekce e-mail/telefon/JID/handle v LLM výstupu, volitelné maskování
+4. Governance politika: kdy je AI povolená, auditovatelnost modelových volání (verze modelu)
+5. Testy na syntetickém případě; dokumentace; changelog update
 
 ## Co nesmí být změněno
-- Existující 9 sekcí reportu (backward compat) — nové sekce se přidávají, staré se nemění
+- Existující report sekce 1–20 (backward compat) — nové funkce se přidávají
 - C3 registry: `build_registry()` vynucuje 1:1 sync s pipeline + shodu verzí, jinak `RegistryError`
 - Neodstraňovat existující testy kvůli zelenému výsledku; nepoužívat mockování místo kritické logiky
 - Originální důkazní data zůstávají neměnná (report pracuje na case DB)
@@ -51,7 +57,7 @@ Tři analytické vrstvy nad materializovanou timeline:
 ## Příkazy k ověření
 ```bash
 cd /home/ai/Prace/projekty/stopa
-.venv/bin/python -m pytest tests/test_timeline_intel.py -q   # 32 passed
-.venv/bin/ruff check src/stopa tests scripts                 # All checks passed!
-.venv/bin/python -m pytest -q                                # 1073 passed, 1 skipped
+.venv/bin/python -m pytest tests/test_report.py -q   # 30 passed (16 původních + 14 nových)
+.venv/bin/ruff check src/stopa tests scripts         # All checks passed!
+.venv/bin/python -m pytest -q                        # 1087 passed, 1 skipped
 ```

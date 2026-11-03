@@ -151,6 +151,137 @@ _STRINGS: dict[str, tuple[str, str]] = {
     # P0 I3: čtyři úrovně vztahů (Entity Resolution 2.0)
     "conf_strong_candidate": ("silný kandidát", "strong candidate"),
     "conf_unverified": ("neověřeno", "unverified"),
+    # ── STP-020 — report engine 9 → 20 sekcí (sekce 10–20) ───────
+    "sec_methodology": ("Metodika analýzy", "Analysis methodology"),
+    "meth_sources": (
+        "Zpracováno {n} evidence zdrojů ({files} souborů, {bytes}).",
+        "{n} evidence sources processed ({files} files, {bytes}).",
+    ),
+    "meth_signatures": (
+        "Detekce typů souborů podle magic bytes (signatur); identifikováno {signed} souborů.",
+        "File type detection by magic bytes (signatures); {signed} files identified.",
+    ),
+    "meth_artifacts": (
+        "Extrakce artifactů přes {n} verzovaných parserů (C3 Parser Validation Registry, 1:1 sync s pipeline).",
+        "Artifact extraction via {n} versioned parsers (C3 Parser Validation Registry, 1:1 pipeline sync).",
+    ),
+    "meth_correlation": (
+        "Korelace entit: {n} propojení (Entity Resolution 2.0 — čtyřúrovňová škála důvěryhodnosti vztahů).",
+        "Entity correlation: {n} links (Entity Resolution 2.0 — four-level relation confidence scale).",
+    ),
+    "meth_timeline": (
+        "Timeline Intelligence 2.0: detekce rozporů (souběžná aktivita jednoho subjektu v okně {w} s) a duplikátů napříč zdroji.",
+        "Timeline Intelligence 2.0: contradiction detection (concurrent activity of one subject within a {w}s window) and cross-source duplicates.",
+    ),
+    # ── sekce 11 — nástroje a verze ─────────────────────────────
+    "sec_tools": ("Nástroje a verze", "Tools and versions"),
+    "th_component": ("Komponenta", "Component"),
+    "th_version": ("Verze / stav", "Version / status"),
+    "tool_stopa": ("STOPA (unifikovaná forenzní workbench)", "STOPA (unified forensic workbench)"),
+    "tool_python": ("Python", "Python"),
+    "tool_sqlite": ("SQLite", "SQLite"),
+    "tool_platform": ("Platforma", "Platform"),
+    "tool_tsk": ("TSK (pytsk3) — filesystem walk diskových obrazů", "TSK (pytsk3) — disk image filesystem walk"),
+    "tool_ewf": ("EWF/libewf — kontejnery E01/AFF4", "EWF/libewf — E01/AFF4 containers"),
+    "tool_cryptsetup": ("cryptsetup — FDE LUKS/FBE dešifrování", "cryptsetup — FDE LUKS/FBE decryption"),
+    "avail_yes": ("dostupná", "available"),
+    "avail_no": ("nedostupná (volitelná závislost)", "not available (optional dependency)"),
+    # ── sekce 12 — omezení analýzy ──────────────────────────────
+    "sec_limitations": ("Omezení analýzy", "Analysis limitations"),
+    "lim_ram": (
+        "Velikostní limit: u velkých E01 obrazů může být RAM peak omezen (BLK-001); stream parsing je plánován v STP-021.",
+        "Size limit: large E01 images may hit a RAM peak ceiling (BLK-001); stream parsing is planned in STP-021.",
+    ),
+    "lim_confidence": (
+        "Důvěryhodnost: artifacty bez explicitního skóre nebo se skóre < 0.5 jsou klasifikovány jako „hypotéza“ — nejslabší tvrzení.",
+        "Confidence: artifacts without an explicit score or with a score < 0.5 are classified as “hypothesis” — the weakest claim.",
+    ),
+    "lim_trunc_timeline": (
+        "Timeline je v reportu omezena na prvních {n} událostí (plný seznam: `stopa timeline <case>`).",
+        "The timeline is limited to the first {n} events in this report (full list: `stopa timeline <case>`).",
+    ),
+    "lim_trunc_flagged": (
+        "Flagované soubory jsou v reportu omezeny na prvních {n} položek.",
+        "Flagged files are limited to the first {n} entries in this report.",
+    ),
+    "lim_trunc_manifest": (
+        "Hash manifest je v reportu omezen na prvních {n} souborů (plný manifest v case DB).",
+        "The hash manifest is limited to the first {n} files in this report (full manifest in the case DB).",
+    ),
+    # ── sekce 13 — závěr ────────────────────────────────────────
+    "sec_conclusion": ("Závěr", "Conclusion"),
+    "concl_summary": (
+        ("Souhrn: {artifacts} artifactů, {flagged} flagovaných souborů, {marked} ručně označených souborů, "
+         "{corr} korelací entit, {entities} entit, {events} timeline událostí."),
+        ("Summary: {artifacts} artifacts, {flagged} flagged files, {marked} manually marked files, "
+         "{corr} entity correlations, {entities} entities, {events} timeline events."),
+    ),
+    "concl_contra": (
+        "Detekováno {n} rozporových skupin — souběžná aktivita jednoho subjektu v časovém okně (viz sekce 8.1).",
+        "{n} contradiction groups detected — concurrent activity of one subject within the time window (see section 8.1).",
+    ),
+    "concl_dup": (
+        "Detekováno {n} duplikátových skupin napříč zdroji — stejný obsah z různých souborů/zdrojů (viz sekce 8.1).",
+        "{n} cross-source duplicate groups detected — same content from different files/sources (see section 8.1).",
+    ),
+    "concl_none": (
+        "Žádné výrazné nálezy — případ obsahuje pouze základní evidence data.",
+        "No significant findings — the case contains only basic evidence data.",
+    ),
+    # ── sekce 14 — provenience timestampů (STP-018) ─────────────
+    "sec_provenance": ("Provenience timestampů (source vs derived)", "Timestamp provenance (source vs derived)"),
+    "prov_source": (
+        "Zdrojové timestamps (z obsahu souboru): {n}",
+        "Source timestamps (from file content): {n}",
+    ),
+    "prov_derived": (
+        "Odvozené timestamps (systémový/FS fallback): {n}",
+        "Derived timestamps (system/FS fallback): {n}",
+    ),
+    "prov_none": ("Žádné timeline události s provenience.", "No timeline events with provenance."),
+    # ── sekce 15 — evidence lineage (C2) ────────────────────────
+    "sec_lineage": ("Evidence lineage — řetězec původu zjištění", "Evidence lineage — chain of origin"),
+    "lineage_steps": (
+        "Zaznamenáno {n} kroků v append-only řetězci (verze nástroje + hash konfigurace + vstupní/výstupní reference) — zpětné dohledání tvrzení až k původnímu zdroji.",
+        "{n} steps recorded in the append-only chain (tool version + config hash + input/output references) — back-tracing any claim to its original source.",
+    ),
+    "lineage_none": ("Žádné zaznamenané kroky lineage pro tento případ.", "No lineage steps recorded for this case."),
+    # ── sekce 16 — integrity Ed25519 (C4) ───────────────────────
+    "sec_integrity": ("Integrity — Ed25519 kontrolní body", "Integrity — Ed25519 checkpoints"),
+    "th_pubkey": ("Veřejný klíč (Ed25519, base64)", "Public key (Ed25519, base64)"),
+    "integrity_none_key": (
+        "Klíč nevygenerován — použij `stopa integrity <case> --init-key`.",
+        "Key not generated — run `stopa integrity <case> --init-key`.",
+    ),
+    "th_audit_row": ("Audit řádek", "Audit row"),
+    "th_last_hash": ("Poslední hash (SHA-256)", "Last hash (SHA-256)"),
+    "th_reason": ("Důvod", "Reason"),
+    "integrity_none_cp": ("Žádné kontrolní body.", "No checkpoints."),
+    # ── sekce 17 — rejstřík entit (E4/I3) ───────────────────────
+    "sec_entities": ("Rejstřík entit", "Entity registry"),
+    "th_entity_kind": ("Typ entity", "Entity kind"),
+    "th_entity_value": ("Hodnota (normalizovaná)", "Value (normalized)"),
+    "th_first_seen": ("První výskyt (UTC)", "First seen (UTC)"),
+    "th_last_seen": ("Poslední výskyt (UTC)", "Last seen (UTC)"),
+    "empty_entities": ("Žádné extrahované entity.", "No extracted entities."),
+    "truncated_entities": (
+        "Zobrazeno prvních 500 z {n} entit (plný rejstřík v case DB).",
+        "Showing first 500 of {n} entities (full registry in the case DB).",
+    ),
+    # ── sekce 18 — Příloha A: validace parserů (C3) ─────────────
+    "sec_app_parsers": ("Příloha A — Validace parserů (C3)", "Appendix A — Parser validation (C3)"),
+    "th_parser": ("Parser", "Parser"),
+    "th_formats": ("Formáty / varianty", "Formats / variants"),
+    "parsers_none": ("Registry se nepodařilo načíst (nesoulad s pipeline).", "The registry could not be loaded (pipeline mismatch)."),
+    # ── sekce 19 — Příloha B: reprodukční prostředí (C5) ────────
+    "sec_app_env": ("Příloha B — Reprodukční prostředí (C5)", "Appendix B — Reproducibility environment (C5)"),
+    "env_note": (
+        "Snapshot prostředí pro reprodukovatelnost běhu — stejné hodnoty jako v manifestu exportů.",
+        "Environment snapshot for run reproducibility — the same values as in the export manifests.",
+    ),
+    # ── sekce 20 — Příloha C: rozložení důvěryhodnosti ──────────
+    "sec_app_confidence": ("Příloha C — Rozložení důvěryhodnosti", "Appendix C — Confidence distribution"),
+    "th_level": ("Úroveň", "Level"),
     # ── patička ────────────────────────────────────────────────
     "footer": (
         ("STOPA report — případ {case_id}, vygenerován {ts}. Hash manifest slouží "

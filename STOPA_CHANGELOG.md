@@ -2,6 +2,41 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-03 (STP-020 Report engine 9→20 sekcí)
+
+### Added (oblast L, priorita P1 — court-ready report výstupy)
+- `domain/report.py` — rozšíření HTML/PDF reportu z **9 na 20 sekcí**:
+  - **Titulní strana** (cover): název případu, ID, znalec, datum vytvoření/
+    generování, verze nástroje; nová CSS třída `.cover`.
+  - **Sekce 10 — Metodika analýzy**: deterministicky z dat (počet zdrojů/
+    souborů/bajtů, signatury, počet parserů C3 registry, korelace entit,
+    Timeline Intel okno).
+  - **Sekce 11 — Nástroje a verze**: STOPA/Python/SQLite/platforma z
+    `env_snapshot()` (C5) + dostupnost TSK/EWF/cryptsetup (E12 diagnostics).
+  - **Sekce 12 — Omezení analýzy**: RAM peak (BLK-001), confidence omezení,
+    truncation limity.
+  - **Sekce 13 — Závěr**: souhrn findings + počty rozporových/duplikátových
+    skupin (STP-018).
+  - **Sekce 14 — Provenience timestampů**: source vs derived (STP-018).
+  - **Sekce 15 — Evidence lineage** (C2, počet kroků).
+  - **Sekce 16 — Integrity Ed25519** (C4, veřejný klíč + kontrolní body).
+  - **Sekce 17 — Rejstřík entit** (E4/I3).
+  - **Sekce 18 — Příloha A: validace parserů** (C3 registry, deterministické
+    pořadí).
+  - **Sekce 19 — Příloha B: reprodukční prostředí** (C5 snapshot).
+  - **Sekce 20 — Příloha C: rozložení důvěryhodnosti** (timeline + korelace).
+- `domain/i18n.py` — ~60 nových klíčů cs/en pro sekce 10–20.
+- `presentation/case_report.py` — defenzivní naplnění nová pole `ReportData`
+  z case DB (entity, lineage, integrity checkpoints + veřejný klíč).
+- Backward compat sekcí 1–9 zachována (testy asertují texty, ne čísla).
+
+### Testy
+- 14 nových testů (`tests/test_report.py`, třída `TestStp020Sections`):
+  presence + pořadí všech 20 sekcí, obsah každé nové sekce na syntetickém
+  bohatém případě (fixture `rich_data`), empty fallbacky u prázdného případu,
+  regrese nevyhodnocených `{placeholder}`.
+- Full suite **1087 passed, 1 skipped** (baseline 1073 + 14); ruff clean.
+
 ## [Unreleased] — 2026-11-03 (STP-018 Timeline Intelligence 2.0)
 
 ### Added (oblast E, priorita P2 — analytické vrstvy nad materializovanou timeline)

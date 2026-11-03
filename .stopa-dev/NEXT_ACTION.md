@@ -1,75 +1,67 @@
 # STOPA — NEXT ACTION
 
 ## Aktuální fáze
-Oblast L (Report Engine) — rozšíření reportu z 9 sekcí na 20; ETAPA B vlny 1–3 hotové,
-STP-018 Timeline Intelligence 2.0 hotový (commit STP-018).
+Oblast L (Report Engine) — **STP-020 hotový** (report 9 → 20 sekcí); ETAPA B vlny 1–3 hotové,
+STP-018 Timeline Intelligence 2.0 hotový.
 
 ## ID aktuálního úkolu
-**STP-020** (READY — čeká na zahájení)
+**STP-019** (READY — čeká na zahájení)
 
 ## Název úkolu
-Report engine: 9 → 20 sekcí (titulní strana, metodika, nástroje+verze, omezení, závěr + další sekce)
+AI governance + PII redaktor (oblast H/M, priorita P2)
 
 ## Proč se úkol provádí
-Report je hlavním výstupem pro soud/experta. Aktuálně má 9 sekcí; profesionální forenzní
-report (AXIOM/EnCase standard) vyžaduje titulní stranu s metadaty případu, metodiku,
-seznam nástrojů+verzí, omezení analýzy a závěr. Oblast L, priorita **P1** — nejvyšší
-priorita mezi definovanými úkoly v TASKS.md (STP-019/021/022 jsou P2, STP-023 je P3).
+AI vrstva (I1–I3) je hotová; chybí governance: politika použití AI v forenzním kontextu,
+PII redaktor pro citace/odpovědi LLM a auditovatelnost modelových volání. Oblast H/M, priorita **P2**.
 
-## Co již bylo provedeno (STP-018, commit `cd5aa25`)
-- `domain/timeline_intel.py` — nový čistý modul bez IO: rozpory `concurrent_activity`,
-  duplikáty napříč zdroji `cross_source_duplicate`, timestamp provenance (`ts_origin` +
-  klasifikace přesnosti).
-- Schéma **v12**: nové sloupce `timeline_events` (`ts_origin`, `subject_values_json`,
-  `contradiction_group_id`, `dup_group_id`) + idempotentní migrace `_migrate_timeline_intel()`.
-- Pipeline post-pass `run_timeline_intel()` po ingestu; CLI `stopa timeline --intel [--window N]`;
-  web POST `/api/cases/{id}/timeline/intel`; report podsekce Timeline Intelligence 2.0 (8.1);
-  export rozšířen o nové sloupce.
-- **32 nových testů** (`tests/test_timeline_intel.py`); full suite **1073 passed, 1 skipped**, ruff clean.
+## Co již bylo provedeno (STP-020)
+- `domain/report.py` — rozšíření HTML/PDF reportu z 9 na **20 sekcí**: titulní strana (cover),
+  10 Metodika analýzy, 11 Nástroje a verze, 12 Omezení analýzy, 13 Závěr, 14 Provenience
+  timestampů, 15 Evidence lineage, 16 Integrity Ed25519, 17 Rejstřík entit,
+  18 Příloha A (validace parserů C3), 19 Příloha B (reprodukční prostředí C5),
+  20 Příloha C (rozložení důvěryhodnosti). Backward compat sekcí 1–9 zachována.
+- `domain/i18n.py` — ~60 nových klíčů cs/en pro sekce 10–20.
+- `presentation/case_report.py` — defenzivní naplnění nová pole `ReportData` z case DB
+  (entity, lineage, integrity checkpoints + veřejný klíč).
+- **14 nových testů** (`tests/test_report.py`, třída `TestStp020Sections`); full suite
+  **1087 passed, 1 skipped**, ruff clean.
 
-## Které soubory byly změněny (STP-018)
-`src/stopa/domain/timeline_intel.py` (nový), `src/stopa/data/db.py`, `src/stopa/models.py`,
-`src/stopa/pipeline.py`, `src/stopa/cli.py`, `src/stopa/web/app.py`,
+## Které soubory byly změněny (STP-020)
 `src/stopa/domain/report.py`, `src/stopa/domain/i18n.py`,
-`src/stopa/presentation/case_report.py`, `src/stopa/domain/export.py`,
-`tests/test_timeline_intel.py` (nový), `tests/test_entity_resolution.py`,
-`tests/test_reproducibility.py` (SCHEMA_VERSION aserty → konstanta), README.md,
+`src/stopa/presentation/case_report.py`, `tests/test_report.py`, README.md,
 STOPA_CHANGELOG.md (+ docs zrcadlo).
 
-## Které soubory je potřeba prostudovat (před STP-020)
-1. `src/stopa/domain/report.py` — SECTIONS list + build_html (9 sekcí, render funkce)
-2. `src/stopa/presentation/case_report.py` — stavba ReportData z case DB
-3. `src/stopa/domain/i18n.py` — struktura klíčů cs/en pro nové sekce
-4. `.stopa-dev/ROADMAP.md` — oblast L: definice rozsahu 20 sekcí
+## Které soubory je potřeba prostudovat (před STP-019)
+1. `docs/STOPA_AI_GOVERNANCE.md` — existující governance dokumentace (pokud je)
+2. `src/stopa/intelligence/ai_orchestrator.py` — audit AI volání, citace
+3. `src/stopa/domain/i18n.py` + report sekce 17 (rejstřík entit) — kde PII uniká do výstupů
+4. `.stopa-dev/TASKS.md` — STP-019 definice rozsahu
 
-## Co zbývá dokončit (STP-020)
-1. Audit existujících 9 sekcí reportu (co už je, co chybí pro 20 sekcí)
-2. Titulní strana: název případu, ID, vyšetřovatel, datum, verze nástroje
-3. Metodika: popis použitých metod (extrakce, parsery, korelace) — deterministicky z dat
-4. Nástroje+verze: STOPA version + Python/SQLite/TSK/libewf (env_snapshot existuje v C5)
-5. Omezení analýzy: chybějící parsery, confidence omezení, RAM peak (z benchmarku)
-6. Závěr: souhrn findings + timeline intel rozporů/duplikátů
-7. Testy na syntetickém případě; dokumentace; changelog update
+## Co zbývá dokončit (STP-019)
+1. Audit existující AI governance + PII toku v citacích/odpovědích LLM
+2. PII redaktor: detekce e-mail/telefon/JID/handle v LLM výstupu, volitelné maskování
+3. Governance politika: kdy je AI povolená, auditovatelnost modelových volání (verze modelu)
+4. Testy na syntetickém případě; dokumentace; changelog update
 
 ## Jaké testy spustit
 ```bash
-.venv/bin/python -m pytest tests/test_report*.py -q   # report testy (pokud existují)
+.venv/bin/python -m pytest tests/test_report*.py -q   # report testy
 .venv/bin/ruff check src/stopa tests scripts          # lint (musí být clean)
-.venv/bin/python -m pytest -q                         # plná sada (baseline 1073 passed, 1 skipped)
+.venv/bin/python -m pytest -q                         # plná sada (baseline 1087 passed, 1 skipped)
 ```
 
 ## Jak poznat úspěšné dokončení
-- Report obsahuje nové sekce (titulní strana, metodika, nástroje+verze, omezení, závěr)
-- Existující 9 sekcí se nemění (backward compat) — staré testy zůstávají zelené
+- PII redaktor maskuje e-mail/telefon/JID/handle v LLM výstupu (volitelně)
+- Governance politika dokumentovaná + auditovatelná (verze modelu v audit logu)
 - Ruff clean na `src/stopa tests scripts`
-- Plná sada bez regresí (≥ baseline 1073 passed, 1 skipped)
-- Commit `feat(report): STP-020 — Report engine 9 → 20 sekcí ...`
+- Plná sada bez regresí (≥ baseline 1087 passed, 1 skipped)
+- Commit `feat(ai): STP-019 — AI governance + PII redaktor ...`
 
 ## Co nesmí být změněno
-- Existující 9 sekcí reportu (backward compat) — nové sekce se přidávají, staré se nemění
+- Existující report sekce 1–20 (backward compat) — nové funkce se přidávají
 - C3 registry: `build_registry()` vynucuje 1:1 sync s pipeline + shodu verzí, jinak `RegistryError`
 - Neodstraňovat existující testy kvůli zelenému výsledku; nepoužívat mockování místo kritické logiky
-- Originální důkazní data zůstávají neměnná (report pracuje na case DB)
+- Originální důkazní data zůstávají neměnná
 
-## Další úkol po STP-020
-STP-019 — AI governance + PII redaktor (oblast H/M, P2) nebo STP-021/022 (P2) dle priority.
+## Další úkol po STP-019
+STP-021/022 (P2) nebo STP-023 (P3) dle priority.

@@ -8,7 +8,15 @@ from pathlib import Path
 import pytest
 
 from stopa.data.db import CaseDB
-from stopa.domain.report import CustodyItem, FlaggedFile, ReportData, SourceInfo, build_html
+from stopa.domain.report import (
+    CorrelationRow,
+    CustodyItem,
+    FlaggedFile,
+    ReportData,
+    SourceInfo,
+    TimelineEvent,
+    build_html,
+)
 from stopa.models import Artifact, Case, EvidenceSource, FileRecord
 from stopa.presentation.case_report import (
     build_report_data,
@@ -198,3 +206,167 @@ class TestIoWrapper:
         db, case_id = populated_case
         html_doc = build_html(build_report_data(db, case_id))
         assert "Chain of custody" in html_doc
+
+
+# ── STP-020 — report engine 9 → 20 sekcí (sekce 10–20) ───────────────
+
+@pytest.fixture()
+def rich_data() -> ReportData:
+    """ReportData naplněné daty pro sekce 10–20 (syntetický případ)."""
+    return ReportData(
+        case_id="case-stp020",
+        case_name="STP-020 bohatý případ",
+        examiner="Znalec Y",
+        created_at=TS,
+        sources=(SourceInfo(id="src-1", kind="folder", path="/evidence/box", added_at=TS),),
+        per_source_stats={"src-1": {"files": 3, "bytes": 4096, "bad_ext": 1, "dups": 1, "signed": 2}},
+        totals={"files": 3, "bytes": 4096, "bad_ext": 1, "dups": 1, "signed": 2},
+        artifact_counts={"browser_history": 5, "sms_message": 3},
+        flagged_files=(FlaggedFile(rel_path="a.txt", flags=("BAD-EXT",), sha256="ab" * 32),),
+        timeline_events=(
+            TimelineEvent(
+                ts_utc="2026-10-30T12:00:00+00:00", event_type="file_access",
+                title="a.txt", confidence=0.9, ts_origin="source",
+                contradiction_group_id="cg-1",
+            ),
+            TimelineEvent(
+                ts_utc="2026-10-30T12:00:30+00:00", event_type="file_access",
+                title="b.txt", confidence=0.6, ts_origin="derived",
+                dup_group_id="dg-1",
+            ),
+        ),
+        correlations=(
+            CorrelationRow(entity_a="u@x.cz", entity_b="+420123", relation="same_account",
+                           confidence="confirmed"),
+            CorrelationRow(entity_a="a.txt", entity_b="b.txt", relation="duplicate",
+                           confidence="inferred"),
+        ),
+        entities=(
+            {"kind": "email", "value": "u@x.cz", "first_seen": "2026-10-30T12:00:00+00:00",
+             "last_seen": "2026-10-30T12:05:00+00:00"},
+        ),
+        lineage_steps=4,
+        integrity_pub_key="AAAA" * 8,
+        integrity_checkpoints=(
+            {"ts": "2026-10-30T12:10:00+00:00", "audit_row_id": 7,
+             "last_hash": "ff" * 32, "reason": "manual"},
+        ),
+    )
+
+
+class TestStp020Sections:
+    """Sekce 10–20 — presence + pořadí + obsah (backward compat sekcí 1–9)."""
+
+    def test_all_20_sections_present_in_order(self, rich_data):
+        html_doc = build_html(rich_data)
+        # hlavička/titulní strana + 20 číslovaných sekcí v pořadí
+        for i in range(1, 21):
+            assert f"<h2>{i}. " in html_doc, f"chybí sekce {i}"
+        # pořadí: každá sekce po předchozí
+        pos = [html_doc.index(f"<h2>{i}. ") for i in range(1, 21)]
+        assert pos == sorted(pos), "sekce nejsou v číselném pořadí"
+
+    def test_section_10_methodology(self, rich_data):
+        html_doc = build_html(rich_data)
+        assert "Metodika analýzy" in html_doc
+        # deterministicky z dat: počet zdrojů + souborů
+        assert "Zpracováno 1 evidence zdrojů" in html_doc
+
+    def test_section_11_tools_and_versions(self, rich_data):
+        from stopa import __version__
+
+        html_doc = build_html(rich_data)
+        assert "Nástroje a verze" in html_doc
+        assert f"v{__version__}" in html_doc  # STOPA verze
+        # Python/SQLite/platforma z env_snapshot (C5)
+        assert "Python" in html_doc
+        assert "SQLite" in html_doc
+
+    def test_section_12_limitations(self, rich_data):
+        html_doc = build_html(rich_data)
+        assert "Omezení analýzy" in html_doc
+        # BLK-001 RAM peak je vždy uvedeno
+        assert "BLK-001" in html_doc
+
+    def test_section_13_conclusion(self, rich_data):
+        html_doc = build_html(rich_data)
+        assert "Závěr" in html_doc
+        # souhrn findings — počty z dat (5+3=8 artifactů)
+        assert "Souhrn: 8 artifactů" in html_doc
+        # rozporové + duplikátové skupiny (STP-018)
+        assert "Detekováno 1 rozporových skupin" in html_doc
+        assert "Detekováno 1 duplikátových skupin" in html_doc
+
+    def test_section_14_provenance(self, rich_data):
+        html_doc = build_html(rich_data)
+        assert "Provenience timestampů" in html_doc
+        # source vs derived počty (1 + 1)
+        assert "Zdrojové timestamps (z obsahu souboru): 1" in html_doc
+        assert "Odvozené timestamps (systémový/FS fallback): 1" in html_doc
+
+    def test_section_15_lineage(self, rich_data):
+        html_doc = build_html(rich_data)
+        assert "Evidence lineage" in html_doc
+        assert "Zaznamenáno 4 kroků" in html_doc
+
+    def test_section_16_integrity(self, rich_data):
+        html_doc = build_html(rich_data)
+        assert "Integrity — Ed25519 kontrolní body" in html_doc
+        # veřejný klíč + kontrolní bod
+        assert "AAAA" * 8 in html_doc
+        assert "manual" in html_doc
+
+    def test_section_17_entities(self, rich_data):
+        html_doc = build_html(rich_data)
+        assert "Rejstřík entit" in html_doc
+        # hodnota entity v tabulce
+        assert "u@x.cz" in html_doc
+
+    def test_section_18_appendix_parsers(self, rich_data):
+        from stopa.domain.validation_registry import build_registry
+
+        html_doc = build_html(rich_data)
+        assert "Příloha A — Validace parserů (C3)" in html_doc
+        # alespoň jeden reálný parser ID z registry
+        reg = build_registry()
+        first_id = min(reg)
+        assert first_id in html_doc
+
+    def test_section_19_appendix_env(self, rich_data):
+        html_doc = build_html(rich_data)
+        assert "Příloha B — Reprodukční prostředí (C5)" in html_doc
+        # snapshot klíčů (python/sqlite/platform) v tabulce
+        assert "Snapshot prostředí pro reprodukovatelnost" in html_doc
+
+    def test_section_20_appendix_confidence(self, rich_data):
+        html_doc = build_html(rich_data)
+        assert "Příloha C — Rozložení důvěryhodnosti" in html_doc
+        # timeline confidence úrovně (0.9→ověřeno, 0.6→extrahováno)
+        assert "[ověřeno]" in html_doc
+        assert "[extrahováno]" in html_doc
+
+    def test_empty_case_new_sections_render(self):
+        """Prázdný případ — nové sekce se vykreslí s empty fallbacky (bez padu)."""
+        data = ReportData(
+            case_id="case-stp020-empty",
+            case_name="Prázdný STP-020",
+            examiner=None,
+            created_at=TS,
+        )
+        html_doc = build_html(data)
+        # všechny 20 sekcí existuje i u prázdného případu
+        for i in range(1, 21):
+            assert f"<h2>{i}. " in html_doc
+        # empty fallbacky
+        assert "Žádné timeline události s provenience." in html_doc
+        assert "Žádné zaznamenané kroky lineage" in html_doc
+        assert "Žádné extrahované entity." in html_doc
+
+    def test_no_unrendered_placeholders(self, rich_data):
+        """Žádný nevyhodnocený {placeholder} v novém HTML (regrese f-stringů)."""
+        html_doc = build_html(rich_data)
+        # typické nevyhodnocené artefakty by byly vidět doslovně
+        assert "{artifacts}" not in html_doc
+        assert "{n}" not in html_doc
+        assert "{ts_origin}" not in html_doc
+
