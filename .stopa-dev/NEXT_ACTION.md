@@ -16,7 +16,7 @@ report (AXIOM/EnCase standard) vyžaduje titulní stranu s metadaty případu, m
 seznam nástrojů+verzí, omezení analýzy a závěr. Oblast L, priorita **P1** — nejvyšší
 priorita mezi definovanými úkoly v TASKS.md (STP-019/021/022 jsou P2, STP-023 je P3).
 
-## Co již bylo provedeno (STP-018, commit STP-018)
+## Co již bylo provedeno (STP-018, commit `cd5aa25`)
 - `domain/timeline_intel.py` — nový čistý modul bez IO: rozpory `concurrent_activity`,
   duplikáty napříč zdroji `cross_source_duplicate`, timestamp provenance (`ts_origin` +
   klasifikace přesnosti).

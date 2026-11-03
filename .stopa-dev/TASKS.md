@@ -172,7 +172,7 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
   (idempotentní migrace bez ztráty dat); post-pass po ingestu + explicitní CLI/web; report
   podsekce Timeline Intelligence 2.0; export rozšířen o nové sloupce; **32 nových testů**
   (`tests/test_timeline_intel.py`); full suite **1073 passed, 1 skipped**, ruff clean.
-- **Dokončeno:** 2026-11-03 | Commit: (STP-018)
+- **Dokončeno:** 2026-11-03 | Commit: `cd5aa25`
 
 ## STP-019 — AI governance + PII redaktor
 - **Oblast:** H/M | **Priorita:** P2 | **Stav:** BACKLOG
