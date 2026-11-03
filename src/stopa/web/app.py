@@ -99,6 +99,7 @@ class SettingsIn(BaseModel):
     ai_url: str | None = None
     role: str | None = None  # examiner | analyst | admin
     bind_address: str | None = None
+    ai_redact_pii: bool | None = None  # STP-019 — maskovat PII v LLM promptech
 
 
 class CaseUpdateIn(BaseModel):
@@ -661,12 +662,24 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             if not health["available"]:
                 raise HTTPException(503, "AI nedostupná — spusťte LM Studio (localhost:1234)")
 
+            # STP-019 — PII redaktor (settings toggle, default ON) + auditní model name
+            redact_pii = bool(_load_settings().get("ai_redact_pii", True))
+            model_name = str(health.get("model") or None)
             try:
                 if body.mode == "nl_search":
-                    return _ai_nl_search(db, case_id, case.name, body.question, client)
+                    return _ai_nl_search(
+                        db, case_id, case.name, body.question, client,
+                        redact_pii=redact_pii, model=model_name,
+                    )
                 if body.mode == "summary":
-                    return _ai_summary(db, case_id, case.name, client)
-                return _ai_explain(db, body.artifact_id, client)
+                    return _ai_summary(
+                        db, case_id, case.name, client,
+                        redact_pii=redact_pii, model=model_name,
+                    )
+                return _ai_explain(
+                    db, case_id, body.artifact_id, client,
+                    redact_pii=redact_pii, model=model_name,
+                )
             except LmStudioUnavailable as exc:
                 raise HTTPException(503, str(exc)) from exc
         finally:
@@ -707,9 +720,16 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             context = build_case_context(db, case_id)
             # P0 Intelligence I2 — Forensic RAG: retrieval napříč vrstvami
             rag = retrieve(body.question, db=db, case_id=case_id)
+            # STP-019 — PII redaktor (settings toggle, default ON)
+            redact_pii = bool(_load_settings().get("ai_redact_pii", True))
             try:
                 result = orchestrate(
-                    client.chat, context, body.question, agent_id=body.agent, rag=rag
+                    client.chat,
+                    context,
+                    body.question,
+                    agent_id=body.agent,
+                    rag=rag,
+                    redact_pii=redact_pii,
                 )
             except LmStudioUnavailable as exc:
                 raise HTTPException(503, str(exc)) from exc
@@ -720,7 +740,9 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             from stopa.intelligence.ai_orchestrator import build_prompt, route_agent
 
             profile = route_agent(body.question, body.agent)
-            ph = prompt_hash(build_prompt(profile, context, body.question, rag=rag))
+            ph = prompt_hash(
+                build_prompt(profile, context, body.question, rag=rag, redact_pii=redact_pii)
+            )
             audit_ai_query(
                 db,
                 case_id=case_id,
@@ -811,6 +833,8 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             ),
             "role": s.get("role", "examiner"),
             "bind_address": s.get("bind_address", "127.0.0.1"),
+            # STP-019 — PII redaktor je default ON (fail-safe: maskovat)
+            "ai_redact_pii": bool(s.get("ai_redact_pii", True)),
         }
 
     @app.put("/api/settings")
@@ -825,6 +849,8 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             s["role"] = body.role
         if body.bind_address is not None:
             s["bind_address"] = body.bind_address
+        if body.ai_redact_pii is not None:
+            s["ai_redact_pii"] = bool(body.ai_redact_pii)
         _save_settings(s)
         return get_settings()
 
@@ -875,17 +901,20 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
 
 
 def _ai_nl_search(
-    db: CaseDB, case_id: str, case_name: str, question: str, client: LmStudioClient
+    db: CaseDB, case_id: str, case_name: str, question: str, client: LmStudioClient, *, redact_pii: bool = True, model: str | None = None
 ) -> dict:
     """Režim ``nl_search`` — přirozená řeč → STOPA FTS query + výsledky.
 
     Citace = soubory, které dotaz vrátil (GUI je propojí na File Inspector).
+    STP-019: PII v promptu se maskuje podle ``redact_pii``; audit do analysis_operations.
     """
     from stopa.domain.search_filters import SearchFilterError
+    from stopa.intelligence.rag import audit_ai_query, prompt_hash
 
     if not question.strip():
         raise HTTPException(400, "chybí otázka")
-    text = client.chat(build_nl_search_prompt(question, case_name))
+    messages = build_nl_search_prompt(question, case_name, redact_pii=redact_pii)
+    text = client.chat(messages)
     query, explanation, confidence = parse_nl_search(text)
     if not query:
         raise HTTPException(502, f"AI nevrátila validní query (odpověď: {text[:160]!r})")
@@ -898,6 +927,16 @@ def _ai_nl_search(
     citations = [
         {"file_id": r.id, "rel_path": r.rel_path, "name": r.name} for r in records[:20]
     ]
+    # STP-019 — audit AI volání (model + hash skutečně odeslaného promptu)
+    audit_ai_query(
+        db,
+        case_id=case_id,
+        question=question,
+        model=model or "unknown",
+        prompt_sha256=prompt_hash(messages),
+        citations=[c["file_id"] for c in citations],
+        agent="e11:nl_search",
+    )
     return {
         "mode": "nl_search",
         "answer": explanation or f"Vyhledáno: {query}",
@@ -908,13 +947,21 @@ def _ai_nl_search(
     }
 
 
-def _ai_summary(db: CaseDB, case_id: str, case_name: str, client: LmStudioClient) -> dict:
-    """Režim ``summary`` — shrnutí případu s citacemi artifactů ze vzorku."""
+def _ai_summary(
+    db: CaseDB, case_id: str, case_name: str, client: LmStudioClient, *, redact_pii: bool = True, model: str | None = None
+) -> dict:
+    """Režim ``summary`` — shrnutí případu s citacemi artifactů ze vzorku.
+
+    STP-019: PII v promptu se maskuje podle ``redact_pii``; audit do analysis_operations.
+    """
+    from stopa.intelligence.rag import audit_ai_query, prompt_hash
+
     stats = db.stats()
     art_stats = db.artifact_stats()
     sample = [a.model_dump(mode="json") for a in db.list_artifacts(limit=15)]
 
-    text = client.chat(build_summary_prompt(case_name, stats, art_stats, sample))
+    messages = build_summary_prompt(case_name, stats, art_stats, sample, redact_pii=redact_pii)
+    text = client.chat(messages)
     valid_ids = {a["id"] for a in sample}
     answer, cited = extract_citations(text, valid_ids)
     by_id = {a["id"]: a for a in sample}
@@ -922,6 +969,16 @@ def _ai_summary(db: CaseDB, case_id: str, case_name: str, client: LmStudioClient
         {"artifact_id": aid, "title": by_id[aid].get("title"), "rel_path": by_id[aid].get("rel_path")}
         for aid in cited
     ]
+    # STP-019 — audit AI volání (model + hash skutečně odeslaného promptu)
+    audit_ai_query(
+        db,
+        case_id=case_id,
+        question=f"summary: {case_name}",
+        model=model or "unknown",
+        prompt_sha256=prompt_hash(messages),
+        citations=list(cited),
+        agent="e11:summary",
+    )
     return {
         "mode": "summary",
         "answer": answer or text.strip(),
@@ -930,8 +987,15 @@ def _ai_summary(db: CaseDB, case_id: str, case_name: str, client: LmStudioClient
     }
 
 
-def _ai_explain(db: CaseDB, artifact_id: str | None, client: LmStudioClient) -> dict:
-    """Režim ``explain`` — vysvětlení jednoho artifactu + citace na něj."""
+def _ai_explain(
+    db: CaseDB, case_id: str, artifact_id: str | None, client: LmStudioClient, *, redact_pii: bool = True, model: str | None = None
+) -> dict:
+    """Režim ``explain`` — vysvětlení jednoho artifactu + citace na něj.
+
+    STP-019: PII v promptu se maskuje podle ``redact_pii``; audit do analysis_operations.
+    """
+    from stopa.intelligence.rag import audit_ai_query, prompt_hash
+
     if not artifact_id:
         raise HTTPException(400, "chybí artifact_id")
     art = db.get_artifact(artifact_id)
@@ -939,8 +1003,19 @@ def _ai_explain(db: CaseDB, artifact_id: str | None, client: LmStudioClient) -> 
         raise HTTPException(404, f"artifact {artifact_id} nenalezen")
 
     payload = art.model_dump(mode="json")
-    text = client.chat(build_explain_prompt(payload))
+    messages = build_explain_prompt(payload, redact_pii=redact_pii)
+    text = client.chat(messages)
     answer, cited = extract_citations(text, {art.id})
+    # STP-019 — audit AI volání (model + hash skutečně odeslaného promptu)
+    audit_ai_query(
+        db,
+        case_id=case_id,
+        question=f"explain: {artifact_id}",
+        model=model or "unknown",
+        prompt_sha256=prompt_hash(messages),
+        citations=list(cited),
+        agent="e11:explain",
+    )
     return {
         "mode": "explain",
         "answer": answer or text.strip(),

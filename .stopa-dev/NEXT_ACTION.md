@@ -1,61 +1,62 @@
 # STOPA — NEXT ACTION
 
 ## Aktuální fáze
-Oblast L (Report Engine) — **STP-020 hotový** (report 9 → 20 sekcí); ETAPA B vlny 1–3 hotové,
-STP-018 Timeline Intelligence 2.0 hotový.
+Oblast H/M (AI governance) — **STP-019 hotový** (PII redaktor + audit modelových volání);
+ETAPA B vlny 1–3 hotové, STP-018 Timeline Intelligence 2.0 hotový, STP-020 report engine hotový.
 
 ## ID aktuálního úkolu
-**STP-019** (READY — čeká na zahájení)
+**STP-021** (READY — čeká na zahájení)
 
 ## Název úkolu
-AI governance + PII redaktor (oblast H/M, priorita P2)
+Performance: stream parsing velkých E01 + progress monitoring (oblast N/O, priorita P2)
 
 ## Proč se úkol provádí
-AI vrstva (I1–I3) je hotová; chybí governance: politika použití AI v forenzním kontextu,
-PII redaktor pro citace/odpovědi LLM a auditovatelnost modelových volání. Oblast H/M, priorita **P2**.
+Velké E01 extrakty (GB řádově) zatěžují RAM peak; chybí stream parsing a viditelný
+progress v web UI. Oblast N/O, priorita **P2**.
 
-## Co již bylo provedeno (STP-020)
-- `domain/report.py` — rozšíření HTML/PDF reportu z 9 na **20 sekcí**: titulní strana (cover),
-  10 Metodika analýzy, 11 Nástroje a verze, 12 Omezení analýzy, 13 Závěr, 14 Provenience
-  timestampů, 15 Evidence lineage, 16 Integrity Ed25519, 17 Rejstřík entit,
-  18 Příloha A (validace parserů C3), 19 Příloha B (reprodukční prostředí C5),
-  20 Příloha C (rozložení důvěryhodnosti). Backward compat sekcí 1–9 zachována.
-- `domain/i18n.py` — ~60 nových klíčů cs/en pro sekce 10–20.
-- `presentation/case_report.py` — defenzivní naplnění nová pole `ReportData` z case DB
-  (entity, lineage, integrity checkpoints + veřejný klíč).
-- **14 nových testů** (`tests/test_report.py`, třída `TestStp020Sections`); full suite
-  **1087 passed, 1 skipped**, ruff clean.
+## Co již bylo provedeno (STP-019)
+- `domain/pii_redaction.py` — nový deterministický PII redaktor (bez I/O): maskuje telefony,
+  e-maily, WhatsApp JID a platformní handle ve všech LLM prompt messages PŘED inference;
+  stavební kameny opakovány z `entities.py`/`entity_resolution.py`; priorita překryvu
+  JID > e-mail > handle > telefon; vrací seznam detekcí (`PiiDetection`) pro audit.
+- `intelligence/ai_orchestrator.py` — `build_prompt()`/`orchestrate()` + parametr
+  `redact_pii: bool = True` (default ON, fail-safe); auditní SHA-256 nad redigovaným textem.
+- `domain/ai_assistant.py` — všechny tři E11 prompt buildery maskují PII (`_maybe_redact`).
+- `web/app.py` — **audit E11 modelových volání** (dříve jen I1): `_ai_nl_search/_ai_summary/
+  _ai_explain` zapisují `ai_query` záznam (model name + SHA-256 promptu + citace, agent
+  `e11:<režim>`); settings toggle `ai_redact_pii` (GET/PUT `/api/settings`, default ON).
+- `cli.py` — `_load_ai_redact_pii()` čte `settings.json` z db_dir; `cmd_analyze` předává
+  `redact_pii` do orchestrace i auditního hashu.
+- **23 nových testů** (`tests/test_pii_redaction.py`); full suite **1110 passed, 1 skipped**, ruff clean.
 
-## Které soubory byly změněny (STP-020)
-`src/stopa/domain/report.py`, `src/stopa/domain/i18n.py`,
-`src/stopa/presentation/case_report.py`, `tests/test_report.py`, README.md,
-STOPA_CHANGELOG.md (+ docs zrcadlo).
+## Které soubory byly změněny (STP-019)
+`src/stopa/domain/pii_redaction.py` (nový), `src/stopa/intelligence/ai_orchestrator.py`,
+`src/stopa/domain/ai_assistant.py`, `src/stopa/web/app.py`, `src/stopa/cli.py`,
+`tests/test_pii_redaction.py` (nový), `STOPA_AI_GOVERNANCE.md`, README.md, STOPA_CHANGELOG.md.
 
-## Které soubory je potřeba prostudovat (před STP-019)
-1. `docs/STOPA_AI_GOVERNANCE.md` — existující governance dokumentace (pokud je)
-2. `src/stopa/intelligence/ai_orchestrator.py` — audit AI volání, citace
-3. `src/stopa/domain/i18n.py` + report sekce 17 (rejstřík entit) — kde PII uniká do výstupů
-4. `.stopa-dev/TASKS.md` — STP-019 definice rozsahu
+## Které soubory je potřeba prostudovat (před STP-021)
+1. `src/stopa/pipeline.py` — aktuální ingest tok E01 (kde se čtou soubory do paměti)
+2. `src/stopa/web/app.py` — Processing Monitor endpointy (pokud existují) + progress stavy
+3. `.stopa-dev/TASKS.md` — STP-021 definice rozsahu
 
-## Co zbývá dokončit (STP-019)
-1. Audit existující AI governance + PII toku v citacích/odpovědích LLM
-2. PII redaktor: detekce e-mail/telefon/JID/handle v LLM výstupu, volitelné maskování
-3. Governance politika: kdy je AI povolená, auditovatelnost modelových volání (verze modelu)
-4. Testy na syntetickém případě; dokumentace; changelog update
+## Co zbývá dokončit (STP-021)
+1. Stream parsing velkých E01 souborů (snížení RAM peaku)
+2. Web Processing Monitor (viditelný progress ingestu/analýzy)
+3. Testy na syntetickém případě; dokumentace; changelog update
 
 ## Jaké testy spustit
 ```bash
-.venv/bin/python -m pytest tests/test_report*.py -q   # report testy
-.venv/bin/ruff check src/stopa tests scripts          # lint (musí být clean)
-.venv/bin/python -m pytest -q                         # plná sada (baseline 1087 passed, 1 skipped)
+.venv/bin/python -m pytest tests/test_pii_redaction.py -q   # PII redaktor (STP-019)
+.venv/bin/ruff check src/stopa tests scripts                # lint (musí být clean)
+.venv/bin/python -m pytest -q                               # plná sada (baseline 1110 passed, 1 skipped)
 ```
 
 ## Jak poznat úspěšné dokončení
-- PII redaktor maskuje e-mail/telefon/JID/handle v LLM výstupu (volitelně)
-- Governance politika dokumentovaná + auditovatelná (verze modelu v audit logu)
+- Stream parsing sníží RAM peak na velkých E01 extraktech
+- Web UI zobrazuje progress ingestu/analýzy
 - Ruff clean na `src/stopa tests scripts`
-- Plná sada bez regresí (≥ baseline 1087 passed, 1 skipped)
-- Commit `feat(ai): STP-019 — AI governance + PII redaktor ...`
+- Plná sada bez regresí (≥ baseline 1110 passed, 1 skipped)
+- Commit `feat(perf): STP-021 — stream parsing + progress monitoring ...`
 
 ## Co nesmí být změněno
 - Existující report sekce 1–20 (backward compat) — nové funkce se přidávají
@@ -63,5 +64,5 @@ STOPA_CHANGELOG.md (+ docs zrcadlo).
 - Neodstraňovat existující testy kvůli zelenému výsledku; nepoužívat mockování místo kritické logiky
 - Originální důkazní data zůstávají neměnná
 
-## Další úkol po STP-019
-STP-021/022 (P2) nebo STP-023 (P3) dle priority.
+## Další úkol po STP-021
+STP-022 (Security: SHA-512 + RBAC minimální + pip-audit CI, P2) nebo STP-023 (Export JSONL/XML/STIX, P3).

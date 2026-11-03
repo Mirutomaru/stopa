@@ -175,9 +175,25 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dokončeno:** 2026-11-03 | Commit: `cd5aa25`
 
 ## STP-019 — AI governance + PII redaktor
-- **Oblast:** H/M | **Priorita:** P2 | **Stav:** READY
+- **Oblast:** H/M | **Priorita:** P2 | **Stav:** DONE
 - **Popis:** `STOPA_AI_GOVERNANCE.md` (kořen), PII redaktor před LLM inference, explicitní oddělení případů.
 - **Závislosti:** —
+- **Dotčené moduly:** `src/stopa/domain/pii_redaction.py` (nový), `intelligence/ai_orchestrator.py`,
+  `domain/ai_assistant.py`, `web/app.py`, `cli.py`, `STOPA_AI_GOVERNANCE.md`.
+- **Akceptační kritéria:** PII redaktor maskuje e-mail/telefon/JID/handle v LLM promptu (volitelně);
+  governance politika dokumentovaná + auditovatelná (verze modelu v audit logu); ruff clean;
+  plná sada bez regresí.
+- **Výsledek:** `domain/pii_redaction.py` — deterministický PII redaktor (bez I/O) maskuje telefony,
+  e-maily, WhatsApp JID a platformní handle ve všech prompt messages PŘED odesláním do LLM;
+  stavební kameny opakovány z `entities.py`/`entity_resolution.py`; priorita překryvu
+  JID > e-mail > handle > telefon; vrací seznam detekcí pro audit. I1 orchestrace:
+  `build_prompt()`/`orchestrate()` + parametr `redact_pii=True` (default ON, fail-safe);
+  auditní SHA-256 nad redigovaným textem. E11 asistent: všechny tři prompt buildery maskují PII.
+  Audit E11 modelových volání: dříve jen I1 — teď zapisují `ai_query` záznam (model name +
+  SHA-256 promptu + citace, agent `e11:<režim>`) i všechny tři režimy E11. Settings toggle
+  `ai_redact_pii` (default ON): GET/PUT `/api/settings`, CLI čte `settings.json`.
+  **23 nových testů** (`tests/test_pii_redaction.py`); full suite **1110 passed, 1 skipped**, ruff clean.
+- **Dokončeno:** 2026-11-03 | Commit: (tento commit)
 
 ## STP-020 — Report engine: 9 → 20 sekcí
 - **Oblast:** L | **Priorita:** P1 | **Stav:** DONE

@@ -47,6 +47,18 @@ def _open_db(case_id: str) -> CaseDB:
     return CaseDB(db_path)
 
 
+def _load_ai_redact_pii() -> bool:
+    """STP-019 — PII redaktor toggle ze settings.json (default ON = maskovat)."""
+    p = _db_dir() / "settings.json"
+    if not p.exists():
+        return True
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+    return bool(data.get("ai_redact_pii", True)) if isinstance(data, dict) else True
+
+
 def case_examiner(db: CaseDB, case_id: str) -> str | None:
     """Znalec případu — výchozí actor pro audit log operací."""
     case = db.get_case(case_id)
@@ -818,9 +830,16 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         context = build_case_context(db, args.case_id)
         # P0 Intelligence I2 — Forensic RAG: retrieval napříč vrstvami
         rag = retrieve(args.question, db=db, case_id=args.case_id)
+        # STP-019 — PII redaktor (settings.json toggle, default ON)
+        redact_pii = _load_ai_redact_pii()
         try:
             result = orchestrate(
-                client.chat, context, args.question, agent_id=args.agent, rag=rag
+                client.chat,
+                context,
+                args.question,
+                agent_id=args.agent,
+                rag=rag,
+                redact_pii=redact_pii,
             )
         except LmStudioUnavailable as exc:
             print(f"AI nedostupná: {exc}")
@@ -833,7 +852,9 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         from stopa.intelligence.ai_orchestrator import build_prompt, route_agent
 
         profile = route_agent(args.question, args.agent)
-        ph = prompt_hash(build_prompt(profile, context, args.question, rag=rag))
+        ph = prompt_hash(
+            build_prompt(profile, context, args.question, rag=rag, redact_pii=redact_pii)
+        )
         audit_ai_query(
             db,
             case_id=args.case_id,

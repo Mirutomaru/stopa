@@ -45,7 +45,21 @@ _FTS_SYNTAX = """STOPA search syntax (FTS5 + metadata filtry):
 - in-artifact:text — match inside extracted artifact content (e.g. chat messages)"""
 
 
-def build_nl_search_prompt(question: str, case_name: str) -> list[dict[str, str]]:
+def _maybe_redact(
+    messages: list[dict[str, str]], redact_pii: bool
+) -> list[dict[str, str]]:
+    """STP-019 — maskuje PII v messages (deterministicky), pokud je zapnuto."""
+    if not redact_pii:
+        return messages
+    from stopa.domain.pii_redaction import redact_messages
+
+    redacted, _ = redact_messages(messages)
+    return redacted
+
+
+def build_nl_search_prompt(
+    question: str, case_name: str, *, redact_pii: bool = True
+) -> list[dict[str, str]]:
     """Chat messages pro režim ``nl_search``.
 
     Model má vrátit JSON::
@@ -61,10 +75,13 @@ def build_nl_search_prompt(question: str, case_name: str) -> list[dict[str, str]
         '"confidence": <0.0-1.0 how confident you are the query matches intent>}. '
         "Use double quotes inside the query for phrases."
     )
-    return [
-        {"role": "system", "content": system},
-        {"role": "user", "content": question.strip()},
-    ]
+    return _maybe_redact(
+        [
+            {"role": "system", "content": system},
+            {"role": "user", "content": question.strip()},
+        ],
+        redact_pii,
+    )
 
 
 def build_summary_prompt(
@@ -72,6 +89,8 @@ def build_summary_prompt(
     stats: dict[str, Any],
     artifact_stats: dict[str, int],
     sample_artifacts: list[dict[str, Any]],
+    *,
+    redact_pii: bool = True,
 ) -> list[dict[str, str]]:
     """Chat messages pro režim ``summary`` — shrnutí případu z statistik.
 
@@ -97,13 +116,16 @@ def build_summary_prompt(
         f"Artifact types: {types_line}\n"
         f"Sample artifacts (id, type, title, timestamp):\n{sample_lines or '- none'}"
     )
-    return [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-    ]
+    return _maybe_redact(
+        [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        redact_pii,
+    )
 
 
-def build_explain_prompt(artifact: dict[str, Any]) -> list[dict[str, str]]:
+def build_explain_prompt(artifact: dict[str, Any], *, redact_pii: bool = True) -> list[dict[str, str]]:
     """Chat messages pro režim ``explain`` — vysvětlení jednoho artifactu.
 
     Výstup má obsahovat inline citaci ``[art:<id>]`` na vysvětlovaný záznam.
@@ -124,10 +146,13 @@ def build_explain_prompt(artifact: dict[str, Any]) -> list[dict[str, str]]:
         f"anomaly flags: {', '.join(artifact.get('anomaly_flags') or []) or 'none'}\n"
         f"details JSON: {details}"
     )
-    return [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-    ]
+    return _maybe_redact(
+        [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        redact_pii,
+    )
 
 
 # ── parsování odpovědí (čistá logika) ───────────────────────────────────────

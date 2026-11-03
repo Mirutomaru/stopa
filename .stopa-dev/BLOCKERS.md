@@ -40,7 +40,7 @@ Blokovaný úkol nesmí být označen jako DONE. Stav: OPEN | RESOLVED | ACCEPTE
 - **Dotčená funkce:** H (AI Copilot).
 - **Dopad:** chybí formální governance dokumentace (PII, modely, oddělení případů).
 - **Možné řešení:** STP-019 — vytvořit dokument + PII redaktor.
-- **Stav:** OPEN | **Blokuje:** nic kritického
+- **Stav:** RESOLVED v STP-019 (2026-11-03) | `STOPA_AI_GOVERNANCE.md` hotový, PII redaktor + audit modelových volání implementovány
 
 ## RESOLVED
 - **BLK-R1** (2026-11): `sqlite3.Row` nemá `.get()` → ruff SIM118 opraven přímým přístupem s komentářem o migraci. RESOLVED v I3.

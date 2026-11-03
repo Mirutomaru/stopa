@@ -65,7 +65,7 @@ Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parser
 | F-041 | Entity Resolution 2.0 (4 confidence, normalizace, merge candidates) | Normalizace účtů/čísel/mailů, 4 úrovně confidence, detekce duplicit entit | domain/entity_resolution.py, entities.py, correlation.py | 0.1.0 | ✓ | ✓ (26+e4/e5/e10) | ✓ `2244d95` | plně funkční | schéma v11; backward compat mapping | STP-009 |
 | F-042 | AI orchestrace — 5 agentů, routing, fail-closed validace | Deklarativní analytické agenty s Pydantic validací a citacemi ke zdrojům | intelligence/agents.py, ai_orchestrator.py | 0.1.0 | ✓ | ✓ (25) | ✓ `61f9a03` | plně funkční | AI volitelná; LM Studio port 1234 | STP-007 |
 | F-043 | Forensic RAG — 3 vrstvy, citace, prompt injection ochrana | Retrieval napříč case/technical/knowledge vrstvami s `<untrusted_source>` izolací | intelligence/rag.py | 0.1.0 | ✓ | ✓ (30) | ✓ `97cd4d6` | plně funkční | docs/formats + docs/methodology volitelné/prázdné | STP-008 |
-| F-044 | AI governance + PII redaktor | Governance dokumentace + PII redakce před inference | — | — | ✗ | — | — | nefunkční (chybí) | STOPA_AI_GOVERNANCE.md neexistuje | STP-019 |
+| F-044 | AI governance + PII redaktor | Governance dokumentace + PII redakce před inference + audit modelových volání | domain/pii_redaction.py, ai_orchestrator.py, ai_assistant.py, web/app.py, cli.py | 0.1.0 | ✓ | ✓ (23) | ✓ (tento commit) | plně funkční | toggle `ai_redact_pii` default ON; audit E11+I1 do analysis_operations | STP-019 |
 
 ## UI & Performance (N, O)
 

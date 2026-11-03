@@ -2,6 +2,36 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-03 (STP-019 AI governance + PII redaktor)
+
+### Added (oblast H/M, priorita P2 — důvěryhodnost AI vrstvy)
+- `domain/pii_redaction.py` — **PII redaktor pro LLM prompty** (deterministický,
+  bez I/O): maskuje telefony (`+420****3456`), e-maily (`j***@example.com`),
+  WhatsApp JID (`wa:+420****3456`) a platformní handle (`skype:j***`) ve všech
+  prompt messages PŘED odesláním do LLM. Stavební kameny (regexy, normalizace)
+  opakovány z `entities.py` / `entity_resolution.py` — žádná nová heuristika;
+  priorita při překryvu JID > e-mail > handle > telefon. Vrací seznam detekcí
+  (`PiiDetection`) pro audit.
+- **I1 orchestrace** (`intelligence/ai_orchestrator.py`): `build_prompt()` a
+  `orchestrate()` dostaly parametr `redact_pii: bool = True` (default ON —
+  fail-safe). Auditní SHA-256 promptu se počítá nad redigovaným textem, takže
+  odpovídá tomu, co LLM skutečně uviděl.
+- **E11 asistent** (`domain/ai_assistant.py`): všechny tři prompt buildery
+  (`nl_search`/`summary`/`explain`) maskují PII podle `redact_pii`.
+- **Audit E11 modelových volání** (`web/app.py`): dříve auditoval jen I1 —
+  teď zapisují `ai_query` záznam (model name + SHA-256 promptu + citace,
+  agent `e11:<režim>`) i všechny tři režimy E11.
+- **Settings toggle** `ai_redact_pii` (default ON): `GET/PUT /api/settings`,
+  CLI `stopa analyze` čte `settings.json` z db_dir (`_load_ai_redact_pii()`).
+
+### Testy
+- 23 nových testů (`tests/test_pii_redaction.py`): domain logika (maskování,
+  detekce, determinismus, priority), I1 orchestrace (redakce v promptu +
+  propis do `llm_call`), E11 buildery a **web E2E** s mockovaným LM Studio —
+  PII zmaskovaná před `chat()`, auditní záznamy v `analysis_operations`,
+  toggle OFF → surová PII + odlišné prompt hash.
+- Full suite **1110 passed, 1 skipped** (baseline 1087 + 23); ruff clean.
+
 ## [Unreleased] — 2026-11-03 (STP-020 Report engine 9→20 sekcí)
 
 ### Added (oblast L, priorita P1 — court-ready report výstupy)

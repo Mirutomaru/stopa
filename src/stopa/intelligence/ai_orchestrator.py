@@ -63,11 +63,16 @@ def build_prompt(
     context: CaseContext,
     question: str,
     rag: RagContext | None = None,
+    *,
+    redact_pii: bool = True,
 ) -> list[dict[str, str]]:
     """Messages pro LLM: system (role agenta) + user (dotaz + kontext případu).
 
     ``rag`` — volitelný RAG retrieval (I2): vrstvy case/technical/knowledge se
     připojí jako izolovaný blok s citacemi; prázdný kontext = nic nepřidá.
+
+    ``redact_pii`` — STP-019: před odesláním do LLM zmaskuje PII (telefony,
+    e-maily, JID/handle) ve všech messages; default ON (viz STOPA_AI_GOVERNANCE).
     """
     user = (
         f"Dotaz: {question}\n\n"
@@ -78,10 +83,15 @@ def build_prompt(
     rag_block = rag.to_prompt_block() if rag is not None else ""
     if rag_block:
         user += "\n\n" + rag_block
-    return [
+    messages = [
         {"role": "system", "content": profile.system_prompt},
         {"role": "user", "content": user},
     ]
+    if redact_pii:
+        from stopa.domain.pii_redaction import redact_messages
+
+        messages, _ = redact_messages(messages)
+    return messages
 
 
 def extract_citations(text: str) -> list[str]:
@@ -140,6 +150,8 @@ def orchestrate(
     question: str,
     agent_id: str | None = None,
     rag: RagContext | None = None,
+    *,
+    redact_pii: bool = True,
 ) -> AgentResult:
     """Spustí jeden analytický úkol přes vybraného agenta.
 
@@ -149,6 +161,7 @@ def orchestrate(
         question: dotaz uživatele.
         agent_id: explicitní agent; ``None`` = auto-routing.
         rag: volitelný RAG retrieval (I2) — připojí se do promptu jako izolovaný blok.
+        redact_pii: STP-019 — maskovat PII v promptu před LLM (default ON).
 
     Returns:
         ``AgentResult`` s validovaným výstupem + auditními metadaty.
@@ -157,7 +170,7 @@ def orchestrate(
         OrchestrationError: neznámý agent / nevalidní výstup LLM.
     """
     profile = route_agent(question, agent_id)
-    messages = build_prompt(profile, context, question, rag=rag)
+    messages = build_prompt(profile, context, question, rag=rag, redact_pii=redact_pii)
     prompt_chars = sum(len(m["content"]) for m in messages)
 
     t0 = time.monotonic()

@@ -50,14 +50,28 @@ Každý AI dotaz se audituje do `analysis_operations`:
 - použité citace
 - `prompt_chars`, `duration_ms`, `raw_text` (v AgentResult)
 
+**STP-019 — audit pokrývá i E11 asistenta:** všechny tři režimy (`nl_search`,
+`summary`, `explain`) zapisují `ai_query` záznam s modelem, SHA-256 skutečně
+odeslaného promptu a agentem `e11:<režim>` (dříve auditoval jen I1 orchestrace).
+
+**STP-019 — PII redaktor před inference:** `domain/pii_redaction.py` maskuje
+osobní data ve všech prompt messages PŘED odesláním do LLM: telefony
+(`+420****3456`), e-maily (`j***@example.com`), WhatsApp JID (`wa:+420****3456`)
+a platformní handle (`skype:j***`). Deterministický (stejný vstup → stejný
+výstup + seznam detekcí pro audit); stavební kameny opakovány z `entities.py` /
+`entity_resolution.py`. Toggle `ai_redact_pii` v settings (default **ON** —
+fail-safe: maskovat) platí pro I1 i E11; hash promptu se počítá nad redigovaným
+textem, takže audit odpovídá tomu, co LLM skutečně uviděl.
+
 ## 8. Napojení na UI/CLI
 - Web: `POST /api/cases/{case_id}/ai/analyze` (agent volitelný; nevalidní LLM výstup → 502).
+- Web E11: `POST /api/cases/{case_id}/ai/query` (režimy `nl_search`/`summary`/`explain`; STP-019 — audit + PII redaktor).
 - CLI: `stopa analyze <case> "dotaz" [--agent X] [--json]`.
 
 ## 9. Omezení a rizika
 | Riziko | Stav | Mitigace / úkol |
 |---|---|---|
-| PII v promptu (jména, čísla) | ⚠️ | PII redaktor před inference — STP-019 |
+| PII v promptu (jména, čísla) | ✅ mitigováno | PII redaktor před inference — `domain/pii_redaction.py`, toggle `ai_redact_pii` (STP-019) |
 | Hallucinace LLM | ✅ mitigováno | fail-closed validace + povinné citace na záznamy případu |
 | Neoddělené případy v RAG | ✅ | striktní izolace podle `case_id` (testováno) |
 | Změna chování při výpadku LLM | ✅ | graceful degradation, fallback na pravidla |

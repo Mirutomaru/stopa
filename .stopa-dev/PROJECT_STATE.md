@@ -27,22 +27,22 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 
 | Metrika | Hodnota |
 |---|---|
-| Dokončené úkoly (TASKS.md) | **21** |
+| Dokončené úkoly (TASKS.md) | **22** |
 | Rozpracované (IN_PROGRESS) | 0 |
-| Čekající (BACKLOG/READY) | **4** (READY: STP-019; BACKLOG: 3) |
+| Čekající (BACKLOG/READY) | **3** (BACKLOG: STP-021, STP-022, STP-023) |
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-020 — Report engine: 9 → 20 sekcí** (oblast L, P1) | Commit: `7360bab`
-Rozšíření HTML/PDF reportu z 9 na **20 sekcí**: titulní strana (cover), 10 Metodika
-analýzy, 11 Nástroje a verze (env_snapshot C5 + E12 diagnostics), 12 Omezení analýzy,
-13 Závěr, 14 Provenience timestampů, 15 Evidence lineage, 16 Integrity Ed25519,
-17 Rejstřík entit, 18 Příloha A (validace parserů C3), 19 Příloha B (reprodukční
-prostředí C5), 20 Příloha C (rozložení důvěryhodnosti). Backward compat sekcí 1–9
-zachována; ~60 nových i18n klíčů cs/en; defenzivní naplnění z case DB. **14 nových
-testů** (`tests/test_report.py`, třída `TestStp020Sections`); full suite **1087 passed,
-1 skipped**, ruff clean. Předtím: STP-018 (Timeline Intel 2.0, `cd5aa25`), STP-017
-(vlna 3), STP-016 (vlna 2), STP-012c (`2549ce6`), STP-012b, STP-012 (`e227929`),
+**STP-019 — AI governance + PII redaktor** (oblast H/M, P2) | Commit: (tento commit)
+`domain/pii_redaction.py` — deterministický PII redaktor (bez I/O): maskuje telefony, e-maily,
+WhatsApp JID a platformní handle ve všech LLM prompt messages PŘED inference; stavební kameny
+opakovány z `entities.py`/`entity_resolution.py`; priorita překryvu JID > e-mail > handle > telefon.
+I1 orchestrace + parametr `redact_pii=True` (default ON); auditní SHA-256 nad redigovaným textem;
+E11 buildery maskují PII; **audit E11 modelových volání** (model name + prompt hash do
+`analysis_operations`, agent `e11:<režim>`); settings toggle `ai_redact_pii`. **23 nových testů**
+(`tests/test_pii_redaction.py`); full suite **1110 passed, 1 skipped**, ruff clean. Předtím: STP-020
+(report engine 9→20 sekcí, `7360bab`), STP-018 (Timeline Intel 2.0, `cd5aa25`), STP-017 (vlna 3),
+STP-016 (vlna 2), STP-012c (`2549ce6`), STP-012b, STP-012 (`e227929`),
 STP-013..015 (vlna 1, `afc49a0`).
 
 ## Aktuální úkol

@@ -112,7 +112,7 @@ Python 3.11+, Clean Architecture, plně offline testovatelné jádro.
 | E8 | File Inspector metadata — PDF/OOXML/ID3v2/MP4/EXIF + porovnání dvou souborů | ✅ |
 | E9 | Search rozšíření — hash lookup, filtry `size:`/`mtime:`/`ext:`, artifact fulltext (`in-artifact:`) | ✅ |
 | E10 | Reporting — timeline+korelace v reportu, confidence štítky, export CSV/JSON, i18n cs/en | ✅ |
-| E11 | AI Forensic Assistant (LM Studio) — nl_search/summary/explain s validovanými citacemi | ✅ |
+| E11 | AI Forensic Assistant (LM Studio) — nl_search/summary/explain s validovanými citacemi; STP-019: PII redaktor + audit modelových volání | ✅ |
 | E12 | GUI doplnění — System Diagnostics, Settings persistence, Cases CRUD | ✅ |
 
 > E13: benchmark engine + regresní sada + validační reporty = hotové v **P0 Core C6** (viz níže); zbývá externí reference validace (SWGDE/NIST datasety) jako P3, viz `docs/DEVELOPMENT_ROADMAP.md`.

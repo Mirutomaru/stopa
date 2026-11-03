@@ -41,9 +41,9 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 
 ## H. AI Copilot
 - **Stav:** ✅ P0 hotovo | **Priorita:** P2 (rozšíření)
-- **Dokončeno:** I1 AI orchestrace (5 agentů, routing, fail-closed validace), I2 Forensic RAG (3 vrstvy, citace, prompt injection ochrana), LM Studio klient. AI = volitelná závislost.
-- **Nedokončeno:** PII redaktor před inference; AI grounding + detekce rozporů; STOPA_AI_GOVERNANCE.md.
-- **Nejbližší úkol:** STP-019
+- **Dokončeno:** I1 AI orchestrace (5 agentů, routing, fail-closed validace), I2 Forensic RAG (3 vrstvy, citace, prompt injection ochrana), LM Studio klient. AI = volitelná závislost. STP-019: PII redaktor před inference (`domain/pii_redaction.py`, toggle `ai_redact_pii`), audit modelových volání (I1+E11 do `analysis_operations`: model name + SHA-256 promptu), `STOPA_AI_GOVERNANCE.md`.
+- **Nedokončeno:** AI grounding + detekce rozporů.
+- **Nejbližší úkol:** STP-021 (Performance: stream parsing velkých E01 + progress monitoring)
 
 ## I. Validation Engine
 - **Stav:** ✅ hotovo | **Priorita:** P2
