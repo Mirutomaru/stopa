@@ -86,9 +86,10 @@ Povinná pole dle DEV OS promptu §3.7:
 | T-073 | tests/test_stp021.py (7) | F-052 stream parsing E01/AFF4 + web Processing Monitor | stream roundtrip byte-for-byte (E01+AFF4, přes 2 chunky), progress callback monotónní, neznámý typ → EwfError, web sync ingest backward compat, async ingest 201→poll /processing až done | PASS | STP-021 ``e0c34b3`` |
 | T-074 | tests/test_stp022.py (32) | F-053 SHA-512 integrity vrstva + RBAC minimální + pip-audit CI | audit chain sha512 (délka/determinismus/tamper/GENESIS/neznámý algo), manifesty opt-in + backward compat, RBAC normalizace/fallback/strict, log_operation atribuce, DB sloupec sha512 (upsert/migrace), pipeline one-pass SHA-512, search_by_hash přes SHA-512, report CoC | PASS | STP-022 ``9707cd8`` |
 | T-075 | tests/test_stp023.py (17) | F-054 Export JSONL/XML/STIX 2.1 formáty | JSONL řádkování/česky/prázdný vstup, XML validita/root tagy/determinismus/prázdný dataset, STIX bundle struktura/mapping typů (file/message/x-stopa-record)/deterministická UUIDv5 ID/ASCII-safe name/x-stopa rozšíření, CLI export do souboru (JSONL/XML) + stdout (STIX) + C4 manifest | PASS | STP-023 ```210c370``` |
+| T-076 | tests/test_w4_parsers.py (33) | F-055 ETAPA B vlna 4 — portable-local AXIOM porty (6 parserů) | DDG cookies (Chromium SQLite µs od 1601, detekce schéma-based), allowlisted websites JSON (detekce + extrakce), OpenOffice .odb ZIP kontejner (mimetype + DC metadata), iOS parked car locations (Local.sqlite ZRTVEHICLEEVENTMO, CFAbsoluteTime, ZLOCLATITUDE/ZLOCLONGITUDE), iOS voicemail.db (date=unix s / trashed_date=CFAbsoluteTime), Windows UserAssist MRU (FakeHive/FakeKey ROT13 + binárka run count/focus/FILETIME, GUID Prog/Doc) | PASS | STP-026 ``cd932e1`` |
 
 ## Celkový stav
-- **1166 testů: 1165 PASS + 1 skipped** (skipped = volitelný backend bez nainstalované závislosti). Poslední změna: STP-023 (+17, `tests/test_stp023.py`).
+- **1199 testů: 1198 PASS + 1 skipped** (skipped = volitelný backend bez nainstalované závislosti). Poslední změna: STP-026 (+33, `tests/test_w4_parsers.py`).
 - Ruff: `All checks passed!` pro `src/stopa tests scripts`.
 - Determinismus coverage matice: SHA-256 diff ✓.
 - NOT_RUN: benchmark engine v CI (neběží automaticky — ručně `stopa benchmark`).

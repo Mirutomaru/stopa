@@ -56,6 +56,7 @@ Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parser
 | F-033 | **Netstat/connstat text** (ETAPA B vlna 1) | Síťové spojení z netstat/ss outputů (Windows+Unix, IPv4/IPv6/wildcard) | artifacts/net_connections.py | 1.0 | ✓ | ✓ (12) | ✓ `afc49a0` | plně funkční | token-based parser; C3 registrován | STP-014 |
 | F-034 | **Clipboard registry** (ETAPA B vlna 1) | Obsah schránky z NTUSER.DAT, CF_* formáty, UTF-8/UTF-16LE detekce | artifacts/win_clipboard.py | 1.0 | ✓ | ✓ (12) | ✓ `afc49a0` | plně funkční | sekundární průchod NTUSER.DAT | STP-015 |
 | F-035 | **SID extraction** (ETAPA B vlna 1) | Uživatelé SIDs z SAM/SECURITY + ProfileList, source_hint podle názvu souboru | artifacts/win_sids.py | 1.0 | ✓ | ✓ (12) | ✓ `afc49a0` | plně funkční | sekundární průchod registry hivy | STP-015 |
+| F-055 | **ETAPA B vlna 4 — portable-local AXIOM porty** (6 parserů) | DDG cookies (Chromium SQLite), DDG allowlisted websites (JSON), OpenOffice/LibreOffice Base (.odb ZIP), iOS parked car locations (Local.sqlite ZRTVEHICLEEVENTMO, CFAbsoluteTime), iOS voicemail (voicemail.db), Windows UserAssist MRU (NTUSER.DAT ROT13 + binárka) | artifacts/ddg_cookies.py, allowlisted_websites.py, openoffice_base.py, parked_car_locations.py, ios_voicemail.py, win_userassist.py | 1.0 | ✓ | ✓ (33) | ✓ ``cd932e1`` | plně funkční | SQLite chain + registry chain + name-based dispatch; C3 registrováno | STP-026 |
 
 ## Analytika & AI (E, F, H)
 
@@ -78,5 +79,5 @@ Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parser
 | F-054 | Export JSONL/XML/STIX 2.1 formáty | `to_jsonl` (1 objekt/řádek, streamovací), `to_xml` (deterministický ElementTree UTF-8, kořen stopa_<dataset>), `to_stix_bundle` (STIX 2.1 bundle — artefakty → file/message + x-stopa rozšíření, deterministická UUIDv5 ID pro C4 reprodukovatelnost); CLI --format csv|json|jsonl|xml|stix | domain/export.py, cli.py | 0.1.0 | ✓ | ✓ (17) | ✓ sada | plně funkční | UCO mapping + Plaso zbývají (volitelné) | STP-023 |
 
 ## Coverage AXIOM (D)
-- **covered 33 / 232** unikátních typů (po vlně 1; předtím 22). Matice: `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}`.
-- Zbývá: portable-local **38**, cloud-export **112**, memory **15**, base-class **34**.
+- **covered 56 / 232** unikátních typů (po ETAPA B vlně 4; předtím 51). Matice: `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}`.
+- Zbývá: portable-local **16**, cloud-export **111**, memory **15**, base-class **34**.

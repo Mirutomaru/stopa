@@ -270,3 +270,13 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** kořen projektu, `.stopa-dev/*`, `docs/STOPA_CHANGELOG.md`
 - **Testy:** ruff clean; testy nedotčeny (895 passed, 1 skipped) — PASS
 - **Dokončeno:** 2026-11-03 | Commit: `e0c34b3`
+
+## STP-026 — ETAPA B vlna 4: portable-local AXIOM porty (6 parserů)
+- **Oblast:** D (Artifact Engine) | **Priorita:** P0 | **Stav:** DONE
+- **Popis:** Port 6 AXIOM extraktorů do čistého Pythonu — DuckDuckGo cookies, DDG allowlisted
+  websites, OpenOffice/LibreOffice Base (.odb), iOS parked car locations, iOS voicemail,
+  Windows UserAssist MRU. Coverage matice flip 5 přímých typů NOT_SUPPORTED → SUPPORTED.
+- **Závislosti:** pipeline dispatch + C3 registry (sdílené záznamy `sqlite`/`registry_hive`)
+- **Dotčené moduly:** `src/stopa/artifacts/{ddg_cookies,allowlisted_websites,openoffice_base,parked_car_locations,ios_voicemail,win_userassist}.py` (nové), `sqlite_extract.py`, `pipeline.py`, `domain/validation_registry.py`, `scripts/build_axiom_coverage.py`, `tests/test_w4_parsers.py` (nový)
+- **Testy:** 33 nových testů zelených (`tests/test_w4_parsers.py`); full suite **1199 passed, 1 skipped** (baseline 1166 + 33); ruff clean — PASS
+- **Dokončeno:** 2026-11-04 | Commit: ``cd932e1``
