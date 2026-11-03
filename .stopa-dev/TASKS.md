@@ -98,7 +98,7 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
   + checkpoint.
 - **Dotčené moduly:** `.stopa-dev/*`
 - **Testy:** konzistence s git/testy ověřena — PASS
-- **Dokončeno:** 2026-11-03 | Commit: (tento commit)
+- **Dokončeno:** 2026-11-03 | Commit: `e0c34b3`
 
 ## STP-013 — ETAPA B vlna 1a: email mbox/EML + WiFi WLAN XML
 - **Oblast:** D | **Priorita:** P0 | **Stav:** DONE
@@ -216,9 +216,14 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dokončeno:** 2026-11-03 | Commit: `7360bab`
 
 ## STP-021 — Performance: stream parsing velkých E01 + progress monitoring
-- **Oblast:** N/O | **Priorita:** P2 | **Stav:** BACKLOG
+- **Oblast:** N/O | **Priorita:** P2 | **Stav:** DONE
 - **Popis:** Stream parsing (snížení RAM peaku), web Processing Monitor.
 - **Závislosti:** —
+- **Dokončeno:** 2026-11-03 | Commit: ``e0c34b3``
+- **Detaily:** `stream_to_raw()` chunked 1 MiB (RAM peak z GB na ~1 MiB), byte-level progress v
+  `process_disk_image(extract_progress=)`, web job registry + `GET /api/cases/{id}/processing`
+  + async ingest (`SourceIn.background`, default sync = backward compat), GUI checkbox „pozadí"
+  + polling status baru. **7 nových testů** (`tests/test_stp021.py`).
 
 ## STP-022 — Security: SHA-512 + RBAC minimální + pip-audit CI
 - **Oblast:** M | **Priorita:** P2 | **Stav:** BACKLOG
@@ -248,4 +253,4 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
   už v kořeni existoval.
 - **Dotčené moduly:** kořen projektu, `.stopa-dev/*`, `docs/STOPA_CHANGELOG.md`
 - **Testy:** ruff clean; testy nedotčeny (895 passed, 1 skipped) — PASS
-- **Dokončeno:** 2026-11-03 | Commit: (tento commit)
+- **Dokončeno:** 2026-11-03 | Commit: `e0c34b3`

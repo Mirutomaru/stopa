@@ -83,6 +83,7 @@ Povinná pole dle DEV OS promptu §3.7:
 | T-069 | tests/test_times.py (7) | časové helpery | FILETIME/Unix/ISO konverze | PASS | — |
 | T-070 | tests/test_sqlite_recover.py (13) + test_sqlite_recover_io.py (8) | SQLite carving z volného prostoru | syntetické obrazy | PASS | — |
 | T-071 | tests/test_e6.py (23), test_e8.py (16), test_e9.py (22), test_e10.py (17), test_e12.py (11) | E-fáze (file meta, report, export, CLI, benchmark CLI) | end-to-end scénáře | PASS | — |
+| T-073 | tests/test_stp021.py (7) | F-052 stream parsing E01/AFF4 + web Processing Monitor | stream roundtrip byte-for-byte (E01+AFF4, přes 2 chunky), progress callback monotónní, neznámý typ → EwfError, web sync ingest backward compat, async ingest 201→poll /processing až done | PASS | STP-021 ``e0c34b3`` |
 
 ## Celkový stav
 - **896 testů: 895 PASS + 1 skipped** (skipped = volitelný backend bez nainstalované závislosti).

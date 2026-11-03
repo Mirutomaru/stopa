@@ -18,8 +18,9 @@ Pipeline = jediný `analyze()` s dispatchem magic signatur + name-based fallback
 ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 
 ## Aktuální fáze vývoje
-**Oblast L (Report Engine)** — **STP-020 hotový** (report 9 → 20 sekcí). Předtím:
-**STP-018 Timeline Intelligence 2.0 dokončen** (oblast E, P2) a **ETAPA B vlny 1–3 hotové**.
+**Oblast N/O (Performance/UI)** — **STP-021 hotový** (stream parsing velkých E01 + web Processing Monitor). Předtím:
+**STP-019 AI governance + PII redaktor** (oblast H/M, P2), **STP-020 Report engine 9→20 sekcí**,
+**STP-018 Timeline Intelligence 2.0** a **ETAPA B vlny 1–3 hotové**.
 Coverage matice: covered **51 / 232** unikátních typů.
 
 ## Celkový stav projektu
@@ -27,41 +28,38 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 
 | Metrika | Hodnota |
 |---|---|
-| Dokončené úkoly (TASKS.md) | **22** |
+| Dokončené úkoly (TASKS.md) | **23** |
 | Rozpracované (IN_PROGRESS) | 0 |
-| Čekající (BACKLOG/READY) | **3** (BACKLOG: STP-021, STP-022, STP-023) |
+| Čekající (BACKLOG/READY) | **2** (BACKLOG: STP-022, STP-023) |
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-019 — AI governance + PII redaktor** (oblast H/M, P2) | Commit: `6d74ab3`
-`domain/pii_redaction.py` — deterministický PII redaktor (bez I/O): maskuje telefony, e-maily,
-WhatsApp JID a platformní handle ve všech LLM prompt messages PŘED inference; stavební kameny
-opakovány z `entities.py`/`entity_resolution.py`; priorita překryvu JID > e-mail > handle > telefon.
-I1 orchestrace + parametr `redact_pii=True` (default ON); auditní SHA-256 nad redigovaným textem;
-E11 buildery maskují PII; **audit E11 modelových volání** (model name + prompt hash do
-`analysis_operations`, agent `e11:<režim>`); settings toggle `ai_redact_pii`. **23 nových testů**
-(`tests/test_pii_redaction.py`); full suite **1110 passed, 1 skipped**, ruff clean. Předtím: STP-020
-(report engine 9→20 sekcí, `7360bab`), STP-018 (Timeline Intel 2.0, `cd5aa25`), STP-017 (vlna 3),
-STP-016 (vlna 2), STP-012c (`2549ce6`), STP-012b, STP-012 (`e227929`),
-STP-013..015 (vlna 1, `afc49a0`).
+**STP-021 — Performance: stream parsing velkých E01 + progress monitoring** (oblast N/O, P2) | Commit: ``e0c34b3``
+`stream_to_raw()` chunked 1 MiB přímo z kontejneru do RAW souboru (**RAM peak z GB na ~1 MiB**),
+byte-level progress v `process_disk_image(extract_progress=)`, web Processing Monitor (job registry +
+`GET /api/cases/{id}/processing`), async ingest (`SourceIn.background`, default sync = backward compat,
+daemon thread s per-thread DB spojením), GUI checkbox „pozadí" + živý progress v status baru.
+**7 nových testů** (`tests/test_stp021.py`); full suite **1117 passed, 1 skipped**, ruff clean. Předtím: STP-019
+(AI governance + PII redaktor, `6d74ab3`), STP-020 (report engine 9→20 sekcí, `7360bab`), STP-018
+(Timeline Intel 2.0, `cd5aa25`), STP-017 (vlna 3), STP-016 (vlna 2), STP-012c (`2549ce6`), STP-012b,
+STP-012 (`e227929`), STP-013..015 (vlna 1, `afc49a0`).
 
 ## Aktuální úkol
-Žádný aktivní — čeká na zahájení **STP-019** (AI governance + PII redaktor).
+Žádný aktivní — čeká na zahájení **STP-022** (Security: SHA-512 + RBAC minimální + pip-audit CI).
 
 ## Nejbližší následující úkol
-**STP-019 — AI governance + PII redaktor** (oblast H/M, P2)
-`STOPA_AI_GOVERNANCE.md` (kořen), PII redaktor před LLM inference, explicitní oddělení případů.
+**STP-022 — Security: SHA-512 + RBAC minimální + pip-audit CI** (oblast M, P2)
+SHA-512 v integrity vrstvě, minimální RBAC (actor povinný), pip-audit do CI.
 
 ## Poslední úspěšné testování
-- **2026-11-03:** `.venv/bin/python -m pytest -q` → **1087 passed, 1 skipped** (~13s)
+- **2026-11-03:** `.venv/bin/python -m pytest -q` → **1117 passed, 1 skipped** (~14s)
 - `.venv/bin/ruff check src/stopa tests scripts` → All checks passed!
 - Coverage matice deterministická (SHA-256 diff ✓), covered **51 / 232**
 
 ## Známé kritické problémy
 Žádné blokující. Technický dluh viz `docs/STOPA_TECHNICAL_AUDIT.md`:
 - `db.py` ~1940 řádků (monolit — rozdělit při příležitosti, ne plošně)
-- RAM peak u velkých E01 (chybí stream parsing)
 - SHA-512 chybí v integrity vrstvě; RBAC minimální
 
 ## Datum poslední aktualizace
-**2026-11-03** — po dokončení STP-020 Report engine 9→20 sekcí (14 testů, report 20 sekcí) + DEV OS paměť.
+**2026-11-03** — po dokončení STP-021 stream parsing velkých E01 + web Processing Monitor (7 testů, RAM peak z GB na ~1 MiB).

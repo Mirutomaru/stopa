@@ -73,6 +73,7 @@ Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parser
 |---|---|---|---|---|---|---|---|---|---|---|
 | F-050 | Web UI — FastAPI 30 endpointů + vanilla JS SPA (dark mode) | Interaktivní GUI pro případy, timeline, graf entit, reporty | web/app.py, static/ | 0.1.0 | ✓ | ✓ (29) | ✓ sada | plně funkční | chybí Processing/Validation/Audit Center | STP-021 |
 | F-051 | Paralelizace pipeline (ThreadPoolExecutor) + E3 resume | Paralelní zpracování souborů, checkpointing a obnovení přerušené analýzy | pipeline.py | 0.1.0 | ✓ | ✓ (sada) | ✓ | plně funkční | RAM peak u velkých E01 — chybí stream parsing | STP-021 |
+| F-052 | Stream parsing E01/AFF4 + web Processing Monitor | Chunked extrakce kontejneru (RAM peak z GB na ~1 MiB), byte-level progress, async ingest s živým progress v GUI | data/ewf_container.py, data/image_pipeline.py, web/app.py, static/js/components/modules.js | 0.1.0 | ✓ | ✓ (7) | ✓ sada | plně funkční | CI běh benchmarku zbývá | STP-021 |
 
 ## Coverage AXIOM (D)
 - **covered 33 / 232** unikátních typů (po vlně 1; předtím 22). Matice: `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}`.
