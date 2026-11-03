@@ -2,33 +2,39 @@
 
 **Datum:** 2026-11-03
 **Verze aplikace:** 0.1.0 (`pyproject.toml`)
-**Commit:** ``9707cd8`` (předchozí: `e0c34b3` STP-021, `5f964f5`, `6d74ab3`, `7360bab`, `cd5aa25`)
+**Commit:** ```210c370``` (předchozí: `5c08679` STP-022 docs, `9707cd8` STP-022 feature, `e0c34b3`, `1ab3488`, `5f964f5`, `6d74ab3`, `7360bab`, `1437927`, `cd5aa25`)
 
-## Hotovo v tomto checkpointu
-**STP-022 — Security: SHA-512 integrity vrstva + RBAC minimální + pip-audit CI** (oblast M, P2)
+## Co se stalo
+**STP-023 — Export: JSONL/XML/STIX formáty** (oblast K/Q, P3) hotový.
+Rozšíření export engine o tři nové formáty nad stávajícím `domain/export.py`:
+- **JSONL** (`to_jsonl`) — 1 objekt/řádek, streamovací, deterministické pořadí klíčů podle schématu.
+- **XML** (`to_xml(records, dataset=)`) — deterministický ElementTree (stdlib), UTF-8 deklarace,
+  kořen `stopa_<dataset>`, záznamy `<artifact>/<event>/<correlation>`, None vynechány, dict/list jako JSON.
+- **STIX 2.1** (`to_stix_bundle(records, dataset=)`) — bundle: artefakty → objekty `file`/`message`
+  (konzervativní mapa `_STIX_TYPE_MAP`), ostatní datasety → `x-stopa-record`, původní záznamy v rozšíření
+  `x-stopa`; **deterministická UUIDv5 ID** ze `STIX_NAMESPACE` pro C4 reprodukovatelnost.
+- CLI: `stopa export --format csv|json|jsonl|xml|stix` (dispatch + argparse).
 
-### Změny
-- `domain/integrity.py` — `compute_audit_hash(..., algo=)` / `verify_chain(rows, algo=)`;
-  per-algorithm GENESIS (`_GENESIS_BY_ALGO`: sha256 = 0×64, sha512 = 0×128) + fail-fast validace;
-  `build_manifest(include_sha512=True)` opt-in, `ManifestEntry.sha512` (default None).
-- nový `domain/rbac.py` — čistá logika: `normalize_actor`, `require_actor` (+`ActorError`),
-  `resolve_actor`; `db.log_operation(strict=)` — atribuce explicitní actor > case examiner > None.
-- `models.py` — `FileRecord.sha512`, `ProcessingProfile.compute_sha512`.
-- `domain/profiles.py` — FORENSIC `compute_sha512=True` (ediscovery/quick ne).
-- `data/db.py` — sloupec `files.sha512` v SCHEMA + idempotentní migrace; `upsert_file`,
-  `row_to_record` defenzivně, `search_by_hash()` přes SHA-256/SHA-512/MD5.
-- `pipeline.py` — one-pass hashing +SHA-512 podle profilu (hashlib multi-hash); dedupe seed/check.
-- `domain/report.py` + `presentation/case_report.py` — CoC manifest +SHA-512 sloupec (jen když existuje).
-- `.github/workflows/ci.yml` — nový job `security` s pip-audit
-  (`pip freeze | grep -v "^-e \|^stopa @\|^stopa==" > requirements.txt && pip-audit --no-deps -r requirements.txt`).
+## Změněné soubory
+- `src/stopa/domain/export.py` — +`to_jsonl`, `to_xml`, `to_stix_bundle`, `_stix_name`, `STIX_NAMESPACE`, `_STIX_TYPE_MAP`.
+- `src/stopa/cli.py` — `cmd_export` dispatch jsonl/xml/stix, argparse `--format`, module docstring + parser help.
+- `tests/test_stp023.py` — **nový soubor, 17 testů** (JSONL/XML/STIX domain + CLI roundtrip).
+- `STOPA_CHANGELOG.md` (+docs zrcadlo), `STOPA_ROADMAP.md` (K ✅ hotovo, Q +STIX 2.1).
 
-### Testy
-- **32 nových testů** (`tests/test_stp022.py`) — všechny zelené.
-- Full suite: **1149 passed, 1 skipped** (baseline 1117 + 32). Ruff clean.
+## Testy
+- Nové: `.venv/bin/python -m pytest tests/test_stp023.py -q` → **17 passed in 0.13s**.
+- Full suite: `.venv/bin/python -m pytest -q` → **1166 passed, 1 skipped** (baseline 1149 + 17).
+- Ruff: `All checks passed!` pro `src/stopa tests scripts`.
 
-### Registry / docs
-- F-053 (FEATURE_REGISTRY), T-074 (TEST_REGISTRY), TASKS STP-022 DONE,
-  PROJECT_STATE aktualizován, NEXT_ACTION → STP-023, changelogy (kořen + zrcadlo) + DEV OS CHANGELOG.
+## Registry
+- Feature: **F-054** Export JSONL/XML/STIX 2.1 formáty.
+- Testy: **T-075** `tests/test_stp023.py` (17).
+- Celkový stav TEST_REGISTRY: **1166 testů: 1165 PASS + 1 skipped**.
+
+## Coverage matice
+covered **51 / 232** unikátních typů (bez změny — export engine, ne nové extraktory).
 
 ## Další krok
-**STP-023 — Export: JSONL/XML/STIX formáty** (oblast K/Q, P3) — viz `NEXT_ACTION.md`.
+**ETAPA B vlna 4 — Artifact Engine: portable-local typy** (oblast D, P0) — pokrytí dalších ~6–10
+portable-local typů (prefetch, jumplist/.lnk, recent/MRU, USB/device, print spooler, DNS cache/hosts,
+taskbar/startmenu). Detail v `NEXT_ACTION.md`.

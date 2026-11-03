@@ -1,57 +1,59 @@
 # STOPA — NEXT ACTION
 
 ## Aktuální fáze
-**STP-022 hotový** (Security: SHA-512 integrity vrstva + RBAC minimální + pip-audit CI) — oblast M.
-Commit: ``9707cd8``; full suite **1149 passed, 1 skipped**, ruff clean.
+**STP-023 hotový** (Export: JSONL/XML/STIX 2.1 formáty) — oblast K/Q.
+Commit: ```210c370```; full suite **1166 passed, 1 skipped**, ruff clean.
 
 ## Další úkol
-### STP-023 — Export: JSONL/XML/STIX formáty (oblast K/Q, P3)
-**Popis:** Rozšíření export engine o JSONL, XML, STIX/UCO.
+### ETAPA B vlna 4 — Artifact Engine: portable-local typy (oblast D, P0)
+**Popis:** Pokračování portu AXIOM extraktorů. Po vlnách 1–3 je covered **51 / 232**
+unikátních typů; zbývá **38 portable-local typů** + cloud-export (112) + memory (15).
 
 **Kontext pro start:**
-- Existující export: `src/stopa/domain/export.py` — stabilní sloupcová schémata
-  (`ARTIFACT_COLUMNS`, `TIMELINE_COLUMNS`, `CORRELATION_COLUMNS`) + `to_csv()` / `to_json()`.
-- CLI: `stopa export <case> --what artifacts|timeline|correlations --format csv|json [--limit N] [--out SOUBOR]`
-  (`src/stopa/cli.py`).
-- Testy: `tests/test_e10.py` (17) — pattern pro nové formáty.
+- Coverage matice: `STOPA_COVERAGE_MATRIX.csv` — filtrace `stav_implementace == NOT_SUPPORTED`.
+  Kandidáti vlny 4 = lokální/portable typy (registry, browser local, jumplist, recent,
+  prefetch, USB/device, print, service/driver, taskbar/startmenu/MRU, DNS cache, hosts file) —
+  **ne** cloud-export a **ne** memory (ty mají vlastní vlny).
+- Pipeline dispatch: `src/stopa/pipeline.py` + C3 registry (`domain/parser_registry.py`) —
+  každý nový parser = entry s ID+verzí (C3 validační registry, 13 verzovaných parserů).
+- Pattern pro nové extraktory: `src/stopa/artifacts/*.py` (I/O jen v entrypointech),
+  testy `tests/test_<parser>.py` (syntetické fixtures, plně offline).
 
-**Navrhovaný design:**
-1. **JSONL** — `to_jsonl()` v `domain/export.py`: jeden JSON objekt na řádek
-   (`json.dumps(..., ensure_ascii=False)`), deterministické pořadí klíčů podle schématu;
-   CLI `--format jsonl`.
-2. **XML** — `to_xml()`: ElementTree (stdlib), kořen `<stopa-export>`, sekce podle `--what`;
-   atributy = sloupce, entity escapované; deterministický výstup (bez timestampů v hlavičce
-   nebo s explicitním `generated_at` parametrem).
-3. **STIX/UCO** — minimální mapping: artifact → STIX 2.1 `indicator`/`observed-data`,
-   timeline event → `observed-data` s `first_observed/last_observed`; UCO jako nadstavba
-   (cybox-like). Začít s `to_stix()` pro artifacts + timeline; correlations = `relationship`.
-4. CLI: `--format jsonl|xml|stix` (rozšíření existujícího dispatche).
-5. Testy: nový `tests/test_stp023.py` — roundtrip JSONL, XML parse-back, STIX struktura
-   (validace klíčových polí), determinismus výstupů.
+**Navrhovaný rozsah vlny 4 (vybrat ~6–10 typů s nejvyšší forenzní hodnotou):**
+1. **Prefetch** (`*.pf`) — spuštěné aplikace + čas posledního spuštění (čistý Python, binární).
+2. **Jumplist / .lnk shortcuts** — nedávné dokumenty/aplikace (část pokryta win_jumplist; rozšířit).
+3. **Recent/MRU** — nedávné soubory z registry (`UserAssist`, `MRUList`).
+4. **USB/device connections** — `Enum\USB` registry + `SetupAPI` device instance ID.
+5. **Print spooler / recent prints** — `Spooler` server, nedávné tisky.
+6. **DNS cache / hosts file** — `DnsCache` registry + `/etc/hosts`, `C:\Windows\System32\drivers\etc\hosts`.
+7. **Taskbar/startmenu/MRU** — nedávné položky taskbaru a start menu.
 
-**Backward compat:** CSV/JSON nezměněné; nové formáty = opt-in přes `--format`.
+Každý typ: parser modul + C3 registry entry (ID+verze) + syntetické testy + coverage matice
+`NOT_SUPPORTED → SUPPORTED` + `STOPA_COVERAGE_MATRIX.csv` SHA-256 diff determinismus.
 
-## Hotové v této fázi (STP-022)
-- SHA-512: audit chain (`algo=`, per-algorithm GENESIS), manifesty opt-in, pipeline one-pass
-  (FORENSIC profil), sloupec `files.sha512` + migrace, dedupe + hash lookup.
-- Report CoC: SHA-512 sloupec jen když existuje.
-- RBAC minimální: `domain/rbac.py`, `log_operation(strict=)` — explicitní actor > examiner.
-- CI: job `security` s pip-audit (PyPI Advisory DB).
-- Testy: 32 nových (`tests/test_stp022.py`), full suite **1149 passed, 1 skipped**.
+**Backward compat:** nové extraktory = opt-in přes pipeline dispatch; stávající 51 typů nezměněny.
+
+## Hotové v této fázi (STP-023)
+- JSONL: `to_jsonl()` — 1 objekt/řádek, streamovací, deterministické pořadí klíčů.
+- XML: `to_xml(records, dataset=)` — deterministický ElementTree, UTF-8 deklarace, kořen `stopa_<dataset>`.
+- STIX 2.1: `to_stix_bundle()` — artefakty → file/message objekty + `x-stopa` rozšíření,
+  ostatní datasety → `x-stopa-record`; deterministická UUIDv5 ID ze STOPA namespace (C4 reprodukovatelnost).
+- CLI: `stopa export --format csv|json|jsonl|xml|stix`.
+- Testy: 17 nových (`tests/test_stp023.py`), full suite **1166 passed, 1 skipped**.
 
 ## Registry
-- Feature: **F-053** SHA-512 integrity vrstva + RBAC minimální + pip-audit CI.
-- Testy: **T-074** `tests/test_stp022.py` (32).
+- Feature: **F-054** Export JSONL/XML/STIX 2.1 formáty.
+- Testy: **T-075** `tests/test_stp023.py` (17).
 
-## Checklist dokončení STP-023
-- [ ] Audit existujícího export engine (`domain/export.py`, CLI dispatch)
-- [ ] Implementace JSONL + XML + STIX/UCO
-- [ ] CLI `--format jsonl|xml|stix`
-- [ ] Testy (nový soubor, roundtrip + determinismus)
-- [ ] Docs: changelog, roadmap K/Q, DEV OS registry (F-054/T-075), checkpoint
-- [ ] Verify: ruff clean + full suite ≥1149 + commit
+## Checklist dokončení ETAPA B vlna 4
+- [ ] Audit coverage matice — vybrat ~6–10 portable-local typů s nejvyšší forenzní hodnotou
+- [ ] Implementace parserů (čistý Python, I/O jen v entrypointech) + C3 registry entries
+- [ ] Syntetické testy per parser (`tests/test_<parser>.py`)
+- [ ] Coverage matice `NOT_SUPPORTED → SUPPORTED` + SHA-256 diff determinismus
+- [ ] Docs: changelog, roadmap D (covered count), DEV OS registry (F-0xx/T-0xx), checkpoint
+- [ ] Verify: ruff clean + full suite ≥1166 + commit
 
 ## Poznámky
-- Domain = čistá logika bez IO; XML/JSONL/STIX buildery patří do `domain/export.py`.
-- Determinismus výstupů je klíčový (testy srovnávají hash) — žádné implicitní timestampy.
-- STIX: neimplementovat celou specifikaci — jen minimální court-ready mapping.
+- Domain = čistá logika bez IO; binární parsery (prefetch) patří do `src/stopa/artifacts/`.
+- Determinismus coverage matice je klíčový (SHA-256 diff test) — pořadí řádků stabilní.
+- Každý parser = C3 registry entry s ID+verzí (validační reporty per-artifact).

@@ -240,9 +240,16 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
   (`tests/test_stp022.py`).
 
 ## STP-023 — Export: JSONL/XML/STIX formáty
-- **Oblast:** K/Q | **Priorita:** P3 | **Stav:** BACKLOG
-- **Popis:** Rozšíření export engine o JSONL, XML, STIX/UCO.
+- **Oblast:** K/Q | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** Rozšíření export engine o JSONL, XML, STIX 2.1 (UCO mapping zbývá jako volitelné rozšíření).
 - **Závislosti:** —
+- **Dokončeno:** 2026-11-03 | Commit: ``210c370``
+- **Detaily:** `domain/export.py` +`to_jsonl` (1 objekt/řádek, streamovací), `to_xml`
+  (deterministický ElementTree, UTF-8, kořen `stopa_<dataset>`), `to_stix_bundle`
+  (STIX 2.1 bundle — artefakty → file/message objekty + `x-stopa` rozšíření, ostatní
+  datasety → `x-stopa-record`; deterministická UUIDv5 ID ze STOPA namespace pro C4
+  reprodukovatelnost); CLI `stopa export --format csv|json|jsonl|xml|stix`. **17 nových
+  testů** (`tests/test_stp023.py`).
 
 ## STP-024 — DEV OS: doplnění povinných polí registrů (STP-012b)
 - **Oblast:** P (QA) | **Priorita:** P1 | **Stav:** DONE
