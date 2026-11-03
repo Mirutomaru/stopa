@@ -21,6 +21,7 @@ from stopa.domain.integrity import (
     verify_chain,
 )
 from stopa.domain.lineage import LineageEvent
+from stopa.domain.rbac import ActorError, resolve_actor  # STP-022 — RBAC minimální
 from stopa.domain.reproducibility import AnalysisOperation, env_snapshot
 from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
@@ -58,7 +59,7 @@ CREATE TABLE IF NOT EXISTS files (
     name TEXT NOT NULL,
     size_bytes INTEGER NOT NULL,
     mtime TEXT, ctime TEXT, atime TEXT,
-    sha256 TEXT, md5 TEXT,
+    sha256 TEXT, md5 TEXT, sha512 TEXT,  -- STP-022: SHA-512 (forensic profil)
     signature_type TEXT, extension TEXT,
     bad_extension INTEGER NOT NULL DEFAULT 0,
     is_duplicate_of TEXT,
@@ -324,6 +325,10 @@ class CaseDB:
         if "meta_addr" not in cols:
             self.conn.execute("ALTER TABLE files ADD COLUMN meta_addr TEXT")
             self.conn.commit()
+        # STP-022 Security: stará case DB bez sloupce sha512 (SHA-512 v integrity vrstvě).
+        if "sha512" not in cols:
+            self.conn.execute("ALTER TABLE files ADD COLUMN sha512 TEXT")
+            self.conn.commit()
         # Migrace: stará evidence_marks bez sloupce flags (GUI „Add to Report“).
         em_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(evidence_marks)").fetchall()}
         if "flags" not in em_cols:
@@ -577,8 +582,18 @@ class CaseDB:
             return None, GENESIS
         return int(row["id"]), str(row["hash"] or "")
 
+    def _case_examiner(self) -> str | None:
+        """Examiner případu (fallback actor pro audit trail). Case DB = jeden případ."""
+        row = self.conn.execute("SELECT examiner FROM cases LIMIT 1").fetchone()
+        return row["examiner"] if row is not None else None
+
     def log_operation(
-        self, action: str, actor: str | None = None, details: dict | None = None
+        self,
+        action: str,
+        actor: str | None = None,
+        details: dict | None = None,
+        *,
+        strict: bool = False,  # STP-022 — RBAC minimální (actor povinný)
     ) -> int:
         """Neměnný záznam operace (append-only) + hash chaining (P0 Core C4). Vrací ID řádku.
 
@@ -586,15 +601,23 @@ class CaseDB:
         artifact_extracted / report_generated / hash_verified …
         Každý řádek nese ``prev_hash`` (hash předchozího) a vlastní ``hash`` →
         jakákoli změna starého řádku rozbití řetězec (ověřitelné bez klíče).
+
+        STP-022 RBAC minimální: actor se řeší prioritou **explicitní > case
+        examiner** (backward compat — volající bez explicitního actora dostanou
+        atribuci na examinera). ``strict=True`` vyžaduje vyřešeného actora,
+        jinak :class:`ActorError` (default False = původní chování).
         """
+        resolved = resolve_actor(actor, self._case_examiner())
+        if strict and resolved is None:
+            raise ActorError(f"Actor je povinný při '{action}' — explicitní actor nebo case examiner")
         _, prev = self._last_audit_row()
         ts = datetime.now(timezone.utc).isoformat()
         details_json = json.dumps(details or {}, ensure_ascii=False)
-        h = compute_audit_hash(prev, ts, action, actor, details_json)
+        h = compute_audit_hash(prev, ts, action, resolved, details_json)
         cur = self.conn.execute(
             "INSERT INTO audit_log (ts, action, actor, details_json, prev_hash, hash)"
             " VALUES (?, ?, ?, ?, ?, ?)",
-            (ts, action, actor, details_json, prev, h),
+            (ts, action, resolved, details_json, prev, h),
         )
         self.conn.commit()
         return int(cur.lastrowid)
@@ -865,14 +888,14 @@ class CaseDB:
         """
         self.conn.execute(
             "INSERT INTO files (id, source_id, rel_path, name, size_bytes,"
-            " mtime, ctime, atime, sha256, md5, signature_type, extension,"
+            " mtime, ctime, atime, sha256, md5, sha512, signature_type, extension,"
             " bad_extension, is_duplicate_of, hash_set_hit, meta_addr)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             " ON CONFLICT (source_id, rel_path) DO UPDATE SET"
             " name = excluded.name,"
             " size_bytes = excluded.size_bytes,"
             " mtime = excluded.mtime, ctime = excluded.ctime, atime = excluded.atime,"
-            " sha256 = excluded.sha256, md5 = excluded.md5,"
+            " sha256 = excluded.sha256, md5 = excluded.md5, sha512 = excluded.sha512,"
             " signature_type = excluded.signature_type, extension = excluded.extension,"
             " bad_extension = excluded.bad_extension,"
             " is_duplicate_of = excluded.is_duplicate_of,"
@@ -889,6 +912,7 @@ class CaseDB:
                 _iso(rec.atime),
                 rec.sha256,
                 rec.md5,
+                rec.sha512,
                 rec.signature_type,
                 rec.extension,
                 int(rec.bad_extension),
@@ -1175,16 +1199,16 @@ class CaseDB:
     def search_by_hash(
         self, hash_hex: str, source_id: str | None = None, limit: int | None = 100
     ) -> list[FileRecord]:
-        """E9 — exact hash lookup (SHA-256 / MD5).
+        """E9 — exact hash lookup (SHA-256 / SHA-512 / MD5).
 
         `hash_hex` — hex string bez prefixu; porovnává se s columnami
-        sha256 a md5 (case-insensitive přes LOWER).
+        sha256, sha512 a md5 (case-insensitive přes LOWER). STP-022: +SHA-512.
         """
         h = hash_hex.strip().lower()
         if not h:
             return []
-        q = "SELECT * FROM files WHERE LOWER(sha256) = ? OR LOWER(md5) = ?"
-        args: list[object] = [h, h]
+        q = "SELECT * FROM files WHERE LOWER(sha256) = ? OR LOWER(sha512) = ? OR LOWER(md5) = ?"
+        args: list[object] = [h, h, h]
         if source_id is not None:
             q += " AND source_id = ?"
             args.append(source_id)
@@ -1945,6 +1969,7 @@ def _row_to_record(r: sqlite3.Row) -> FileRecord:
         atime=parse(r["atime"]),
         sha256=r["sha256"],
         md5=r["md5"],
+        sha512=r["sha512"] if "sha512" in r else None,  # noqa: SIM401 (Row bez .get)
         signature_type=r["signature_type"],
         extension=r["extension"],
         bad_extension=bool(r["bad_extension"]),

@@ -36,6 +36,7 @@ class CustodyItem:
     size_bytes: int
     sha256: str | None
     md5: str | None = None
+    sha512: str | None = None  # STP-022 — SHA-512 (forensic profil)
 
 
 @dataclass(frozen=True)
@@ -434,18 +435,23 @@ def build_html(data: ReportData, lang: str | None = None) -> str:
     parts.append(f"<h2>6. {t('sec_manifest', L)}</h2>")
     if data.custody_items:
         src_path = {s.id: s.path for s in data.sources}  # zdrojová úroveň CoC
+        has_sha512 = any(c.sha512 for c in data.custody_items)  # STP-022 — sloupec jen když existuje
+        sha512_th = "<th>SHA-512</th>" if has_sha512 else ""
         parts.append(
             f"<table><tr><th>{t('th_source', L)}</th>"
             f"<th>{t('th_file', L)}</th>"
-            f"<th>{t('th_size', L)}</th><th>SHA-256</th><th>MD5</th></tr>"
+            f"<th>{t('th_size', L)}</th><th>SHA-256</th><th>MD5</th>{sha512_th}</tr>"
         )
         for c in data.custody_items[:5000]:  # limit — manifest může být velký
             sha = f"<td class='mono'>{_esc(c.sha256)}</td>" if c.sha256 else "<td>—</td>"
             md5 = f"<td class='mono'>{_esc(c.md5)}</td>" if c.md5 else "<td>—</td>"
+            sha512_td = (
+                f"<td class='mono'>{_esc(c.sha512)}</td>" if has_sha512 and c.sha512 else ("<td>—</td>" if has_sha512 else "")
+            )
             parts.append(
                 f"<tr><td class='mono'>{_esc(src_path.get(c.source_id, c.source_id))}</td>"
                 f"<td class='mono'>{_esc(c.rel_path)}</td>"
-                f"<td>{c.size_bytes:,}</td>{sha}{md5}</tr>"
+                f"<td>{c.size_bytes:,}</td>{sha}{md5}{sha512_td}</tr>"
             )
         parts.append("</table>")
         if len(data.custody_items) > 5000:

@@ -70,6 +70,7 @@ class FileRecord(BaseModel):
     atime: datetime | None = None
     sha256: str | None = None
     md5: str | None = None
+    sha512: str | None = None  # STP-022 — SHA-512 (forensic profil, integrity vrstva)
     signature_type: str | None = None  # kanonický typ z magic bytes (None = neznámá)
     extension: str | None = None
     bad_extension: bool = False  # FTK Flag Bad Extensions
@@ -85,6 +86,7 @@ class ProcessingProfile(BaseModel):
     compute_md5: bool = True
     compute_sha1: bool = False
     compute_sha256: bool = True
+    compute_sha512: bool = False  # STP-022 — SHA-512 (forensic profil)
     signature_analysis: bool = True  # magic bytes → reálný typ
     flag_bad_extensions: bool = True  # rozpor signatura × přípona
     deduplicate: bool = True  # duplikáty podle hash

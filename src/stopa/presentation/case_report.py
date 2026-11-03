@@ -62,7 +62,7 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
 
     # chain of custody + flagované soubory — jeden průchod přes files
     rows = db.conn.execute(
-        "SELECT source_id, rel_path, size_bytes, sha256, md5, bad_extension,"
+        "SELECT source_id, rel_path, size_bytes, sha256, md5, sha512, bad_extension,"
         " is_duplicate_of, hash_set_hit FROM files ORDER BY source_id, rel_path"
     ).fetchall()
     custody: list[CustodyItem] = []
@@ -75,6 +75,7 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
                 size_bytes=int(r["size_bytes"] or 0),
                 sha256=r["sha256"],
                 md5=r["md5"],
+                sha512=r["sha512"],  # STP-022 — SHA-512 (forensic profil)
             )
         )
         flags = _flags_for(bool(r["bad_extension"]), r["is_duplicate_of"], r["hash_set_hit"])

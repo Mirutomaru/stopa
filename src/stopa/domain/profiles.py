@@ -17,6 +17,7 @@ FORENSIC = ProcessingProfile(
     compute_md5=True,
     compute_sha1=False,
     compute_sha256=True,
+    compute_sha512=True,  # STP-022 — SHA-512 v integrity vrstvě (court-ready)
     signature_analysis=True,
     flag_bad_extensions=True,
     deduplicate=True,

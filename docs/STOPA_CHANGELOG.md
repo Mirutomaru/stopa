@@ -4,6 +4,43 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-03 (STP-022 Security: SHA-512 integrity vrstva + RBAC minimální + pip-audit CI)
+
+### Added (oblast M, priorita P2 — court-ready integrity + atribuce operací)
+- **SHA-512 v integrity vrstvě** (`domain/integrity.py`): `compute_audit_hash(..., algo=)`
+  a `verify_chain(rows, algo=)` s parametrem `"sha256"` (výchozí, backward compat —
+  stávající řetězce i testy nezměněné) nebo `"sha512"`. **Per-algorithm GENESIS**
+  (`_GENESIS_BY_ALGO`: SHA-256 = `0×64`, SHA-512 = `0×128`) + fail-fast validace
+  neznámého algoritmu. Exportní manifesty: `build_manifest(include_sha512=True)`
+  opt-in — `ManifestEntry.sha512` (default None → backward compat hash manifestu).
+- **SHA-512 v pipeline** (`models.py`, `domain/profiles.py`, `pipeline.py`):
+  `ProcessingProfile.compute_sha512: bool = False`; **FORENSIC profil počítá SHA-512**
+  (ediscovery/quick ne) — v **jednom průchodu** s ostatními algs (hashlib multi-hash,
+  bez druhého čtení souboru). `FileRecord.sha512` + sloupec `files.sha512`
+  (SCHEMA + idempotentní migrace pro staré case DB); dedupe seed i check zahrnují
+  SHA-512; `search_by_hash()` = exact lookup přes **SHA-256 / SHA-512 / MD5**.
+- **Report CoC** (`domain/report.py`, `presentation/case_report.py`):
+  `CustodyItem.sha512`; manifest tabulka v HTML reportu dostane sloupec **SHA-512
+  jen když existuje** (staré case DB bez SHA-512 → vizuálně nezměněný report).
+- **RBAC minimální** (`domain/rbac.py` — čistá logika bez IO): `normalize_actor()`
+  (trim, max 128 znaků), `require_actor()` (+`ActorError`), `resolve_actor()`.
+  `db.log_operation(..., strict=False)` — atribuce operace: **explicitní actor >
+  case examiner > None** (backward compat); `strict=True` vyžaduje actora
+  (pro budoucí multi-user režim).
+- **pip-audit CI** (`.github/workflows/ci.yml`): nový job `security` — audit známých
+  zranitelností v závislostech (PyPI Advisory DB) přes `pip freeze | grep -v "^-e \|^stopa @\|^stopa==" > requirements.txt && pip-audit --no-deps -r requirements.txt`
+  (přímo `-r pyproject.toml` nefunguje — pip-audit chce requirements formát;
+  editovatelný stopa jako VCS link by se snažil buildovat).
+
+### Testy
+- **32 nových testů** (`tests/test_stp022.py`): SHA-512 audit chain (délka hexdigestu,
+  determinismus, tamper detekce, per-algorithm GENESIS, neznámý algoritmus → ValueError),
+  manifesty s/SHA-512 opt-in + backward compat hash, RBAC (normalizace, require_actor,
+  resolve_actor fallback na examinera, strict režim), `log_operation` atribuce
+  (explicitní > examiner > None), DB sloupec sha512 (upsert/read/migrace staré DB),
+  pipeline SHA-512 v jednom průchodu (FORENSIC vs. quick profil), `search_by_hash()`
+  přes SHA-512, report CoC manifest s/SHA-512 sloupec.
+
 ## [Unreleased] — 2026-11-03 (STP-021 Performance: stream parsing velkých E01 + progress monitoring)
 
 ### Added (oblast N/O, priorita P2 — výkon ingestu + viditelnost zpracování)

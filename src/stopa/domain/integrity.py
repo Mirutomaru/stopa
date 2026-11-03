@@ -27,18 +27,32 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-# GENESIS — prev_hash prvního audit řádku (0×64)
-GENESIS = "0" * 64
+# GENESIS — prev_hash prvního audit řádku (0×64). STP-022: per-algorithm genesis.
+GENESIS = "0" * 64  # SHA-256 (backward compat — původní výchozí)
+_GENESIS_BY_ALGO = {"sha256": GENESIS, "sha512": "0" * 128}
+
+
+def _genesis(algo: str) -> str:
+    """Genesis prev_hash pro daný algoritmus (SHA-256 → 0×64, SHA-512 → 0×128)."""
+    try:
+        return _GENESIS_BY_ALGO[algo]
+    except KeyError:
+        raise ValueError(f"Neznámý hash algoritmus '{algo}' (dostupné: {', '.join(sorted(_GENESIS_BY_ALGO))})") from None
 
 
 def compute_audit_hash(
-    prev_hash: str, ts: str, action: str, actor: str | None, details_json: str
+    prev_hash: str, ts: str, action: str, actor: str | None, details_json: str, *, algo: str = "sha256"
 ) -> str:
-    """SHA-256 řetězce audit řádku — deterministický (kanonické pořadí polí)."""
+    """Hash řetězce audit řádku — deterministický (kanonické pořadí polí).
+
+    STP-022: ``algo`` — "sha256" (výchozí, backward compat) nebo "sha512".
+    Neznámý algoritmus → :class:`ValueError` (fail fast přes ``_genesis``).
+    """
+    _genesis(algo)  # validace algoritmu (neznámý → ValueError)
     payload = "\x1f".join(
         [prev_hash, ts, action, actor or "", details_json]
     )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return hashlib.new(algo, payload.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -64,22 +78,24 @@ class ChainReport:
     reason: str | None = None
 
 
-def verify_chain(rows: list[ChainRow]) -> ChainReport:
+def verify_chain(rows: list[ChainRow], *, algo: str = "sha256") -> ChainReport:
     """Přepočítá celý hash řetězec a ověří propojení.
 
     Řádky musí být seřazené vzestupně podle ``id`` (chronologicky). Ověření:
-    - první ``prev_hash`` == GENESIS
+    - první ``prev_hash`` == GENESIS pro daný algoritmus
     - každý ``hash`` == přepočtený hash z polí řádku
     - každý následující ``prev_hash`` == předchozí ``hash``
 
+    STP-022: ``algo`` — "sha256" (výchozí, backward compat) nebo "sha512".
     Vrací :class:`ChainReport` s ID prvního rozbitého řádku (pro report).
     """
+    genesis = _genesis(algo)  # fail fast na neznámý algoritmus
     if not rows:
         return ChainReport(ok=True, rows_checked=0)
 
-    prev = GENESIS
+    prev = genesis
     for row in rows:
-        expected = compute_audit_hash(row.prev_hash, row.ts, row.action, row.actor, row.details_json)
+        expected = compute_audit_hash(row.prev_hash, row.ts, row.action, row.actor, row.details_json, algo=algo)
         if row.hash != expected:
             return ChainReport(
                 ok=False,
@@ -97,7 +113,7 @@ def verify_chain(rows: list[ChainRow]) -> ChainReport:
         prev = row.hash
 
     first = rows[0]
-    if first.prev_hash != GENESIS:
+    if first.prev_hash != genesis:
         return ChainReport(
             ok=False,
             rows_checked=first.id,
@@ -177,6 +193,7 @@ class ManifestEntry:
     name: str  # název / rel. cesta souboru
     sha256: str  # SHA-256 obsahu
     size: int = 0
+    sha512: str | None = None  # STP-022 — volitelný SHA-512 (integrity vrstva)
 
 
 @dataclass(frozen=True)
@@ -194,10 +211,21 @@ def build_manifest(
     tool_version: str,
     files: list[tuple[str, bytes]],
     extra: dict[str, Any] | None = None,
+    *,
+    include_sha512: bool = False,  # STP-022 — SHA-512 v manifestu (opt-in)
 ) -> ExportManifest:
-    """Sestaví manifest z exportních souborů (název + obsah → SHA-256)."""
+    """Sestaví manifest z exportních souborů (název + obsah → SHA-256).
+
+    STP-022: ``include_sha512=True`` doplní i SHA-512 (deterministický hash
+    manifestu se změní — volitelné rozšíření integrity vrstvy).
+    """
     entries = tuple(
-        ManifestEntry(name=name, sha256=hashlib.sha256(content).hexdigest(), size=len(content))
+        ManifestEntry(
+            name=name,
+            sha256=hashlib.sha256(content).hexdigest(),
+            size=len(content),
+            sha512=hashlib.sha512(content).hexdigest() if include_sha512 else None,
+        )
         for name, content in sorted(files)
     )
     return ExportManifest(case_id=case_id, tool_version=tool_version, entries=entries, extra=extra or {})
@@ -207,12 +235,15 @@ def manifest_hash(manifest: ExportManifest) -> str:
     """Deterministický SHA-256 manifestu — kanonické JSON (seřazené klíče).
 
     Stejný vstup + verze STOPA = stejný hash (reprodukovatelnost exportu).
+    STP-022: SHA-512 entry se do kanonického payloadu počítá jen když je
+    přítomné (backward compat — staré manifesty bez sha512 mají stejný hash).
     """
     canonical = {
         "case_id": manifest.case_id,
         "tool_version": manifest.tool_version,
         "entries": [
-            {"name": e.name, "sha256": e.sha256, "size": e.size} for e in manifest.entries
+            {"name": e.name, "sha256": e.sha256, "size": e.size} | ({"sha512": e.sha512} if e.sha512 else {})
+            for e in manifest.entries
         ],
         "extra": manifest.extra,
     }

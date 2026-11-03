@@ -363,16 +363,20 @@ def _process_file_worker(
         algs.append("sha1")
     if profile.compute_sha256:
         algs.append("sha256")
+    if profile.compute_sha512:  # STP-022 — SHA-512 (forensic profil)
+        algs.append("sha512")
     hash_error: str | None = None
     try:
         if algs and wf.size_bytes > 0:
             digests = hash_file(abs_path, algs)
             rec.md5 = digests.get("md5")
             rec.sha256 = digests.get("sha256")
+            rec.sha512 = digests.get("sha512")
         elif algs:  # prázdný soubor — platné prázdné digesty
             digests = hash_bytes(b"", algs)
             rec.md5 = digests.get("md5")
             rec.sha256 = digests.get("sha256")
+            rec.sha512 = digests.get("sha512")
     except OSError as e:
         # hashing selhal (IO) — soubor se upsertuje bez hashů, ale signatura +
         # artifacts se zkouší dál (původní sekvenční chování — IO chyba nemusí
@@ -466,12 +470,13 @@ def process_source(
         progress(skipped, total)
 
     # dedupe napříč celým případem — seed z DB (jiné zdroje / předchozí běhy)
-    # oba hashy: SHA-256 profily i MD5-only (FTK eDiscovery)
+    # oba hashy: SHA-256 profily i MD5-only (FTK eDiscovery); STP-022: +SHA-512
     deduper = Deduper()
-    existing = db.conn.execute("SELECT sha256, md5, rel_path FROM files").fetchall()
+    existing = db.conn.execute("SELECT sha256, md5, sha512, rel_path FROM files").fetchall()
     deduper.seed(
         [(r["sha256"], r["rel_path"]) for r in existing]
         + [(r["md5"], r["rel_path"]) for r in existing]
+        + [(r["sha512"], r["rel_path"]) for r in existing]
     )
 
     # hash sets — normalizace na malá hex pro rychlé porovnání
@@ -537,7 +542,8 @@ def process_source(
             # ── dedupe napříč případem (FTK Advanced De-duplication) ──
             # hlavní vlákno, pořadí procházky → deterministický originál
             if profile.deduplicate:
-                for digest in (rec.sha256, rec.md5):  # SHA-256 profily i MD5-only (eDiscovery)
+                # SHA-256 profily i MD5-only (eDiscovery); STP-022: +SHA-512
+                for digest in (rec.sha256, rec.md5, rec.sha512):
                     original = deduper.check_and_register(digest, wf.rel_path)
                     if original is not None:
                         rec.is_duplicate_of = original

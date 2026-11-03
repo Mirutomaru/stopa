@@ -55,3 +55,28 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           node graph.test.mjs
+
+  security:
+    name: Security (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # STP-022 — pip-audit: známé zranitelnosti v závislostech (PyPI Advisory DB)
+      - name: Install dependencies + pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,web]"
+          pip install pip-audit
+
+      # Audit nainstalovaného prostředí; editovatelný stopa (git ref) vynechat —
+      # pip freeze ho obsahuje jako VCS link a pip-audit by se snažil buildovat.
+      - name: Audit dependencies
+        run: |
+          pip freeze | grep -v "^-e \|^stopa @\|^stopa==" > requirements.txt
+          pip-audit --no-deps -r requirements.txt

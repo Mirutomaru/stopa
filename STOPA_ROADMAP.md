@@ -68,8 +68,8 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 
 ## M. Security
 - **Stav:** 🔧 částečně | **Priorita:** P2
-- **Dokončeno:** Ed25519 podpisy, hash chaining audit logu, prompt injection ochrana RAG.
-- **Nedokončeno:** RBAC, pip-audit v CI, izolace parserů (sandbox).
+- **Dokončeno:** Ed25519 podpisy, hash chaining audit logu, prompt injection ochrana RAG. STP-022: SHA-512 v integrity vrstvě (audit chain `algo=`, per-algorithm GENESIS, manifesty opt-in), SHA-512 v pipeline (FORENSIC profil, one-pass hashing, dedupe + hash lookup), report CoC +SHA-512 sloupec, RBAC minimální (`domain/rbac.py` — actor atribuce explicitní > examiner, `strict=`), pip-audit CI job `security`.
+- **Nedokončeno:** izolace parserů (sandbox).
 
 ## N. Performance
 - **Stav:** ✅ hotovo | **Priorita:** P2
