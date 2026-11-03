@@ -1,37 +1,34 @@
-# STOPA — Checkpoint (DEV OS)
+# STOPA — Checkpoint (latest)
 
 **Datum:** 2026-11-03
-**Verze projektu:** 0.1.0, commit ``e0c34b3`` (STP-021) + předchozí `5f964f5` (STP-019 docs), `6d74ab3` (STP-019), `7360bab` (STP-020), `cd5aa25` (STP-018), `025c6c0` (vlna 3), `1b046ee` (vlna 2), `afc49a0` (vlna 1)
-**Poslední dokončený úkol:** STP-021 (Performance: stream parsing velkých E01 + progress monitoring — oblast N/O, P2) — před ním STP-019 (AI governance + PII redaktor), STP-020 (Report engine 9→20 sekcí), STP-018 (Timeline Intelligence 2.0), STP-017 (ETAPA B vlna 3)
-**Aktuální fáze:** Oblast N/O hotová — čeká na zahájení **STP-022** (Security: SHA-512 + RBAC minimální + pip-audit CI, oblast M, P2); ETAPA B vlny 1–3 hotové
+**Verze aplikace:** 0.1.0 (`pyproject.toml`)
+**Commit:** ``9707cd8`` (předchozí: `e0c34b3` STP-021, `5f964f5`, `6d74ab3`, `7360bab`, `cd5aa25`)
 
-## Aktuální stav
-| Metrika | Hodnota |
-|---|---|
-| Dokončené úkoly (TASKS.md) | **23** |
-| Čekající (BACKLOG/READY) | **2** (BACKLOG: STP-022, STP-023) |
-| Blokované | 0 |
-| Full suite | **1117 passed, 1 skipped** (~14s) |
-| Ruff | clean (`src/stopa tests scripts`) |
-| Coverage matice | covered **51 / 232**, deterministická (SHA-256 diff ✓) |
+## Hotovo v tomto checkpointu
+**STP-022 — Security: SHA-512 integrity vrstva + RBAC minimální + pip-audit CI** (oblast M, P2)
 
-## Co se změnilo (STP-021)
-- `src/stopa/data/ewf_container.py` — `_ewf_read()`/`_aff_read()` → chunked generátory
-  `_ewf_chunks()`/`_aff_chunks()`; nové veřejné API **`stream_to_raw(path, typ, dest, progress=None)`**
-  (1 MiB chunky přímo z kontejneru do RAW souboru — RAM peak z GB na ~1 MiB); `read_container()` = wrapper.
-- `src/stopa/data/image_pipeline.py` — `process_disk_image()` + keyword-only `extract_progress`;
-  extrakce E01/AFF4 přes `stream_to_raw(..., progress=...)`.
-- `src/stopa/web/app.py` — job registry `_jobs` + lock; `SourceIn.background: bool = False`
-  (default sync = backward compat); async ingest = daemon thread s vlastním DB spojením
-  (per-thread `sqlite3.connect` → thread-safe bez globálního locku); nový endpoint
-  **`GET /api/cases/{case_id}/processing`** (aktivní běh + poslední 10).
-- GUI — checkbox „pozadí" (`index.html`) + async ingest polluje `/processing` 500 ms,
-  status bar zobrazuje živý progress (`modules.js`).
-- `tests/test_stp021.py` (nový) — **7 testů**
-- STOPA_CHANGELOG.md (+docs zrcadlo), STOPA_ROADMAP.md (N ✅ hotovo, O +Processing Monitor)
-- `.stopa-dev/*` — NEXT_ACTION, PROJECT_STATE, TASKS, CHANGELOG, FEATURE_REGISTRY (F-052), TEST_REGISTRY (T-073), checkpoint
+### Změny
+- `domain/integrity.py` — `compute_audit_hash(..., algo=)` / `verify_chain(rows, algo=)`;
+  per-algorithm GENESIS (`_GENESIS_BY_ALGO`: sha256 = 0×64, sha512 = 0×128) + fail-fast validace;
+  `build_manifest(include_sha512=True)` opt-in, `ManifestEntry.sha512` (default None).
+- nový `domain/rbac.py` — čistá logika: `normalize_actor`, `require_actor` (+`ActorError`),
+  `resolve_actor`; `db.log_operation(strict=)` — atribuce explicitní actor > case examiner > None.
+- `models.py` — `FileRecord.sha512`, `ProcessingProfile.compute_sha512`.
+- `domain/profiles.py` — FORENSIC `compute_sha512=True` (ediscovery/quick ne).
+- `data/db.py` — sloupec `files.sha512` v SCHEMA + idempotentní migrace; `upsert_file`,
+  `row_to_record` defenzivně, `search_by_hash()` přes SHA-256/SHA-512/MD5.
+- `pipeline.py` — one-pass hashing +SHA-512 podle profilu (hashlib multi-hash); dedupe seed/check.
+- `domain/report.py` + `presentation/case_report.py` — CoC manifest +SHA-512 sloupec (jen když existuje).
+- `.github/workflows/ci.yml` — nový job `security` s pip-audit
+  (`pip freeze | grep -v "^-e \|^stopa @\|^stopa==" > requirements.txt && pip-audit --no-deps -r requirements.txt`).
 
-## Jak pokračovat (STP-022)
-1. Přečíst `src/stopa/domain/integrity.py` — aktuální hash vrstva (SHA-256/MD5 + Ed25519)
-2. Přečíst `src/stopa/data/db.py` (`log_operation`) — kde je actor povinný/nebo ne
-3. Přečíst `.github/workflows/ci.yml` — aktuální CI (ruff + pytest + jsdom)
+### Testy
+- **32 nových testů** (`tests/test_stp022.py`) — všechny zelené.
+- Full suite: **1149 passed, 1 skipped** (baseline 1117 + 32). Ruff clean.
+
+### Registry / docs
+- F-053 (FEATURE_REGISTRY), T-074 (TEST_REGISTRY), TASKS STP-022 DONE,
+  PROJECT_STATE aktualizován, NEXT_ACTION → STP-023, changelogy (kořen + zrcadlo) + DEV OS CHANGELOG.
+
+## Další krok
+**STP-023 — Export: JSONL/XML/STIX formáty** (oblast K/Q, P3) — viz `NEXT_ACTION.md`.

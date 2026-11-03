@@ -226,9 +226,18 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
   + polling status baru. **7 nových testů** (`tests/test_stp021.py`).
 
 ## STP-022 — Security: SHA-512 + RBAC minimální + pip-audit CI
-- **Oblast:** M | **Priorita:** P2 | **Stav:** BACKLOG
+- **Oblast:** M | **Priorita:** P2 | **Stav:** DONE
 - **Popis:** SHA-512 v integrity vrstvě, minimální RBAC (actor povinný), pip-audit do CI.
 - **Závislosti:** —
+- **Dokončeno:** 2026-11-03 | Commit: ``9707cd8``
+- **Detaily:** `compute_audit_hash/verify_chain(algo="sha256|sha512")` + per-algorithm GENESIS;
+  manifesty `build_manifest(include_sha512=True)` opt-in (backward compat); FORENSIC profil
+  počítá SHA-512 v jednom průchodu (`ProcessingProfile.compute_sha512`, sloupec `files.sha512`
+  + migrace, dedupe + `search_by_hash()` přes SHA-256/SHA-512/MD5); report CoC manifest
+  +SHA-512 sloupec (jen když existuje); nový `domain/rbac.py` (`normalize_actor`,
+  `require_actor`+`ActorError`, `resolve_actor`) — `log_operation(strict=)` atribuce
+  explicitní actor > case examiner > None; CI job `security` s pip-audit. **32 nových testů**
+  (`tests/test_stp022.py`).
 
 ## STP-023 — Export: JSONL/XML/STIX formáty
 - **Oblast:** K/Q | **Priorita:** P3 | **Stav:** BACKLOG

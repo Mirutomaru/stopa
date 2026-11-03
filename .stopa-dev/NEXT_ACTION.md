@@ -1,70 +1,57 @@
 # STOPA — NEXT ACTION
 
 ## Aktuální fáze
-Oblast N/O (Performance/UI) — **STP-021 hotový** (stream parsing velkých E01 + web Processing Monitor);
-předtím STP-019 AI governance, STP-020 report engine 9→20 sekcí, STP-018 Timeline Intelligence 2.0,
-ETAPA B vlny 1–3 hotové.
+**STP-022 hotový** (Security: SHA-512 integrity vrstva + RBAC minimální + pip-audit CI) — oblast M.
+Commit: ``9707cd8``; full suite **1149 passed, 1 skipped**, ruff clean.
 
-## ID aktuálního úkolu
-**STP-022** (READY — čeká na zahájení)
+## Další úkol
+### STP-023 — Export: JSONL/XML/STIX formáty (oblast K/Q, P3)
+**Popis:** Rozšíření export engine o JSONL, XML, STIX/UCO.
 
-## Název úkolu
-Security: SHA-512 + RBAC minimální + pip-audit CI (oblast M, priorita P2)
+**Kontext pro start:**
+- Existující export: `src/stopa/domain/export.py` — stabilní sloupcová schémata
+  (`ARTIFACT_COLUMNS`, `TIMELINE_COLUMNS`, `CORRELATION_COLUMNS`) + `to_csv()` / `to_json()`.
+- CLI: `stopa export <case> --what artifacts|timeline|correlations --format csv|json [--limit N] [--out SOUBOR]`
+  (`src/stopa/cli.py`).
+- Testy: `tests/test_e10.py` (17) — pattern pro nové formáty.
 
-## Proč se úkol provádí
-Integrity vrstva má jen SHA-256/MD5 — chybí SHA-512 pro moderní požadavky. RBAC je minimální
-(actor není povinný u všech operací). pip-audit běží ručně, ne v CI. Oblast M, priorita **P2**.
+**Navrhovaný design:**
+1. **JSONL** — `to_jsonl()` v `domain/export.py`: jeden JSON objekt na řádek
+   (`json.dumps(..., ensure_ascii=False)`), deterministické pořadí klíčů podle schématu;
+   CLI `--format jsonl`.
+2. **XML** — `to_xml()`: ElementTree (stdlib), kořen `<stopa-export>`, sekce podle `--what`;
+   atributy = sloupce, entity escapované; deterministický výstup (bez timestampů v hlavičce
+   nebo s explicitním `generated_at` parametrem).
+3. **STIX/UCO** — minimální mapping: artifact → STIX 2.1 `indicator`/`observed-data`,
+   timeline event → `observed-data` s `first_observed/last_observed`; UCO jako nadstavba
+   (cybox-like). Začít s `to_stix()` pro artifacts + timeline; correlations = `relationship`.
+4. CLI: `--format jsonl|xml|stix` (rozšíření existujícího dispatche).
+5. Testy: nový `tests/test_stp023.py` — roundtrip JSONL, XML parse-back, STIX struktura
+   (validace klíčových polí), determinismus výstupů.
 
-## Co již bylo provedeno (STP-021)
-- `data/ewf_container.py` — `_ewf_read()`/`_aff_read()` refaktorovány na chunked generátory
-  `_ewf_chunks()`/`_aff_chunks()`; nové veřejné API `stream_to_raw(path, typ, dest, progress=None)`
-  (1 MiB chunky přímo z kontejneru do RAW souboru — **RAM peak z GB na ~1 MiB**);
-  `read_container()` = tenký wrapper pro backward compat.
-- `data/image_pipeline.py` — `process_disk_image()` + keyword-only `extract_progress`;
-  extrakce E01/AFF4 přes `stream_to_raw(..., progress=...)`.
-- `web/app.py` — job registry `_jobs` + lock; `SourceIn.background: bool = False` (default sync);
-  async ingest = daemon thread s vlastním DB spojením (per-thread `sqlite3.connect` → thread-safe);
-  nový endpoint `GET /api/cases/{case_id}/processing` (aktivní běh + poslední 10).
-- GUI — checkbox „pozadí" ve formuláři zdroje; async ingest polluje `/processing` každých 500 ms,
-  status bar zobrazuje živý progress („Zpracovávám zdroj: … — done/total").
-- **7 nových testů** (`tests/test_stp021.py`); full suite **1117 passed, 1 skipped**, ruff clean.
+**Backward compat:** CSV/JSON nezměněné; nové formáty = opt-in přes `--format`.
 
-## Které soubory byly změněny (STP-021)
-`src/stopa/data/ewf_container.py`, `src/stopa/data/image_pipeline.py`, `src/stopa/web/app.py`,
-`src/stopa/web/static/index.html`, `src/stopa/web/static/js/components/modules.js`,
-`tests/test_stp021.py` (nový), STOPA_CHANGELOG.md (+docs zrcadlo), STOPA_ROADMAP.md, `.stopa-dev/*`.
+## Hotové v této fázi (STP-022)
+- SHA-512: audit chain (`algo=`, per-algorithm GENESIS), manifesty opt-in, pipeline one-pass
+  (FORENSIC profil), sloupec `files.sha512` + migrace, dedupe + hash lookup.
+- Report CoC: SHA-512 sloupec jen když existuje.
+- RBAC minimální: `domain/rbac.py`, `log_operation(strict=)` — explicitní actor > examiner.
+- CI: job `security` s pip-audit (PyPI Advisory DB).
+- Testy: 32 nových (`tests/test_stp022.py`), full suite **1149 passed, 1 skipped**.
 
-## Které soubory je potřeba prostudovat (před STP-022)
-1. `src/stopa/domain/integrity.py` — aktuální hash vrstva (SHA-256/MD5 + Ed25519)
-2. `src/stopa/data/db.py` — audit log operací (`log_operation`) — kde je actor povinný/nebo ne
-3. `.github/workflows/ci.yml` — aktuální CI (ruff + pytest + jsdom)
+## Registry
+- Feature: **F-053** SHA-512 integrity vrstva + RBAC minimální + pip-audit CI.
+- Testy: **T-074** `tests/test_stp022.py` (32).
 
-## Co zbývá dokončit (STP-022)
-1. SHA-512 v integrity vrstvě (hashing + manifesty + report)
-2. Minimální RBAC: actor povinný u všech auditovaných operací
-3. pip-audit do CI workflowu
+## Checklist dokončení STP-023
+- [ ] Audit existujícího export engine (`domain/export.py`, CLI dispatch)
+- [ ] Implementace JSONL + XML + STIX/UCO
+- [ ] CLI `--format jsonl|xml|stix`
+- [ ] Testy (nový soubor, roundtrip + determinismus)
+- [ ] Docs: changelog, roadmap K/Q, DEV OS registry (F-054/T-075), checkpoint
+- [ ] Verify: ruff clean + full suite ≥1149 + commit
 
-## Jaké testy spustit
-```bash
-.venv/bin/python -m pytest tests/test_stp021.py -q   # stream + monitor (STP-021)
-.venv/bin/ruff check src/stopa tests scripts         # lint (musí být clean)
-.venv/bin/python -m pytest -q                        # plná sada (baseline 1117 passed, 1 skipped)
-```
-
-## Jak poznat úspěšné dokončení
-- SHA-512 v integrity vrstvě + manifestech
-- Actor povinný u auditovaných operací (RBAC minimální)
-- pip-audit běží v CI
-- Ruff clean na `src/stopa tests scripts`
-- Plná sada bez regresí (≥ baseline 1117 passed, 1 skipped)
-- Commit `feat(security): STP-022 — SHA-512 + RBAC minimální + pip-audit CI ...`
-
-## Co nesmí být změněno
-- Stream parsing E01/AFF4 (STP-021) — backward compat `read_container()` wrapper
-- Web Processing Monitor (STP-021) — sync default ingest, job registry kontrakt
-- C3 registry: `build_registry()` vynucuje 1:1 sync s pipeline + shodu verzí, jinak `RegistryError`
-- Neodstraňovat existující testy kvůli zelenému výsledku; nepoužívat mockování místo kritické logiky
-- Originální důkazní data zůstávají neměnná
-
-## Další úkol po STP-022
-STP-023 (Export: JSONL/XML/STIX formáty, P3).
+## Poznámky
+- Domain = čistá logika bez IO; XML/JSONL/STIX buildery patří do `domain/export.py`.
+- Determinismus výstupů je klíčový (testy srovnávají hash) — žádné implicitní timestampy.
+- STIX: neimplementovat celou specifikaci — jen minimální court-ready mapping.
