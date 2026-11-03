@@ -2,6 +2,20 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-03 (STP-023 Export: JSONL/XML/STIX formáty)
+
+### Added (oblast K/Q, P3)
+- **JSONL export** (`to_jsonl`) — jeden objekt na řádek, streamovací formát pro velké sady; `ensure_ascii=False` (česky čitelné).
+- **XML export** (`to_xml`) — deterministický XML dokument přes ElementTree (UTF-8 deklarace, `ET.indent`); kořen `stopa_<dataset>`, záznamy `<artifact>/<event>/<correlation>`; None hodnoty vynechány, dict/list jako JSON.
+- **STIX 2.1 bundle export** (`to_stix_bundle`) — validní STIX 2.1 bundle: artefakty → objekty `file`/`message` (konzervativní mapa typů), ostatní datasety → `x-stopa-record`; původní záznamy v rozšíření `x-stopa`; **deterministická UUIDv5 ID** ze STOPA namespace (reprodukovatelnost C4 — stejný vstup = stejné bundle).
+- CLI `stopa export --format` rozšířen: `csv|json|jsonl|xml|stix` (default csv); C4 manifest + integrity checkpoint fungují pro všechny formáty.
+
+### Testy
+- **17 nových testů** (`tests/test_stp023.py`) — JSONL řádkování/česky/prázdný vstup; XML validita/root tagy/determinismus; STIX struktura/mapping typů/deterministická ID/ASCII-safe name/x-stopa rozšíření; CLI export do souboru (JSONL/XML) + stdout (STIX) + C4 manifest.
+
+### Backward compat
+- Stávající `to_csv`/`to_json` a sloupcová schémata nezměněna; default formát zůstává CSV.
+
 ## [Unreleased] — 2026-11-03 (STP-022 Security: SHA-512 integrity vrstva + RBAC minimální + pip-audit CI)
 
 ### Added (oblast M, priorita P2 — court-ready integrity + atribuce operací)

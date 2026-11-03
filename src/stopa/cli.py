@@ -13,7 +13,7 @@ Použití:
   stopa audit <case_id> [--limit N] [-v]                 # E1 — neměnná stopa operací
   stopa backup <case_id> [--out DIR]                     # E1 — záloha case DB (SQLite .backup + integrity)
   stopa report <case_id> [--format html|pdf] [--out DIR] [--lang cs|en]  # court-ready report + chain of custody
-  stopa export <case_id> --what artifacts|timeline|correlations --format csv|json [--limit N] [--out SOUBOR]
+  stopa export <case_id> --what artifacts|timeline|correlations --format csv|json|jsonl|xml|stix [--limit N] [--out SOUBOR]
   stopa serve [--port 8473]                                 # web GUI (FastAPI)
   stopa profiles
 
@@ -479,6 +479,9 @@ def cmd_export(args: argparse.Namespace) -> int:
         timeline_records,
         to_csv,
         to_json,
+        to_jsonl,
+        to_stix_bundle,
+        to_xml,
     )
 
     db = _open_db(args.case_id)
@@ -494,7 +497,13 @@ def cmd_export(args: argparse.Namespace) -> int:
 
     if args.format == "csv":
         text = to_csv(records, columns)
-    else:
+    elif args.format == "jsonl":
+        text = to_jsonl(records)
+    elif args.format == "xml":
+        text = to_xml(records, dataset=args.what)
+    elif args.format == "stix":
+        text = to_stix_bundle(records, dataset=args.what)
+    else:  # json (default)
         text = to_json(records)
 
     out_path = Path(args.out).expanduser() if args.out else None
@@ -1180,13 +1189,13 @@ def build_parser() -> argparse.ArgumentParser:
                        help="jazyk reportu (E10 i18n; default: cs)")
     rep_p.set_defaults(func=cmd_report)
 
-    exp_p = sub.add_parser("export", help="E10 — export dat případu do CSV/JSON")
+    exp_p = sub.add_parser("export", help="E10/STP-023 — export dat případu do CSV/JSON/JSONL/XML/STIX")
     exp_p.add_argument("case_id")
     exp_p.add_argument("--what", choices=["artifacts", "timeline", "correlations"],
                        default="artifacts",
                        help="co exportovat (default: artifacts)")
-    exp_p.add_argument("--format", choices=["csv", "json"], default="csv",
-                       help="výstupní formát (default: csv)")
+    exp_p.add_argument("--format", choices=["csv", "json", "jsonl", "xml", "stix"], default="csv",
+                       help="výstupní formát (default: csv; STP-023: jsonl/xml/stix)")
     exp_p.add_argument("--limit", type=int, default=None,
                        help="max. počet záznamů (artifacts/timeline; default: vše)")
     exp_p.add_argument("--out", metavar="SOUBOR",

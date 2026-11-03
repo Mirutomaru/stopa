@@ -56,9 +56,9 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 - **Nedokončeno:** Case Mgmt 2.0 (RBAC minimální — actor je volitelný string).
 
 ## K. Export Engine
-- **Stav:** 🔧 částečně | **Priorita:** P2
-- **Dokončeno:** CSV/JSON exporty s manifestem pro reprodukovatelnost (`domain/export.py`).
-- **Nedokončeno:** STIX/UCO/Plaso/JSONL/XML formáty.
+- **Stav:** ✅ hotovo | **Priorita:** P2
+- **Dokončeno:** CSV/JSON exporty s manifestem pro reprodukovatelnost (`domain/export.py`). STP-023: **JSONL** (streamovací, 1 objekt/řádek), **XML** (deterministický ElementTree, UTF-8) a **STIX 2.1 bundle** (artefakty → file/message objekty + `x-stopa` rozšíření, deterministická UUIDv5 ID pro C4 reprodukovatelnost); CLI `--format csv|json|jsonl|xml|stix`.
+- **Nedokončeno:** Plaso formát (volitelné).
 
 ## L. Report Engine
 - **Stav:** 🔧 částečně | **Priorita:** P1
@@ -88,5 +88,5 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 
 ## Q. Interoperability
 - **Stav:** 🔧 částečně | **Priorita:** P3
-- **Dokončeno:** TSK/libewf integrace, iMessage cloud CSV/XLSX, mobilní logical exporty.
-- **Nedokončeno:** STIX/UCO výstup (společné s K).
+- **Dokončeno:** TSK/libewf integrace, iMessage cloud CSV/XLSX, mobilní logical exporty. STP-023: **STIX 2.1 výstup** (společné s K — `to_stix_bundle`, deterministická UUIDv5 ID).
+- **Nedokončeno:** UCO mapping (nad STIX), Plaso import.
