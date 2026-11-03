@@ -1,7 +1,7 @@
 # STOPA CHECKPOINT — latest
 
 **Datum:** 2026-11-03
-**Verze projektu:** 0.1.0, commit (STP-020) + předchozí `cd5aa25` (STP-018), `025c6c0` (vlna 3), `1b046ee` (vlna 2), `afc49a0` (vlna 1)
+**Verze projektu:** 0.1.0, commit `7360bab` (STP-020) + předchozí `cd5aa25` (STP-018), `025c6c0` (vlna 3), `1b046ee` (vlna 2), `afc49a0` (vlna 1)
 **Poslední dokončený úkol:** STP-020 (Report engine 9 → 20 sekcí — oblast L, P1) — před ním STP-018 (Timeline Intelligence 2.0), STP-017 (ETAPA B vlna 3), STP-016 (vlna 2), STP-012c (`2549ce6`), STP-012b (`19a458d`), STP-012 (`e227929`), STP-013..015 (vlna 1)
 **Aktuální fáze:** Oblast L hotová — čeká na zahájení **STP-019** (AI governance + PII redaktor, oblast H/M, P2); ETAPA B vlny 1–3 hotové
 

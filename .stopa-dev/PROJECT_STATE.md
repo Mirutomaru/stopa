@@ -33,7 +33,7 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-020 — Report engine: 9 → 20 sekcí** (oblast L, P1)
+**STP-020 — Report engine: 9 → 20 sekcí** (oblast L, P1) | Commit: `7360bab`
 Rozšíření HTML/PDF reportu z 9 na **20 sekcí**: titulní strana (cover), 10 Metodika
 analýzy, 11 Nástroje a verze (env_snapshot C5 + E12 diagnostics), 12 Omezení analýzy,
 13 Závěr, 14 Provenience timestampů, 15 Evidence lineage, 16 Integrity Ed25519,

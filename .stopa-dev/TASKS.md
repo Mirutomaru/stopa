@@ -197,7 +197,7 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
   backward compat sekcí 1–9 zachována; ~60 nových i18n klíčů cs/en; defenzivní
   naplnění z case DB; **14 nových testů** (`tests/test_report.py`, třída
   `TestStp020Sections`); full suite **1087 passed, 1 skipped**, ruff clean.
-- **Dokončeno:** 2026-11-03 | Commit: (STP-020)
+- **Dokončeno:** 2026-11-03 | Commit: `7360bab`
 
 ## STP-021 — Performance: stream parsing velkých E01 + progress monitoring
 - **Oblast:** N/O | **Priorita:** P2 | **Stav:** BACKLOG
