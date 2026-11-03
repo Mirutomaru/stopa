@@ -271,13 +271,13 @@ def _make_v10_db(path: Path) -> None:
 
 class TestMigrationV10ToV11:
     def test_old_db_migrates_up(self, tmp_path: Path):
-        """Stará DB (v10) → open → v11, confidence remapováno, data zachována."""
+        """Stará DB (v10) → open → aktuální verze, confidence remapováno, data zachována."""
         p = tmp_path / "old.db"
         _make_v10_db(p)
 
         d = CaseDB(p)
         try:
-            assert d.schema_version() == SCHEMA_VERSION == 11
+            assert d.schema_version() == SCHEMA_VERSION
             # confidence remap: verified→confirmed, inferred→possible
             cors = {c["relation"]: c["confidence"] for c in d.list_correlations("c1")}
             assert cors["same_contact"] == "confirmed"
@@ -300,14 +300,14 @@ class TestMigrationV10ToV11:
             d.close()
 
     def test_migration_idempotent(self, tmp_path: Path):
-        """Druhé otevření už v11 DB → migrace no-op, data stabilní."""
+        """Druhé otevření migrované DB → migrace no-op, data stabilní."""
         p = tmp_path / "old.db"
         _make_v10_db(p)
         d = CaseDB(p)
         d.close()
         d2 = CaseDB(p)
         try:
-            assert d2.schema_version() == 11
+            assert d2.schema_version() == SCHEMA_VERSION
             cors = {c["relation"]: c["confidence"] for c in d2.list_correlations("c1")}
             assert cors["same_contact"] == "confirmed"
             assert cors["temporal_overlap"] == "possible"

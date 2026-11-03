@@ -101,6 +101,7 @@ from stopa.data.db import CaseDB
 from stopa.data.ingest import WalkedFile, walk_source
 from stopa.domain.bad_extension import extension_of, is_bad_extension
 from stopa.domain.dedupe import Deduper
+from stopa.domain.entities import extract_entities
 from stopa.domain.hashing import hash_bytes, hash_file
 from stopa.domain.lineage import config_hash
 from stopa.domain.profiles import get_profile
@@ -112,6 +113,7 @@ from stopa.domain.reproducibility import (
 )
 from stopa.domain.signatures import detect_signature
 from stopa.domain.timeline_anomaly import AnomalyContext, detect_anomalies
+from stopa.domain.timeline_intel import analyze_timeline
 from stopa.models import Artifact, FileRecord, ProcessingProfile, ProcessResult
 
 log = logging.getLogger("stopa.pipeline")
@@ -583,6 +585,13 @@ def process_source(
                     )
                     if flags:
                         a.anomaly_flags = tuple(flags)
+                    # STP-018 — normalizované entity subjektu (pro detekci rozporů);
+                    # čistá logika bez IO, defenzivně (chyba extrakce ≠ pád pipeline).
+                    try:
+                        subject_values = tuple(sorted({e.value for e in extract_entities(a)}))
+                    except Exception:  # noqa: BLE001 — analytický bonus, ne kritická cesta
+                        log.debug("subject extraction failed for artifact %s", a.id)
+                        subject_values = ()
                     db.add_timeline_event(
                         source_id=source_id,
                         artifact_id=a.id,
@@ -595,6 +604,8 @@ def process_source(
                         parser_version=a.parser_version,
                         extracted_at=a.extracted_at,
                         anomaly_flags=tuple(flags),
+                        ts_origin=getattr(a, "ts_origin", None) or "source",
+                        subject_values=subject_values,
                     )
                     # průběžné doplnění kontextu — duplikát detekce + rozšiřování okna
                     key = f"{a.artifact_type}|{a.title or ''}|{wf.rel_path}"
@@ -664,6 +675,40 @@ def process_source(
         duration_ms=int((time.monotonic() - _t0) * 1000),
     )
     return result
+
+
+def run_timeline_intel(
+    db: CaseDB, window_seconds: float = 60.0
+) -> dict[str, int]:
+    """STP-018 Timeline Intelligence 2.0 — post-pass nad celou case DB.
+
+    Běží po zpracování zdrojů (CLI ``add`` / web process) nebo explicitně
+    (``stopa timeline --intel``). Čistá logika z ``domain/timeline_intel.py``:
+    rozpory (souběžná aktivita subjektu) + duplikáty napříč zdroji. Výsledek se
+    materializuje do ``timeline_events`` (group ID + kanonické flagy) —
+    idempotentní, deterministický, bez dotyku původních artifactů.
+
+    Vrací souhrn pro logování/UI: počet událostí, rozporových skupin a duplikátů.
+    """
+    db.clear_timeline_intel_groups()
+    events = db.list_timeline_events()
+    result = analyze_timeline(events, window_seconds=window_seconds)
+    updated = db.set_timeline_intel_groups(
+        result.event_contradiction_groups, result.event_dup_groups
+    )
+    log.info(
+        "timeline intel: %d událostí → %d rozporových skupin, %d dup. skupin (%d řádků upraveno)",
+        len(events),
+        len(result.contradictions),
+        len(result.dup_groups),
+        updated,
+    )
+    return {
+        "events": len(events),
+        "contradiction_groups": len(result.contradictions),
+        "dup_groups": len(result.dup_groups),
+        "updated_rows": updated,
+    }
 
 
 def _case_id_for_source(db: CaseDB, source_id: str) -> str | None:

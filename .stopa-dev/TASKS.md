@@ -156,9 +156,23 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dokončeno:** 2026-11-03 | Commit: (vlna 3)
 
 ## STP-018 — Timeline Intelligence 2.0
-- **Oblast:** E | **Priorita:** P2 | **Stav:** READY
-- **Popis:** Rozpory v timeline, duplikáty, přesnost timestampů (source vs derived).
+- **Oblast:** E | **Priorita:** P2 | **Stav:** DONE
+- **Popis:** Rozpory v timeline, duplikáty napříč zdroji, přesnost timestampů (source vs derived).
 - **Závislosti:** STP-016
+- **Dotčené moduly:** `src/stopa/domain/timeline_intel.py` (nový čistý modul bez IO),
+  `data/db.py` (SCHEMA_VERSION 11→**12**, nové sloupce `timeline_events`, migrace
+  `_migrate_timeline_intel()`, metody `set/clear_timeline_intel_groups()`),
+  `models.py` (`Artifact.ts_origin`), `pipeline.py` (insert subject_values+ts_origin,
+  post-pass `run_timeline_intel()`), `cli.py` (`add` post-pass + `timeline --intel [--window N]`),
+  `web/app.py` (POST `/api/cases/{id}/timeline/intel`), `domain/report.py` (podsekce 8.1),
+  `domain/i18n.py`, `presentation/case_report.py`, `domain/export.py`.
+- **Výsledek:** tři analytické vrstvy — rozpory `concurrent_activity` (union-find,
+  deterministické group ID), duplikáty napříč zdroji `cross_source_duplicate` (provenience
+  všech výskytů) a timestamp provenance (`ts_origin` + klasifikace přesnosti); schéma v12
+  (idempotentní migrace bez ztráty dat); post-pass po ingestu + explicitní CLI/web; report
+  podsekce Timeline Intelligence 2.0; export rozšířen o nové sloupce; **32 nových testů**
+  (`tests/test_timeline_intel.py`); full suite **1073 passed, 1 skipped**, ruff clean.
+- **Dokončeno:** 2026-11-03 | Commit: (STP-018)
 
 ## STP-019 — AI governance + PII redaktor
 - **Oblast:** H/M | **Priorita:** P2 | **Stav:** BACKLOG
@@ -166,9 +180,15 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Závislosti:** —
 
 ## STP-020 — Report engine: 9 → 20 sekcí
-- **Oblast:** L | **Priorita:** P1 | **Stav:** BACKLOG
+- **Oblast:** L | **Priorita:** P1 | **Stav:** READY
 - **Popis:** Titulní strana, metodika, nástroje+verze, omezení, závěr + další sekce.
 - **Závislosti:** —
+- **Dotčené moduly:** `src/stopa/domain/report.py` (SECTIONS + build_html),
+  `src/stopa/presentation/case_report.py` (stavba ReportData), `domain/i18n.py`,
+  případně `web/app.py` (report endpoint).
+- **Akceptační kritéria:** report obsahuje nové sekce (titulní strana, metodika,
+  nástroje+verze, omezení, závěr); existující 9 sekcí se nemění (backward compat);
+  i18n cs/en; testy na syntetickém případě; plná sada bez regresí.
 
 ## STP-021 — Performance: stream parsing velkých E01 + progress monitoring
 - **Oblast:** N/O | **Priorita:** P2 | **Stav:** BACKLOG

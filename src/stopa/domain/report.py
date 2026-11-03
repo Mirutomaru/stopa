@@ -86,6 +86,9 @@ class TimelineEvent:
 
     ``ts_utc`` je ISO řetězec z case DB; lokální čas počítá build_html()
     přes ``ReportData.timezone_name`` (case TZ, default Europe/Prague).
+
+    STP-018 Timeline Intelligence 2.0 — analytická pole (defaulty = staré
+    výstupy se nemění): provenience timestampu + ID skupin rozporů/duplikátů.
     """
 
     ts_utc: str | None
@@ -94,6 +97,10 @@ class TimelineEvent:
     rel_path: str | None = None
     confidence: float | None = None
     anomaly_flags: tuple[str, ...] = ()
+    # STP-018 — provenience + analytické skupiny (None/() = nedetekováno)
+    ts_origin: str | None = None  # "source" | "derived"
+    contradiction_group_id: str | None = None  # ID rozporové skupiny (souběžná aktivita)
+    dup_group_id: str | None = None  # ID duplikátové skupiny napříč zdroji
 
 
 @dataclass(frozen=True)
@@ -500,6 +507,60 @@ def build_html(data: ReportData, lang: str | None = None) -> str:
             )
     else:
         parts.append(f"<p class='small'>{t('empty_timeline', L)}</p>")
+
+    # ── STP-018: Timeline Intelligence 2.0 (rozpory + duplikáty) ─────
+    contra_events = [e for e in data.timeline_events if e.contradiction_group_id]
+    dup_events = [e for e in data.timeline_events if e.dup_group_id]
+    if contra_events or dup_events:
+        parts.append("<h3>8.1 Timeline Intelligence 2.0</h3>")
+        if contra_events:
+            by_group: dict[str, list[TimelineEvent]] = {}
+            for ev in sorted(contra_events, key=lambda x: (x.contradiction_group_id or "", x.ts_utc or "")):
+                by_group.setdefault(ev.contradiction_group_id or "?", []).append(ev)
+            parts.append(
+                f"<p class='small'>{t('intel_contradictions', L).format(n=len(contra_events))}</p>"
+            )
+            for gid, items in sorted(by_group.items()):
+                parts.append(f"<p><b>{_esc(gid)}</b></p>")
+                parts.append(
+                    "<table><tr>"
+                    f"<th>{t('th_time_utc', L)}</th>"
+                    f"<th>{t('th_event_type', L)}</th>"
+                    f"<th>{t('th_event', L)}</th>"
+                    f"<th>{t('th_file', L)}</th></tr>"
+                )
+                for ev in items:
+                    parts.append(
+                        f"<tr><td class='mono'>{_esc(_fmt_dt(_parse_iso(ev.ts_utc)))}</td>"
+                        f"<td>{_esc(ev.event_type)}</td>"
+                        f"<td>{_esc((ev.title or '')[:120])}</td>"
+                        f"<td class='mono small'>{_esc(ev.rel_path or '—')}</td></tr>"
+                    )
+                parts.append("</table>")
+        if dup_events:
+            by_group = {}
+            for ev in sorted(dup_events, key=lambda x: (x.dup_group_id or "", x.ts_utc or "")):
+                by_group.setdefault(ev.dup_group_id or "?", []).append(ev)
+            parts.append(
+                f"<p class='small'>{t('intel_duplicates', L).format(n=len(dup_events))}</p>"
+            )
+            for gid, items in sorted(by_group.items()):
+                parts.append(f"<p><b>{_esc(gid)}</b> — {len(items)}×</p>")
+                parts.append(
+                    "<table><tr>"
+                    f"<th>{t('th_time_utc', L)}</th>"
+                    f"<th>{t('th_event_type', L)}</th>"
+                    f"<th>{t('th_event', L)}</th>"
+                    f"<th>{t('th_file', L)}</th></tr>"
+                )
+                for ev in items:
+                    parts.append(
+                        f"<tr><td class='mono'>{_esc(_fmt_dt(_parse_iso(ev.ts_utc)))}</td>"
+                        f"<td>{_esc(ev.event_type)}</td>"
+                        f"<td>{_esc((ev.title or '')[:120])}</td>"
+                        f"<td class='mono small'>{_esc(ev.rel_path or '—')}</td></tr>"
+                    )
+                parts.append("</table>")
 
     # ── E10: korelace entity (s evidence odkazy) ───────────────
     parts.append(f"<h2>9. {t('sec_correlations', L)}</h2>")

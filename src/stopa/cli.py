@@ -31,7 +31,7 @@ from pathlib import Path
 from stopa.data.db import CaseDB
 from stopa.domain.profiles import PROFILES, get_profile
 from stopa.models import Case, EvidenceSource
-from stopa.pipeline import load_hash_sets, process_source
+from stopa.pipeline import load_hash_sets, process_source, run_timeline_intel
 
 
 def _db_dir() -> Path:
@@ -138,6 +138,16 @@ def cmd_add(args: argparse.Namespace) -> int:
             print(f"    artifacty extrahovány: {result.artifacts_extracted}")
         for err in result.errors[:5]:
             print(f"    ! {err}", file=sys.stderr)
+    # STP-018 Timeline Intelligence 2.0 — post-pass nad celou case DB (rozpory + duplikáty).
+    try:
+        intel = run_timeline_intel(db)
+        if intel["events"]:
+            print(
+                f"    timeline intel: {intel['contradiction_groups']} rozporových skupin, "
+                f"{intel['dup_groups']} dup. skupin ({intel['events']} událostí)"
+            )
+    except Exception as exc:  # noqa: BLE001 — analytický bonus, ne pád ingestu
+        print(f"    ! timeline intel: {exc}", file=sys.stderr)
     # P0 Core C4: kontrolní bod po ingestu (podpis hashu posledního audit řádku).
     db.add_integrity_checkpoint("ingest")
     db.close()
@@ -217,8 +227,55 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 
 def cmd_timeline(args: argparse.Namespace) -> int:
-    """AXIOM-style timeline — chronologický přehled extrahovaných artifactů."""
+    """AXIOM-style timeline — chronologický přehled extrahovaných artifactů.
+
+    STP-018: ``--intel`` spustí Timeline Intelligence 2.0 post-pass (rozpory +
+    duplikáty napříč zdroji) a vypíše analytické skupiny nad materializovanou timeline.
+    """
     db = _open_db(args.case_id)
+
+    if getattr(args, "intel", False):
+        from stopa.domain.timeline_intel import (
+            FLAG_CONCURRENT_ACTIVITY,
+            FLAG_CROSS_SOURCE_DUP,
+        )
+
+        summary = run_timeline_intel(db, window_seconds=getattr(args, "window", 60.0))
+        print(
+            f"Timeline Intelligence 2.0: {summary['events']} událostí → "
+            f"{summary['contradiction_groups']} rozporových skupin, "
+            f"{summary['dup_groups']} dup. skupin"
+        )
+        events = db.list_timeline_events(limit=10_000)
+        contra = [e for e in events if FLAG_CONCURRENT_ACTIVITY in (e.get("anomaly_flags") or [])]
+        dups = [e for e in events if FLAG_CROSS_SOURCE_DUP in (e.get("anomaly_flags") or [])]
+        if contra:
+            print(f"\nROZPORY (souběžná aktivita subjektu) — {len(contra)} událostí:")
+            by_group: dict[str, list[dict]] = {}
+            for e in sorted(contra, key=lambda x: (x.get("contradiction_group_id") or "", x["ts_utc"])):
+                by_group.setdefault(e["contradiction_group_id"], []).append(e)
+            for gid, items in sorted(by_group.items()):
+                subj = ", ".join(sorted({v for i in items for v in (i.get("subject_values") or [])}))[:100]
+                print(f"  [{gid}] subjekt: {subj}")
+                for e in items:
+                    ts = e["ts_utc"].strftime("%Y-%m-%d %H:%M:%S") if e["ts_utc"] else "—" * 19
+                    print(
+                        f"    {ts}  [{e['event_type']}] {(e.get('title') or '')[:60]} "
+                        f"(src={e['source_id']}, file={(e.get('rel_path') or '')[:40]})"
+                    )
+        if dups:
+            print(f"\nDUPLIKÁTY NAPŘÍČ ZDROJI — {len(dups)} událostí:")
+            by_group = {}
+            for e in sorted(dups, key=lambda x: (x.get("dup_group_id") or "", x["ts_utc"])):
+                by_group.setdefault(e["dup_group_id"], []).append(e)
+            for gid, items in sorted(by_group.items()):
+                print(f"  [{gid}] {len(items)}× {(items[0].get('title') or '')[:60]}")
+                for e in items:
+                    ts = e["ts_utc"].strftime("%Y-%m-%d %H:%M:%S") if e["ts_utc"] else "—" * 19
+                    print(f"    {ts}  src={e['source_id']} file={(e.get('rel_path') or '')[:50]}")
+        db.close()
+        return 0
+
     arts = db.list_artifacts(
         source_id=args.source,
         artifact_type=args.type,
@@ -1054,6 +1111,11 @@ def build_parser() -> argparse.ArgumentParser:
     tl_p.add_argument("--path", help="filtr — cesta obsahuje text (LIKE %text%)")
     tl_p.add_argument("--limit", type=int, default=100)
     tl_p.add_argument("-v", "--verbose", action="store_true", help="zobrazit i zdrojové cesty")
+    # STP-018 Timeline Intelligence 2.0 — post-pass: rozpory + duplikáty napříč zdroji
+    tl_p.add_argument("--intel", action="store_true",
+                      help="spustit Timeline Intelligence 2.0 (rozpory + duplikáty) a vypsat analytické skupiny")
+    tl_p.add_argument("--window", type=float, default=60.0, metavar="SEC",
+                      help="časové okno pro detekci rozporů v sekundách (default 60)")
     tl_p.set_defaults(func=cmd_timeline)
 
     cor_p = sub.add_parser("correlate", help="E4 — Entity + Correlation Engine (explicitní krok)")

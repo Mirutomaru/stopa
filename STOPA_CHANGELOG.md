@@ -2,6 +2,44 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-03 (STP-018 Timeline Intelligence 2.0)
+
+### Added (oblast E, priorita P2 — analytické vrstvy nad materializovanou timeline)
+- `domain/timeline_intel.py` — **nový čistý modul bez IO** (301 řádků), tři
+  analytické vrstvy:
+  - **Rozpory** `concurrent_activity`: stejná normalizovaná entita ve dvou
+    událostech v časovém okně (default 60 s) + odlišný typ/soubor; union-find
+    tranzitivní uzavření, deterministické group ID (SHA-256).
+  - **Duplikáty napříč zdroji** `cross_source_duplicate`: stejný obsah
+    (typ+title) z ≥2 různých zdrojů/souborů; provenance všech výskytů zachována.
+  - **Timestamp provenance**: `ts_origin` (source vs derived) + klasifikace
+    přesnosti (`second`/`millisecond`/`microsecond`/`file_metadata`/`unknown`).
+- Schéma **v12** (`db.py`): nové sloupce `timeline_events` — `ts_origin`,
+  `subject_values_json`, `contradiction_group_id`, `dup_group_id`; idempotentní
+  migrace `_migrate_timeline_intel()` (ALTER TABLE, bez ztráty dat);
+  `add/list_timeline_event(s)` rozšířené; nové metody `set_timeline_intel_groups()`
+  (idempotentní UPDATE + merge flagů do `anomaly_flags`) a
+  `clear_timeline_intel_groups()`.
+- Pipeline: timeline insert naplňuje `subject_values` (přes `extract_entities`,
+  defenzivně) + `ts_origin`; nový post-pass **`run_timeline_intel(db,
+  window_seconds=60)`** — clear → analyze → materializace; souhrn pro log/UI.
+- CLI: `stopa add` spouští post-pass automaticky po ingestu;
+  `stopa timeline --intel [--window N]` explicitně + tisk rozporů/duplikátů.
+- Web: POST `/api/cases/{id}/timeline/intel?window_seconds=60`; GET timeline
+  vrací nové sloupce automaticky (`{**e}`).
+- Report sekce 8 → podsekce **Timeline Intelligence 2.0**: rozpory po skupinách
+  + duplikáty s provenance; i18n klíče cs/en.
+- Export: `TIMELINE_COLUMNS` + `timeline_records()` rozšířené o nové sloupce
+  (reprodukovatelnost).
+- Model: `Artifact.ts_origin = "source"` default (staré parsery se nemění —
+  používají jen source časy, FS fallback nepoužívají).
+
+### Testy
+- 32 nových testů (`tests/test_timeline_intel.py`): čistá logika (rozpory,
+  duplikáty, provenance na syntetických fixtures), DB migrace v10→v12 (bez ztráty
+  dat + idempotence), roundtrip add/list, post-pass materializace + idempotence.
+- Full suite **1073 passed, 1 skipped**; ruff clean.
+
 ## [Unreleased] — 2026-11-03 (ETAPA B vlna 3)
 
 ### Added (ETAPA B vlna 3 — port AXIOM extraktorů, 5 nových parserů + 75 testů)

@@ -108,6 +108,11 @@ class Artifact(BaseModel):
     parser_version: str | None = None  # verze extraktoru, který artifact vygeneroval
     extracted_at: datetime | None = None  # kdy byl artifact extrahován (UTC) — odliší se od event time
     anomaly_flags: list[str] = Field(default_factory=list)  # E2: detekované nesrovnalosti (kanonické flagy)
+    # STP-018 Timeline Intelligence 2.0 — provenience timestampu:
+    # "source" = čas z obsahu artifactu (parser ho extrahoval), "derived" = odvozený
+    # ze souborových metadat (MACE apod.). Parsery dnes produkují jen source časy;
+    # pole existuje pro rozšíření + transparentní zobrazení v timeline.
+    ts_origin: str = "source"
     # P0 Core C1 — Unified Evidence Model: strukturovaná provenance + stav validace.
     # Staré artifacty bez provenance zůstávají čitelné (default prázdný list / 'extracted').
     provenance: list[Provenance] = Field(default_factory=list)

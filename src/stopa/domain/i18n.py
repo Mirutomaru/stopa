@@ -124,6 +124,15 @@ _STRINGS: dict[str, tuple[str, str]] = {
         "Žádné timeline události (artifacty bez časového otisku).",
         "No timeline events (artifacts without timestamps).",
     ),
+    # ── STP-018 — Timeline Intelligence 2.0 (podsekce 8.1) ────────
+    "intel_contradictions": (
+        "Rozpory — souběžná aktivita jednoho subjektu: {n} událostí.",
+        "Contradictions — concurrent activity of one subject: {n} events.",
+    ),
+    "intel_duplicates": (
+        "Duplikáty napříč zdroji — stejný obsah z různých souborů/zdrojů: {n} událostí.",
+        "Cross-source duplicates — same content from different files/sources: {n} events.",
+    ),
     # ── sekce 9 — korelace entity (E10) ────────────────────────
     "sec_correlations": ("Propojení entity (korelace)", "Entity correlations"),
     "th_entity_a": ("Entita A", "Entity A"),

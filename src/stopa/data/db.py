@@ -26,7 +26,7 @@ from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -109,7 +109,12 @@ CREATE TABLE IF NOT EXISTS timeline_events (
     confidence REAL,
     parser_version TEXT,
     extracted_at TEXT,                 -- kdy byl artifact extrahován (odliší se od event time)
-    anomaly_flags TEXT                 -- komou oddělené kanonické flagy nesrovnalostí
+    anomaly_flags TEXT,                -- komou oddělené kanonické flagy nesrovnalostí
+    -- STP-018 Timeline Intelligence 2.0: provenience + přesnost timestampů
+    ts_origin TEXT NOT NULL DEFAULT 'source',   -- source (z obsahu) | derived (MACE apod.)
+    subject_values_json TEXT,          -- normalizované entity subjektu (JSON list) — pro rozpory
+    contradiction_group_id TEXT,       -- ID skupiny časového rozporu (NULL = bez rozporu)
+    dup_group_id TEXT                  -- ID skupiny duplikátu napříč zdroji (NULL = originál)
 );
 CREATE INDEX IF NOT EXISTS idx_timeline_ts ON timeline_events(ts_utc);
 CREATE INDEX IF NOT EXISTS idx_timeline_source ON timeline_events(source_id);
@@ -349,6 +354,8 @@ class CaseDB:
         self._migrate_audit_chain()
         # P0 Intelligence I3: Entity Resolution 2.0 — CHECK rozšíření entities/correlations.
         self._migrate_entity_resolution()
+        # STP-018 Timeline Intelligence 2.0 — provenience + analytické sloupce timeline_events.
+        self._migrate_timeline_intel()
         # P0 Core C5: Reproducibility Engine — stará DB bez sloupce params_json.
         ops_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(analysis_operations)").fetchall()}
         if "params_json" not in ops_cols:
@@ -537,6 +544,29 @@ class CaseDB:
             )
             self.conn.execute("DROP TABLE _correlations_old")
             self.conn.commit()
+
+    def _migrate_timeline_intel(self) -> None:
+        """STP-018 Timeline Intelligence 2.0 — stará case DB (schéma ≤ v11).
+
+        Idempotentní, bez ztráty dat: přidá sloupce ``ts_origin`` (default
+        'source' — staré timestampy jsou vždy z obsahu artifactu),
+        ``subject_values_json``, ``contradiction_group_id``, ``dup_group_id``.
+        Nové DB mají sloupce přímo ze SCHEMA — migrace je no-op.
+        """
+        tl_cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(timeline_events)").fetchall()}
+        if "ts_origin" not in tl_cols:
+            self.conn.execute(
+                "ALTER TABLE timeline_events ADD COLUMN ts_origin TEXT NOT NULL DEFAULT 'source'"
+            )
+            self.conn.commit()
+        for col, decl in (
+            ("subject_values_json", "TEXT"),
+            ("contradiction_group_id", "TEXT"),
+            ("dup_group_id", "TEXT"),
+        ):
+            if col not in tl_cols:
+                self.conn.execute(f"ALTER TABLE timeline_events ADD COLUMN {col} {decl}")
+                self.conn.commit()
 
     def _last_audit_row(self) -> tuple[int | None, str]:
         """ID posledního audit řádku + jeho hash (GENESIS pokud log prázdný)."""
@@ -1549,18 +1579,23 @@ class CaseDB:
         parser_version: str | None = None,
         extracted_at: datetime | None = None,
         anomaly_flags: tuple[str, ...] | list[str] = (),
+        ts_origin: str = "source",  # STP-018: source (z obsahu) | derived (MACE apod.)
+        subject_values: tuple[str, ...] | list[str] = (),  # STP-018: normalizované entity subjektu
     ) -> str:
         """Explicitní insert jednoho timeline eventu (ROADMAP E2 bod 2).
 
         Materializace běží v pipeline při artifact extrakci — ne triggerem,
         aby re-ingest / replace zůstal pod kontrolou. Vrací ID nového řádku.
+        STP-018: ``ts_origin`` rozlišuje source vs derived timestamp;
+        ``subject_values`` (normalizované entity) slouží detekci časových
+        rozporů (souběžné aktivity jednoho subjektu).
         """
         event_id = new_id("tl")
         self.conn.execute(
             "INSERT INTO timeline_events (id, source_id, artifact_id, file_id,"
             " rel_path, event_type, ts_utc, title, confidence, parser_version,"
-            " extracted_at, anomaly_flags)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " extracted_at, anomaly_flags, ts_origin, subject_values_json)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 event_id,
                 source_id,
@@ -1574,6 +1609,8 @@ class CaseDB:
                 parser_version,
                 _iso(extracted_at),
                 ",".join(anomaly_flags) if anomaly_flags else None,
+                ts_origin,
+                json.dumps(list(subject_values)) if subject_values else None,
             ),
         )
         return event_id
@@ -1634,8 +1671,94 @@ class CaseDB:
                 "parser_version": r["parser_version"],
                 "extracted_at": r["extracted_at"],
                 "anomaly_flags": [f for f in flags_raw.split(",") if f],
+                # STP-018 Timeline Intelligence 2.0 — provenience + analytické skupiny
+                "ts_origin": r["ts_origin"] or "source",
+                "subject_values": json.loads(r["subject_values_json"]) if r["subject_values_json"] else [],
+                "contradiction_group_id": r["contradiction_group_id"],
+                "dup_group_id": r["dup_group_id"],
             })
         return out
+
+    def set_timeline_intel_groups(
+        self,
+        contradiction: dict[str, str],  # event_id → group_id (jen události v rozporu)
+        duplicates: dict[str, str],     # event_id → dup_group_id (jen duplikáty napříč zdroji)
+    ) -> int:
+        """STP-018 — zápis analytických skupin do materializované timeline.
+
+        Idempotentní UPDATE per událost (re-ingest / re-run = stejný výsledek).
+        Vrací počet upravených řádků. Skupiny jsou deterministické ID z
+        ``domain/timeline_intel.py`` — bez IO, plně reprodukovatelné.
+
+        Zároveň merge kanonických flagů (``concurrent_activity``,
+        ``cross_source_duplicate``) do ``anomaly_flags`` — tím se projeví ve
+        všech existujících výstupech (report sekce 8, export, web, CLI).
+        """
+        from stopa.domain.timeline_intel import (
+            FLAG_CONCURRENT_ACTIVITY,
+            FLAG_CROSS_SOURCE_DUP,
+        )
+
+        n = 0
+        for event_id, group_id in contradiction.items():
+            cur = self.conn.execute(
+                "UPDATE timeline_events SET contradiction_group_id = ? WHERE id = ?",
+                (group_id, event_id),
+            )
+            n += cur.rowcount or 0
+            self._merge_timeline_flag(event_id, FLAG_CONCURRENT_ACTIVITY)
+        for event_id, group_id in duplicates.items():
+            cur = self.conn.execute(
+                "UPDATE timeline_events SET dup_group_id = ? WHERE id = ?",
+                (group_id, event_id),
+            )
+            n += cur.rowcount or 0
+            self._merge_timeline_flag(event_id, FLAG_CROSS_SOURCE_DUP)
+        if n:
+            self.conn.commit()
+        return n
+
+    def _merge_timeline_flag(self, event_id: str, flag: str) -> None:
+        """Přidá kanonický flag do anomaly_flags události (bez duplicit)."""
+        row = self.conn.execute(
+            "SELECT anomaly_flags FROM timeline_events WHERE id = ?", (event_id,)
+        ).fetchone()
+        if not row:
+            return
+        existing = [f for f in (row["anomaly_flags"] or "").split(",") if f]
+        if flag not in existing:
+            existing.append(flag)
+        self.conn.execute(
+            "UPDATE timeline_events SET anomaly_flags = ? WHERE id = ?",
+            (",".join(existing), event_id),
+        )
+
+    def clear_timeline_intel_groups(self) -> None:
+        """STP-018 — reset analytických skupin + jejich flagů (před re-runem).
+
+        Odstraní jen STP-018 flagy; E2 flagy (``mtime_before_ctime``,
+        ``out_of_range``, ``duplicate``) zůstávají nedotčené.
+        """
+        from stopa.domain.timeline_intel import (
+            FLAG_CONCURRENT_ACTIVITY,
+            FLAG_CROSS_SOURCE_DUP,
+        )
+
+        self.conn.execute(
+            "UPDATE timeline_events SET contradiction_group_id = NULL, dup_group_id = NULL"
+        )
+        rows = self.conn.execute(
+            "SELECT id, anomaly_flags FROM timeline_events WHERE anomaly_flags IS NOT NULL"
+        ).fetchall()
+        for r in rows:
+            flags = [f for f in (r["anomaly_flags"] or "").split(",") if f]
+            kept = [f for f in flags if f not in (FLAG_CONCURRENT_ACTIVITY, FLAG_CROSS_SOURCE_DUP)]
+            new_val = ",".join(kept) if kept else None
+            self.conn.execute(
+                "UPDATE timeline_events SET anomaly_flags = ? WHERE id = ?",
+                (new_val, r["id"]),
+            )
+        self.conn.commit()
 
     def timeline_window(self, source_id: str | None = None) -> dict[str, datetime | None]:
         """Min/max pozorovaných časů událostí — operační okno pro anomaly detekci.

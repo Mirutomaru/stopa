@@ -46,6 +46,11 @@ TIMELINE_COLUMNS: tuple[str, ...] = (
     "parser_version",
     "extracted_at_utc",
     "anomaly_flags",
+    # STP-018 Timeline Intelligence 2.0 — provenience + analytické skupiny
+    "ts_origin",
+    "contradiction_group_id",
+    "dup_group_id",
+    "subject_values_json",
 )
 
 CORRELATION_COLUMNS: tuple[str, ...] = (
@@ -105,6 +110,7 @@ def timeline_records(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Řádky z ``db.list_timeline_events`` → ploché záznamy pro export."""
     out: list[dict[str, Any]] = []
     for e in events:
+        subject_values = e.get("subject_values") or ()
         out.append({
             "id": e.get("id"),
             "source_id": e.get("source_id"),
@@ -118,6 +124,11 @@ def timeline_records(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "parser_version": e.get("parser_version"),
             "extracted_at_utc": e.get("extracted_at"),
             "anomaly_flags": _flags_str(e.get("anomaly_flags")),
+            # STP-018 — provenience + analytické skupiny (staré DB → None)
+            "ts_origin": e.get("ts_origin"),
+            "contradiction_group_id": e.get("contradiction_group_id"),
+            "dup_group_id": e.get("dup_group_id"),
+            "subject_values_json": json.dumps(list(subject_values), ensure_ascii=False) if subject_values else None,
         })
     return out
 

@@ -111,6 +111,10 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
             rel_path=e.get("rel_path"),
             confidence=e.get("confidence"),
             anomaly_flags=tuple(e.get("anomaly_flags") or ()),
+            # STP-018 — provenience + analytické skupiny (staré DB → None)
+            ts_origin=e.get("ts_origin"),
+            contradiction_group_id=e.get("contradiction_group_id"),
+            dup_group_id=e.get("dup_group_id"),
         )
         for e in db.list_timeline_events(limit=500)
     )

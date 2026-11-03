@@ -356,6 +356,29 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── STP-018 Timeline Intelligence 2.0 ─────────────────────────────
+    @app.post("/api/cases/{case_id}/timeline/intel")
+    def timeline_intel(case_id: str, window_seconds: float = Query(60.0)) -> dict:
+        """STP-018 — explicitní spuštění Timeline Intelligence 2.0 post-passu.
+
+        Rozpory (souběžná aktivita subjektu) + duplikáty napříč zdroji nad
+        materializovanou timeline. Idempotentní, deterministický výsledek.
+        """
+        from stopa.pipeline import run_timeline_intel
+
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            summary = run_timeline_intel(db, window_seconds=window_seconds)
+            db.log_operation(
+                "timeline_intel_run",
+                actor=case.examiner if case else None,
+                details={**summary, "window_seconds": window_seconds},
+            )
+            return summary
+        finally:
+            db.close()
+
     # ── E4 Entity + Correlation Engine ────────────────────────────────
     @app.post("/api/cases/{case_id}/correlate")
     def correlate(case_id: str) -> dict:

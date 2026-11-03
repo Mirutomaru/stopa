@@ -1,53 +1,57 @@
 # STOPA CHECKPOINT — latest
 
 **Datum:** 2026-11-03
-**Verze projektu:** 0.1.0, commit `1b046ee` (vlna 2) + tento vlna 3 commit
-**Poslední dokončený úkol:** STP-017 (ETAPA B vlna 3 — legacy mobile/messenger SQLite) — před ním STP-016 (vlna 2, `1b046ee`), STP-012c (kořenové výstupy MASTER promptu 9/9, `2549ce6`), STP-012b (`19a458d`), STP-012 (DEV OS bootstrap, `e227929`), STP-013..015 (vlna 1, `afc49a0`)
-**Aktuální fáze:** ETAPA B — port AXIOM extraktorů (vlny 1–3 hotové)
+**Verze projektu:** 0.1.0, commit (STP-018) + předchozí `025c6c0` (vlna 3), `1b046ee` (vlna 2), `afc49a0` (vlna 1)
+**Poslední dokončený úkol:** STP-018 (Timeline Intelligence 2.0 — oblast E, P2) — před ním STP-017 (ETAPA B vlna 3), STP-016 (vlna 2, `1b046ee`), STP-012c (`2549ce6`), STP-012b (`19a458d`), STP-012 (`e227929`), STP-013..015 (vlna 1, `afc49a0`)
+**Aktuální fáze:** Oblast L (Report Engine) — příprava STP-020 (9 → 20 sekcí); ETAPA B vlny 1–3 hotové
 
 ## Aktuální stav
-- **1041 passed + 1 skipped** (`.venv/bin/python -m pytest -q`), ruff clean (`src/stopa tests scripts`)
-- Coverage AXIOM: **covered 51 / 232** unikátních typů (před vlnou 3: 42, před vlnou 2: 33)
-- C3 Parser Validation Registry: **24 parserů**, sync s pipeline OK (`build_registry()`)
-- DB schema: **v11**; artifact_type = volný TEXT bez CHECK
+| Metrika | Hodnota |
+|---|---|
+| Dokončené úkoly (TASKS.md) | **20** |
+| Čekající (BACKLOG/READY) | **5** (READY: STP-020; BACKLOG: 4) |
+| Blokované | 0 |
+| Full suite | **1073 passed, 1 skipped** (~13s) |
+| Ruff | clean (`src/stopa tests scripts`) |
+| Coverage matice | covered **51 / 232**, deterministická (SHA-256 diff ✓) |
+| C3 registry | **24 parserů** (`build_registry()`) |
 
-## Provedené změny (tento cyklus — vlna 3)
-### Změněné soubory
-- Nové parsery: `src/stopa/artifacts/{kik_messenger,mailru_agent,bebo_chat,chatroulette,limewire_p2p}.py`
-- `pipeline.py` — importy + NAME_BASED_EXTRACTORS (+4) + `_name_based_match` (+4 větví)
-- `sqlite_extract.py` — Kik branch do dispatch chainu (schéma-based, před mobile fallback)
-- `domain/validation_registry.py` — +4 záznamy (celkem 24 parserů; Kik bez samostatného záznamu — SQLite chain vzor clipboard/SID)
-- Nové testy: `tests/test_{kik_messenger,mailru_agent,bebo_chat,chatroulette,limewire_p2p}.py` (**75 testů**)
-- `scripts/build_axiom_coverage.py` — COVERED +9 typů vlny 3 + `_covered_desc`
-- `STOPA_COVERAGE_MATRIX.csv`, `docs/re-axiom/AXIOM_COVERAGE.{md,json}` — regenerovány (covered 51)
-- `README.md` (řádek vlny 3 + test count 1041), `STOPA_CHANGELOG.md` (+ sekce vlna 3, docs zrcadlo sync)
+## STP-018 — co se provedlo
+Tři analytické vrstvy nad materializovanou timeline:
+1. **Rozpory `concurrent_activity`** — stejná normalizovaná entita ve dvou událostech v okně 60 s + odlišný typ/soubor → union-find tranzitivní uzavření, deterministické group ID (SHA-256).
+2. **Duplikáty napříč zdroji `cross_source_duplicate`** — stejný obsah (typ+title) z ≥2 různých (source_id, rel_path), provenance všech výskytů zachována.
+3. **Timestamp provenance** — `ts_origin` (source vs derived) + klasifikace přesnosti (`classify_precision`: second/millisecond/microsecond/file_metadata/unknown).
 
-### Nové funkce
-- **Kik Messenger** — SQLite dispatch chain: iOS `kik.sqlite` (`ZKIKUSER`/`ZKIKMESSAGE`, prefix ZKIK) i Android aliasy (`users`+`messages`); defenzivní mapování sloupců přes aliasy, epoch s/ms; detekce schéma-based (iOS stačí `ZKIK*`, Android vyžaduje obě tabulky — proti false-positive na obecných DB)
-- **Mail.ru Agent** — desktop IM lokální logy: chat log text `|` formát (typ zprávy/délka z hranatých závorek), kontakty, skupiny
-- **Bebo Live Chat** — textový chat log (`[ts] user said:`) i JSON pole; konzervativní JSON detekce
-- **Chatroulette video chat** — text/JSON carving (stejný vzor)
-- **LimeWire/Limerunner/Luckywire P2P shared files** — JSON i pipe-delimited; detekce rodiny s prioritou Limerunner > Luckywire > LimeWire
+## Změněné soubory (STP-018)
+- nový: `src/stopa/domain/timeline_intel.py` (čistá logika bez IO, ~301 ř.)
+- `data/db.py`: SCHEMA_VERSION 11→**12**, nové sloupce `timeline_events` (`ts_origin`, `subject_values_json`, `contradiction_group_id`, `dup_group_id`), migrace `_migrate_timeline_intel()`, metody `set/clear_timeline_intel_groups()`
+- `models.py`: `Artifact.ts_origin = "source"` default
+- `pipeline.py`: insert subject_values+ts_origin, post-pass `run_timeline_intel(db, window_seconds=60)`
+- `cli.py`: `add` post-pass po ingestu; `timeline --intel [--window N]`
+- `web/app.py`: POST `/api/cases/{id}/timeline/intel?window_seconds=60`
+- `domain/report.py`: podsekce Timeline Intelligence 2.0 (8.1) — rozpory + duplikáty s provenance
+- `domain/i18n.py`, `presentation/case_report.py`, `domain/export.py` (TIMELINE_COLUMNS + timeline_records)
+- nový test: `tests/test_timeline_intel.py` (**32 testů**)
+- `tests/test_entity_resolution.py` + `tests/test_reproducibility.py`: SCHEMA_VERSION aserty → konstanta (robustní vůči bumpům)
+- README.md, STOPA_CHANGELOG.md (+docs zrcadlo), `.stopa-dev/*`
 
-### Opravy
-- Kik: closure `g()` binduje `low` přes default argument (ruff B023); test fixture DB dostaly `row_factory = sqlite3.Row`
-- Bebo/Chatroulette/LimeWire: konzervativní JSON detekce — textový log začíná na `[ts] user said:` a narážel na `startswith("[")`; JSON se uznává jen při jasném signálu (objekt, uzavřené pole s `{}`/`""`, kompaktní pole v 1. řádku)
+## Jak pokračovat (STP-020)
+1. Přečíst `src/stopa/domain/report.py` — SECTIONS list + build_html (9 sekcí)
+2. Přečíst `src/stopa/presentation/case_report.py` — stavba ReportData z case DB
+3. Přečíst `src/stopa/domain/i18n.py` — struktura klíčů cs/en
+4. Audit existujících 9 sekcí → definovat rozsah 20 sekcí (titulní strana, metodika, nástroje+verze, omezení, závěr + další)
+5. Implementace + testy na syntetickém případě; dokumentace; changelog update
 
-## Testování
-- **Provedeno:** plná sada 1041 passed, 1 skipped; ruff clean; determinismus matice SHA-256 ✓ (2 běhy identické)
-- **Neprovedeno:** benchmark engine v CI (BLK-003), E2E na reálném E01
+## Co nesmí být změněno
+- Existující 9 sekcí reportu (backward compat) — nové sekce se přidávají, staré se nemění
+- C3 registry: `build_registry()` vynucuje 1:1 sync s pipeline + shodu verzí, jinak `RegistryError`
+- Neodstraňovat existující testy kvůli zelenému výsledku; nepoužívat mockování místo kritické logiky
+- Originální důkazní data zůstávají neměnná (report pracuje na case DB)
 
-## Rozpracovaná práce
-- Vlna 3: **hotová a commitnutá** (tento commit)
-- DEV OS paměť: aktualizována (PROJECT_STATE, TASKS STP-017 DONE + STP-018 READY, NEXT_ACTION → STP-018, CHANGELOG)
-
-## Další krok
-- **ID úkolu:** STP-018 — Timeline Intelligence 2.0 (oblast E, P2)
-- **Konkrétní instrukce:** rozpory v timeline (souběžné aktivity jednoho subjektu), duplikáty (stejný obsah z více zdrojů), přesnost timestampů (source vs derived). Nejdřív audit existující timeline logiky.
-- **Relevantní soubory:** `src/stopa/domain/timeline*.py`, `src/stopa/data/db.py` (artifact tabulka + timestamp pole), `docs/STOPA_TARGET_ARCHITECTURE.md` (oblast E)
-- **Akceptační kritéria:** plná sada bez regresí (≥ 1041); ruff clean; timeline report se novými sekcemi; commit.
-
-## Rizika
-- Timeline 2.0 musí zachovat backward compat existujících výstupů — nové sekce se přidávají, staré se nemění
-- Source vs derived timestampy: u NTFS MACE je třeba explicitní provenance pole (ne odhad)
-- Registry sekundární průchody (Clipboard/SID vzor) nemají nezávislé C3 položky
+## Příkazy k ověření
+```bash
+cd /home/ai/Prace/projekty/stopa
+.venv/bin/python -m pytest tests/test_timeline_intel.py -q   # 32 passed
+.venv/bin/ruff check src/stopa tests scripts                 # All checks passed!
+.venv/bin/python -m pytest -q                                # 1073 passed, 1 skipped
+```
