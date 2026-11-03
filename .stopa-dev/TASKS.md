@@ -138,13 +138,25 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dokončeno:** 2026-11-03 | Commit: (vlna 2)
 
 ## STP-017 — ETAPA B vlna 3: legacy mobile/messenger SQLite typy
-- **Oblast:** D | **Priorita:** P1 | **Stav:** BACKLOG
+- **Oblast:** D | **Priorita:** P1 | **Stav:** DONE
 - **Popis:** Kik, MailRu (Chat/Contact/Group), Bebo, Chatroulette, Limewire/Limerunner/Luckywire —
   SQLite-based legacy messenger extraktory.
 - **Závislosti:** STP-016
+- **Dotčené moduly:** `src/stopa/artifacts/*` (5 nových: `kik_messenger`, `mailru_agent`,
+  `bebo_chat`, `chatroulette`, `limewire_p2p`), `pipeline.py` (importy + NAME_BASED_EXTRACTORS
+  +4 + `_name_based_match` +4), `sqlite_extract.py` (Kik branch do dispatch chainu),
+  `validation_registry.py` (+4 záznamy → **24 parserů**), `scripts/build_axiom_coverage.py`,
+  `STOPA_COVERAGE_MATRIX.csv`.
+- **Výsledek:** 5 nových parserů pokrývající **9 AXIOM typů** (KikLocalUserExtractor,
+  MailRuChat/Contact/GroupArtifact, BeboArtifact, ChatrouletteArtifact, Limewire/Limerunner/
+  LuckywireArtifact) + **75 testů**; C3 registry 20 → **24 parserů**; coverage covered
+  **42 → 51** (+9 typů z 232, deterministická SHA-256 ✓); full suite **1041 passed, 1 skipped**,
+  ruff clean. Kik přes SQLite dispatch chain (iOS `ZKIK*` / Android `users+messages`, aliasy
+  sloupců, epoch s/ms); ostatní name-based s konzervativní JSON detekcí.
+- **Dokončeno:** 2026-11-03 | Commit: (vlna 3)
 
 ## STP-018 — Timeline Intelligence 2.0
-- **Oblast:** E | **Priorita:** P2 | **Stav:** BACKLOG
+- **Oblast:** E | **Priorita:** P2 | **Stav:** READY
 - **Popis:** Rozpory v timeline, duplikáty, přesnost timestampů (source vs derived).
 - **Závislosti:** STP-016
 

@@ -5,20 +5,22 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 42
-- **🔧 PORTABLE-LOCAL**: 30
+- **✅ COVERED**: 51
+- **🔧 PORTABLE-LOCAL**: 21
 - **☁️ CLOUD-EXPORT**: 111
 - **💾 MEMORY**: 15
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (42)
+## ✅ COVERED — STOPA už umí (existující parser) (51)
 
 - `AppleIMessageArtifact` — sqlite_extract → imessage
 - `AuditDriveEventsArtifact` — EVTX event log (evtx parser)
 - `AuditLoginEventsArtifact` — EVTX event log (evtx parser)
+- `BeboArtifact` — bebo_chat parser (text/JSON live chat)
 - `CallLogsArtifact` — sqlite_extract → call_log
+- `ChatrouletteArtifact` — chatroulette parser (text/JSON video chat)
 - `ClipboardArtifact` — win_clipboard (sekundární registry průchod NTUSER.DAT)
 - `CloudGoogleChromeBrowserHistoryArtifact` — browser_history
 - `CloudGoogleLocationHistoryArtifact` — google_location_history parser (warrant return CSV/JSON)
@@ -37,7 +39,14 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `IeTypedUrlArtifact` — browser_history (chrome/firefox)
 - `ImageInfoArtifact` — magic bytes → image info
 - `JumpListsArtifact` — win_jumplist parser
+- `KikLocalUserExtractor` — kik_messenger parser (SQLite dispatch chain, iOS ZKIK*/Android users+messages)
+- `LimerunnerArtifact` — limewire_p2p parser (P2P shared files JSON/pipe)
+- `LimewireArtifact` — limewire_p2p parser (P2P shared files JSON/pipe)
+- `LuckywireArtifact` — limewire_p2p parser (P2P shared files JSON/pipe)
 - `MSNArtifact` — msn_messenger parser (chat log text)
+- `MailRuChatArtifact` — mailru_agent parser (chat log text | formát)
+- `MailRuContactArtifact` — mailru_agent parser (kontakty)
+- `MailRuGroupArtifact` — mailru_agent parser (skupiny)
 - `MapArtifact` — timeline / map
 - `MediaMetadataExtractor` — media family
 - `MftArtifact` — TSK disk image MFT
@@ -58,12 +67,10 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (30)
+## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (21)
 
 - `AllowlistedWebSitesArtifact` — lokální parser (čistý Python)
 - `AttachmentExtractor` — lokální parser (čistý Python)
-- `BeboArtifact` — legacy mobile / messenger (SQLite)
-- `ChatrouletteArtifact` — legacy mobile / messenger (SQLite)
 - `DriveActivityArtifact` — lokální parser (čistý Python)
 - `DuckDuckGoCookiesArtifact` — browser cookies/bookmarks
 - `GoogleAccountChangeHistoryArtifact` — lokální profil / takeout
@@ -79,13 +86,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GooglePhotosArtifact` — lokální profil / takeout
 - `GooglePlusChatArtifact` — lokální profil / takeout
 - `GoogleTalkArtifact` — lokální profil / takeout
-- `KikLocalUserExtractor` — legacy mobile / messenger (SQLite)
-- `LimerunnerArtifact` — legacy mobile / messenger (SQLite)
-- `LimewireArtifact` — legacy mobile / messenger (SQLite)
-- `LuckywireArtifact` — legacy mobile / messenger (SQLite)
-- `MailRuChatArtifact` — legacy mobile / messenger (SQLite)
-- `MailRuContactArtifact` — legacy mobile / messenger (SQLite)
-- `MailRuGroupArtifact` — legacy mobile / messenger (SQLite)
 - `OpenOfficeBaseArtifact` — lokální parser (čistý Python)
 - `ParkedCarLocationsArtifact` — lokální parser (čistý Python)
 - `SamsungVoiceRecordingArtifact` — legacy mobile / messenger (SQLite)

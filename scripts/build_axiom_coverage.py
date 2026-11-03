@@ -81,6 +81,16 @@ COVERED: dict[str, str] = {
     "FileScanArtifact": "covered",  # mem_scan (textový výstup)
     "CurrentTabsArtifact": "covered",  # ddg_current_tabs
     "MSNArtifact": "covered",  # msn_messenger
+    # ETAPA B vlna 3 — port AXIOM extraktorů (5 nových parserů, testováno)
+    "KikLocalUserExtractor": "covered",  # kik_messenger (SQLite dispatch chain)
+    "MailRuChatArtifact": "covered",  # mailru_agent
+    "MailRuContactArtifact": "covered",  # mailru_agent
+    "MailRuGroupArtifact": "covered",  # mailru_agent
+    "BeboArtifact": "covered",  # bebo_chat
+    "ChatrouletteArtifact": "covered",  # chatroulette
+    "LimewireArtifact": "covered",  # limewire_p2p
+    "LimerunnerArtifact": "covered",  # limewire_p2p
+    "LuckywireArtifact": "covered",  # limewire_p2p
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -190,6 +200,16 @@ def _covered_desc(name: str) -> str:
         "FileScanArtifact": "mem_scan parser (textový výstup — soubory v paměti)",
         "CurrentTabsArtifact": "ddg_current_tabs parser (JSON/text záložky)",
         "MSNArtifact": "msn_messenger parser (chat log text)",
+        # ETAPA B vlna 3 — port AXIOM extraktorů
+        "KikLocalUserExtractor": "kik_messenger parser (SQLite dispatch chain, iOS ZKIK*/Android users+messages)",
+        "MailRuChatArtifact": "mailru_agent parser (chat log text | formát)",
+        "MailRuContactArtifact": "mailru_agent parser (kontakty)",
+        "MailRuGroupArtifact": "mailru_agent parser (skupiny)",
+        "BeboArtifact": "bebo_chat parser (text/JSON live chat)",
+        "ChatrouletteArtifact": "chatroulette parser (text/JSON video chat)",
+        "LimewireArtifact": "limewire_p2p parser (P2P shared files JSON/pipe)",
+        "LimerunnerArtifact": "limewire_p2p parser (P2P shared files JSON/pipe)",
+        "LuckywireArtifact": "limewire_p2p parser (P2P shared files JSON/pipe)",
     }
     return m.get(name, "existující parser")
 

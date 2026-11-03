@@ -22,6 +22,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import stopa as _stopa_pkg  # __version__ (single-source z pyproject)
+from stopa.artifacts.bebo_chat import PARSER_VERSION as BEBO_CHAT_VERSION
+from stopa.artifacts.bebo_chat import extract_bebo_artifacts, is_bebo_chat_file
+from stopa.artifacts.chatroulette import PARSER_VERSION as CHATROULETTE_VERSION
+from stopa.artifacts.chatroulette import (
+    extract_chatroulette_artifacts,
+    is_chatroulette_file,
+)
 from stopa.artifacts.ddg_current_tabs import PARSER_VERSION as DDG_TABS_VERSION
 from stopa.artifacts.ddg_current_tabs import extract_current_tabs_artifacts, is_current_tabs_file
 from stopa.artifacts.email_mbox import PARSER_VERSION as EMAIL_MBOX_VERSION
@@ -48,6 +55,13 @@ from stopa.artifacts.imessage_cloud import (
     PARSER_VERSION as IMESSAGE_CLOUD_VERSION,
 )
 from stopa.artifacts.imessage_cloud import extract_icloud_messages, is_icloud_messages_file
+from stopa.artifacts.limewire_p2p import PARSER_VERSION as LIMEWIRE_P2P_VERSION
+from stopa.artifacts.limewire_p2p import (
+    extract_shared_files_artifacts,
+    is_limewire_family_file,
+)
+from stopa.artifacts.mailru_agent import PARSER_VERSION as MAILRU_AGENT_VERSION
+from stopa.artifacts.mailru_agent import extract_mailru_artifacts, is_mailru_file
 from stopa.artifacts.mem_scan import PARSER_VERSION as MEMSCAN_VERSION
 from stopa.artifacts.mem_scan import extract_mem_scan_artifacts, is_mem_scan_file
 from stopa.artifacts.msn_messenger import PARSER_VERSION as MSN_VERSION
@@ -180,6 +194,11 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "mem_scan": (extract_mem_scan_artifacts, MEMSCAN_VERSION),
     "ddg_current_tabs": (extract_current_tabs_artifacts, DDG_TABS_VERSION),
     "msn_messenger": (extract_msn_artifacts, MSN_VERSION),
+    # ETAPA B vlna 3 — AXIOM port: legacy mobile/messenger (Bebo, Chatroulette, Mail.ru, P2P)
+    "bebo_chat": (extract_bebo_artifacts, BEBO_CHAT_VERSION),
+    "chatroulette": (extract_chatroulette_artifacts, CHATROULETTE_VERSION),
+    "mailru_agent": (extract_mailru_artifacts, MAILRU_AGENT_VERSION),
+    "limewire_p2p": (extract_shared_files_artifacts, LIMEWIRE_P2P_VERSION),
 }
 
 
@@ -193,6 +212,10 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
     ETAPA B vlna 2: + Google lokální profily (Search/Location/Login History,
     Account Info JSON/CSV), cmdscan/filescan paměťové skeny, DuckDuckGo Current
     Tabs a MSN/Messenger chat logy — všechny bez spolehlivé magiky.
+    ETAPA B vlna 3: + Bebo Live Chat, Chatroulette video chat, Mail.Ru Agent
+    (chat/kontakty) a P2P shared files (LimeWire/Limerunner/Luckywire) —
+    textové/JSON logy bez spolehlivé magiky. Kik běží schéma-based v SQLite
+    dispatch chainu (viz sqlite_extract), ne zde.
     """
     if is_icloud_messages_file(name):
         return NAME_BASED_EXTRACTORS["icloud_messages"]
@@ -224,6 +247,15 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["ddg_current_tabs"]
     if is_msn_chat_file(name):
         return NAME_BASED_EXTRACTORS["msn_messenger"]
+    # ETAPA B vlna 3 — legacy mobile/messenger (Bebo, Chatroulette, Mail.ru, P2P)
+    if is_bebo_chat_file(name):
+        return NAME_BASED_EXTRACTORS["bebo_chat"]
+    if is_chatroulette_file(name):
+        return NAME_BASED_EXTRACTORS["chatroulette"]
+    if is_mailru_file(name):
+        return NAME_BASED_EXTRACTORS["mailru_agent"]
+    if is_limewire_family_file(name):
+        return NAME_BASED_EXTRACTORS["limewire_p2p"]
     return None
 
 

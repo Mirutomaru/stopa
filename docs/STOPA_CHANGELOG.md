@@ -4,6 +4,52 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-03 (ETAPA B vlna 3)
+
+### Added (ETAPA B vlna 3 — port AXIOM extraktorů, 5 nových parserů + 75 testů)
+- `artifacts/kik_messenger.py` — **Kik Messenger parser** (AXIOM
+  `KikLocalUserExtractor`): SQLite dispatch chain v `sqlite_extract.py` — iOS
+  `kik.sqlite` schéma (`ZKIKUSER`/`ZKIKMESSAGE`, prefix ZKIK) i Android aliasy
+  (`users`+`messages`); defenzivní mapování sloupců přes aliasy, epoch s/ms;
+  artifact typy `kik_user` / `kik_message`. Detekce schéma-based (iOS stačí
+  `ZKIK*`, Android vyžaduje obě tabulky — proti false-positive na obecných DB).
+- `artifacts/mailru_agent.py` — **Mail.ru Agent parser** (AXIOM
+  `MailRuChatArtifact` + `MailRuContactArtifact` + `MailRuGroupArtifact`):
+  desktop IM lokální logy, textový formát s `|` oddělovači; typ zprávy a délka
+  z hranatých závorek, kontakty i skupiny; artifact typy `mailru_chat` /
+  `mailru_contact` / `mailru_group`. Detekce name/content-based.
+- `artifacts/bebo_chat.py` — **Bebo Live Chat parser** (AXIOM `BeboArtifact`):
+  textový chat log (`[ts] user said:`) i JSON pole záznamů; konzervativní JSON
+  detekce (objekt, uzavřené pole s `{}`/`""`, kompaktní pole v 1. řádku);
+  artifact type `bebo_chat`.
+- `artifacts/chatroulette.py` — **Chatroulette video chat parser** (AXIOM
+  `ChatrouletteArtifact`): textový log i JSON; stejný vzor konzervativní JSON
+  detekce; artifact type `chatroulette_message`.
+- `artifacts/limewire_p2p.py` — **LimeWire/Limerunner/Luckywire P2P parser**
+  (AXIOM `LimewireArtifact` + `LimerunnerArtifact` + `LuckywireArtifact`):
+  shared files JSON i pipe-delimited text; detekce rodiny s prioritou
+  Limerunner > Luckywire > LimeWire; artifact typy `limewire_shared_file` /
+  `limerunner_shared_file` / `luckywire_shared_file`.
+- Registrace: pipeline `NAME_BASED_EXTRACTORS` + `_name_based_match` (4 nových
+  name-based extraktorů) a Kik do SQLite dispatch chainu; C3 Parser Validation
+  Registry **+4 záznamy → 24 parserů** (`build_registry()` ověřeno).
+- Coverage matrix: `scripts/build_axiom_coverage.py` COVERED +9 typů vlny 3 +
+  `_covered_desc`; regenerace `STOPA_COVERAGE_MATRIX.csv` — covered **42 → 51**
+  (+9 typů z 232), deterministická (SHA-256 diff ✓).
+
+### Fixed
+- Kik parser: closure `g()` v `parse_kik_users`/`parse_kik_messages` binduje
+  `low` přes default argument (ruff B023); test fixture DB dostávají
+  `row_factory = sqlite3.Row`.
+- Bebo/Chatroulette/LimeWire: konzervativní JSON detekce — textový log začíná
+  na `[ts] user said:` a narážel na `startswith("[")`; JSON se teď uznává jen
+  při jasném signálu (objekt, uzavřené pole s `{}`/`""`, kompaktní pole v
+  prvním řádku).
+
+### Testy
+- 75 nových testů napříč 5 novými soubory (`tests/test_{kik_messenger,mailru_agent,bebo_chat,chatroulette,limewire_p2p}.py`), plně offline syntetické fixture (in-memory SQLite + text/JSON).
+- Full suite **1041 passed, 1 skipped**; ruff clean.
+
 ## [Unreleased] — 2026-11-03 (ETAPA B vlna 2)
 
 ### Added (ETAPA B vlna 2 — port AXIOM extraktorů, 7 nových parserů + 71 testů)

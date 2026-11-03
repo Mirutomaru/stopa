@@ -284,6 +284,63 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_msn_messenger.py",),
     ),
+    # ── ETAPA B vlna 3 — AXIOM port: legacy mobile/messenger (Kik, Mail.ru, Bebo, Chatroulette, P2P) ──
+    "bebo_chat": ParserValidation(
+        parser_id="bebo_chat",
+        version="",
+        formats=(
+            "Bebo Live Chat carving text/JSON (Type + Content)",
+        ),
+        limitations=(
+            "detekce name-based (bebo) + content check (chat/markery záznamů)",
+            "carved obsah bez spolehlivého času — timestamp=None",
+            "limit MAX_MESSAGES_PER_FILE=5000 zpráv",
+        ),
+        test_files=("tests/test_bebo_chat.py",),
+    ),
+    "chatroulette": ParserValidation(
+        parser_id="chatroulette",
+        version="",
+        formats=(
+            "Chatroulette video chat carving text ([ts] user said: text / user: text)",
+            "JSON pole záznamů (partner/message/timestamp)",
+        ),
+        limitations=(
+            "detekce name-based (chatroulette/cr_chat) + content check",
+            "carved obsah — čas jen pokud je v řádku; jinak timestamp=None",
+            "limit MAX_MESSAGES_PER_FILE=5000 zpráv",
+        ),
+        test_files=("tests/test_chatroulette.py",),
+    ),
+    "mailru_agent": ParserValidation(
+        parser_id="mailru_agent",
+        version="",
+        formats=(
+            "Mail.Ru Agent desktop IM — chat log text (zprávy)",
+            "Kontakty/knihovna kontaktů text (jméno + identifikátor)",
+            "Skupinové konverzace text (skupina + zprávy)",
+        ),
+        limitations=(
+            "detekce name-based (mail.ru/mailru/agent) + content check",
+            "typ záznamu (chat/kontakt/skupina) určen podle formátu řádků",
+            "limit MAX_MESSAGES_PER_FILE=5000 / MAX_CONTACTS_PER_FILE=10000",
+        ),
+        test_files=("tests/test_mailru_agent.py",),
+    ),
+    "limewire_p2p": ParserValidation(
+        parser_id="limewire_p2p",
+        version="",
+        formats=(
+            "LimeWire/Limerunner/Luckywire P2P shared files — JSON pole záznamů",
+            "Pipe-delimited text (name|size|path|hash[|modified][|accessed])",
+        ),
+        limitations=(
+            "detekce name-based (limewire/limerunner/luckywire) + content check; rodina podle prvního markeru (Limerunner má prioritu)",
+            "transfer metadata (downloaded/uploaded by/from/to/on) jen pokud jsou ve vstupu",
+            "limit MAX_FILES_PER_FILE=20000 souborů",
+        ),
+        test_files=("tests/test_limewire_p2p.py",),
+    ),
 }
 
 
