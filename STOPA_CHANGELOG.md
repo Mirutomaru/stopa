@@ -2,6 +2,14 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (ETAPA C vlna 3: rozdělení `db.py` ★ = ETAPA C DOKONČENA ★★)
+
+### Changed (oblast A, P1 — STP-041)
+- **Finální rozklad monolitu** `src/stopa/data/db.py` — vlna 3: vyčleněny **schema.py** (`SCHEMA_VERSION`, `_schema_version`, kompletní DDL — 15 tabulek, indexy, triggery, FTS5 virtual tables; 293 ř.) a **migrations.py** (idempotentní migrace starých case DB — `apply_legacy_migrations`: audit chain backfill od GENESIS s obnovou triggerů, entity resolution CHECK rebuild s confidence remapem verified→confirmed/inferred→possible, timeline intel sloupce, FTS backfill flagy; 268 ř.).
+- **Facade úklid:** mrtvé privátní delegace `_last_audit_row`/`_case_examiner` odstraněny; `CaseDB.__init__` volá `apply_legacy_migrations(self.conn)`. Facade `CaseDB` = tenký agregátor 5 repozitářů na sdílené SQLite connection; **backward compat zachován** (`CaseDB`, `SCHEMA_VERSION`, `_fts_query`).
+- `db.py`: 1011 → **476 řádků** (−535); celkem ETAPA C: ~2090 → 476 = **−77 %**; cíl < ~600 ř. splněn ★.
+- Nové testy: `tests/test_stp041_wave3_schema_migrations.py` (**18 testů** — kompletnost SCHEMA DDL, `_schema_version` fallback na prázdné DB, legacy v10 DB migrace end-to-end přes `CaseDB`, audit chain backfill od GENESIS s obnovou triggerů, FTS backfill flagy, idempotence na nové DB, facade úklid + backward compat). Full suite **1792 passed, 1 skipped**, ruff clean.
+
 ## [Unreleased] — 2026-11-04 (ETAPA C vlna 2: rozdělení `db.py` ★)
 
 ### Changed (oblast A, P1 — STP-040)

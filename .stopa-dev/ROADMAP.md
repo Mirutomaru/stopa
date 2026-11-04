@@ -4,7 +4,7 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 Žádný smyšlený stav — každá položka je doložitelná v kódu/testech/auditu.
 
 ## A. Core Architecture
-- **Stav:** 🔧 v průběhu (ETAPA C — rozklad monolitu `db.py`) | **Priorita:** P1
+- **Stav:** ✅ hotovo (ETAPA C dokončena ★★ — rozklad monolitu `db.py`) | **Priorita:** P1
 - **Dokončeno:** Evidence Model + Lineage (provenance každého nálezu), Integrity (SHA-256/MD5,
   Ed25519 podpisy, hash-chained audit log), Reproducibility Engine, Benchmark Engine
   (`domain/benchmark.py` + `data/benchmark_engine.py`, detekce regresí >20%), C3 Parser Validation
@@ -12,10 +12,12 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
   `CaseRepository` + `FileRepository` + `AuditRepository` (+ `_helpers.py`), facade `CaseDB` deleguje
   na sdílenou connection, backward compat zachován; `db.py` 2090 → **1565 řádků**.
   **ETAPA C vlna 2 hotová (STP-040):** vyčleněny `ArtifactRepository` + `EntityRepository`,
-  facade deleguje ~23 metod, backward compat zachován; `db.py` 1565 → **1011 řádků**
-  (monolit o ~54 % menší).
-- **Nedokončeno:** rozdělení monolitu `db.py` — zbývá vlna 3: facade úklid + závěrečný audit (cíl < ~600 ř.). SHA-512 v integrity vrstvě hotové (STP-022).
-- **Závislosti:** — | **Nejbližší úkol:** ETAPA C vlna 3 (STP-041) — facade úklid + závěrečný audit (`db.py` < ~600 ř.)
+  facade deleguje ~23 metod, backward compat zachován; `db.py` 1565 → **1011 řádků**.
+  **ETAPA C vlna 3 hotová (STP-041):** vyčleněny `schema.py` (SCHEMA_VERSION + DDL) a
+  `migrations.py` (legacy migrace), facade úklid; `db.py` 1011 → **476 řádků** — celkem
+  ~2090 → 476 = **−77 %**, cíl < ~600 splněn ★.
+- **Nedokončeno:** — (ETAPA C dokončena; SHA-512 v integrity vrstvě hotové STP-022).
+- **Závislosti:** — | **Nejbližší úkol:** volba ETAPY D (audit reálného stavu oblastí B/C/G/I/M)
 
 ## B. Evidence Acquisition
 - **Stav:** ✅ hotovo | **Priorita:** P1
@@ -125,10 +127,15 @@ Důvody: (1) nejvyšší zbývající priorita **P1**; (2) největší technick�
 - **Vlna 2 (STP-040):** ✅ **hotová** — extrakce `ArtifactRepository` + `EntityRepository`
   (~23 metod: artifacts/findings/timeline events/intel groups, entities/correlations/lineage);
   `CaseDB` deleguje; facade zachován pro backward compat. `db.py` 1565 → **1011 řádků** (−554), full suite **1774 passed**.
-- **Vlna 3 (STP-041):** finální facade úklid (`CaseDB` = tenký agregátor), full regression + audit.
+- **Vlna 3 (STP-041):** ✅ **hotová** — extrakce `schema.py` (SCHEMA_VERSION + DDL) a `migrations.py`
+  (legacy migrace: audit chain backfill, entity CHECK rebuild, timeline intel sloupce), facade úklid;
+  `CaseDB` = tenký agregátor 5 repozitářů. `db.py` 1011 → **476 řádků** (−535), full suite **1792 passed**.
 
 **Akceptační kritéria ETAPA C:** `db.py` < ~600 ř.; každé repozitářové modulu vlastní testy;
 žádná změna veřejného API `CaseDB` (backward compat); full suite zelená po každé vlně; ruff clean.
 
-**Co reálně zbývá (pořadí podle priority):** P1 A Core db split + P1 P QA CI benchmark job →
+**ETAPA C DOKONČENA ★★ (2026-11-04)** — všechny 3 vlny hotové, cíl < ~600 ř. splněn (476 ř.),
+backward compat zachován, full suite **1792 passed, 1 skipped**. Další = volba ETAPY D.
+
+**Co reálně zbývá (pořadí podle priority):** P1 P QA CI benchmark job →
 P2 M sandbox / H AI grounding / I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.

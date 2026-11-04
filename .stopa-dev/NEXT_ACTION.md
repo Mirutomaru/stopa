@@ -1,20 +1,20 @@
-# STOPA — Nejbližší akce
+# NEXT ACTION — po STP-041 (ETAPA C dokončena ★★)
 
-**Datum:** 2026-11-04
-**Poslední dokončený úkol:** STP-040 — ETAPA C vlna 2: rozdělení monolitu `db.py` (Artifact/Entity repozitáře) | Commit: ```28b6222```
+## Hotovo
+- **STP-041 / ETAPA C vlna 3** — `schema.py` + `migrations.py` vyčleněny, facade úklid; commit ```824755d```.
+- **ETAPA C dokončena ★★** — `db.py` ~2090 → **476 řádků (−77 %)**, cíl < ~600 splněn.
+- Full suite: **1792 passed, 1 skipped**; ruff clean; DEV OS + changelog + roadmapy synchronizovány.
 
-## Stav
-- **ETAPA C vlna 1+2 DOKONČENA ★** — `db.py` 2090 → **1011 řádků** (−54 % původní velikosti)
-- Facade `CaseDB` drží pět repozitářů na sdílené SQLite connection: Case / File / Audit / Artifact / Entity
-- Full suite **1774 passed, 1 skipped**; ruff clean; backward compat API beze změny
+## Další krok — STP-042: volba ETAPY D
+Audit reálného stavu zbývajících oblastí v kódu (ne jen roadmapě) + rozhodnutí o směru:
+1. **B/C** — disk images & filesystemy (NTFS/EXT4/APFS/EWF — co je pokryto, co chybí).
+2. **G** — timeline intelligence (co po STP-018 zbylo).
+3. **I** — report engine (20 sekcí hotové; rozšíření/exporty?).
+4. **M** — performance & benchmark (CI běží lint+test, ale bez benchmarku).
 
-## Nejbližší úkol
-**STP-041 — ETAPA C vlna 3: rozdělení `db.py` — facade úklid + závěrečný audit** (oblast A, P1)
-- Úklid zbývajícího kódu v `CaseDB` (SCHEMA/migrace/close zůstávají; delegované metody bez duplicit)
-- Závěrečný audit celého rozkladu: backward compat API (`CaseDB`, `SCHEMA_VERSION`, `_fts_query`), plná test suite, ruff clean
-- **Cíl: `db.py` < ~600 ř. = ETAPA C dokončena ★**
+Kritéria volby: priorita P0/P1 v roadmapě + reálný stav kódu + dopad na uživatele.
 
-## Akceptační kritéria (vlna 3)
-1. Žádná změna veřejného API `CaseDB`
-2. Full suite zelená, ruff clean
-3. `db.py` < ~600 řádků; pět repozitářů + `_helpers` jako samostatné moduly
+## Po dokončení volby
+- Synchronizace obou roadmap (root `STOPA_ROADMAP.md` + `.stopa-dev/ROADMAP.md`).
+- DEV OS: TASKS STP-042, PROJECT_STATE fáze, checkpoint, NEXT_ACTION.
+- Docs commit s reálným hashem.

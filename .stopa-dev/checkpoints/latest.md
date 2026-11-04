@@ -1,20 +1,20 @@
-# STOPA — Checkpoint (poslední dokončený stav)
+# CHECKPOINT — STP-041 hotový = ETAPA C vlna 3 DOKONČENA ★ = CELÁ ETAPA C DOKONČENA ★★ (2026-11-04)
 
-**Datum:** 2026-11-04
-**Poslední dokončený úkol:** STP-040 — ETAPA C vlna 2: rozdělení monolitu `db.py` (Artifact/Entity repozitáře) | Commit: ```28b6222```
+## Stav
+- **ETAPA C dokončena** — monolit `db.py` rozložen na doménová repozitáře + schema/migrations moduly.
+- `db.py`: ~2090 → 1565 (vlna 1) → 1011 (vlna 2) → **476 řádků** (vlna 3) = **−77 %**; cíl < ~600 splněn.
+- `CaseDB` = tenký agregátor 5 repozitářů na sdílené SQLite connection; backward compat zachován (`CaseDB`, `SCHEMA_VERSION`, `_fts_query`).
 
-## Stav projektu
-- **Fáze:** Oblast A (Core Architecture) — **ETAPA C vlna 2 DOKONČENA ★**
-- **Full suite:** 1774 passed, 1 skipped (~18s); ruff clean (`src/stopa tests scripts`)
-- **Coverage AXIOM:** covered **198 / 232 ★**, NOT_SUPPORTED celkem **0** (base-class 34 = rozhraní)
-- **C3 registry:** 76 parserů (bez změny — vlna 2 je refactor datové vrstvy, ne parsery)
+## Co se stalo (STP-041, commit ```824755d```)
+- **`schema.py`** (293 ř.): SCHEMA_VERSION + `_schema_version` + kompletní DDL (15 tabulek, indexy, triggery, FTS5).
+- **`migrations.py`** (268 ř.): `apply_legacy_migrations` — audit chain backfill od GENESIS s obnovou triggerů, entity CHECK rebuild + confidence remap, timeline intel sloupce, FTS backfill flagy.
+- **Facade úklid:** mrtvé `_last_audit_row`/`_case_examiner` pryč; `__init__` volá `apply_legacy_migrations(self.conn)`.
+- Testy: `tests/test_stp041_wave3_schema_migrations.py` — **18 testů** (SCHEMA DDL, legacy v10 migrace end-to-end, idempotence, backward compat).
 
-## Co se stalo (STP-040)
-Rozklad monolitu `src/stopa/data/db.py` na doménová repozitáře — vlna 2:
-- **ArtifactRepository** (`data/artifact_repository.py`, 712 ř.) — artifacts upsert/replace/list/get, findings CRUD, lineage_events append-only + dohledání řetězce, analysis_operations, timeline events + intel groups + window; konvertory `_row_to_artifact`/`_row_to_finding`/`_row_to_lineage_event`/`_row_to_analysis_operation`
-- **EntityRepository** (`data/entity_repository.py`, 138 ř.) — entities upsert s agregací first/last_seen při re-runu, correlations clear/add/list
-- `db.py`: 1565 → **1011 řádků** (−554); facade `CaseDB` drží pět repozitářů na sdílené connection a deleguje; backward compat zachován (`CaseDB`, `SCHEMA_VERSION`, `_fts_query`)
-- Testy: 17 nových testů zelených (`tests/test_stp040_wave2_repos.py`)
+## Verify
+- Ruff: All checks passed! ✓
+- Full suite: **1792 passed, 1 skipped** (baseline 1774 + 18) ✓
+- Nové testy: 18/18 passed ✓
 
-## Nejbližší krok
-**STP-041 — ETAPA C vlna 3:** facade úklid + závěrečný audit; cíl `db.py` < ~600 ř. = **ETAPA C dokončena ★**.
+## Další krok
+**Volba ETAPY D** — audit reálného stavu zbývajících oblastí (B disk images, C filesystems, G timeline, I report engine, M performance, R UI) + rozhodnutí o směru. Kandidáti dle roadmapy: B/C (disk+filesystem), G (timeline intelligence), I (report engine 20 sekcí — rozšíření), M (performance/benchmark v CI).

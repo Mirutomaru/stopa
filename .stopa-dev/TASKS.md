@@ -399,3 +399,12 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/data/{artifact_repository,entity_repository}.py` (nové), `db.py` (facade — 1565 → **1011 řádků**, −554; zbývá vlna 3 = facade úklid + audit)
 - **Testy:** 17 nových testů zelených (`tests/test_stp040_wave2_repos.py` — wiring sdílené connection, delegace přes facade i přímé čtení z repo, idempotentní upsert artifactu podle klíče, výměna artifactů souboru při re-ingestu, lineage chain dohledání, entity agregace first/last_seen, correlations); full suite **1774 passed, 1 skipped** (baseline 1757 + 17); ruff clean
 - **Dokončeno:** 2026-11-04 | Commit: ```28b6222```
+
+### STP-041 — ETAPA C vlna 3: rozdělení `db.py` (schema/migrations moduly + facade úklid)
+- **Oblast:** A (Core Architecture) | **Priorita:** P1 | **Stav:** DONE
+- **Popis:** Finální vlna rozkladu monolitu `src/stopa/data/db.py`. Vyčleněny dva samostatné moduly: **schema.py** (`SCHEMA_VERSION`, `_schema_version`, kompletní DDL — 15 tabulek, indexy, triggery, FTS5 virtual tables) a **migrations.py** (idempotentní migrace starých case DB — `apply_legacy_migrations` + audit chain backfill od GENESIS + entity resolution CHECK rebuild s confidence remapem verified→confirmed/inferred→possible + timeline intel sloupce + FTS backfill flagy; původně inline v `CaseDB.__init__`). Facade úklid: mrtvé privátní delegace `_last_audit_row`/`_case_examiner` (používané jen uvnitř `audit_repository`) odstraněny z `CaseDB`. **Backward compat zachován** (`CaseDB`, `SCHEMA_VERSION`, `_fts_query`).
+- **Závislosti:** STP-040 (vlna 2 — Artifact/Entity repozitáře)
+- **Dotčené moduly:** `src/stopa/data/{schema,migrations}.py` (nové), `db.py` (facade — 1011 → **476 řádků**, −535; celkem ETAPA C: ~2090 → 476, **−77 %**)
+- **Testy:** 18 nových testů zelených (`tests/test_stp041_wave3_schema_migrations.py` — schema kompletnost (tabulky/FTS/triggery), legacy v10 DB migrace end-to-end přes `CaseDB`, audit chain backfill od GENESIS s obnovou triggerů, FTS backfill flagy, idempotence na nové DB, facade úklid + backward compat); full suite **1792 passed, 1 skipped** (baseline 1774 + 18); ruff clean
+- **Finální stav ETAPY C:** `db.py` = tenký agregátor 5 repozitářů na sdílené connection; **ETAPA C DOKONČENA ★** (cíl < ~600 ř. splněn — 476 ř.)
+- **Dokončeno:** 2026-11-04 | Commit: ```824755d```
