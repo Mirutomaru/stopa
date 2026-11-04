@@ -9,8 +9,8 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
   Ed25519 podpisy, hash-chained audit log), Reproducibility Engine, Benchmark Engine
   (`domain/benchmark.py` + `data/benchmark_engine.py`, detekce regresí >20%), C3 Parser Validation
   Registry (13 parserů, 1:1 sync s pipeline).
-- **Nedokončeno:** rozdělení monolitu `db.py` (~1940 ř.); SHA-512 v integrity vrstvě.
-- **Závislosti:** — | **Nejbližší úkol:** STP-020 (SHA-512, P2)
+- **Nedokončeno:** rozdělení monolitu `db.py` (~2090 ř., 67 metod → doménová repozitáře). SHA-512 v integrity vrstvě hotové (STP-022).
+- **Závislosti:** — | **Nejbližší úkol:** ETAPA C vlna 1 (STP-039) — rozdělení `db.py` na doménová repozitáře
 
 ## B. Evidence Acquisition
 - **Stav:** ✅ hotovo | **Priorita:** P1
@@ -25,23 +25,21 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Nejbližší úkol:** —
 
 ## D. Artifact Engine
-- **Stav:** 🔧 v průběhu (ETAPA B) | **Priorita:** P0
-- **Dokončeno:** 20 parser modulů; C3 registry 13 verzovaných parserů; ETAPA B vlna 1 hotová
-  (email mbox/EML, WiFi WLAN XML, Scheduled Tasks XML, netstat/connstat text, Clipboard registry,
-  SID extraction) — commit `afc49a0`. Coverage: **covered 33 / 232** unikátních AXIOM typů.
-- **Nedokončeno:** portable-local zbývá **38 typů** (vlny 2+), cloud-export 112, memory 15.
-- **Závislosti:** pipeline dispatch + C3 registry sync | **Nejbližší úkol:** STP-016 (vlna 2)
+- **Stav:** ✅ hotovo (ETAPA B, vlny 1–15) | **Priorita:** P0
+- **Dokončeno:** 76 parser modulů; C3 registry **76 verzovaných parserů**; ETAPA B vlny 1–15 hotové.
+  Coverage: **covered 198 / 232** unikátních AXIOM typů ★; NOT_SUPPORTED celkem **0** (base-class 34 = rozhraní/DEPRECATED).
+- **Nedokončeno:** base-class 34 (rozhraní, ne extraktory) — vyčerpáno vlnou 15.
+- **Závislosti:** pipeline dispatch + C3 registry sync | **Nejbližší úkol:** ETAPA B dokončena (STP-037) → volba ETAPY C viz níže
 
 ## E. Advanced Timeline
-- **Stav:** ✅ základ hotov | **Priorita:** P2
-- **Dokončeno:** timeline engine + anomálie (`timeline_anomaly.py`), Map/WorldMap covered.
-- **Nedokončeno:** Timeline Intelligence 2.0 (rozpory, duplikáty, přesnost timestampů).
-- **Nejbližší úkol:** STP-018
+- **Stav:** ✅ hotovo | **Priorita:** P2
+- **Dokončeno:** timeline engine + anomálie (`timeline_anomaly.py`), Map/WorldMap covered. STP-018: **Timeline Intelligence 2.0** — `domain/timeline_intel.py` (rozpory, duplikáty napříč zdroji, timestamp provenance), schéma v12; 32 testů.
+- **Nejbližší úkol:** —
 
 ## F. Evidence Graph
 - **Stav:** ✅ hotovo | **Priorita:** P2
 - **Dokončeno:** Entity Resolution 2.0 (4 confidence levels, normalizace účtů, merge candidates),
-  korelace s časovým rozmezí, web graph.js + endpoint merge-candidates.
+  korelace s časovým rozmezím, web graph.js + endpoint merge-candidates.
 - **Nejbližší úkol:** —
 
 ## G. File Intelligence
@@ -53,8 +51,9 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Stav:** ✅ P0 hotovo | **Priorita:** P2 (rozšíření)
 - **Dokončeno:** I1 AI orchestrace (5 agentů, routing, fail-closed validace), I2 Forensic RAG
   (3 vrstvy, citace, prompt injection ochrana), LM Studio klient. AI = volitelná závislost.
-- **Nedokončeno:** PII redaktor před inference; AI grounding + detekce rozporů; STOPA_AI_GOVERNANCE.md.
-- **Nejbližší úkol:** STP-019
+- **Dokončeno (STP-019):** PII redaktor před inference (`domain/pii_redaction.py`, toggle `ai_redact_pii`), audit modelových volání, `STOPA_AI_GOVERNANCE.md`.
+- **Nedokončeno:** AI grounding + detekce rozporů.
+- **Nejbližší úkol:** —
 
 ## I. Validation Engine
 - **Stav:** ✅ hotovo | **Priorita:** P2
@@ -64,43 +63,66 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 
 ## J. Case Management
 - **Stav:** ✅ základ hotov | **Priorita:** P3
-- **Dokončeno:** cases DB (schema v11), chain of custody, audit trail, E3 resume/checkpointing.
-- **Nedokončeno:** Case Mgmt 2.0 (RBAC minimální — actor je volitelný string).
+- **Dokončeno:** cases DB (schema v12), chain of custody, audit trail, E3 resume/checkpointing. STP-022: RBAC minimální (`domain/rbac.py`).
+- **Nedokončeno:** Case Mgmt 2.0 (RBAC rozšíření).
 
 ## K. Export Engine
 - **Stav:** 🔧 částečně | **Priorita:** P2
-- **Dokončeno:** CSV/JSON exporty s manifestem pro reprodukovatelnost (`domain/export.py`).
-- **Nedokončeno:** STIX/UCO/Plaso/JSONL/XML formáty.
+- **Dokončeno:** CSV/JSON exporty s manifestem. STP-023: JSONL (streamovací), XML (deterministický ElementTree), STIX 2.1 bundle; CLI `--format csv|json|jsonl|xml|stix`.
+- **Nedokončeno:** Plaso formát (volitelné).
 
 ## L. Report Engine
-- **Stav:** 🔧 částečně | **Priorita:** P1
-- **Dokončeno:** HTML report 9 sekcí (chain of custody, artifacty, findings, manifest SHA-256 +
-  Ed25519 podpis, audit trail, timeline, korelace), PDF přes weasyprint (volitelné).
-- **Nedokončeno:** rozšíření na 20 sekcí (titulní strana, metodika, nástroje+verze, omezení, závěr).
-- **Nejbližší úkol:** STP-017
+- **Stav:** ✅ hotovo | **Priorita:** P1
+- **Dokončeno:** HTML report **20 sekcí** (STP-020: titulní strana, metodika, nástroje+verze, omezení, závěr + původních 9), PDF přes weasyprint (volitelné).
+- **Nejbližší úkol:** —
 
 ## M. Security
 - **Stav:** 🔧 částečně | **Priorita:** P2
-- **Dokončeno:** Ed25519 podpisy, hash chaining audit logu, prompt injection ochrana RAG.
-- **Nedokončeno:** RBAC, pip-audit v CI, izolace parserů (sandbox).
+- **Dokončeno:** Ed25519 podpisy, hash chaining audit logu, prompt injection ochrana RAG. STP-022: SHA-512 v integrity + pipeline, RBAC minimální, pip-audit CI job `security`.
+- **Nedokončeno:** izolace parserů (sandbox).
 
 ## N. Performance
-- **Stav:** 🔧 částečně | **Priorita:** P2
-- **Dokončeno:** ThreadPoolExecutor paralelizace pipeline, benchmark engine s detekcí regresí.
-- **Nedokončeno:** stream parsing velkých E01 (RAM peak), progress monitoring v web UI, CI běh benchmarku.
+- **Stav:** ✅ hotovo | **Priorita:** P2
+- **Dokončeno:** ThreadPoolExecutor paralelizace pipeline, benchmark engine s detekcí regresí. STP-021: stream parsing velkých E01/AFF4 (`stream_to_raw`, chunked 1 MiB), byte-level progress.
+- **Nedokončeno:** CI běh benchmarku.
 
 ## O. User Interface
 - **Stav:** ✅ základ hotov | **Priorita:** P3
-- **Dokončeno:** FastAPI 30 endpointů + vanilla JS SPA (dark mode), graph.js.
-- **Nedokončeno:** Processing Monitor / Validation Center / Audit Center moduly.
+- **Dokončeno:** FastAPI 30+ endpointů + vanilla JS SPA (dark mode), graph.js. STP-021: Processing Monitor (`GET /api/cases/{id}/processing` + async ingest s živým progress).
+- **Nedokončeno:** Validation Center / Audit Center moduly.
 
 ## P. Quality Assurance
 - **Stav:** ✅ hotovo | **Priorita:** P1
-- **Dokončeno:** 895 testů plně offline (syntetické fixtures), ruff clean, deterministická
-  coverage matice, DEV OS projektová paměť (`.stopa-dev/`).
-- **Nedokončeno:** CI pipeline (pytest + ruff + benchmark).
+- **Dokončeno:** 1742 testů plně offline (syntetické fixtures), ruff clean, deterministická coverage matice, DEV OS projektová paměť. STP-022: CI pipeline `.github/workflows/ci.yml` (lint + pytest + JS DOM + pip-audit).
+- **Nedokončeno:** CI běh benchmarku.
 
 ## Q. Interoperability
 - **Stav:** 🔧 částečně | **Priorita:** P3
-- **Dokončeno:** TSK/libewf integrace, iMessage cloud CSV/XLSX, mobilní logical exporty.
-- **Nedokončeno:** STIX/UCO výstup (společné s K).
+- **Dokončeno:** TSK/libewf integrace, iMessage cloud CSV/XLSX, mobilní logical exporty. STP-023: STIX 2.1 výstup (`to_stix_bundle`, deterministická UUIDv5 ID).
+- **Nedokončeno:** UCO mapping (nad STIX), Plaso import.
+
+---
+
+## ETAPA C — ROZHODNUTÍ O SMĚRU (STP-038, 2026-11-04)
+
+**Kontext:** ETAPA B (Artifact Engine, oblast D) dokončena vlnou 15 (STP-037). Všechny P0 úkoly hotové;
+full suite **1742 passed, 1 skipped**; C3 registry **76 parserů**; covered **198 / 232 ★**.
+
+**ROZHODNUTÍ — ETAPA C = oblast A (Core Architecture): rozdělení monolitu `db.py` na doménová repozitáře.**
+Důvody: (1) nejvyšší zbývající priorita **P1**; (2) největší technický dluh ovlivňující všechny ostatní oblasti;
+(3) čistě definovaný rozsah — 67 metod `CaseDB` → doménová repozitáře podle Clean Architecture;
+(4) inkrementální a plně testovatelné vlny (každá vlna drží full suite zelenou).
+
+**Plán vln ETAPY C:**
+- **Vlna 1 (STP-039):** extrakce `CaseRepository` + `FileRepository` + `AuditRepository`
+  (~28 metod: case/source/custody, file/flags/marked, audit log/operations/integrity checkpoints);
+  `CaseDB` deleguje; facade zachován pro backward compat.
+- **Vlna 2 (STP-040):** extrakce `ArtifactRepository` + `EntityRepository`
+  (~23 metod: artifacts/findings/timeline events/intel groups, entities/correlations/lineage).
+- **Vlna 3 (STP-041):** finální facade úklid (`CaseDB` = tenký agregátor), full regression + audit.
+
+**Akceptační kritéria ETAPA C:** `db.py` < ~600 ř.; každé repozitářové modulu vlastní testy;
+žádná změna veřejného API `CaseDB` (backward compat); full suite zelená po každé vlně; ruff clean.
+
+**Co reálně zbývá (pořadí podle priority):** P1 A Core db split + P1 P QA CI benchmark job →
+P2 M sandbox / H AI grounding / I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.

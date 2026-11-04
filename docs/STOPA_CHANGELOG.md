@@ -4,6 +4,12 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (ETAPA C: volba směru + synchronizace roadmapy ★)
+
+### Changed (oblast A, P1 — STP-038)
+- **Audit reálného stavu všech oblastí A–Q v kódu** a synchronizace zastaralých „Nedokončeno" položek: E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021).
+- **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře.** Plán vln: STP-039 (Case/File/Audit Repository), STP-040 (Artifact/Entity Repository), STP-041 (facade úklid + audit, `db.py` < ~600 ř.).
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 15: ZÁVĚREČNÝ AUDIT — ETAPA B dokončena ★)
 
 ### Added (oblast D, P0 — závěrečný audit celé ETAPY B po vlnách 1–14)

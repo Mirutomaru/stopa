@@ -374,3 +374,12 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Testy:** 13 nových testů zelených; full suite **1742 passed, 1 skipped** (baseline 1729 + 13); ruff clean
 - **Finální stav ETAPY B:** covered **198 / 232** unikátních AXIOM typů ★, NOT_SUPPORTED celkem **0**, C3 registry **76 parserů**; oblast D v roadmapě ✅ hotovo (vlny 1–15)
 - **Dokončeno:** 2026-11-04 | Commit: ```166e42e```
+
+### STP-038 — ETAPA C: volba směru + synchronizace roadmapy (rozdělení `db.py`)
+- **Oblast:** A (Core Architecture) | **Priorita:** P1 | **Stav:** DONE
+- **Popis:** Po dokončení ETAPY B (STP-037) — audit reálného stavu všech oblastí A–Q v kódu (ne jen roadmapě), synchronizace zastaralých „Nedokončeno" položek a rozhodnutí o směru ETAPY C. Zjištěno: několik položek bylo mezitím dokončeno — E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021). **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** (nejvyšší zbývající priorita P1, největší technický dluh).
+- **Závislosti:** STP-037 (ETAPA B dokončena)
+- **Dotčené moduly:** `STOPA_ROADMAP.md` (root — faktické opravy A/E/H/J/L/P/Q + sekce „ETAPA C — ROZHODNUTÍ O SMĚRU"), `.stopa-dev/ROADMAP.md` (autoritativní — synchronizace D–Q + sekce rozhodnutí), DEV OS registry/checkpoint/NEXT_ACTION
+- **Testy:** full suite **1742 passed, 1 skipped** (bez změny — jen docs); ruff clean
+- **Plán vln ETAPY C:** vlna 1 STP-039 (`CaseRepository`+`FileRepository`+`AuditRepository`, ~28 metod), vlna 2 STP-040 (`ArtifactRepository`+`EntityRepository`, ~23 metod), vlna 3 STP-041 (facade úklid + audit). Akceptační kritéria: `db.py` < ~600 ř., backward compat API, full suite zelená po každé vlně.
+- **Dokončeno:** 2026-11-04 | Commit: ```68da2f3```

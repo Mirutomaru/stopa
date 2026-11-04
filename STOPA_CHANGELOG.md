@@ -2,6 +2,14 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (ETAPA C: volba směru + synchronizace roadmapy ★)
+
+### Changed (oblast A, P1 — STP-038)
+- **Audit reálného stavu všech oblastí A–Q v kódu** (ne jen roadmapě) a synchronizace zastaralých „Nedokončeno" položek: E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021).
+- **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** (nejvyšší zbývající priorita P1, největší technický dluh).
+- Plán vln: **STP-039** (Case/File/Audit Repository ~28 metod), **STP-040** (Artifact/Entity Repository ~23 metod), **STP-041** (facade úklid + audit, `db.py` < ~600 ř.). Akceptační kritéria: backward compat API, full suite zelená po každé vlně.
+- Změněno: `STOPA_ROADMAP.md` (root — faktické opravy A/E/H/J/L/P/Q + sekce „ETAPA C — ROZHODNUTÍ O SMĚRU"), `.stopa-dev/ROADMAP.md` (autoritativní — synchronizace D–Q), DEV OS registry.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 15: ZÁVĚREČNÝ AUDIT — ETAPA B dokončena ★)
 
 ### Added (oblast D, P0 — závěrečný audit celé ETAPY B po vlnách 1–14)

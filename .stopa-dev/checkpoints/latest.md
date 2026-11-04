@@ -1,33 +1,31 @@
 # STOPA — Checkpoint (latest)
 
 **Datum:** 2026-11-04
-**Úkol:** STP-037 — ETAPA B vlna 15: ZÁVĚREČNÝ AUDIT (**ETAPA B DOKONČENA ★**)
-**Commit (feature):** `166e42e`
+**Úkol:** STP-038 — ETAPA C: volba směru + synchronizace roadmapy (rozdělení `db.py`)
+**Oblast / priorita:** A (Core Architecture) / P1
+**Stav:** DONE ★ **ETAPA C ZAHÁJENA**
 
-## Stav po dokončení
-- **Oblast D (Artifact Engine): ✅ hotovo** — ETAPA B vlny 1–15 všechny hotové.
-- Coverage matice: covered **198 / 232** unikátních AXIOM typů ★; NOT_SUPPORTED celkem **0**;
-  zbývá jen base-class **34** (rozhraní, ne extraktory = DEPRECATED).
-- C3 registry: **76 verzovaných parserů**.
-- Full suite: **1742 passed, 1 skipped**; ruff clean.
+## Co se stalo
+- Audit reálného stavu všech oblastí A–Q v kódu (ne jen roadmapě).
+- Synchronizace zastaralých „Nedokončeno" položek — mezitím dokončeno: E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021).
+- **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** (nejvyšší zbývající priorita P1, největší technický dluh).
 
-## Co se stalo v STP-037
-- Nový `tests/test_etapa_b_final_audit.py` — **13 invariantních testů** (offline):
-  bijekce coverage matice ↔ AXIOM RE reference (232 typů oběma směry), SUPPORTED = 198
-  každý s parserem + `stav_testovani=testováno`, DEPRECATED = 34 base-class rozhraní
-  (potvrzeno v AXIOM RE jsonu), NOT_SUPPORTED = **0 ★**, C3 registry = 76 parserů
-  (všechny test_files existují, verze neprázdné), pipeline dispatch ↔ C3 registry sync.
-- Docs: changelog root+mirror (vlna 15 blok), roadmap D ✅ hotovo + vlna 15 popisek,
-  DEV OS: TASKS STP-037, FEATURE_REGISTRY F-066, TEST_REGISTRY T-087 + celkový stav 1742,
-  PROJECT_STATE (fáze/poslední úkol/aktuální+nejbližší/testování/datum), DEV OS CHANGELOG.
+## Plán vln ETAPY C
+| Vlna | Úkol | Obsah | Akceptační kritéria |
+|---|---|---|---|
+| 1 | STP-039 | `CaseRepository` + `FileRepository` + `AuditRepository` (~28 metod) | backward compat API, full suite zelená, ruff clean |
+| 2 | STP-040 | `ArtifactRepository` + `EntityRepository` (~23 metod) | totéž |
+| 3 | STP-041 | facade úklid + audit (`db.py` < ~600 ř.) | totéž + finální audit test |
 
-## Reference commity
-| Commit | Úkol |
-|---|---|
-| `166e42e` | STP-037 vlna 15 — závěrečný audit (feature) |
-| `714cc89` | STP-036 vlna 14 — docs follow-up / HEAD před tímto úkolem |
-| `496391b` | STP-036 vlna 14 — feature (dokončení cloud-export kategorie) |
+## Metriky (bez změny — jen docs)
+- Full suite: **1742 passed, 1 skipped** (~18s)
+- Ruff: clean
+- Coverage: covered **198 / 232 ★**, NOT_SUPPORTED **0**
+- C3 registry: **76 parserů**
+
+## Commity
+- Feature (docs): viz `git log` — `docs(stp-038): ETAPA C volba směru + synchronizace roadmapy (db.py)`
+- Předchozí HEAD: `a4307c8` (STP-037 docs)
 
 ## Nejbližší krok
-**Volba oblasti pro ETAPU C** — oblast D ✅ hotovo; kandidáti dle roadmapy:
-E Advanced Timeline / F Evidence Graph / N Performance (dle priority P0→P2).
+**STP-039 — ETAPA C vlna 1:** extrakce `CaseRepository` + `FileRepository` + `AuditRepository` z `db.py`; `CaseDB` deleguje, facade zachován.

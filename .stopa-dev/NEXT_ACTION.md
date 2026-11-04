@@ -1,33 +1,21 @@
 # STOPA — NEXT ACTION
 
-**Aktuální stav:** STP-037 hotový (ETAPA B vlna 15 — závěrečný audit) → **ETAPA B DOKONČENA ★**
-**Commit:** `166e42e` (feature), HEAD po docs follow-upu viz git log.
+**Datum:** 2026-11-04
+**Poslední hotový úkol:** STP-038 — ETAPA C volba směru + synchronizace roadmapy (oblast A, P1) ★ **ETAPA C ZAHÁJENA**
 
 ## Co je hotové
-- [x] ETAPA B vlny 1–15 — celá oblast D (Artifact Engine) ✅
-- [x] Coverage: covered **198 / 232 ★**, NOT_SUPPORTED celkem **0** (base-class 34 = rozhraní/DEPRECATED)
-- [x] C3 registry: **76 verzovaných parserů**
-- [x] Závěrečný audit test `tests/test_etapa_b_final_audit.py` — 13 invariantních testů, offline
-- [x] Full suite: **1742 passed, 1 skipped**; ruff clean
+- ETAPA B dokončena (STP-037, vlna 15 — závěrečný audit; commit `166e42e`); oblast D ✅ hotovo.
+- Audit reálného stavu všech oblastí A–Q v kódu + synchronizace zastaralých „Nedokončeno" položek roadmapy (E/L/H/J/K/Q/N/O).
+- **ROZHODNUTÍ: ETAPA C = rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře.**
 
-## Nejbližší krok (STP-038)
-**Volba oblasti pro ETAPU C.** Kandidáti dle roadmapy (priorita P0→P2):
-1. **E — Advanced Timeline** (základ hotov, P2; nejbližší úkol STP-018)
-2. **F — Evidence Graph** (P?)
-3. **N — Performance** (STP-021 stream parsing velkých E01 + progress monitoring)
+## Nejbližší úkol — STP-039 (ETAPA C vlna 1)
+**Rozdělení `db.py` — extrakce `CaseRepository` + `FileRepository` + `AuditRepository`:**
+1. Nové moduly `src/stopa/data/repositories/case_repository.py`, `file_repository.py`, `audit_repository.py`.
+2. Přesun ~28 metod (case/source/custody, file/flags/marked, audit log/operations/integrity checkpoints).
+3. `CaseDB` deleguje do repozitářů — facade zachován pro backward compat (žádná změna veřejného API).
+4. Testy: existující suite musí zůstat zelená + nové testy repozitářů; ruff clean.
 
-Doporučení: projít roadmapu a vybrat oblast s nejvyšší prioritou; pak rozložit do vln/úkolů
-jako ETAPA B (TASKS.md → implementace → testy → docs).
+**Akceptační kritéria:** žádná změna veřejného API `CaseDB`, full suite **1742+ passed**, ruff clean, commit `refactor(data): ETAPA C vlna 1 — Case/File/Audit Repository`.
 
-## Kontrolní příkazy
-```bash
-cd /home/ai/Prace/projekty/stopa
-.venv/bin/python -m pytest tests/test_etapa_b_final_audit.py -q   # 13 passed
-.venv/bin/python -m pytest tests/ -q                              # 1742 passed, 1 skipped
-.venv/bin/ruff check src/stopa tests scripts                      # All checks passed!
-```
-
-## Reference
-- Checkpoint: `.stopa-dev/checkpoints/latest.md` (STP-037) + `history/20261104-stp036-vlna14-cloud-export-done.md`
-- DEV OS: TASKS.md (STP-037), FEATURE_REGISTRY.md (F-066), TEST_REGISTRY.md (T-087, celkem 1742), PROJECT_STATE.md
-- Roadmap: `STOPA_ROADMAP.md` — oblast D ✅ hotovo (vlny 1–15)
+## Po STP-039
+STP-040 (vlna 2: Artifact/Entity Repository ~23 metod) → STP-041 (vlna 3: facade úklid + audit, `db.py` < ~600 ř.).
