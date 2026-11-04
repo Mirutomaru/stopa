@@ -2,47 +2,42 @@
 
 **Datum:** 2026-11-04
 **Verze aplikace:** 0.1.0 (`pyproject.toml`)
-**Commit:** ```31bceb2``` (předchozí: `e0d4bb9` STP-034 fixup, `977e3ac` STP-034 docs, `47e7103` STP-034 feature)
+**Commit:** ```496391b``` (předchozí: `587a1ac` STP-035 docs, `31bceb2` STP-035 feature)
 
 ## Co se stalo
-**STP-035 — ETAPA B vlna 13: cloud-export Google II + Box/Dropbox/Mega (4 nové parsery / 9 AXIOM typů + 11 čistých flipů)** (oblast D, P0) hotový.
+**STP-036 — ETAPA B vlna 14: dokončení cloud-export kategorie (6 nových parserů / 19 AXIOM typů → NOT_SUPPORTED celkem 0 ★)** (oblast D, P0) hotový.
 
 ### Nové parsery (`src/stopa/artifacts/`)
-- `google_calendar_events.py` — Google Calendar Events WR/Takeout (summary/organizer/start/end/location/attendees; tolerantní klíče summary/subject, start.dateTime/date; **organizer.displayName PŘED email** — forenzní identita > adresa; all-day i timed); artifact type `calendar_event`, `details.engine=google_calendar_events`.
-- `google_keep_tasks.py` — Google Keep Notes + Tasks (poznámky title/text/labels + creationTime/modificationTime, úkoly title/dueDate/completed/listId; **auto-detekce kind keep_note|task** podle klíčů); artifact type `document_metadata`, `details.engine=google_keep_tasks`.
-- `box_cloud.py` — Box Cloud (soubory/složky name/size/path_collection + created_at/modified_at, enterprise a auditní eventy event_type/action + actor.name; **auto-detekce kind file|folder|comment|event**); artifact type `document_metadata`, `details.engine=box_cloud`.
-- `dropbox_mega.py` — Dropbox + Mega (cloud storage položky s **provider auto-detekcí**: Dropbox API klíče path_lower/bytes/is_dir PŘED Mega size/type, hint z cesty; složky i soubory); artifact type `document_metadata`, `details.provider=dropbox|mega`, `details.engine=dropbox_mega`.
-
-### Čisté flipy (bez nového kódu — existující parsery už typy pokrývaly)
-- AppleIMessage → `imessage_cloud`
-- GooglePhotos×2 → `google_photos`
-- GmailMessagesWR → `google_mail_info`
-- Chat/ChatSpaces/Chats/Hangouts → `google_chat_family`
-- GoogleActivity → `google_aggregated_activities`
-- SemanticLocationHistory activity_segment + place_visit → `google_maps_activity`
+- `apple_cloud.py` — Apple Cloud rodina: Contacts (`contact`, tolerantní klíče + `_list_of_str` pro listy dictů), Keychain (`credential` label/account/type/data), Mail (`email_message`, body do `details`), Photos (`media_asset`), Backup (`file_metadata`); **auto-detekce podtypu `_detect_kind()`**; detektor vyžaduje `.json` příponu (nekrade iMessage TSV `[Apple_Request]-MessagesInICloud-1.csv`).
+- `google_2025_wr.py` — Google 2025 WR: AccessLogDevices (`event_log_entry`), AccountTargetAssociation (`contact` relationship=account_target), Calls (`call_record` from/to/duration); **klíčová slova bez podtržítek** (accesslog/targetassoc/call) pro CamelCase exporty; call fallback `from`/`to` klíče.
+- `whatsapp_cloud.py` — WhatsApp Chats (`chat_message`, body do `details["text"]`) + Backups (`file_metadata` backupDate/version/sizeBytes); auto-detekce kind chat|backup.
+- `cloud_generic.py` — generic cloud metadata: AccountsInfo (accountName fallback), ConnectedApps, RecentDevices, Timeline, Passwords, AndroidBackups, AzureVM snapshots; **nejobecnější detektor** — v `_sns_prepass()` poslední, aby nekradl cizí soubory.
+- `gmail_messages.py` — Gmail Messages (`email_message`, tolerantní klíče).
+- `maps_labeled_places.py` — Google Maps Labeled Places WR (`location_point`).
 
 ### Pipeline dispatch
-- `_sns_prepass()` rozšířen o vlnu 13 detektory (pořadí: **calendar PŘED keep** — keep_notes.json obsahuje „calendar" jen u cizích cest; box/dropbox/mega dle markery; specifické PŘED obecnými) — bez kolizí s existujícími Google/SNS detektory.
-- `NAME_BASED_EXTRACTORS` +4 položky; imports v abecedním pořadí (box_cloud za bebo_chat, dropbox_mega za drive_activity, google_calendar_events + google_keep_tasks v Google bloku).
+- `_sns_prepass()` rozšířen o 6 vlna-14 detektorů (pořadí: **specifické PŘED obecným `cloud_generic`**); docstring ETAPA B vlna 10/11/12/13/14.
+- `NAME_BASED_EXTRACTORS` +6 položek; imports v abecedním pořadí (apple_cloud před bebo_chat, cloud_generic před ddg_current_tabs, gmail_messages/google_2025_wr v Google bloku, maps_labeled_places za mailru_agent, whatsapp_cloud před win_amcache).
 
 ### C3 registry
-- 4 nové záznamy (`google_calendar_events`/`google_keep_tasks`/`box_cloud`/`dropbox_mega`) — `build_registry()` = **70 parserů** (předtím 66). Limity v textu srovnány s reálnými konstantami parserů.
+- 6 nových záznamů (`apple_cloud`/`google_2025_wr`/`whatsapp_cloud`/`cloud_generic`/`gmail_messages`/`maps_labeled_places`) — `build_registry()` = **76 parserů** (předtím 70).
 
 ## Metriky
-| Metrika | Předtím | Po vlně 13 |
+| Metrika | Předtím | Po vlně 14 |
 |---------|---------|------------|
-| Full suite | 1626 passed, 1 skipped | **1671 passed, 1 skipped** (+45) |
-| C3 registry | 66 parserů | **70 parserů** |
-| Coverage covered | 159 / 232 | **179 / 232 ★** |
-| cloud-export NOT_SUPPORTED | 39 | **19** |
+| Full suite | 1671 passed, 1 skipped | **1729 passed, 1 skipped** (+58) |
+| C3 registry | 70 parserů | **76 parserů** |
+| Coverage covered | 179 / 232 | **198 / 232 ★** |
+| cloud-export NOT_SUPPORTED | 19 | **0 ★ (vyčerpána)** |
+| NOT_SUPPORTED celkem | 19 | **0** (base-class 34 = rozhraní) |
 | memory NOT_SUPPORTED | 0 ★ | 0 ★ |
 | portable-local NOT_SUPPORTED | 0 ★ | 0 ★ |
 
 ## Testy
-- `tests/test_w13_parsers.py` — **45 syntetických offline testů**, ruff clean.
-- Full suite: **1671 passed, 1 skipped**.
+- `tests/test_w14_parsers.py` — **58 syntetických offline testů** (6 parserů + dispatch pre-pass routing), ruff clean.
+- Full suite: **1729 passed, 1 skipped**.
 
 ## Registry
-- Feature: **F-064** ETAPA B vlna 13 — cloud-export Google II + Box/Dropbox/Mega (4 nové parsery / 9 typů + 11 čistých flipů).
-- Testy: **T-085** `tests/test_w13_parsers.py` (45).
-- Celkový stav TEST_REGISTRY: **1671 testů: 1670 PASS + 1 skipped**.
+- Feature: **F-065** ETAPA B vlna 14 — dokončení cloud-export kategorie (6 nových parserů / 19 typů → NOT_SUPPORTED celkem 0 ★).
+- Testy: **T-086** `tests/test_w14_parsers.py` (58).
+- Celkový stav TEST_REGISTRY: **1729 testů: 1728 PASS + 1 skipped**.

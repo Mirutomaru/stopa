@@ -11,14 +11,15 @@
 ## Aktuální architektura
 Clean Architecture — 4 vrstvy:
 - `src/stopa/domain/` — čistá doménová logika bez I/O (**35 modulů**, +timeline_intel)
-- `src/stopa/artifacts/` — extraktory artifactů, I/O jen v entrypointech (**70 souborů**)
+- `src/stopa/artifacts/` — extraktory artifactů, I/O jen v entrypointech (**87 souborů**)
 - `src/stopa/data/` — I/O vrstva: db.py (SQLite), TSK, libewf, image_pipeline, ingest
 - `src/stopa/web/` + `cli.py` — prezentace (FastAPI 30 endpointů + CLI)
 Pipeline = jediný `analyze()` s dispatchem magic signatur + name-based fallback,
 ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 
 ## Aktuální fáze vývoje
-**Oblast D (Artifact Engine)** — **STP-035 hotový** (ETAPA B vlna 13: cloud-export Google II + Box/Dropbox/Mega,
+**Oblast D (Artifact Engine)** — **STP-036 hotový** (ETAPA B vlna 14: dokončení cloud-export kategorie,
+6 nových parserů / 19 AXIOM typů → NOT_SUPPORTED celkem **0 ★**; `_sns_prepass()` rozšířen o 6 vlna-14 detektorů). Předtím: **STP-035 ETAPA B vlna 13** (cloud-export Google II + Box/Dropbox/Mega,
 4 nové parsery / 9 AXIOM typů + 11 čistých flipů; `_sns_prepass()` rozšířen o vlnu 13 detektory). Předtím: **STP-034 ETAPA B vlna 12** (cloud-export Microsoft + Amazon,
 8 parserů / 12 AXIOM typů; `_sns_prepass()` rozšířen o 8 MS+Amazon detektorů bez kolizí). Předtím: **STP-033 ETAPA B vlna 11** (cloud SNS exporty — Twitter/X + Facebook warrant return,
 4 parsery / 13 AXIOM typů; `_sns_prepass()` rozšířen o 4 detektory bez kolizí),
@@ -35,23 +36,24 @@ ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 **STP-021 stream parsing velkých E01 + web Processing Monitor**,
 **STP-019 AI governance + PII redaktor**, **STP-020 Report engine 9→20 sekcí**,
 **STP-018 Timeline Intelligence 2.0** a **ETAPA B vlny 1–3 hotové**.
-Coverage matice: covered **179 / 232** unikátních typů; portable-local NOT_SUPPORTED = **0 ★**; memory NOT_SUPPORTED = **0 ★** (vyzerovala vlnou 9); cloud-export NOT_SUPPORTED = **19**.
+Coverage matice: covered **198 / 232** unikátních typů; portable-local NOT_SUPPORTED = **0 ★**; memory NOT_SUPPORTED = **0 ★** (vyzerovala vlnou 9); cloud-export NOT_SUPPORTED = **0 ★** (vyčerpáno vlnou 14 — celá kategorie dokončena).
 
 ## Celkový stav projektu
 Stabilní — plná test suite zelená, ruff clean, deterministická coverage matice.
 
 | Metrika | Hodnota |
 |---|---|
-| Dokončené úkoly (TASKS.md) | **35** |
+| Dokončené úkoly (TASKS.md) | **36** |
 | Rozpracované (IN_PROGRESS) | 0 |
-| Čekající (BACKLOG/READY) | **0** (všechny STP-001..035 DONE; další = ETAPA B vlna 14 cloud-export/base-class) |
+| Čekající (BACKLOG/READY) | **0** (všechny STP-001..036 DONE; další = ETAPA B vlna 15 base-class typy) |
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-035 — ETAPA B vlna 13: cloud-export Google II + Box/Dropbox/Mega (4 nové parsery / 9 typů + 11 čistých flipů)** (oblast D, P0) | Commit: ```31bceb2```
-Čtyři nové extraktory: `google_calendar_events.py` (Calendar Events WR/Takeout → `calendar_event`, tolerantní klíče summary/subject, start.dateTime/date, organizer.displayName PŘED email), `google_keep_tasks.py` (Keep Notes + Tasks → `document_metadata` kind=keep_note|task, auto-detekce podle klíčů), `box_cloud.py` (Box soubory/složky/enterprise+audit eventy → `document_metadata` kind=file|folder|comment|event), `dropbox_mega.py` (Dropbox + Mega položky, provider auto-detekce — Dropbox API klíče PŘED Mega size/type). **11 čistých flipů bez nového kódu** (iMessage cloud→imessage_cloud, Google Photos×2→google_photos, Gmail Messages WR→google_mail_info, Chat/ChatSpaces/Chats/Hangouts→google_chat_family, Google Activity→aggregated_activities, Semantic Location History activity_segment+place_visit→maps_activity). Pipeline `_sns_prepass()` rozšířen o vlnu 13 detektory (calendar PŘED keep; box/dropbox/mega dle markery); C3 registry **70 parserů**; full suite **1671 passed, 1 skipped**; coverage flip 20 typů: covered **159 → 179 / 232**, cloud-export kategorie **39 → 19**.
-**45 nových testů** (`tests/test_w13_parsers.py`); full suite **1671 passed, 1 skipped**, ruff clean.
-Předtím: STP-034 (vlna 12 cloud-export Microsoft + Amazon, `47e7103`),
+**STP-036 — ETAPA B vlna 14: dokončení cloud-export kategorie (6 nových parserů / 19 typů → NOT_SUPPORTED celkem 0 ★)** (oblast D, P0) | Commit: ```496391b```
+Šest nových extraktorů: `apple_cloud.py` (Apple Cloud rodina — Contacts/Keychain/Mail/Photos/Backup, auto-detekce podtypu `_detect_kind`; detektor vyžaduje `.json` příponu, aby nekradl iMessage TSV), `google_2025_wr.py` (Google 2025 WR — AccessLogDevices + AccountTargetAssociation + Calls; klíčová slova bez podtržítek pro CamelCase exporty), `whatsapp_cloud.py` (WhatsApp Chats + Backups), `cloud_generic.py` (generic cloud metadata — AccountsInfo/ConnectedApps/RecentDevices/Timeline/Passwords/AndroidBackups/AzureVM snapshots; nejobecnější detektor, v pre-passu poslední), `gmail_messages.py` (Gmail Messages → `email_message`), `maps_labeled_places.py` (Maps Labeled Places WR → `location_point`). Pipeline `_sns_prepass()` rozšířen o 6 vlna-14 detektorů (specifické PŘED obecným `cloud_generic`); C3 registry **76 parserů**; full suite **1729 passed, 1 skipped**; coverage flip 19 typů: covered **179 → 198 / 232 ★**, cloud-export kategorie **19 → 0 ★ (vyčerpána)**.
+**58 nových testů** (`tests/test_w14_parsers.py`); full suite **1729 passed, 1 skipped**, ruff clean.
+Předtím: STP-035 (vlna 13 cloud-export Google II + Box/Dropbox/Mega, `31bceb2`),
+STP-034 (vlna 12 cloud-export Microsoft + Amazon, `47e7103`),
 STP-033 (vlna 11 cloud SNS Twitter/X + Facebook WR, `bea2a25`),
 STP-032 (vlna 10 cloud SNS Instagram/Snapchat WR, `da83a6f`),
 STP-031 (vlna 9 memory forensics, `4747738`),
@@ -67,17 +69,17 @@ STP-018 (Timeline Intel 2.0, `cd5aa25`), STP-017 (vlna 3), STP-016 (vlna 2), STP
 STP-012b, STP-012 (`e227929`), STP-013..015 (vlna 1, `afc49a0`).
 
 ## Aktuální úkol
-Žádný aktivní — čeká na zahájení **ETAPA B vlna 14** (Artifact Engine: zbývající cloud-export/base-class typy).
+Žádný aktivní — čeká na zahájení **ETAPA B vlna 15** (Artifact Engine: base-class typy, zbývá 34).
 
 ## Nejbližší následující úkol
-**STP-036 — ETAPA B vlna 14 — Artifact Engine: cloud-export typy (zbývá 19) + base-class (34)** (oblast D, P0)
-Pokračování portu AXIOM extraktorů; po vlně 13 je covered **179 / 232 ★**.
-Zbývá portable-local **0 ★** + cloud-export **19** + base-class **34**.
+**STP-037 — ETAPA B vlna 15 — Artifact Engine: base-class typy (zbývá 34)** (oblast D, P0)
+Pokračování portu AXIOM extraktorů; po vlně 14 je covered **198 / 232 ★**.
+Zbývá portable-local **0 ★** + cloud-export **0 ★** + base-class **34** (rozhraní, ne extraktory).
 
 ## Poslední úspěšné testování
-- **2026-11-04:** `.venv/bin/python -m pytest -q` → **1671 passed, 1 skipped** (~17s)
+- **2026-11-04:** `.venv/bin/python -m pytest -q` → **1729 passed, 1 skipped** (~18s)
 - `.venv/bin/ruff check src/stopa tests scripts` → All checks passed!
-- Coverage matice deterministická (SHA-256 diff ✓), covered **179 / 232 ★**, portable-local NOT_SUPPORTED = **0 ★**
+- Coverage matice deterministická (SHA-256 diff ✓), covered **198 / 232 ★**, portable-local NOT_SUPPORTED = **0 ★**, cloud-export NOT_SUPPORTED = **0 ★**
 
 ## Známé kritické problémy
 Žádné blokující. Technický dluh viz `docs/STOPA_TECHNICAL_AUDIT.md`:
@@ -85,4 +87,4 @@ Zbývá portable-local **0 ★** + cloud-export **19** + base-class **34**.
 - izolace parserů (sandbox) zbývá v oblasti M
 
 ## Datum poslední aktualizace
-**2026-11-04** — po dokončení STP-035 ETAPA B vlna 13: cloud-export Google II + Box/Dropbox/Mega (4 nové parsery / 9 typů + 11 čistých flipů, 45 testů).
+**2026-11-04** — po dokončení STP-036 ETAPA B vlna 14: dokončení cloud-export kategorie (6 nových parserů / 19 typů, 58 testů; NOT_SUPPORTED celkem **0 ★**).

@@ -2,6 +2,49 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 14: dokončení cloud-export kategorie)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 6 nových parserů / 19 typů → NOT_SUPPORTED celkem 0 ★)
+- **Apple Cloud rodina** (`artifacts/apple_cloud.py`) — kontakty (displayName/firstName/lastName,
+  emaily/telefony jako seznamy), keychain položky (label/account/type/data), e-mailové zprávy
+  (sender/recipient/body do `details`), fotky a zálohy; auto-detekce podtypu `_detect_kind`.
+  AXIOM `CloudAppleContactsArtifact` + `CloudAppleKeychainItemArtifact` +
+  `CloudAppleMailMessageArtifact` + `CloudApplePhotosArtifact` +
+  `CloudAppleBackupArtifact`. Artifact types `contact`/`credential`/`email_message`/
+  `media_asset`/`backup_metadata`, `details.engine=apple_cloud`. Detektor vyžaduje
+  `.json` příponu (nekrade iMessage TSV `[Apple_Request]-MessagesInICloud-1.csv`).
+- **Google 2025 WR** (`artifacts/google_2025_wr.py`) — AccessLogDevices (přístroj/čas přístupu),
+  AccountTargetAssociation (asociace účtu a cíle) a Calls (from/to/duration); auto-detekce
+  podtypu podle cesty + tvaru položky. AXIOM `GoogleAccessLogDevices2025Artifact` +
+  `GoogleAccountTargetAssociation2025Artifact` + `GoogleCalls2025Artifact`. Artifact type
+  `device_access_log`/`account_association`/`call_record`, `details.engine=google_2025_wr`.
+- **WhatsApp Cloud** (`artifacts/whatsapp_cloud.py`) — chaty (sender/text do `details["text"]`,
+  message_type) a zálohy (backupDate/version/sizeBytes); auto-detekce kind. AXIOM
+  `CloudWhatsAppChatsArtifact` + `CloudWhatsAppBackupsArtifact`. Artifact type
+  `chat_message`/`backup_metadata`, `details.engine=whatsapp_cloud`.
+- **Generic cloud metadata** (`artifacts/cloud_generic.py`) — AccountsInfo (accountName/email),
+  ConnectedApps, RecentDevices, Timeline, Passwords, AndroidBackups a Azure VM snapshots;
+  auto-detekce kind podle cesty + klíčů. AXIOM `CloudAccountsInfoArtifact` +
+  `CloudConnectedAppsArtifact` + `CloudRecentDevicesArtifact` + `CloudTimelineArtifact` +
+  `CloudPasswordsArtifact` + `CloudAndroidBackupsArtifact` +
+  `AzureVirtualMachineSnapshotsArtifact`. Artifact type `account_metadata`/`device_access_log`/
+  `credential`, `details.engine=cloud_generic`. Nejobecnější detektor — v pre-passu poslední.
+- **Gmail Messages** (`artifacts/gmail_messages.py`) — e-mailové zprávy (from/to/subject/body do
+  `details`). AXIOM `CloudGmailMessagesArtifact`. Artifact type `email_message`,
+  `details.engine=gmail_messages`.
+- **Maps Labeled Places WR** (`artifacts/maps_labeled_places.py`) — označená místa warrant returnu
+  (label/place name/lat/lng). AXIOM `GoogleMapsLabeledPlacesWarrantReturnArtifact`. Artifact type
+  `location_point`, `details.engine=maps_labeled_places`.
+
+### Changed
+- **Pipeline** — imports 6 nových parserů (abecedně), `NAME_BASED_EXTRACTORS` +6 položek,
+  `_sns_prepass()` rozšířen o vlna-14 detektory (specifické PŘED obecným `cloud_generic`).
+  Docstring pre-passu `ETAPA B vlna 10/11/12/13/14`.
+- **C3 registry** — 70 → **76 parserů** (6 nových záznamů za `dropbox_mega`).
+- **Coverage matice** — 19 typů NOT_SUPPORTED → SUPPORTED: covered **179 → 198 / 232 ★**;
+  cloud-export NOT_SUPPORTED **19 → 0 ★** (celá kategorie dokončena); NOT_SUPPORTED celkem **0**
+  (base-class 34 = rozhraní, ne extraktory). Regen CSV/MD/JSON deterministicky.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 13: cloud-export Google II + Box/Dropbox/Mega)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 9 typů + 11 čistých flipů)
