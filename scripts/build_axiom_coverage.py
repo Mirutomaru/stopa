@@ -128,6 +128,23 @@ COVERED: dict[str, str] = {
     "SkypeWarrantReturnChatHistoryRecordsArtifact": "covered",  # skype_warrant_return (chat history)
     "SkypeWarrantReturnConnectionHistoryArtifact": "covered",  # skype_warrant_return (connection history)
     "SkypeWarrantReturnContactsArtifact": "covered",  # skype_warrant_return (contacts)
+    # ETAPA B vlna 8 — port AXIOM extraktorů (4 nové parsery, testováno)
+    "CloudGoogleChromeExtensionsArtifact": "covered",  # chrome_preferences (extensions.settings)
+    "CloudGoogleChromeExtensionSettingsArtifact": "covered",  # chrome_preferences (extension settings detail)
+    "CloudGoogleChromeSearchEnginesArtifact": "covered",  # chrome_preferences (search engines)
+    "CloudGoogleChromeSyncSettingsAppSettingsArtifact": "covered",  # chrome_preferences (sync app settings)
+    "CloudGoogleChromeSyncSettingsAppsArtifact": "covered",  # chrome_preferences (sync apps)
+    "CloudGoogleChromeSyncSettingsPreferencesArtifact": "covered",  # chrome_preferences (sync preferences)
+    "CloudDriveFileArtifact": "covered",  # cloud_drive_files (Google Drive soubory)
+    "CloudDriveFileVersionArtifact": "covered",  # cloud_drive_files (verze souboru)
+    "CloudOneDriveFileArtifact": "covered",  # cloud_drive_files (OneDrive soubory)
+    "CloudOneDriveFileVersionArtifact": "covered",  # cloud_drive_files (OneDrive verze)
+    "CloudAppleDriveArtifact": "covered",  # cloud_drive_files (Apple Drive)
+    "GoogleVoiceTexts2025Artifact": "covered",  # google_voice_wr (SMS texty)
+    "GoogleVoicemail2025Artifact": "covered",  # google_voice_wr (hlasové schránky)
+    "GoogleVoiceContactsMetadata2026Artifact": "covered",  # google_voice_wr (kontakty)
+    "GoogleVoiceSubscriberInformation2026Artifact": "covered",  # google_voice_wr (předplatitel)
+    "DriversArtifact": "covered",  # win_drivers (načtené ovladače z paměti)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -284,6 +301,23 @@ def _covered_desc(name: str) -> str:
         "SkypeWarrantReturnChatHistoryRecordsArtifact": "skype_warrant_return parser (chat history records — conversationId/composetime)",
         "SkypeWarrantReturnConnectionHistoryArtifact": "skype_warrant_return parser (connection history — contact/status/dateAdded)",
         "SkypeWarrantReturnContactsArtifact": "skype_warrant_return parser (contacts — msnId/displayName/email)",
+        # ETAPA B vlna 8 — port AXIOM extraktorů
+        "CloudGoogleChromeExtensionsArtifact": "chrome_preferences parser (extensions.settings — ID/název/stav rozšíření)",
+        "CloudGoogleChromeExtensionSettingsArtifact": "chrome_preferences parser (detail nastavení rozšíření)",
+        "CloudGoogleChromeSearchEnginesArtifact": "chrome_preferences parser (default_search_provider_data + custom search engines)",
+        "CloudGoogleChromeSyncSettingsAppSettingsArtifact": "chrome_preferences parser (sync data_type_enabled — app settings)",
+        "CloudGoogleChromeSyncSettingsAppsArtifact": "chrome_preferences parser (sync apps)",
+        "CloudGoogleChromeSyncSettingsPreferencesArtifact": "chrome_preferences parser (sync preferences)",
+        "CloudDriveFileArtifact": "cloud_drive_files parser (Google Drive soubory — název/velikost/checksum/čas)",
+        "CloudDriveFileVersionArtifact": "cloud_drive_files parser (verze souboru do details.versions)",
+        "CloudOneDriveFileArtifact": "cloud_drive_files parser (OneDrive soubory — lastModifiedDateTime marker)",
+        "CloudOneDriveFileVersionArtifact": "cloud_drive_files parser (OneDrive verze souboru)",
+        "CloudAppleDriveArtifact": "cloud_drive_files parser (Apple Drive soubory)",
+        "GoogleVoiceTexts2025Artifact": "google_voice_wr parser (SMS texty — from/to/body/timestampMsInEpoch)",
+        "GoogleVoicemail2025Artifact": "google_voice_wr parser (hlasové schránky — duration/transcript)",
+        "GoogleVoiceContactsMetadata2026Artifact": "google_voice_wr parser (kontakty — name/phoneNumber/emailAddress)",
+        "GoogleVoiceSubscriberInformation2026Artifact": "google_voice_wr parser (předplatitel — subscriberNumber/carrierName)",
+        "DriversArtifact": "win_drivers parser (načtené ovladače z paměti — baseAddress/signed, anomaly unsigned_driver)",
     }
     return m.get(name, "existující parser")
 

@@ -5,15 +5,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 84
+- **✅ COVERED**: 100
 - **🔧 PORTABLE-LOCAL**: 0
-- **☁️ CLOUD-EXPORT**: 99
-- **💾 MEMORY**: 15
+- **☁️ CLOUD-EXPORT**: 84
+- **💾 MEMORY**: 14
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (84)
+## ✅ COVERED — STOPA už umí (existující parser) (100)
 
 - `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
 - `AppleIMessageArtifact` — sqlite_extract → imessage
@@ -24,17 +24,29 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CallLogsArtifact` — sqlite_extract → call_log
 - `ChatrouletteArtifact` — chatroulette parser (text/JSON video chat)
 - `ClipboardArtifact` — win_clipboard (sekundární registry průchod NTUSER.DAT)
+- `CloudAppleDriveArtifact` — cloud_drive_files parser (Apple Drive soubory)
+- `CloudDriveFileArtifact` — cloud_drive_files parser (Google Drive soubory — název/velikost/checksum/čas)
+- `CloudDriveFileVersionArtifact` — cloud_drive_files parser (verze souboru do details.versions)
 - `CloudGoogleChromeAutofillArtifact` — google_chrome_autofill parser (Autofill/ContactInfo JSON, name/email/address)
 - `CloudGoogleChromeBookmarksArtifact` — google_chrome_bookmarks parser (Bookmarks JSON, date_added µs od 1601)
 - `CloudGoogleChromeBrowserHistoryArtifact` — browser_history
+- `CloudGoogleChromeExtensionSettingsArtifact` — chrome_preferences parser (detail nastavení rozšíření)
+- `CloudGoogleChromeExtensionsArtifact` — chrome_preferences parser (extensions.settings — ID/název/stav rozšíření)
+- `CloudGoogleChromeSearchEnginesArtifact` — chrome_preferences parser (default_search_provider_data + custom search engines)
+- `CloudGoogleChromeSyncSettingsAppSettingsArtifact` — chrome_preferences parser (sync data_type_enabled — app settings)
+- `CloudGoogleChromeSyncSettingsAppsArtifact` — chrome_preferences parser (sync apps)
+- `CloudGoogleChromeSyncSettingsPreferencesArtifact` — chrome_preferences parser (sync preferences)
 - `CloudGoogleContactsArtifact` — google_contacts_wr parser (Contacts Takeout/warrant JSON, name/emails/phoneNumbers)
 - `CloudGoogleLocationHistoryArtifact` — google_location_history parser (warrant return CSV/JSON)
 - `CloudMboxEmailArtifact` — email_mbox parser
+- `CloudOneDriveFileArtifact` — cloud_drive_files parser (OneDrive soubory — lastModifiedDateTime marker)
+- `CloudOneDriveFileVersionArtifact` — cloud_drive_files parser (OneDrive verze souboru)
 - `CmdScanArtifact` — mem_scan parser (textový výstup — procesy v paměti)
 - `ConnscanArtifact` — net_connections parser
 - `CurrentTabsArtifact` — ddg_current_tabs parser (JSON/text záložky)
 - `DocumentMetadataExtractor` — OOXML metadata
 - `DriveActivityArtifact` — drive_activity parser (Drive activity log JSON)
+- `DriversArtifact` — win_drivers parser (načtené ovladače z paměti — baseAddress/signed, anomaly unsigned_driver)
 - `DuckDuckGoCookiesArtifact` — ddg_cookies parser (Chromium cookies SQLite, µs od 1601)
 - `FileScanArtifact` — mem_scan parser (textový výstup — soubory v paměti)
 - `GetsidsArtifact` — win_sids (sekundární registry průchod SAM/SECURITY)
@@ -61,6 +73,10 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GooglePlusChatArtifact` — google_chat_family parser (Takeout Plus Chat JSON)
 - `GoogleSearchHistoryArtifact` — google_search_history parser (JSON Takeout)
 - `GoogleTalkArtifact` — google_chat_family parser (Takeout Talk JSON)
+- `GoogleVoiceContactsMetadata2026Artifact` — google_voice_wr parser (kontakty — name/phoneNumber/emailAddress)
+- `GoogleVoiceSubscriberInformation2026Artifact` — google_voice_wr parser (předplatitel — subscriberNumber/carrierName)
+- `GoogleVoiceTexts2025Artifact` — google_voice_wr parser (SMS texty — from/to/body/timestampMsInEpoch)
+- `GoogleVoicemail2025Artifact` — google_voice_wr parser (hlasové schránky — duration/transcript)
 - `IeTypedUrlArtifact` — browser_history (chrome/firefox)
 - `ImageInfoArtifact` — magic bytes → image info
 - `JumpListsArtifact` — win_jumplist parser
@@ -100,7 +116,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## ☁️ CLOUD-EXPORT — JSON export / warrant return (99)
+## ☁️ CLOUD-EXPORT — JSON export / warrant return (84)
 
 - `CloudAccountsInfoArtifact` — JSON export / warrant return
 - `CloudAmazonCloudTrailEventsArtifact` — JSON export / warrant return
@@ -110,7 +126,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudAndroidBackupsArtifact` — JSON export / warrant return
 - `CloudAppleBackupArtifact` — JSON export / warrant return
 - `CloudAppleContactsArtifact` — JSON export / warrant return
-- `CloudAppleDriveArtifact` — JSON export / warrant return
 - `CloudAppleIMessageArtifact` — JSON export / warrant return
 - `CloudAppleKeychainArtifact` — JSON export / warrant return
 - `CloudAppleMailArtifact` — JSON export / warrant return
@@ -120,8 +135,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudBoxFilesArtifact` — JSON export / warrant return
 - `CloudBoxUserEventArtifact` — JSON export / warrant return
 - `CloudConnectedAppsArtifact` — JSON export / warrant return
-- `CloudDriveFileArtifact` — JSON export / warrant return
-- `CloudDriveFileVersionArtifact` — JSON export / warrant return
 - `CloudDropboxEntryArtifact` — JSON export / warrant return
 - `CloudFacebookFriendsArtifact` — JSON export / warrant return
 - `CloudFacebookInstagramMessagesArtifact` — JSON export / warrant return
@@ -137,12 +150,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudGoogleChatArtifact` — JSON export / warrant return
 - `CloudGoogleChatSpacesArtifact` — JSON export / warrant return
 - `CloudGoogleChatsArtifact` — JSON export / warrant return
-- `CloudGoogleChromeExtensionSettingsArtifact` — JSON export / warrant return
-- `CloudGoogleChromeExtensionsArtifact` — JSON export / warrant return
-- `CloudGoogleChromeSearchEnginesArtifact` — JSON export / warrant return
-- `CloudGoogleChromeSyncSettingsAppSettingsArtifact` — JSON export / warrant return
-- `CloudGoogleChromeSyncSettingsAppsArtifact` — JSON export / warrant return
-- `CloudGoogleChromeSyncSettingsPreferencesArtifact` — JSON export / warrant return
 - `CloudGoogleKeepArtifact` — JSON export / warrant return
 - `CloudGooglePhotosArtifact` — JSON export / warrant return
 - `CloudGooglePhotosAxiom2Pt8Artifact` — JSON export / warrant return
@@ -158,8 +165,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudMicrosoftMailPstArtifact` — JSON export / warrant return
 - `CloudMicrosoftTeamsConversationsArtifact` — JSON export / warrant return
 - `CloudMicrosoftTeamsTeamsArtifact` — JSON export / warrant return
-- `CloudOneDriveFileArtifact` — JSON export / warrant return
-- `CloudOneDriveFileVersionArtifact` — JSON export / warrant return
 - `CloudOutlookCalendarArtifact` — JSON export / warrant return
 - `CloudPasswordsArtifact` — JSON export / warrant return
 - `CloudRecentDevicesArtifact` — JSON export / warrant return
@@ -181,10 +186,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GoogleAccountTargetAssociation2025Artifact` — warrant return (JSON)
 - `GoogleCalls2025Artifact` — warrant return (JSON)
 - `GoogleMapsLabeledPlacesWarrantReturnArtifact` — warrant return (JSON)
-- `GoogleVoiceContactsMetadata2026Artifact` — warrant return (JSON)
-- `GoogleVoiceSubscriberInformation2026Artifact` — warrant return (JSON)
-- `GoogleVoiceTexts2025Artifact` — warrant return (JSON)
-- `GoogleVoicemail2025Artifact` — warrant return (JSON)
 - `InstagramAccountActionsArtifact` — JSON/DB export
 - `InstagramAccountHistoryArtifact` — JSON/DB export
 - `InstagramArchivedStoriesArtifact` — JSON/DB export
@@ -202,11 +203,10 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `SnapchatIpHistoryArtifact` — JSON/DB export
 - `SnapchatMessagesWarrantReturnArtifact` — warrant return (JSON)
 
-## 💾 MEMORY — live forensics (paměťový dump) (15)
+## 💾 MEMORY — live forensics (paměťový dump) (14)
 
 - `ApiHooksArtifact` — live forensics (paměťový dump)
 - `CallbacksArtifact` — live forensics (paměťový dump)
-- `DriversArtifact` — live forensics (paměťový dump)
 - `ExecutiveObjectCallbacksArtifact` — live forensics (paměťový dump)
 - `HandlesArtifact` — live forensics (paměťový dump)
 - `MalfindArtifact` — live forensics (paměťový dump)

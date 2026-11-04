@@ -34,6 +34,16 @@ from stopa.artifacts.chatroulette import (
     extract_chatroulette_artifacts,
     is_chatroulette_file,
 )
+from stopa.artifacts.chrome_preferences import PARSER_VERSION as CHROME_PREFS_VERSION
+from stopa.artifacts.chrome_preferences import (
+    extract_chrome_pref_artifacts,
+    is_chrome_preferences_file,
+)
+from stopa.artifacts.cloud_drive_files import PARSER_VERSION as CLOUD_DRIVE_FILES_VERSION
+from stopa.artifacts.cloud_drive_files import (
+    extract_cloud_drive_artifacts,
+    is_cloud_drive_file,
+)
 from stopa.artifacts.ddg_current_tabs import PARSER_VERSION as DDG_TABS_VERSION
 from stopa.artifacts.ddg_current_tabs import extract_current_tabs_artifacts, is_current_tabs_file
 from stopa.artifacts.drive_activity import PARSER_VERSION as DRIVE_ACTIVITY_VERSION
@@ -124,6 +134,11 @@ from stopa.artifacts.google_search_history import (
     extract_google_search_artifacts,
     is_google_search_history_file,
 )
+from stopa.artifacts.google_voice_wr import PARSER_VERSION as GOOGLE_VOICE_WR_VERSION
+from stopa.artifacts.google_voice_wr import (
+    extract_google_voice_artifacts,
+    is_google_voice_file,
+)
 from stopa.artifacts.imessage_cloud import (
     PARSER_VERSION as IMESSAGE_CLOUD_VERSION,
 )
@@ -160,6 +175,11 @@ from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
 from stopa.artifacts.sqlite_recover import recover_deleted_rows
 from stopa.artifacts.win_amcache import extract_amcache_artifacts
 from stopa.artifacts.win_clipboard import extract_clipboard_artifacts
+from stopa.artifacts.win_drivers import PARSER_VERSION as WIN_DRIVERS_VERSION
+from stopa.artifacts.win_drivers import (
+    extract_win_driver_artifacts,
+    is_win_drivers_file,
+)
 from stopa.artifacts.win_eventlog import PARSER_VERSION as EVTX_VERSION
 from stopa.artifacts.win_eventlog import extract_evtx_artifacts
 from stopa.artifacts.win_jumplist import PARSER_VERSION as JUMPLIST_VERSION
@@ -317,6 +337,11 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "contacts_wr": (extract_contacts_wr_artifacts, CONTACTS_WR_VERSION),
     "chrome_autofill": (extract_chrome_autofill_artifacts, CHROME_AUTOFILL_VERSION),
     "skype_warrant": (extract_skype_artifacts, SKYPE_WR_VERSION),
+    # ETAPA B vlna 8 — AXIOM port: Chrome prefs/sync + cloud drive soubory + Google Voice WR + drivers
+    "chrome_preferences": (extract_chrome_pref_artifacts, CHROME_PREFS_VERSION),
+    "cloud_drive_files": (extract_cloud_drive_artifacts, CLOUD_DRIVE_FILES_VERSION),
+    "google_voice_wr": (extract_google_voice_artifacts, GOOGLE_VOICE_WR_VERSION),
+    "win_drivers": (extract_win_driver_artifacts, WIN_DRIVERS_VERSION),
 }
 
 
@@ -398,6 +423,16 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["contacts_wr"]
     if is_skype_warrant_file(name):
         return NAME_BASED_EXTRACTORS["skype_warrant"]
+    # ETAPA B vlna 8 — Chrome prefs/sync + cloud drive soubory + Google Voice WR + drivers
+    # (chrome_preferences PŘED obecnějšími; cloud_drive PO drive_activity — ten je specifický)
+    if is_chrome_preferences_file(name):
+        return NAME_BASED_EXTRACTORS["chrome_preferences"]
+    if is_cloud_drive_file(name):
+        return NAME_BASED_EXTRACTORS["cloud_drive_files"]
+    if is_google_voice_file(name):
+        return NAME_BASED_EXTRACTORS["google_voice_wr"]
+    if is_win_drivers_file(name):
+        return NAME_BASED_EXTRACTORS["win_drivers"]
     # ETAPA B vlna 2 — paměťové skeny / záložky / MSN chat logy
     if is_mem_scan_file(name):
         return NAME_BASED_EXTRACTORS["mem_scan"]
@@ -465,6 +500,11 @@ def _extract_artifacts_for(
         fn, ver = ARTIFACT_EXTRACTORS[signature_type]
         return fn(path), ver
     name_match = _name_based_match(path.name)  # name-based fallback (AXIOM Hunter)
+    if name_match is None:
+        # ETAPA B vlna 8 — Takeout soubory se generic názvy (Drive/Files.json, Voice/Texts.json):
+        # klíčové slovo je v rodičovské složce → retry na celé cestě. Parsery jsou
+        # defenzivní (ne-JSON → []), takže cizí soubory jen projdou bez artifactů.
+        name_match = _name_based_match(str(path))
     if name_match is not None:
         fn, ver = name_match
         return fn(path), ver

@@ -2,6 +2,51 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 8: Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 16 AXIOM typů)
+- **Google Chrome Preferences** (`artifacts/chrome_preferences.py`) — Chrome
+  Preferences JSON (profilový export; `extensions.settings` → rozšíření s
+  manifest name/version/stavem, `default_search_provider_data` + custom search
+  engines, `sync.data_type_enabled`). Name-based detekce. AXIOM
+  `CloudGoogleChromeExtensionsArtifact` + `CloudGoogleChromeExtensionSettingsArtifact`
+  + `CloudGoogleChromeSearchEnginesArtifact` + 3× SyncSettings. Artifact types
+  `browser_extension`, `browser_setting`.
+- **Cloud Drive soubory** (`artifacts/cloud_drive_files.py`) — Google Drive /
+  OneDrive / Apple Drive JSON (Takeout/warrant return; název, velikost, MD5
+  checksum, MIME, created/modified ISO 8601 i epoch s → unix s). Provider
+  auto-detekován podle markerů (`sizeBytes`/`md5Checksum` = Google,
+  `lastModifiedDateTime` = OneDrive, název = Apple). Name-based detekce. AXIOM
+  `CloudDriveFileArtifact` + `CloudDriveFileVersionArtifact` +
+  `CloudOneDriveFileArtifact` + `CloudOneDriveFileVersionArtifact` +
+  `CloudAppleDriveArtifact`. Artifact type `cloud_file`.
+- **Google Voice Warrant Return** (`artifacts/google_voice_wr.py`) — Google
+  Voice JSON s auto-detekcí subtypu (SMS texty / hlasové schránky / kontakty /
+  informace o předplatiteli; `timestampMsInEpoch` → unix s). Name-based detekce.
+  AXIOM `GoogleVoiceTexts2025Artifact` + `GoogleVoicemail2025Artifact` +
+  `GoogleVoiceContactsMetadata2026Artifact` +
+  `GoogleVoiceSubscriberInformation2026Artifact`. Artifact types `sms_message`,
+  `voicemail`, `contact`, `google_account`.
+- **Windows Drivers** (`artifacts/win_drivers.py`) — Windows drivers JSON (live
+  forensics / paměťový dump; `driverName`, `baseAddress` normalizace na hex,
+  velikost, signatura, popis). Nesignovaný driver → anomaly flag
+  `unsigned_driver`. Name-based detekce. AXIOM `DriversArtifact`. Artifact type
+  `win_driver`.
+
+### Pipeline dispatch + C3 registry
+- Všech 4 parserů napojeno do `NAME_BASED_EXTRACTORS` + `_name_based_match()`.
+- **Nový mechanismus**: Takeout soubory se generic názvy (`Drive/Files.json`,
+  `Voice/Texts.json`) — klíčové slovo je v rodičovské složce, ne v basename.
+  `_extract_artifacts_for()` teď při selhání name-based matche na basename retry
+  na celé cestě (parsery jsou defenzivní → cizí soubory projdou bez artifactů).
+- C3 registry (`validation_registry.py`): nové záznamy `chrome_preferences`,
+  `cloud_drive_files`, `google_voice_wr`, `win_drivers`.
+  `build_registry()` = **45 parserů** (předtím 41).
+
+### Coverage matice (FÁZE 16)
+- Flip 16 AXIOM typů NOT_SUPPORTED → SUPPORTED: covered **84 → 100 / 232** ★
+  (první stovka!); cloud-export **99 → 84**, memory **15 → 14**. Regen CSV/MD/JSON.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 7: Chrome Bookmarks/History/Autofill + Contacts + Skype WR)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 5 nových parserů / 12 AXIOM typů)

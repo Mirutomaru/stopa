@@ -574,6 +574,59 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_w7_parsers.py",),
     ),
+    # ── ETAPA B vlna 8 — AXIOM port: Chrome prefs/sync + cloud drive soubory + Google Voice WR + drivers ──
+    "chrome_preferences": ParserValidation(
+        parser_id="chrome_preferences",
+        version="",
+        formats=(
+            "Chrome Preferences JSON (profilový export — extensions.settings, default_search_provider_data, sync)",
+        ),
+        limitations=(
+            "detekce name-based (preferences/chrome_prefs/secure_pref) + content check (extensions/account_info/sync)",
+            "extensions→browser_extension; search provider + sync settings→browser_setting",
+            "snapshot konfigurace bez času — timestamp=None; limit MAX_EXTENSIONS_PER_FILE=2000",
+        ),
+        test_files=("tests/test_w8_parsers.py",),
+    ),
+    "cloud_drive_files": ParserValidation(
+        parser_id="cloud_drive_files",
+        version="",
+        formats=(
+            "Cloud Drive soubory JSON (Google Drive / OneDrive / Apple Drive — warrant return / Takeout)",
+        ),
+        limitations=(
+            "detekce name-based (drive/onedrive/apple_drive) + content check; PO drive_activity (specifický)",
+            "provider auto-detekován podle markerů; verze souboru do details.versions",
+            "čas ISO 8601 / epoch s/ms tolerantně; limit MAX_FILES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w8_parsers.py",),
+    ),
+    "google_voice_wr": ParserValidation(
+        parser_id="google_voice_wr",
+        version="",
+        formats=(
+            "Google Voice warrant return JSON (Texts/Voicemail/ContactsMetadata/SubscriberInformation)",
+        ),
+        limitations=(
+            "detekce name-based (voice/voicemail/gvoice) + content check; PO ios_voicemail (.db) a samsung recording",
+            "auto-detekce subtypu: sms→sms_message, voicemail→voicemail, contacts→contact, subscriber→google_account",
+            "čas epoch ms/s tolerantně; limit MAX_ENTRIES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w8_parsers.py",),
+    ),
+    "win_drivers": ParserValidation(
+        parser_id="win_drivers",
+        version="",
+        formats=(
+            "Windows drivers JSON (live forensics / paměťový dump — načtené ovladače)",
+        ),
+        limitations=(
+            "detekce name-based (driver/drivers) + content check (baseAddress/driverName)",
+            "adresa normalizována na hex; nesignovaný driver → anomaly flag unsigned_driver",
+            "snapshot paměti bez času — timestamp=None; limit MAX_DRIVERS_PER_FILE=2000 záznamů",
+        ),
+        test_files=("tests/test_w8_parsers.py",),
+    ),
 }
 
 
