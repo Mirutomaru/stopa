@@ -2,53 +2,34 @@
 
 **Datum:** 2026-11-04
 **Verze aplikace:** 0.1.0 (`pyproject.toml`)
-**Commit:** ```1a3e007``` (předchozí: `f96fd67` STP-029 docs, `5e47850` STP-029 feature, `5d7e95b`, `9ffde5b`)
+**Commit:** ```4747738``` (předchozí: `96cf2b9` STP-030 docs, `1a3e007` STP-030 feature, `f96fd67`, `5e47850`)
 
 ## Co se stalo
-**STP-030 — ETAPA B vlna 8: Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers (4 parsery / 16 AXIOM typů)** (oblast D, P0) hotový.
-Čtyři nové extraktory v čistém Pythonu nad stávajícím pipeline dispatchem:
-- **Chrome Preferences** (`chrome_preferences.py`) — Chrome Preferences JSON: `extensions.settings` → rozšíření s manifest name/version/stavem,
-  `default_search_provider_data` + custom search engines, `sync.data_type_enabled`; name-based detekce; artifact types `browser_extension`/`browser_setting`.
-- **Cloud Drive soubory** (`cloud_drive_files.py`) — Google Drive / OneDrive / Apple Takeout/warrant JSON: název, velikost, MD5 checksum, MIME,
-  created/modified ISO 8601 i epoch s → unix s; provider auto-detekce podle markerů (`sizeBytes`/`md5Checksum`=Google, `lastModifiedDateTime`=OneDrive, název=Apple); name-based detekce; artifact type `cloud_file`.
-- **Google Voice WR** (`google_voice_wr.py`) — 4 subtypy s auto-detekcí (SMS texty / hlasové schránky / kontakty / informace o předplatiteli);
-  `timestampMsInEpoch` → unix s; name-based detekce; artifact types `sms_message`/`voicemail`/`contact`/`google_account`.
-- **Windows Drivers** (`win_drivers.py`) — paměťový dump: `driverName`, `baseAddress` normalizace na hex, velikost, signatura, popis;
-  nesignovaný driver → anomaly flag `unsigned_driver`; name-based detekce; artifact type `win_driver`.
+**STP-031 — ETAPA B vlna 9: memory forensics (procesy/spojení/handlery/moduly/hooks) (5 parserů / 14 AXIOM typů)** (oblast D, P0) hotový.
 
-Pipeline dispatch: 4 parsery do `NAME_BASED_EXTRACTORS` + `_name_based_match()` + **nový mechanismus**: `_extract_artifacts_for()` při selhání
-name-based matche na basename retry na celé cestě — Takeout soubory se generic názvy (`Drive/Files.json`, `Voice/Texts.json`) mají klíčové slovo v rodičovské složce;
-parsery defenzivní → cizí soubory projdou bez artifactů. C3 registry (`domain/validation_registry.py`): nové záznamy
-`chrome_preferences`/`cloud_drive_files`/`google_voice_wr`/`win_drivers` → **45 verzovaných parserů**
-(`build_registry()` OK; předtím 41).
+### Nové parsery (`src/stopa/artifacts/`)
+- `mem_processes.py` — paměťový dump: seznam procesů (pid/name/ppid/cmdline/threads/user/start_time); **PsxView** subtyp: rozdílné jméno EPROCESS vs PEB → anomaly flag `psxview_mismatch`; artifact type `mem_process`.
+- `mem_network.py` — paměťový dump: síťová spojení (pid/processName/proto/localAddress/remoteAddress/state), proto i state uppercase normalizace; artifact type `mem_connection`.
+- `mem_handles.py` — paměťový dump: otevřené handlery procesů (pid/processName/handleValue/type/name), handle value hex normalizace (int/decimal/hex tolerantně); artifact type `mem_handle`.
+- `mem_modules.py` — paměťový dump: načtené moduly (pid/processName/baseAddress/size/name/inLdrList), adresa hex normalizace; **Malfind** subtyp: modul v paměti ale ne v LDR listu → anomaly flag `hidden_module` / indikátor DLL injection; artifact type `mem_module`.
+- `mem_hooks.py` — paměťový dump: zaregistrované hooky a callback funkce (pid/processName/apiFunction/callbackAddress/module/hookType), adresa hex normalizace; artifact type `mem_hook`.
 
-## Změněné soubory
-- Nové parsery: `src/stopa/artifacts/{chrome_preferences,cloud_drive_files,google_voice_wr,win_drivers}.py`.
-- `src/stopa/pipeline.py` — importy 4 parserů abecedně, `NAME_BASED_EXTRACTORS` + `_name_based_match()` rozšířeny, dispatch větve, full-path retry.
-- `src/stopa/domain/validation_registry.py` — C3 registry rozšířeno (45 parserů).
-- `scripts/build_axiom_coverage.py` — COVERED + _covered_desc +16 AXIOM typů.
-- Regenerováno: `STOPA_COVERAGE_MATRIX.csv`, `docs/re-axiom/AXIOM_COVERAGE.{md,json}`.
-- Nový test: `tests/test_w8_parsers.py` (**32 testů** — syntetické offline fixtures).
-- `STOPA_CHANGELOG.md` (+docs zrcadlo), `STOPA_ROADMAP.md` (D covered 100/232 ★, 45 parser modulů).
+### Pipeline & registry
+- `src/stopa/pipeline.py`: importy 5 parserů + záznamy do `NAME_BASED_EXTRACTORS` po `win_drivers` + dispatch větve **PŘED netstatem** (sdílená klíčová slova `connections`/`sockets`; detektory dostávají jen name → kolize řešena pořadím; ověřeno: `open_connections.json` → mem_network, `netstat.txt` → dál net_connections).
+- C3 registry (`domain/validation_registry.py`): 5 nových záznamů → **50 parserů** (předtím 45).
 
-## Testy
-- Nové: `.venv/bin/python -m pytest tests/test_w8_parsers.py -q` → **32 passed**.
-- Full suite: `.venv/bin/python -m pytest -q` → **1350 passed, 1 skipped** (baseline 1318 + 32).
-- Ruff: `All checks passed!` pro `src/stopa tests scripts`.
+### Coverage matice
+- Flip 14 memory typů NOT_SUPPORTED → SUPPORTED: covered **100 → 114 / 232**; **memory kategorie vyzerovala 14 → 0 ★** (jako portable-local ve vlně 4); cloud-export 84, base-class 34.
+- Regen `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}`; SHA-256 diff determinismus zachován.
+
+### Testy & verify
+- **35 nových testů** (`tests/test_w9_parsers.py`, syntetické offline fixtures).
+- Full suite: **1385 passed, 1 skipped** (baseline 1350 + 35); ruff clean.
 
 ## Registry
-- Feature: **F-059** ETAPA B vlna 8 — Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers (4 parsery / 16 AXIOM typů).
-- Testy: **T-080** `tests/test_w8_parsers.py` (32).
-- Celkový stav TEST_REGISTRY: **1350 testů: 1349 PASS + 1 skipped**.
-
-## Coverage matice
-covered **84 → 100 / 232 ★ PRVNÍ STOVDKA** — flip 16 AXIOM typů NOT_SUPPORTED → SUPPORTED (cloud-export + memory):
-CloudGoogleChromeExtensionsArtifact, CloudGoogleChromeExtensionSettingsArtifact, CloudGoogleChromeSearchEnginesArtifact,
-CloudGoogleChromeSyncSettings×3, CloudDriveFileArtifact, CloudDriveFileVersionArtifact, CloudOneDriveFileArtifact,
-CloudOneDriveFileVersionArtifact, CloudAppleDriveArtifact, GoogleVoiceTexts2025Artifact, GoogleVoicemail2025Artifact,
-GoogleVoiceContactsMetadata2026Artifact, GoogleVoiceSubscriberInformation2026Artifact, DriversArtifact.
-NOT_SUPPORTED 114 → 98; DEPRECATED 34 (bez změny); **portable-local NOT_SUPPORTED = 0 ★** (bez změny).
+- Feature: **F-060** ETAPA B vlna 9 — memory forensics (procesy/spojení/handlery/moduly/hooks).
+- Testy: **T-081** `tests/test_w9_parsers.py` (35).
+- Celkový stav TEST_REGISTRY: **1385 testů: 1384 PASS + 1 skipped**.
 
 ## Další krok
-**ETAPA B vlna 9 — Artifact Engine: cloud-export typy (zbývá 84)** (oblast D, P0) —
-Google Docs/Sheets/Slides rodina, Microsoft Graph exporty, memory typy; detail v `NEXT_ACTION.md`.
+**ETAPA B vlna 10 — cloud-export typy** (zbývá cloud-export 84 + base-class 34; detail v `NEXT_ACTION.md`).

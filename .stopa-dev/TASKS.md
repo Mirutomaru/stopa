@@ -316,3 +316,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/artifacts/{chrome_preferences,cloud_drive_files,google_voice_wr,win_drivers}.py`, `pipeline.py` (importy + NAME_BASED_EXTRACTORS + dispatch + path retry), `validation_registry.py`, `scripts/build_axiom_coverage.py`
 - **Testy:** 32 nových testů zelených (`tests/test_w8_parsers.py`); full suite **1350 passed, 1 skipped** (baseline 1318 + 32); ruff clean; `build_registry()` = **45 parserů** (předtím 41)
 - **Dokončeno:** 2026-11-04 | Commit: ```1a3e007```
+
+### STP-031 — ETAPA B vlna 9: memory forensics (procesy/spojení/handlery/moduly/hooks)
+- **Oblast:** D (Artifact Engine) | **Priorita:** P0 | **Stav:** DONE
+- **Popis:** Port 14 memory AXIOM typů (live forensics / paměťový dump) do čistého Pythonu — Memory Processes (seznam procesů pid/name/ppid/cmdline/threads/user; PsxView subtyp: EPROCESS vs PEB mismatch → anomaly flag `psxview_mismatch`), Memory Network Connections (síťová spojení proto/localAddress/remoteAddress/state, uppercase normalizace), Memory Handles (otevřené handlery, handle value hex normalizace int/decimal/hex tolerantně), Memory Modules (načtené moduly baseAddress/size/inLdrList; Malfind subtyp: modul v paměti ne v LDR listu → anomaly flag `hidden_module` / DLL injection), Memory API Hooks & Callbacks (hooky/callback funkce apiFunction/callbackAddress/hookType, adresa hex normalizace). Coverage matice flip 14 typů NOT_SUPPORTED → SUPPORTED (**100 → 114 / 232**); memory kategorie **vyzerovala 14 → 0 ★**.
+- **Závislosti:** pipeline dispatch (name-based 5 parserů, **PŘED netstatem** — sdílená klíčová slova `connections`/`sockets`) + C3 registry (nové záznamy mem_processes/mem_network/mem_handles/mem_modules/mem_hooks)
+- **Dotčené moduly:** `src/stopa/artifacts/{mem_processes,mem_network,mem_handles,mem_modules,mem_hooks}.py`, `pipeline.py` (importy + NAME_BASED_EXTRACTORS + dispatch), `validation_registry.py`, `scripts/build_axiom_coverage.py`
+- **Testy:** 35 nových testů zelených (`tests/test_w9_parsers.py`); full suite **1385 passed, 1 skipped** (baseline 1350 + 35); ruff clean; `build_registry()` = **50 parserů** (předtím 45)
+- **Dokončeno:** 2026-11-04 | Commit: ```4747738```

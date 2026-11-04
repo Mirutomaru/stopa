@@ -11,15 +11,16 @@
 ## Aktuální architektura
 Clean Architecture — 4 vrstvy:
 - `src/stopa/domain/` — čistá doménová logika bez I/O (**35 modulů**, +timeline_intel)
-- `src/stopa/artifacts/` — extraktory artifactů, I/O jen v entrypointech (**57 souborů**)
+- `src/stopa/artifacts/` — extraktory artifactů, I/O jen v entrypointech (**62 souborů**)
 - `src/stopa/data/` — I/O vrstva: db.py (SQLite), TSK, libewf, image_pipeline, ingest
 - `src/stopa/web/` + `cli.py` — prezentace (FastAPI 30 endpointů + CLI)
 Pipeline = jediný `analyze()` s dispatchem magic signatur + name-based fallback,
 ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 
 ## Aktuální fáze vývoje
-**Oblast D (Artifact Engine)** — **STP-030 hotový** (ETAPA B vlna 8: Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers,
-4 parsery / 16 AXIOM typů). Předtím: **STP-029 ETAPA B vlna 7** (Chrome Bookmarks/History/Autofill + Contacts + Skype WR),
+**Oblast D (Artifact Engine)** — **STP-031 hotový** (ETAPA B vlna 9: memory forensics — procesy/spojení/handlery/moduly/hooks,
+5 parserů / 14 AXIOM typů; dispatch PŘED netstatem). Předtím: **STP-030 ETAPA B vlna 8** (Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers),
+**STP-029 ETAPA B vlna 7** (Chrome Bookmarks/History/Autofill + Contacts + Skype WR),
 **STP-028 ETAPA B vlna 6** (Google local profile/takeout + přílohy),
 **STP-027 ETAPA B vlna 5** (Google Takeout rodina + Samsung voice),
 **STP-026 ETAPA B vlna 4** (portable-local AXIOM porty),
@@ -28,28 +29,24 @@ ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 **STP-021 stream parsing velkých E01 + web Processing Monitor**,
 **STP-019 AI governance + PII redaktor**, **STP-020 Report engine 9→20 sekcí**,
 **STP-018 Timeline Intelligence 2.0** a **ETAPA B vlny 1–3 hotové**.
-Coverage matice: covered **100 / 232** unikátních typů ★ (první stovka); portable-local NOT_SUPPORTED = **0 ★**.
+Coverage matice: covered **114 / 232** unikátních typů; portable-local NOT_SUPPORTED = **0 ★**; memory NOT_SUPPORTED = **0 ★** (vyzerovala vlnou 9).
 
 ## Celkový stav projektu
 Stabilní — plná test suite zelená, ruff clean, deterministická coverage matice.
 
 | Metrika | Hodnota |
 |---|---|
-| Dokončené úkoly (TASKS.md) | **30** |
+| Dokončené úkoly (TASKS.md) | **31** |
 | Rozpracované (IN_PROGRESS) | 0 |
-| Čekající (BACKLOG/READY) | **0** (všechny STP-001..030 DONE; další = ETAPA B vlna 9 cloud-export) |
+| Čekající (BACKLOG/READY) | **0** (všechny STP-001..031 DONE; další = ETAPA B vlna 10 cloud-export) |
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-030 — ETAPA B vlna 8: Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers (4 parsery / 16 AXIOM typů)** (oblast D, P0) | Commit: ```1a3e007```
-Čtyři nové extraktory: `chrome_preferences.py` (Chrome Preferences JSON — extensions.settings → rozšíření s manifest name/version, search provider + custom engines, sync.data_type_enabled),
-`cloud_drive_files.py` (Google Drive / OneDrive / Apple Takeout/warrant JSON — název/velikost/checksum/MIME/čas; provider auto-detekce z markerů),
-`google_voice_wr.py` (4 subtypy s auto-detekcí: SMS texty/hlasové schránky/kontakty/předplatitel, timestampMsInEpoch → unix s),
-`win_drivers.py` (paměťový dump — baseAddress normalizace na hex, nesignovaný driver → anomaly flag `unsigned_driver`).
-Pipeline dispatch: 4 name-based parsery + **nový mechanismus** `_extract_artifacts_for()` retry na celé cestě pro Takeout soubory se generic názvy (`Drive/Files.json`, `Voice/Texts.json`); C3 registry rozšířeno na **45 parserů**.
-Coverage flip 16 AXIOM typů NOT_SUPPORTED → SUPPORTED (**84 → 100 / 232 ★ první stovka**); cloud-export **99 → 84**, memory **15 → 14**.
-**32 nových testů** (`tests/test_w8_parsers.py`); full suite **1350 passed, 1 skipped**, ruff clean.
-Předtím: STP-029 (vlna 7 Chrome Bookmarks/History/Autofill + Contacts + Skype WR, `5e47850`), STP-028 (vlna 6 Google local profile/takeout + přílohy, `9ffde5b`),
+**STP-031 — ETAPA B vlna 9: memory forensics (procesy/spojení/handlery/moduly/hooks) (5 parserů / 14 AXIOM typů)** (oblast D, P0) | Commit: ```4747738```
+Pět nových extraktorů: `mem_processes.py` (seznam procesů z paměti; PsxView EPROCESS vs PEB mismatch → anomaly `psxview_mismatch`), `mem_network.py` (síťová spojení, proto/state uppercase normalizace), `mem_handles.py` (otevřené handlery, handle value hex normalizace), `mem_modules.py` (načtené moduly; Malfind skryté moduly → anomaly `hidden_module` / DLL injection), `mem_hooks.py` (API hooky & callback funkce). Pipeline dispatch 5 parserů PŘED netstatem (sdílená klíčová slova connections/sockets); C3 registry **50 parserů**; full suite **1385 passed, 1 skipped**; coverage flip 14 typů: covered **100 → 114 / 232**, memory kategorie vyzerovala **14 → 0 ★**.
+**35 nových testů** (`tests/test_w9_parsers.py`); full suite **1385 passed, 1 skipped**, ruff clean.
+Předtím: STP-030 (vlna 8 Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers, `1a3e007`),
+STP-029 (vlna 7 Chrome Bookmarks/History/Autofill + Contacts + Skype WR, `5e47850`), STP-028 (vlna 6 Google local profile/takeout + přílohy, `9ffde5b`),
 STP-027 (vlna 5 Google Takeout rodina + Samsung voice, `b786064`),
 STP-026 (vlna 4 portable-local porty, `cd932e1`),
 STP-023 (Export JSONL/XML/STIX, `210c370`),
