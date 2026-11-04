@@ -6,20 +6,20 @@ Jedna DB na případ: cases, sources, files tabulky. Všechny operace idempotent
 
 from __future__ import annotations
 
-import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
-from stopa.data._helpers import _iso  # ETAPA C vlna 1 (sdílené konverze)
+from stopa.data.artifact_repository import ArtifactRepository  # ETAPA C vlna 2
 from stopa.data.audit_repository import AuditRepository  # ETAPA C vlna 1
 from stopa.data.case_repository import CaseRepository  # ETAPA C vlna 1
+from stopa.data.entity_repository import EntityRepository  # ETAPA C vlna 2
 from stopa.data.file_repository import FileRepository, _fts_query  # noqa: F401 — _fts_query backward compat (test_search)
-from stopa.domain.evidence_model import ConfidenceLevel, Finding, Provenance
+from stopa.domain.evidence_model import Finding
 from stopa.domain.integrity import GENESIS, compute_audit_hash  # migrace audit chain
 from stopa.domain.lineage import LineageEvent
-from stopa.domain.reproducibility import AnalysisOperation, env_snapshot
-from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
+from stopa.domain.reproducibility import AnalysisOperation
+from stopa.models import Artifact, Case, EvidenceSource, FileRecord
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
@@ -408,6 +408,9 @@ class CaseDB:
         self.case_repo = CaseRepository(self.conn)
         self.file_repo = FileRepository(self.conn)
         self.audit_repo = AuditRepository(self.conn)
+        # ETAPA C vlna 2 — artifacty/findings/lineage + entity/correlations.
+        self.artifact_repo = ArtifactRepository(self.conn)
+        self.entity_repo = EntityRepository(self.conn)
 
     def schema_version(self) -> int:
         """Aktuální verze schématu case DB (E1 — diagnostika / migrace)."""
@@ -755,87 +758,18 @@ class CaseDB:
         return self.file_repo.stats(source_id)
 
     # ── artifacts (AXIOM-style) ──────────────────────────────
+    # ── P0 Core C1: Unified Evidence Model — artifacts (ETAPA C vlna 2 → ArtifactRepository) ──
     def upsert_artifact(self, art: Artifact) -> None:
-        """Idempotentní upsert artifactu podle (source_id, artifact_type, rel_path).
-
-        Pro artefakty bez file_id (např. disk_image přehled obrazu) — re-ingest
-        stejného zdroje nahradí starý záznam místo duplikace.
-        """
-        if art.source_id is None:
-            raise ValueError(f"Artifact {art.id} nemá source_id")
-        self.conn.execute(
-            "DELETE FROM artifacts WHERE source_id = ? AND artifact_type = ? AND rel_path IS ?",
-            (art.source_id, art.artifact_type, art.rel_path),
-        )
-        self.conn.execute(
-            "INSERT INTO artifacts (id, source_id, file_id, rel_path,"
-            " artifact_type, timestamp, title, details_json,"
-            " confidence, parser_version, extracted_at, anomaly_flags,"
-            " provenance_json, validation_status)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                art.id,
-                art.source_id,
-                art.file_id,
-                art.rel_path,
-                art.artifact_type,
-                _iso(art.timestamp),
-                art.title,
-                json.dumps(art.details, ensure_ascii=False),
-                art.confidence,
-                art.parser_version,
-                _iso(art.extracted_at),
-                ",".join(art.anomaly_flags) if art.anomaly_flags else None,
-                json.dumps([p.model_dump(mode="json") for p in art.provenance], ensure_ascii=False),
-                art.validation_status,
-            ),
-        )
-        self.conn.commit()
+        """Idempotentní upsert artifactu podle (source_id, artifact_type, rel_path)."""
+        self.artifact_repo.upsert_artifact(art)
 
     def replace_artifacts_for_file(self, file_id: str, arts: list[Artifact]) -> int:
         """Idempotentní výměna artifactů jednoho souboru (re-ingest → čisté data)."""
-        self.conn.execute("DELETE FROM artifacts WHERE file_id = ?", (file_id,))
-        for a in arts:
-            if a.source_id is None:
-                raise ValueError(f"Artifact {a.id} nemá source_id")
-            self.conn.execute(
-                "INSERT INTO artifacts (id, source_id, file_id, rel_path,"
-                " artifact_type, timestamp, title, details_json,"
-                " confidence, parser_version, extracted_at, anomaly_flags,"
-                " provenance_json, validation_status)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    a.id,
-                    a.source_id,
-                    a.file_id,
-                    a.rel_path,
-                    a.artifact_type,
-                    _iso(a.timestamp),
-                    a.title,
-                    json.dumps(a.details, ensure_ascii=False),
-                    a.confidence,
-                    a.parser_version,
-                    _iso(a.extracted_at),
-                    ",".join(a.anomaly_flags) if a.anomaly_flags else None,
-                    json.dumps([p.model_dump(mode="json") for p in a.provenance], ensure_ascii=False),
-                    a.validation_status,
-                ),
-            )
-        self.conn.commit()
-        return len(arts)
+        return self.artifact_repo.replace_artifacts_for_file(file_id, arts)
 
     def clear_timeline_events(self, source_id: str | None = None) -> int:
-        """Odstraní materializované timeline události (re-ingest → čisté data).
-
-        ``source_id=None`` vyčistí celý případ. Vrací počet odstraněných řádků.
-        """
-        if source_id is not None:
-            cur = self.conn.execute(
-                "DELETE FROM timeline_events WHERE source_id = ?", (source_id,)
-            )
-        else:
-            cur = self.conn.execute("DELETE FROM timeline_events")
-        return cur.rowcount
+        """Odstraní materializované timeline události; ``source_id=None`` vyčistí celý případ."""
+        return self.artifact_repo.clear_timeline_events(source_id)
 
     def list_artifacts(
         self,
@@ -848,86 +782,26 @@ class CaseDB:
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[Artifact]:
-        """Timeline dotaz — chronologicky (None timestamps na konec).
-
-        E2 filtry: ``from_ts``/``to_ts`` omezí časové okno událostí (UTC),
-        ``anomalies_only=True`` vrátí jen artifacty s detekovanou nesrovnalostí.
-        """
-        q = "SELECT * FROM artifacts"
-        where: list[str] = []
-        args: list[object] = []
-        if source_id is not None:
-            where.append("source_id = ?")
-            args.append(source_id)
-        if artifact_type is not None:
-            where.append("artifact_type = ?")
-            args.append(artifact_type)
-        if rel_path_like is not None:
-            where.append("rel_path LIKE ?")
-            args.append(f"%{rel_path_like}%")
-        if from_ts is not None:
-            where.append("timestamp >= ?")
-            args.append(_iso(from_ts))
-        if to_ts is not None:
-            where.append("timestamp <= ?")
-            args.append(_iso(to_ts))
-        if anomalies_only:
-            where.append("anomaly_flags IS NOT NULL AND anomaly_flags != ''")
-        if where:
-            q += " WHERE " + " AND ".join(where)
-        q += " ORDER BY (timestamp IS NULL), timestamp, id"
-        if limit is not None:
-            q += f" LIMIT {int(limit)}"
-        if offset:
-            q += f" OFFSET {int(offset)}"
-        rows = self.conn.execute(q, args).fetchall()
-        return [_row_to_artifact(r) for r in rows]
+        """Timeline dotaz — chronologicky; E2 filtry (časové okno, anomálie)."""
+        return self.artifact_repo.list_artifacts(
+            source_id=source_id,
+            artifact_type=artifact_type,
+            rel_path_like=rel_path_like,
+            from_ts=from_ts,
+            to_ts=to_ts,
+            anomalies_only=anomalies_only,
+            limit=limit,
+            offset=offset,
+        )
 
     def get_artifact(self, artifact_id: str) -> Artifact | None:
         """Jeden artifact podle ID (E11 — AI explain režim); ``None`` = nenalezen."""
-        row = self.conn.execute(
-            "SELECT * FROM artifacts WHERE id = ?", (artifact_id,)
-        ).fetchone()
-        return _row_to_artifact(row) if row is not None else None
+        return self.artifact_repo.get_artifact(artifact_id)
 
-    # ── P0 Core C1: Unified Evidence Model — findings ───────────────
+    # ── P0 Core C1: findings (ETAPA C vlna 2 → ArtifactRepository) ───────
     def add_finding(self, finding: Finding) -> str:
         """Vloží derived finding / analytical observation. Vrací ID záznamu."""
-        self.conn.execute(
-            "INSERT INTO findings (id, case_id, kind, confidence_level,"
-            " provenance_json, details_json, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                finding.id,
-                finding.case_id,
-                finding.kind,
-                finding.confidence_level.value,
-                json.dumps([p.model_dump(mode="json") for p in finding.provenance], ensure_ascii=False),
-                json.dumps(finding.details_json, ensure_ascii=False),
-                _iso(finding.created_at) or datetime.now(timezone.utc).isoformat(),
-            ),
-        )
-        self.conn.commit()
-        # P0 Core C2: Evidence Lineage — krok finding_added (zdroj → zjištění).
-        # Input = source/file/record reference z provenance; output = ID findingu.
-        input_refs: list[str] = []
-        for p in finding.provenance:
-            if p.source_id:
-                input_refs.append(p.source_id)
-            if p.file_id:
-                input_refs.append(p.file_id)
-            if p.record_ref:  # reference na zdrojový záznam (řádek/klíč/event/artefakt ID)
-                input_refs.append(p.record_ref)
-        self.log_lineage(
-            "finding_added",
-            case_id=finding.case_id,
-            tool_version=None,  # finding je analytický krok bez konkrétního parseru
-            config_hash=None,
-            input_refs=tuple(dict.fromkeys(input_refs)),  # dedup + zachování pořadí
-            output_refs=(finding.id,),
-            details={"kind": finding.kind, "confidence_level": finding.confidence_level.value},
-        )
-        return finding.id
+        return self.artifact_repo.add_finding(finding)
 
     def list_findings(
         self,
@@ -936,38 +810,19 @@ class CaseDB:
         confidence_level: str | None = None,
     ) -> list[Finding]:
         """Findings s volitelnými filtry (case/kind/confidence)."""
-        q = "SELECT * FROM findings"
-        where: list[str] = []
-        args: list[object] = []
-        if case_id is not None:
-            where.append("case_id = ?")
-            args.append(case_id)
-        if kind is not None:
-            where.append("kind = ?")
-            args.append(kind)
-        if confidence_level is not None:
-            where.append("confidence_level = ?")
-            args.append(confidence_level)
-        if where:
-            q += " WHERE " + " AND ".join(where)
-        q += " ORDER BY created_at DESC, id"
-        rows = self.conn.execute(q, args).fetchall()
-        return [_row_to_finding(r) for r in rows]
+        return self.artifact_repo.list_findings(
+            case_id=case_id, kind=kind, confidence_level=confidence_level
+        )
 
     def get_finding(self, finding_id: str) -> Finding | None:
         """Jeden finding podle ID; ``None`` = nenalezen."""
-        row = self.conn.execute(
-            "SELECT * FROM findings WHERE id = ?", (finding_id,)
-        ).fetchone()
-        return _row_to_finding(row) if row is not None else None
+        return self.artifact_repo.get_finding(finding_id)
 
     def delete_finding(self, finding_id: str) -> bool:
         """Odstraní finding; ``True`` pokud řádek existoval."""
-        cur = self.conn.execute("DELETE FROM findings WHERE id = ?", (finding_id,))
-        self.conn.commit()
-        return cur.rowcount > 0
+        return self.artifact_repo.delete_finding(finding_id)
 
-    # ── P0 Core C2: Evidence Lineage Engine (lineage_events) ────────────────
+    # ── P0 Core C2: Evidence Lineage (ETAPA C vlna 2 → ArtifactRepository) ──
     def log_lineage(
         self,
         op_type: str,
@@ -980,56 +835,25 @@ class CaseDB:
         details: dict | None = None,
     ) -> str:
         """Zaznamená jeden krok v řetězci důkazů (append-only). Vrací ID události."""
-        from stopa.domain.lineage import LineageEvent
-
-        ev = LineageEvent(
-            op_type=op_type,
+        return self.artifact_repo.log_lineage(
+            op_type,
             case_id=case_id,
             tool_version=tool_version,
             config_hash=config_hash,
-            input_refs=tuple(input_refs),
-            output_refs=tuple(output_refs),
-            details_json=dict(details or {}),
+            input_refs=input_refs,
+            output_refs=output_refs,
+            details=details,
         )
-        self.conn.execute(
-            "INSERT INTO lineage_events (id, case_id, op_type, tool_version,"
-            " config_hash, input_refs_json, output_refs_json, details_json, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                ev.id,
-                ev.case_id,
-                ev.op_type,
-                ev.tool_version,
-                ev.config_hash,
-                json.dumps(list(ev.input_refs), ensure_ascii=False),
-                json.dumps(list(ev.output_refs), ensure_ascii=False),
-                json.dumps(ev.details_json, ensure_ascii=False),
-                _iso(ev.created_at) or datetime.now(timezone.utc).isoformat(),
-            ),
-        )
-        self.conn.commit()
-        return ev.id
 
     def list_lineage(self, case_id: str | None = None) -> list[LineageEvent]:
         """Všechny lineage události (volitelně jen pro případ), chronologicky."""
-        if case_id is not None:
-            rows = self.conn.execute(
-                "SELECT * FROM lineage_events WHERE case_id = ? ORDER BY created_at, id",
-                (case_id,),
-            ).fetchall()
-        else:
-            rows = self.conn.execute(
-                "SELECT * FROM lineage_events ORDER BY created_at, id"
-            ).fetchall()
-        return [_row_to_lineage_event(r) for r in rows]
+        return self.artifact_repo.list_lineage(case_id)
 
     def get_lineage_chain(self, ref: str) -> list[LineageEvent]:
         """Zpětné dohledání řetězce pro referenci (vzor ``build_chain``)."""
-        from stopa.domain.lineage import build_chain
+        return self.artifact_repo.get_lineage_chain(ref)
 
-        return build_chain(self, ref)
-
-    # ── P0 Core C5: Reproducibility Engine (analysis_operations) ───────────
+    # ── P0 Core C5: Reproducibility Engine (ETAPA C vlna 2 → ArtifactRepository) ──
     def record_operation(
         self,
         op_type: str,
@@ -1044,74 +868,31 @@ class CaseDB:
         outputs: dict | None = None,
         duration_ms: int | None = None,
     ) -> str:
-        """Zaznamená analytickou operaci pro opakování + porovnání (append-only).
-
-        Vrací ID operace. ``input_files`` — vstupní soubory se SHA-256 hashi;
-        ``outputs`` — deterministický souhrn výsledku (porovnání při replay).
-        """
-        op = AnalysisOperation(
-            op_type=op_type,
+        """Zaznamená analytickou operaci pro opakování + porovnání (append-only)."""
+        return self.artifact_repo.record_operation(
+            op_type,
             case_id=case_id,
             source_id=source_id,
-            input_files=tuple(input_files or ()),
-            parser_versions=dict(parser_versions or {}),
+            input_files=input_files,
+            parser_versions=parser_versions,
             stopa_version=stopa_version,
             config_hash=config_hash,
-            params_json=dict(params or {}),
-            outputs_json=dict(outputs or {}),
+            params=params,
+            outputs=outputs,
             duration_ms=duration_ms,
-            env_json=env_snapshot(),
         )
-        self.conn.execute(
-            "INSERT INTO analysis_operations (id, case_id, op_type, source_id,"
-            " input_files_json, parser_versions_json, stopa_version, config_hash,"
-            " params_json, outputs_json, duration_ms, env_json, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                op.id,
-                op.case_id,
-                op.op_type,
-                op.source_id,
-                json.dumps(list(op.input_files), ensure_ascii=False),
-                json.dumps(op.parser_versions, ensure_ascii=False, sort_keys=True),
-                op.stopa_version,
-                op.config_hash,
-                json.dumps(op.params_json, ensure_ascii=False, sort_keys=True),
-                json.dumps(op.outputs_json, ensure_ascii=False, sort_keys=True),
-                op.duration_ms,
-                json.dumps(op.env_json, ensure_ascii=False, sort_keys=True),
-                _iso(op.created_at) or datetime.now(timezone.utc).isoformat(),
-            ),
-        )
-        self.conn.commit()
-        return op.id
 
     def list_operations(
         self, case_id: str | None = None, op_type: str | None = None
     ) -> list[AnalysisOperation]:
         """Záznamy operací (chronologicky); volitelně filtrované případem / typem."""
-        sql = "SELECT * FROM analysis_operations"
-        clauses: list[str] = []
-        params: list[str] = []
-        if case_id is not None:
-            clauses.append("case_id = ?")
-            params.append(case_id)
-        if op_type is not None:
-            clauses.append("op_type = ?")
-            params.append(op_type)
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY created_at, id"
-        return [_row_to_analysis_operation(r) for r in self.conn.execute(sql, params).fetchall()]
+        return self.artifact_repo.list_operations(case_id=case_id, op_type=op_type)
 
     def get_operation(self, op_id: str) -> AnalysisOperation | None:
         """Jeden záznam operace podle ID (None pokud neexistuje)."""
-        row = self.conn.execute(
-            "SELECT * FROM analysis_operations WHERE id = ?", (op_id,)
-        ).fetchone()
-        return _row_to_analysis_operation(row) if row else None
+        return self.artifact_repo.get_operation(op_id)
 
-    # ── E2 Timeline Engine: materializovaná timeline (timeline_events) ───────
+    # ── E2 Timeline Engine (ETAPA C vlna 2 → ArtifactRepository) ───────────
     def add_timeline_event(
         self,
         *,
@@ -1129,38 +910,22 @@ class CaseDB:
         ts_origin: str = "source",  # STP-018: source (z obsahu) | derived (MACE apod.)
         subject_values: tuple[str, ...] | list[str] = (),  # STP-018: normalizované entity subjektu
     ) -> str:
-        """Explicitní insert jednoho timeline eventu (ROADMAP E2 bod 2).
-
-        Materializace běží v pipeline při artifact extrakci — ne triggerem,
-        aby re-ingest / replace zůstal pod kontrolou. Vrací ID nového řádku.
-        STP-018: ``ts_origin`` rozlišuje source vs derived timestamp;
-        ``subject_values`` (normalizované entity) slouží detekci časových
-        rozporů (souběžné aktivity jednoho subjektu).
-        """
-        event_id = new_id("tl")
-        self.conn.execute(
-            "INSERT INTO timeline_events (id, source_id, artifact_id, file_id,"
-            " rel_path, event_type, ts_utc, title, confidence, parser_version,"
-            " extracted_at, anomaly_flags, ts_origin, subject_values_json)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                event_id,
-                source_id,
-                artifact_id,
-                file_id,
-                rel_path,
-                event_type,
-                _iso(ts_utc),
-                title,
-                confidence,
-                parser_version,
-                _iso(extracted_at),
-                ",".join(anomaly_flags) if anomaly_flags else None,
-                ts_origin,
-                json.dumps(list(subject_values)) if subject_values else None,
-            ),
+        """Explicitní insert jednoho timeline eventu (ROADMAP E2 bod 2)."""
+        return self.artifact_repo.add_timeline_event(
+            source_id=source_id,
+            ts_utc=ts_utc,
+            event_type=event_type,
+            artifact_id=artifact_id,
+            file_id=file_id,
+            rel_path=rel_path,
+            title=title,
+            confidence=confidence,
+            parser_version=parser_version,
+            extracted_at=extracted_at,
+            anomaly_flags=anomaly_flags,
+            ts_origin=ts_origin,
+            subject_values=subject_values,
         )
-        return event_id
 
     def list_timeline_events(
         self,
@@ -1172,236 +937,49 @@ class CaseDB:
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[dict]:
-        """Timeline dotaz nad materializovanou tabulkou (chronologicky).
-
-        Vrací slovníky s UTC i lokálním časem — lokální konverze počítá GUI
-        přes case ``timezone_name``; tady jen předáme ISO UTC + flagy.
-        """
-        q = "SELECT * FROM timeline_events"
-        where: list[str] = []
-        args: list[object] = []
-        if source_id is not None:
-            where.append("source_id = ?")
-            args.append(source_id)
-        if event_type is not None:
-            where.append("event_type = ?")
-            args.append(event_type)
-        if from_ts is not None:
-            where.append("ts_utc >= ?")
-            args.append(_iso(from_ts))
-        if to_ts is not None:
-            where.append("ts_utc <= ?")
-            args.append(_iso(to_ts))
-        if anomalies_only:
-            where.append("anomaly_flags IS NOT NULL AND anomaly_flags != ''")
-        if where:
-            q += " WHERE " + " AND ".join(where)
-        q += " ORDER BY ts_utc, id"
-        if limit is not None:
-            q += f" LIMIT {int(limit)}"
-        if offset:
-            q += f" OFFSET {int(offset)}"
-        rows = self.conn.execute(q, args).fetchall()
-        out: list[dict] = []
-        for r in rows:
-            flags_raw = r["anomaly_flags"] or ""
-            out.append({
-                "id": r["id"],
-                "source_id": r["source_id"],
-                "artifact_id": r["artifact_id"],
-                "file_id": r["file_id"],
-                "rel_path": r["rel_path"],
-                "event_type": r["event_type"],
-                "ts_utc": r["ts_utc"],
-                "title": r["title"],
-                "confidence": r["confidence"],
-                "parser_version": r["parser_version"],
-                "extracted_at": r["extracted_at"],
-                "anomaly_flags": [f for f in flags_raw.split(",") if f],
-                # STP-018 Timeline Intelligence 2.0 — provenience + analytické skupiny
-                "ts_origin": r["ts_origin"] or "source",
-                "subject_values": json.loads(r["subject_values_json"]) if r["subject_values_json"] else [],
-                "contradiction_group_id": r["contradiction_group_id"],
-                "dup_group_id": r["dup_group_id"],
-            })
-        return out
+        """Timeline dotaz nad materializovanou tabulkou (chronologicky)."""
+        return self.artifact_repo.list_timeline_events(
+            source_id=source_id,
+            event_type=event_type,
+            from_ts=from_ts,
+            to_ts=to_ts,
+            anomalies_only=anomalies_only,
+            limit=limit,
+            offset=offset,
+        )
 
     def set_timeline_intel_groups(
         self,
         contradiction: dict[str, str],  # event_id → group_id (jen události v rozporu)
         duplicates: dict[str, str],     # event_id → dup_group_id (jen duplikáty napříč zdroji)
     ) -> int:
-        """STP-018 — zápis analytických skupin do materializované timeline.
-
-        Idempotentní UPDATE per událost (re-ingest / re-run = stejný výsledek).
-        Vrací počet upravených řádků. Skupiny jsou deterministické ID z
-        ``domain/timeline_intel.py`` — bez IO, plně reprodukovatelné.
-
-        Zároveň merge kanonických flagů (``concurrent_activity``,
-        ``cross_source_duplicate``) do ``anomaly_flags`` — tím se projeví ve
-        všech existujících výstupech (report sekce 8, export, web, CLI).
-        """
-        from stopa.domain.timeline_intel import (
-            FLAG_CONCURRENT_ACTIVITY,
-            FLAG_CROSS_SOURCE_DUP,
-        )
-
-        n = 0
-        for event_id, group_id in contradiction.items():
-            cur = self.conn.execute(
-                "UPDATE timeline_events SET contradiction_group_id = ? WHERE id = ?",
-                (group_id, event_id),
-            )
-            n += cur.rowcount or 0
-            self._merge_timeline_flag(event_id, FLAG_CONCURRENT_ACTIVITY)
-        for event_id, group_id in duplicates.items():
-            cur = self.conn.execute(
-                "UPDATE timeline_events SET dup_group_id = ? WHERE id = ?",
-                (group_id, event_id),
-            )
-            n += cur.rowcount or 0
-            self._merge_timeline_flag(event_id, FLAG_CROSS_SOURCE_DUP)
-        if n:
-            self.conn.commit()
-        return n
-
-    def _merge_timeline_flag(self, event_id: str, flag: str) -> None:
-        """Přidá kanonický flag do anomaly_flags události (bez duplicit)."""
-        row = self.conn.execute(
-            "SELECT anomaly_flags FROM timeline_events WHERE id = ?", (event_id,)
-        ).fetchone()
-        if not row:
-            return
-        existing = [f for f in (row["anomaly_flags"] or "").split(",") if f]
-        if flag not in existing:
-            existing.append(flag)
-        self.conn.execute(
-            "UPDATE timeline_events SET anomaly_flags = ? WHERE id = ?",
-            (",".join(existing), event_id),
-        )
+        """STP-018 — zápis analytických skupin do materializované timeline."""
+        return self.artifact_repo.set_timeline_intel_groups(contradiction, duplicates)
 
     def clear_timeline_intel_groups(self) -> None:
-        """STP-018 — reset analytických skupin + jejich flagů (před re-runem).
-
-        Odstraní jen STP-018 flagy; E2 flagy (``mtime_before_ctime``,
-        ``out_of_range``, ``duplicate``) zůstávají nedotčené.
-        """
-        from stopa.domain.timeline_intel import (
-            FLAG_CONCURRENT_ACTIVITY,
-            FLAG_CROSS_SOURCE_DUP,
-        )
-
-        self.conn.execute(
-            "UPDATE timeline_events SET contradiction_group_id = NULL, dup_group_id = NULL"
-        )
-        rows = self.conn.execute(
-            "SELECT id, anomaly_flags FROM timeline_events WHERE anomaly_flags IS NOT NULL"
-        ).fetchall()
-        for r in rows:
-            flags = [f for f in (r["anomaly_flags"] or "").split(",") if f]
-            kept = [f for f in flags if f not in (FLAG_CONCURRENT_ACTIVITY, FLAG_CROSS_SOURCE_DUP)]
-            new_val = ",".join(kept) if kept else None
-            self.conn.execute(
-                "UPDATE timeline_events SET anomaly_flags = ? WHERE id = ?",
-                (new_val, r["id"]),
-            )
-        self.conn.commit()
+        """STP-018 — reset analytických skupin + jejich flagů (před re-runem)."""
+        self.artifact_repo.clear_timeline_intel_groups()
 
     def timeline_window(self, source_id: str | None = None) -> dict[str, datetime | None]:
-        """Min/max pozorovaných časů událostí — operační okno pro anomaly detekci.
-
-        Pravidlo ``out_of_range`` potřebuje rozsah zařízení; bez dat → oba None
-        (pravidlo se nepoužije). Čte z materializované timeline, fallback na artifacts.
-        """
-        where = "WHERE source_id = ?" if source_id else ""
-        args: tuple[object, ...] = (source_id,) if source_id else ()
-        row = self.conn.execute(
-            f"SELECT MIN(ts_utc) AS lo, MAX(ts_utc) AS hi FROM timeline_events {where}",
-            args,
-        ).fetchone()
-        if not row or (row["lo"] is None and row["hi"] is None):
-            # fallback: stará DB bez materializované timeline → artifacts.timestamp
-            where_a = "WHERE source_id = ?" if source_id else ""
-            args_a: tuple[object, ...] = (source_id,) if source_id else ()
-            row = self.conn.execute(
-                f"SELECT MIN(timestamp) AS lo, MAX(timestamp) AS hi FROM artifacts {where_a}",
-                args_a,
-            ).fetchone()
-
-        def parse(v):
-            return datetime.fromisoformat(v) if v else None
-
-        return {"window_start": parse(row["lo"]), "window_end": parse(row["hi"])}
+        """Min/max pozorovaných časů událostí — operační okno pro anomaly detekci."""
+        return self.artifact_repo.timeline_window(source_id)
 
     def artifact_stats(self, source_id: str | None = None) -> dict[str, int]:
-        where = "WHERE source_id = ?" if source_id else ""
-        args = (source_id,) if source_id else ()
-        row = self.conn.execute(
-            f"SELECT COUNT(*) AS total FROM artifacts {where}", args
-        ).fetchone()
-        by_type: dict[str, int] = {}
-        for r in self.conn.execute(
-            f"SELECT artifact_type, COUNT(*) AS n FROM artifacts {where}"
-            " GROUP BY artifact_type ORDER BY n DESC",
-            args,
-        ):
-            by_type[r["artifact_type"]] = int(r["n"])
-        return {"total": int(row["total"] or 0), **by_type}
+        """Počty artifactů celkem + podle typu (volitelně jen zdroj)."""
+        return self.artifact_repo.artifact_stats(source_id)
 
-    # ── E4 Entity + Correlation Engine ────────────────────────────────
+    # ── E4 Entity + Correlation Engine (ETAPA C vlna 2 → EntityRepository) ──
     def upsert_entities(self, case_id: str, rows) -> int:
-        """Idempotentní upsert kanonických entit (UNIQUE case+kind+value).
-
-        ``rows`` = iterace ``(kind, value_normalized, raw_value, first_seen, last_seen)``,
-        kde časy jsou ISO UTC stringy nebo None. Při re-runu se first/last_seen
-        agregují přes MIN/MAX a raw_value doplní jen pokud chybí. Vrací počet zapsaných řádků.
-        """
-        count = 0
-        for kind, value, raw_value, first_seen, last_seen in rows:
-            self.conn.execute(
-                "INSERT INTO entities (id, case_id, kind, value_normalized,"
-                " raw_value, first_seen, last_seen)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)"
-                " ON CONFLICT (case_id, kind, value_normalized) DO UPDATE SET"
-                "   raw_value = COALESCE(entities.raw_value, excluded.raw_value),"
-                "   first_seen = COALESCE("
-                "     CASE WHEN entities.first_seen IS NOT NULL AND excluded.first_seen IS NOT NULL"
-                "          THEN MIN(entities.first_seen, excluded.first_seen) END,"
-                "     COALESCE(excluded.first_seen, entities.first_seen)),"
-                "   last_seen  = COALESCE("
-                "     CASE WHEN entities.last_seen IS NOT NULL AND excluded.last_seen IS NOT NULL"
-                "          THEN MAX(entities.last_seen, excluded.last_seen) END,"
-                "     COALESCE(excluded.last_seen, entities.last_seen))",
-                (new_id("ent"), case_id, kind, value, raw_value, first_seen, last_seen),
-            )
-            count += 1
-        self.conn.commit()
-        return count
+        """Idempotentní upsert kanonických entit (UNIQUE case+kind+value)."""
+        return self.entity_repo.upsert_entities(case_id, rows)
 
     def list_entities(self, case_id: str) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT * FROM entities WHERE case_id = ? ORDER BY kind, value_normalized",
-            (case_id,),
-        ).fetchall()
-        return [
-            {
-                "id": r["id"],
-                "kind": r["kind"],
-                "value": r["value_normalized"],
-                "raw_value": r["raw_value"],
-                "first_seen": r["first_seen"],
-                "last_seen": r["last_seen"],
-            }
-            for r in rows
-        ]
+        """Kanonické entity případu (ORDER BY kind, value_normalized)."""
+        return self.entity_repo.list_entities(case_id)
 
     def clear_correlations(self, case_id: str) -> int:
         """Vymaže propojení případu (re-run korelace = explicitní krok)."""
-        cur = self.conn.execute(
-            "DELETE FROM correlations WHERE case_id = ?", (case_id,)
-        )
-        self.conn.commit()
-        return int(cur.rowcount or 0)
+        return self.entity_repo.clear_correlations(case_id)
 
     def add_correlation(
         self,
@@ -1414,151 +992,19 @@ class CaseDB:
         first_seen: str | None = None,
         last_seen: str | None = None,
     ) -> int:
-        """Vloží jedno propojení s evidence listem. Vrací ID řádku.
-
-        P0 I3: ``first_seen``/``last_seen`` = časové rozmezí vztahu (ISO UTC).
-        """
-        cur = self.conn.execute(
-            "INSERT INTO correlations (case_id, entity_a, entity_b, relation,"
-            " confidence, evidence_json, first_seen, last_seen, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                case_id,
-                entity_a,
-                entity_b,
-                relation,
-                confidence,
-                json.dumps(evidence, ensure_ascii=False),
-                first_seen,
-                last_seen,
-                datetime.now(timezone.utc).isoformat(),
-            ),
+        """Vloží jedno propojení s evidence listem. Vrací ID řádku."""
+        return self.entity_repo.add_correlation(
+            case_id, entity_a, entity_b, relation, confidence, evidence,
+            first_seen=first_seen, last_seen=last_seen,
         )
-        self.conn.commit()
-        return int(cur.lastrowid)
 
     def list_correlations(self, case_id: str) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT * FROM correlations WHERE case_id = ? ORDER BY id", (case_id,)
-        ).fetchall()
-        out: list[dict] = []
-        for r in rows:
-            try:
-                evidence = json.loads(r["evidence_json"] or "[]")
-            except json.JSONDecodeError:
-                evidence = []
-            out.append(
-                {
-                    "id": int(r["id"]),
-                    "entity_a": r["entity_a"],
-                    "entity_b": r["entity_b"],
-                    "relation": r["relation"],
-                    "confidence": r["confidence"],
-                    "evidence": evidence,
-                    # P0 I3: migrace _migrate_entity_resolution() v __init__ vždy
-                    # přidá sloupce first_seen/last_seen → přímý přístup je bezpečný.
-                    "first_seen": r["first_seen"],
-                    "last_seen": r["last_seen"],
-                    "created_at": r["created_at"],
-                }
-            )
-        return out
+        """Propojení případu s evidence listy (ORDER BY id)."""
+        return self.entity_repo.list_correlations(case_id)
 
     def close(self) -> None:
         self.conn.close()
 
-
-def _row_to_artifact(r: sqlite3.Row) -> Artifact:
-    def parse(v):
-        return datetime.fromisoformat(v) if v else None
-
-    keys = r.keys()
-    # E2: staré DB bez provenience sloupců (migrace je idempotentní, ale čtení
-    # může jít přes přímý SELECT na starém souboru) → defenzivně None.
-    return Artifact(
-        id=r["id"],
-        source_id=r["source_id"],
-        file_id=r["file_id"],
-        rel_path=r["rel_path"],
-        artifact_type=r["artifact_type"],
-        timestamp=parse(r["timestamp"]),
-        title=r["title"],
-        details=json.loads(r["details_json"]),
-        confidence=r["confidence"] if "confidence" in keys else None,
-        parser_version=r["parser_version"] if "parser_version" in keys else None,
-        extracted_at=parse(r["extracted_at"]) if "extracted_at" in keys else None,
-        anomaly_flags=(
-            [f for f in r["anomaly_flags"].split(",") if f]
-            if "anomaly_flags" in keys and r["anomaly_flags"]
-            else []
-        ),
-        # P0 Core C1: staré DB bez sloupců → defaulty (prázdná provenance / 'extracted')
-        provenance=(
-            [Provenance.model_validate(p) for p in json.loads(r["provenance_json"])]
-            if "provenance_json" in keys and r["provenance_json"] not in (None, "", "[]")
-            else []
-        ),
-        validation_status=r["validation_status"] if "validation_status" in keys else "extracted",
-    )
-
-
-def _row_to_finding(r: sqlite3.Row) -> Finding:
-    """Řádek tabulky findings → Pydantic model (P0 Core C1)."""
-
-    def parse(v):
-        return datetime.fromisoformat(v) if v else None
-
-    keys = r.keys()
-    prov_raw = r["provenance_json"] if "provenance_json" in keys else "[]"
-    details_raw = r["details_json"] if "details_json" in keys else "{}"
-    created = parse(r["created_at"]) if "created_at" in keys and r["created_at"] else None
-    return Finding(
-        id=r["id"],
-        case_id=r["case_id"],
-        kind=r["kind"],
-        confidence_level=ConfidenceLevel(r["confidence_level"]),
-        provenance=[Provenance.model_validate(p) for p in json.loads(prov_raw or "[]")],
-        details_json=json.loads(details_raw),
-        created_at=created if created is not None else datetime.now(timezone.utc),
-    )
-
-
-def _row_to_lineage_event(r: sqlite3.Row) -> LineageEvent:
-    """Řádek tabulky lineage_events → dataclass (P0 Core C2)."""
-    from stopa.domain.lineage import LineageEvent
-
-    created = datetime.fromisoformat(r["created_at"]) if r["created_at"] else None
-    return LineageEvent(
-        op_type=r["op_type"],
-        case_id=r["case_id"],
-        tool_version=r["tool_version"],
-        config_hash=r["config_hash"],
-        input_refs=tuple(json.loads(r["input_refs_json"] or "[]")),
-        output_refs=tuple(json.loads(r["output_refs_json"] or "[]")),
-        details_json=json.loads(r["details_json"] or "{}"),
-        id=r["id"],
-        created_at=created if created is not None else datetime.now(timezone.utc),
-    )
-
-
-def _row_to_analysis_operation(r: sqlite3.Row) -> AnalysisOperation:
-    """Řádek tabulky analysis_operations → dataclass (P0 Core C5)."""
-    created = datetime.fromisoformat(r["created_at"]) if r["created_at"] else None
-    return AnalysisOperation(
-        op_type=r["op_type"],
-        case_id=r["case_id"],
-        source_id=r["source_id"],
-        input_files=tuple(json.loads(r["input_files_json"] or "[]")),
-        parser_versions=json.loads(r["parser_versions_json"] or "{}"),
-        stopa_version=r["stopa_version"],
-        config_hash=r["config_hash"],
-        params_json=json.loads(r["params_json"] or "{}"),
-        outputs_json=json.loads(r["outputs_json"] or "{}"),
-        duration_ms=r["duration_ms"],
-        env_json=json.loads(r["env_json"] or "{}"),
-        id=r["id"],
-        created_at=created if created is not None else datetime.now(timezone.utc),
-    )
 
 
 # ETAPA C vlna 1: _FTS5_OPS + _fts_query přesunuty do file_repository.py
