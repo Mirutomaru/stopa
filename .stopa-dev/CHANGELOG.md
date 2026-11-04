@@ -2,7 +2,7 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
-## 2026-11-04 — STP-042 Volba ETAPY D + synchronizace roadmapy (audit reálného stavu) = **ETAPA D ZAHÁJENA ★** (oblast P, P1) | Commit: ```docs follow-up```
+## 2026-11-04 — STP-042 Volba ETAPY D + synchronizace roadmapy (audit reálného stavu) = **ETAPA D ZAHÁJENA ★** (oblast P, P1) | Commit: ```d87a677```
 **Změněné soubory:** `.stopa-dev/ROADMAP.md` + `STOPA_ROADMAP.md` (sekce P → 🔧 v průběhu ETAPA D; nová sekce „ETAPA D — ROZHODNUTÍ O SMĚRU" s audit tabulkou kandidátů, rozhodnutím a plánem vln 1–2), `.stopa-dev/TASKS.md` (záznam STP-042), `.stopa-dev/PROJECT_STATE.md` (fáze → ETAPA D ZAHÁJENA ★, completed tasks **42**, next = STP-043 vlna 1 CI benchmark job).
 **Audit reálného stavu kandidátů:** P QA — benchmark engine hotový (`domain/benchmark.py` 95 ř. + `data/benchmark_engine.py` 267 ř., CLI `stopa benchmark`, detekce regresí >20 %), CI má lint+test+security ale **benchmark chybí**, baseline neexistuje; M Security — sandbox parserů neexistuje (parsery v hlavním procesu); H AI Copilot — citace existují (`CITATION_RE`, `extract_citations`), detekce rozporů chybí; I+O Validation/Audit Center UI — registry existuje, UI moduly chybí; G/J/K/Q — částečně/neexistují.
 **ROZHODNUTÍ:** ETAPA D = oblast P (CI běh benchmarku proti baseline) — jediný zbývající P1 úkol, nejmenší rozsah s největším dopadem (engine hotový, chybí jen zapojení do CI), chrání ETAPU C i budoucí vlny před tichou regresí výkonu.

@@ -49,7 +49,7 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-042 — Volba ETAPY D + synchronizace roadmapy (audit reálného stavu)** (oblast P, P1) | Commit: ```docs follow-up```
+**STP-042 — Volba ETAPY D + synchronizace roadmapy (audit reálného stavu)** (oblast P, P1) | Commit: ```d87a677```
 Audit reálného stavu všech kandidátských oblastí pro ETAPU D v kódu (ne jen staré „Nedokončeno" v roadmapě): **P QA** — benchmark engine hotový (`domain/benchmark.py` 95 ř. + `data/benchmark_engine.py` 267 ř., CLI `stopa benchmark`, detekce regresí >20 %), CI má lint+test+security ale benchmark chybí, baseline neexistuje; **M Security** — sandbox parserů neexistuje; **H AI Copilot** — citace existují (`CITATION_RE`, `extract_citations`), detekce rozporů chybí; **I+O Validation/Audit Center UI** — registry existuje, UI moduly chybí; **G/J/K/Q** — částečně/neexistují. **ROZHODNUTÍ: ETAPA D = oblast P (CI běh benchmarku proti baseline)** — jediný zbývající P1 úkol, nejmenší rozsah s největším dopadem. Obě roadmapy synchronizovány (sekce P → 🔧 v průběhu ETAPA D + nová sekce „ETAPA D — ROZHODNUTÍ O SMĚRU" s audit tabulkou a plánem vln 1–2). Full suite **1792 passed, 1 skipped**, ruff clean.
 Předtím: STP-041 (ETAPA C vlna 3 — schema/migrations moduly + facade úklid; CELÁ ETAPA C DOKONČENA ★★, `824755d`),
 STP-040 (ETAPA C vlna 2 — Artifact/Entity repozitáře, `28b6222`),
