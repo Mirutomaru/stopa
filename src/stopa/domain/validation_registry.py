@@ -508,6 +508,72 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_w6_parsers.py",),
     ),
+    # ── ETAPA B vlna 7 — AXIOM port: Chrome Bookmarks/History/Autofill + Contacts + Skype WR ──
+    "chrome_bookmarks": ParserValidation(
+        parser_id="chrome_bookmarks",
+        version="",
+        formats=(
+            "Chrome Bookmarks JSON (Takeout / warrant return, roots/date_added µs od 1601)",
+        ),
+        limitations=(
+            "detekce name-based (bookmark/chrome_bookmark) + content check (JSON s roots/bookmark_bar)",
+            "date_added = µs od Windows epochy 1601; rekurzivní walk přes roots",
+            "limit MAX_BOOKMARKS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w7_parsers.py",),
+    ),
+    "chrome_history_wr": ParserValidation(
+        parser_id="chrome_history_wr",
+        version="",
+        formats=(
+            "Chrome History warrant return JSON (pole návštěv, visit_time µs od 1601)",
+        ),
+        limitations=(
+            "detekce name-based (chrome_history/history) + content check (JSON s visit_time/url)",
+            "visit_time = µs od Windows epochy 1601; artifact_type=browser_history",
+            "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w7_parsers.py",),
+    ),
+    "contacts_wr": ParserValidation(
+        parser_id="contacts_wr",
+        version="",
+        formats=(
+            "Google Contacts Takeout / warrant return JSON (name/emails/phoneNumbers)",
+        ),
+        limitations=(
+            "detekce name-based (contact/google_contact) + content check (JSON s givenName/emails)",
+            "Takeout formát = pole stringů pro jména; People API tolerantně",
+            "limit MAX_CONTACTS_PER_FILE=10000 záznamů",
+        ),
+        test_files=("tests/test_w7_parsers.py",),
+    ),
+    "chrome_autofill": ParserValidation(
+        parser_id="chrome_autofill",
+        version="",
+        formats=(
+            "Chrome Autofill / Contact Info warrant return JSON (name/email/phoneNumber/address)",
+        ),
+        limitations=(
+            "detekce name-based (autofill/contact_info) + content check (JSON s autofill klíči)",
+            "prázdné záznamy (bez jména i e-mailu) se vynechávají",
+            "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w7_parsers.py",),
+    ),
+    "skype_warrant": ParserValidation(
+        parser_id="skype_warrant",
+        version="",
+        formats=(
+            "Skype warrant return JSON (AccountDetails/ChatHistory/ConnectionHistory/Contacts)",
+        ),
+        limitations=(
+            "detekce name-based (skype) + content check (msnId/conversationId/composetime)",
+            "auto-detekce subtypu podle obsahu; chat→messenger_message, contacts→contact",
+            "čas ISO 8601 / epoch s/ms tolerantně; limit MAX_ENTRIES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w7_parsers.py",),
+    ),
 }
 
 

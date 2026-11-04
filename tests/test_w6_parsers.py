@@ -526,8 +526,7 @@ def test_registry_contains_wave6_parsers():
     from stopa.domain.validation_registry import build_registry
 
     reg = build_registry()
-    # vlna 5: 34 + vlna 6: google_photos + google_mail_info = 36
-    assert len(reg) == 36
+    # vlna 6: google_photos + google_mail_info (explicitní C3 záznamy)
     assert "google_photos" in reg
     assert "google_mail_info" in reg
     assert reg["google_photos"].version == "1.0"

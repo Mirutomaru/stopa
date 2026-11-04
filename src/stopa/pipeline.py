@@ -70,6 +70,32 @@ from stopa.artifacts.google_chat_family import (
     extract_google_chat_artifacts,
     is_google_chat_file,
 )
+from stopa.artifacts.google_chrome_autofill import (
+    PARSER_VERSION as CHROME_AUTOFILL_VERSION,
+)
+from stopa.artifacts.google_chrome_autofill import (
+    extract_chrome_autofill_artifacts,
+    is_chrome_autofill_file,
+)
+from stopa.artifacts.google_chrome_bookmarks import (
+    PARSER_VERSION as CHROME_BOOKMARKS_VERSION,
+)
+from stopa.artifacts.google_chrome_bookmarks import (
+    extract_bookmarks_artifacts,
+    is_chrome_bookmarks_file,
+)
+from stopa.artifacts.google_chrome_history_wr import (
+    PARSER_VERSION as CHROME_HISTORY_WR_VERSION,
+)
+from stopa.artifacts.google_chrome_history_wr import (
+    extract_chrome_history_wr_artifacts,
+    is_chrome_history_wr_file,
+)
+from stopa.artifacts.google_contacts_wr import PARSER_VERSION as CONTACTS_WR_VERSION
+from stopa.artifacts.google_contacts_wr import (
+    extract_contacts_wr_artifacts,
+    is_contacts_wr_file,
+)
 from stopa.artifacts.google_location_history import (
     PARSER_VERSION as GOOGLE_LOC_VERSION,
 )
@@ -124,6 +150,11 @@ from stopa.artifacts.plist_extract import PARSER_VERSION as PLIST_VERSION
 from stopa.artifacts.plist_extract import extract_plist_artifacts
 from stopa.artifacts.registry_extract import PARSER_VERSION as REGISTRY_VERSION
 from stopa.artifacts.registry_extract import extract_registry_artifacts
+from stopa.artifacts.skype_warrant_return import PARSER_VERSION as SKYPE_WR_VERSION
+from stopa.artifacts.skype_warrant_return import (
+    extract_skype_artifacts,
+    is_skype_warrant_file,
+)
 from stopa.artifacts.sqlite_extract import PARSER_VERSION as SQLITE_VERSION
 from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
 from stopa.artifacts.sqlite_recover import recover_deleted_rows
@@ -280,6 +311,12 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     # ETAPA B vlna 6 — AXIOM port: Google Photos + Mail Message Information (WarrantReturn)
     "google_photos": (extract_photos_artifacts, GOOGLE_PHOTOS_VERSION),
     "google_mail_info": (extract_mail_info_artifacts, GOOGLE_MAIL_INFO_VERSION),
+    # ETAPA B vlna 7 — AXIOM port: Chrome Bookmarks/History/Autofill + Contacts + Skype WR
+    "chrome_bookmarks": (extract_bookmarks_artifacts, CHROME_BOOKMARKS_VERSION),
+    "chrome_history_wr": (extract_chrome_history_wr_artifacts, CHROME_HISTORY_WR_VERSION),
+    "contacts_wr": (extract_contacts_wr_artifacts, CONTACTS_WR_VERSION),
+    "chrome_autofill": (extract_chrome_autofill_artifacts, CHROME_AUTOFILL_VERSION),
+    "skype_warrant": (extract_skype_artifacts, SKYPE_WR_VERSION),
 }
 
 
@@ -349,6 +386,18 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["google_login_history"]
     if is_account_info_file(name):
         return NAME_BASED_EXTRACTORS["google_account_info"]
+    # ETAPA B vlna 7 — Chrome Bookmarks/History/Autofill + Contacts + Skype WR
+    # (specifické PŘED obecnějšími; autofill PŘED contacts — "contactinfo" ⊃ "contact")
+    if is_chrome_bookmarks_file(name):
+        return NAME_BASED_EXTRACTORS["chrome_bookmarks"]
+    if is_chrome_autofill_file(name):
+        return NAME_BASED_EXTRACTORS["chrome_autofill"]
+    if is_chrome_history_wr_file(name):
+        return NAME_BASED_EXTRACTORS["chrome_history_wr"]
+    if is_contacts_wr_file(name):
+        return NAME_BASED_EXTRACTORS["contacts_wr"]
+    if is_skype_warrant_file(name):
+        return NAME_BASED_EXTRACTORS["skype_warrant"]
     # ETAPA B vlna 2 — paměťové skeny / záložky / MSN chat logy
     if is_mem_scan_file(name):
         return NAME_BASED_EXTRACTORS["mem_scan"]

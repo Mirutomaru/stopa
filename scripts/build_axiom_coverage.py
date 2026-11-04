@@ -115,6 +115,19 @@ COVERED: dict[str, str] = {
     "GoogleMailMessageInformationArtifact": "covered",  # google_mail_info (Gmail warrant return JSON)
     "GoogleBarArtifact": "covered",  # google_bar (Chrome History search_terms bonus v sqlite_extract)
     "AttachmentExtractor": "covered",  # attachment_extractor (MIME/RFC822 přílohy, bonus v email_mbox)
+    # ETAPA B vlna 7 — port AXIOM extraktorů (5 nových parserů, testováno)
+    "GoogleChromeBookmarksWarrantReturnArtifact": "covered",  # google_chrome_bookmarks (Bookmarks JSON)
+    "CloudGoogleChromeBookmarksArtifact": "covered",  # google_chrome_bookmarks (Bookmarks JSON)
+    "GoogleChromeHistoryWarrantReturnArtifact": "covered",  # google_chrome_history_wr (History warrant JSON)
+    "GoogleContactsWarrantReturnArtifact": "covered",  # google_contacts_wr (Contacts Takeout/warrant JSON)
+    "CloudGoogleContactsArtifact": "covered",  # google_contacts_wr (Contacts Takeout/warrant JSON)
+    "GoogleChromeAutofillWarrantReturnArtifact": "covered",  # google_chrome_autofill (Autofill/ContactInfo JSON)
+    "GoogleChromeContactInfoWarrantReturnArtifact": "covered",  # google_chrome_autofill (Autofill/ContactInfo JSON)
+    "CloudGoogleChromeAutofillArtifact": "covered",  # google_chrome_autofill (Autofill/ContactInfo JSON)
+    "SkypeWarrantReturnAccountDetailsArtifact": "covered",  # skype_warrant_return (account details)
+    "SkypeWarrantReturnChatHistoryRecordsArtifact": "covered",  # skype_warrant_return (chat history)
+    "SkypeWarrantReturnConnectionHistoryArtifact": "covered",  # skype_warrant_return (connection history)
+    "SkypeWarrantReturnContactsArtifact": "covered",  # skype_warrant_return (contacts)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -258,6 +271,19 @@ def _covered_desc(name: str) -> str:
         "GoogleMailMessageInformationArtifact": "google_mail_info parser (Gmail warrant return JSON, threadId/internalDate µs)",
         "GoogleBarArtifact": "google_bar parser (Chrome History search_terms — omnibox dotazy z lišty)",
         "AttachmentExtractor": "attachment_extractor parser (MIME/RFC822 přílohy → email_attachment artifacty)",
+        # ETAPA B vlna 7 — port AXIOM extraktorů
+        "GoogleChromeBookmarksWarrantReturnArtifact": "google_chrome_bookmarks parser (Bookmarks JSON, date_added µs od 1601)",
+        "CloudGoogleChromeBookmarksArtifact": "google_chrome_bookmarks parser (Bookmarks JSON, date_added µs od 1601)",
+        "GoogleChromeHistoryWarrantReturnArtifact": "google_chrome_history_wr parser (History warrant return JSON, visit_time µs od 1601)",
+        "GoogleContactsWarrantReturnArtifact": "google_contacts_wr parser (Contacts Takeout/warrant JSON, name/emails/phoneNumbers)",
+        "CloudGoogleContactsArtifact": "google_contacts_wr parser (Contacts Takeout/warrant JSON, name/emails/phoneNumbers)",
+        "GoogleChromeAutofillWarrantReturnArtifact": "google_chrome_autofill parser (Autofill/ContactInfo JSON, name/email/address)",
+        "GoogleChromeContactInfoWarrantReturnArtifact": "google_chrome_autofill parser (Autofill/ContactInfo JSON, name/email/address)",
+        "CloudGoogleChromeAutofillArtifact": "google_chrome_autofill parser (Autofill/ContactInfo JSON, name/email/address)",
+        "SkypeWarrantReturnAccountDetailsArtifact": "skype_warrant_return parser (account details — account/email/displayName)",
+        "SkypeWarrantReturnChatHistoryRecordsArtifact": "skype_warrant_return parser (chat history records — conversationId/composetime)",
+        "SkypeWarrantReturnConnectionHistoryArtifact": "skype_warrant_return parser (connection history — contact/status/dateAdded)",
+        "SkypeWarrantReturnContactsArtifact": "skype_warrant_return parser (contacts — msnId/displayName/email)",
     }
     return m.get(name, "existující parser")
 

@@ -2,6 +2,47 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 7: Chrome Bookmarks/History/Autofill + Contacts + Skype WR)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 5 nových parserů / 12 AXIOM typů)
+- **Google Chrome Bookmarks** (`artifacts/google_chrome_bookmarks.py`) — Chrome
+  Bookmarks JSON (Takeout/warrant return; rekurzivní walk `roots`, `date_added`
+  µs od 1601 → unix s, folder path z hierarchie). Name-based detekce. AXIOM
+  `GoogleChromeBookmarksWarrantReturnArtifact` + `CloudGoogleChromeBookmarksArtifact`.
+  Artifact type `browser_bookmark`.
+- **Google Chrome History Warrant Return** (`artifacts/google_chrome_history_wr.py`) —
+  Chrome History warrant return JSON (pole záznamů; `url`, `title`, `visit_time`
+  µs od 1601 → unix s, transition_type). Name-based detekce. AXIOM
+  `GoogleChromeHistoryWarrantReturnArtifact`. Artifact type `browser_history`.
+- **Google Contacts Warrant Return** (`artifacts/google_contacts_wr.py`) — Google
+  Contacts Takeout/warrant JSON (pole kontaktů; `name`/`givenName`/`familyName`,
+  `emails[]`, `phoneNumbers[]`; People API fallback `names[].displayName`).
+  Name-based detekce. AXIOM `GoogleContactsWarrantReturnArtifact` +
+  `CloudGoogleContactsArtifact`. Artifact type `contact`.
+- **Google Chrome Autofill / Contact Info** (`artifacts/google_chrome_autofill.py`) —
+  Chrome Autofill/Contact Info JSON (pole záznamů; `name`, `email`, `phoneNumber`,
+  adresa). Name-based detekce. AXIOM `GoogleChromeAutofillWarrantReturnArtifact` +
+  `GoogleChromeContactInfoWarrantReturnArtifact` + `CloudGoogleChromeAutofillArtifact`.
+  Artifact type `autofill_entry`.
+- **Skype Warrant Return** (`artifacts/skype_warrant_return.py`) — Skype warrant
+  return JSON s auto-detekcí subtypu (account details / chat history records /
+  connection history / contacts; `composetime` ISO 8601 i epoch ms → unix s).
+  Name-based detekce. AXIOM `SkypeWarrantReturnAccountDetailsArtifact` +
+  `SkypeWarrantReturnChatHistoryRecordsArtifact` + `SkypeWarrantReturnConnectionHistoryArtifact`
+  + `SkypeWarrantReturnContactsArtifact`. Artifact types `skype_account`,
+  `messenger_message`, `contact`.
+
+### Pipeline dispatch + C3 registry
+- Všech 5 parserů napojeno do `NAME_BASED_EXTRACTORS` + `_name_based_match()`
+  (specifické detekce PŘED obecnějšími Google/Skype detekcemi).
+- C3 registry (`validation_registry.py`): nové záznamy `chrome_bookmarks`,
+  `chrome_history_wr`, `contacts_wr`, `chrome_autofill`, `skype_warrant_return`.
+  `build_registry()` = **41 parserů** (předtím 36).
+
+### Coverage matice (FÁZE 15)
+- Flip 12 AXIOM typů NOT_SUPPORTED → SUPPORTED: covered **72 → 84 / 232**;
+  cloud-export **111 → 99**. Regen CSV/MD/JSON.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 6: Google local profile/takeout + přílohy)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 4 AXIOM typy)
