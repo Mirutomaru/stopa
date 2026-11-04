@@ -292,3 +292,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/artifacts/{google_aggregated_activities,google_maps_activity,google_chat_family,google_account_meta,drive_activity,samsung_voice_recording}.py` (nové), `sqlite_extract.py`, `pipeline.py`, `domain/validation_registry.py`, `scripts/build_axiom_coverage.py`, `tests/test_w5_parsers.py` (nový)
 - **Testy:** 43 nových testů zelených (`tests/test_w5_parsers.py`); full suite **1242 passed, 1 skipped** (baseline 1199 + 43); ruff clean; `build_registry()` = **34 parserů** — PASS
 - **Dokončeno:** 2026-11-04 | Commit: ```b786064```
+
+## STP-028 — ETAPA B vlna 6: Google local profile/takeout + přílohy (4 parsery / 4 AXIOM typy)
+- **Oblast:** D (Artifact Engine) | **Priorita:** P0 | **Stav:** DONE
+- **Popis:** Port 4 AXIOM extraktorů do čistého Pythonu — Google Photos (Takeout/warrant JSON, photoTakenTime/geoData E7), Google Mail Message Information (Gmail warrant return JSON, threadId/internalDate µs), Google Bar (Chrome History DB tabulka `search_terms` — omnibox dotazy), Attachment Extractor (MIME/RFC822 přílohy → email_attachment artifacty). Coverage matice flip 4 přímých typů NOT_SUPPORTED → SUPPORTED (**68 → 72 / 232**); portable-local **4 → 0** ★.
+- **Závislosti:** pipeline dispatch (name-based photos/mail_info + bonus hooky GoogleBar v `_extract_chrome_history` a AttachmentExtractor v `email_mbox`) + C3 registry (nové záznamy google_photos/google_mail_info/attachment_extractor; sdílené sqlite/email_mbox rozšířeny)
+- **Dotčené moduly:** `src/stopa/artifacts/{google_photos,google_mail_info,google_bar,attachment_extractor}.py`, `pipeline.py`, `sqlite_extract.py`, `email_mbox.py`, `validation_registry.py`, `scripts/build_axiom_coverage.py`
+- **Testy:** 37 nových testů zelených (`tests/test_w6_parsers.py`); full suite **1279 passed, 1 skipped** (baseline 1242 + 37); ruff clean; `build_registry()` = **36 parserů** (předtím 34)
+- **Dokončeno:** 2026-11-04 | Commit: ```9ffde5b```
