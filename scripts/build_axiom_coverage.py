@@ -181,6 +181,20 @@ COVERED: dict[str, str] = {
     "SnapchatGeolocationArtifact": "covered",  # snapchat_wr (geolokace)
     "SnapchatIpHistoryArtifact": "covered",  # snapchat_wr (IP historie)
     "SnapchatAccountInformationArtifact": "covered",  # snapchat_wr (info o účtu)
+    # ETAPA B vlna 11 — cloud SNS exporty (Twitter/X + Facebook warrant return)
+    "CloudTwitterPostsArtifact": "covered",  # twitter_posts (příspěvky)
+    "CloudTwitterPostsPublicArtifact": "covered",  # twitter_posts (veřejné příspěvky)
+    "CloudTwitterWarrantReturnPostsArtifact": "covered",  # twitter_posts (posts WR)
+    "CloudTwitterDirectMessagesArtifact": "covered",  # twitter_messages (DM konverzace)
+    "CloudTwitterWarrantReturnDirectMessagesArtifact": "covered",  # twitter_messages (DM WR)
+    "CloudTwitterUsersArtifact": "covered",  # twitter_users (uživatelé/sociální graf)
+    "CloudTwitterUsersPublicArtifact": "covered",  # twitter_users (veřejní uživatelé)
+    "CloudTwitterWarrantReturnUsersArtifact": "covered",  # twitter_users (uživatelé WR)
+    "CloudFacebookMessengerMessagesArtifact": "covered",  # facebook_wr (Messenger zprávy)
+    "CloudFacebookFriendsArtifact": "covered",  # facebook_wr (přátelé)
+    "CloudFacebookTimelineArtifact": "covered",  # facebook_wr (timeline příspěvky)
+    "CloudFacebookMobileTimelineArtifact": "covered",  # facebook_wr (mobilní timeline)
+    "CloudFacebookProfileInfoArtifact": "covered",  # facebook_wr (info o profilu)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -390,6 +404,20 @@ def _covered_desc(name: str) -> str:
         "SnapchatGeolocationArtifact": "snapchat_wr parser (geolokace → location_data, lat/lon tolerantní klíče)",
         "SnapchatIpHistoryArtifact": "snapchat_wr parser (IP historie → network_connection, ip_address/event_type)",
         "SnapchatAccountInformationArtifact": "snapchat_wr parser (info o účtu → contact user/email/phone)",
+        # ETAPA B vlna 11 — Twitter/X + Facebook
+        "CloudTwitterPostsArtifact": "twitter_posts parser (příspěvky → sns_post, retweety/odpovědi post_type)",
+        "CloudTwitterPostsPublicArtifact": "twitter_posts parser (veřejné příspěvky → sns_post)",
+        "CloudTwitterWarrantReturnPostsArtifact": "twitter_posts parser (posts WR — tweet_id/from_user/body/date tolerantní klíče)",
+        "CloudTwitterDirectMessagesArtifact": "twitter_messages parser (DM konverzace → chat_message, konverzační i flat formát)",
+        "CloudTwitterWarrantReturnDirectMessagesArtifact": "twitter_messages parser (DM WR → chat_message)",
+        "CloudTwitterUsersArtifact": "twitter_users parser (uživatelé/sociální graf → contact sns:twitter)",
+        "CloudTwitterUsersPublicArtifact": "twitter_users parser (veřejní uživatelé → contact sns:twitter)",
+        "CloudTwitterWarrantReturnUsersArtifact": "twitter_users parser (uživatelé WR — followers/following relace)",
+        "CloudFacebookMessengerMessagesArtifact": "facebook_wr parser (Messenger zprávy → chat_message, konverzace i flat)",
+        "CloudFacebookFriendsArtifact": "facebook_wr parser (přátelé → contact sns:facebook)",
+        "CloudFacebookTimelineArtifact": "facebook_wr parser (timeline příspěvky → sns_post post_type=timeline)",
+        "CloudFacebookMobileTimelineArtifact": "facebook_wr parser (mobilní timeline → sns_post)",
+        "CloudFacebookProfileInfoArtifact": "facebook_wr parser (info o profilu → contact relationship=account)",
     }
     return m.get(name, "existující parser")
 

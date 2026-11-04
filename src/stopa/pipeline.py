@@ -53,6 +53,8 @@ from stopa.artifacts.drive_activity import (
 )
 from stopa.artifacts.email_mbox import PARSER_VERSION as EMAIL_MBOX_VERSION
 from stopa.artifacts.email_mbox import extract_email_artifacts, is_email_file
+from stopa.artifacts.facebook_wr import PARSER_VERSION as FACEBOOK_WR_VERSION
+from stopa.artifacts.facebook_wr import extract_facebook_artifacts, is_facebook_file
 from stopa.artifacts.google_account_info import PARSER_VERSION as GOOGLE_ACCT_VERSION
 from stopa.artifacts.google_account_info import extract_account_artifacts, is_account_info_file
 from stopa.artifacts.google_account_meta import (
@@ -200,6 +202,21 @@ from stopa.artifacts.snapchat_wr import extract_snapchat_artifacts, is_snapchat_
 from stopa.artifacts.sqlite_extract import PARSER_VERSION as SQLITE_VERSION
 from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
 from stopa.artifacts.sqlite_recover import recover_deleted_rows
+from stopa.artifacts.twitter_messages import PARSER_VERSION as TWITTER_MESSAGES_VERSION
+from stopa.artifacts.twitter_messages import (
+    extract_twitter_message_artifacts,
+    is_twitter_messages_file,
+)
+from stopa.artifacts.twitter_posts import PARSER_VERSION as TWITTER_POSTS_VERSION
+from stopa.artifacts.twitter_posts import (
+    extract_twitter_post_artifacts,
+    is_twitter_posts_file,
+)
+from stopa.artifacts.twitter_users import PARSER_VERSION as TWITTER_USERS_VERSION
+from stopa.artifacts.twitter_users import (
+    extract_twitter_user_artifacts,
+    is_twitter_users_file,
+)
 from stopa.artifacts.win_amcache import extract_amcache_artifacts
 from stopa.artifacts.win_clipboard import extract_clipboard_artifacts
 from stopa.artifacts.win_drivers import PARSER_VERSION as WIN_DRIVERS_VERSION
@@ -380,15 +397,20 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "instagram_posts": (extract_instagram_post_artifacts, INSTAGRAM_POSTS_VERSION),
     "instagram_account": (extract_instagram_account_artifacts, INSTAGRAM_ACCOUNT_VERSION),
     "snapchat_wr": (extract_snapchat_artifacts, SNAPCHAT_WR_VERSION),
+    # ETAPA B vlna 11 — cloud SNS rodina Twitter/X + Facebook
+    "twitter_posts": (extract_twitter_post_artifacts, TWITTER_POSTS_VERSION),
+    "twitter_messages": (extract_twitter_message_artifacts, TWITTER_MESSAGES_VERSION),
+    "twitter_users": (extract_twitter_user_artifacts, TWITTER_USERS_VERSION),
+    "facebook_wr": (extract_facebook_artifacts, FACEBOOK_WR_VERSION),
 }
 
 
 def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
-    """ETAPA B vlna 10 — cloud SNS pre-pass na celé cestě.
+    """ETAPA B vlna 10/11 — cloud SNS pre-pass na celé cestě.
 
-    Instagram/Snapchat exporty mají generic basenames (``Messages.json``,
-    ``Photos.json``, ``Friends.json``), které kolidují s Google detektory v
-    basename chainu → SNS markery (instagram/snapchat) se zkoušejí PŘED ním.
+    Instagram/Snapchat/Twitter/Facebook exporty mají generic basenames
+    (``Messages.json``, ``Photos.json``, ``Friends.json``), které kolidují s
+    Google detektory v basename chainu → SNS markery se zkoušejí PŘED ním.
     """
     for key, detector in (
         ("instagram_messages", is_instagram_messages_file),
@@ -396,6 +418,11 @@ def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
         ("instagram_account", is_instagram_account_file),
         ("instagram_posts", is_instagram_posts_file),
         ("snapchat_wr", is_snapchat_file),
+        # ETAPA B vlna 11 — Twitter/X + Facebook (messages PŘED users/posts)
+        ("twitter_messages", is_twitter_messages_file),
+        ("twitter_users", is_twitter_users_file),
+        ("twitter_posts", is_twitter_posts_file),
+        ("facebook_wr", is_facebook_file),
     ):
         if detector(full_path):
             fn, ver = NAME_BASED_EXTRACTORS[key]

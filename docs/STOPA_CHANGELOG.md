@@ -4,6 +4,55 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 11: cloud SNS exporty — Twitter/X + Facebook warrant return)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 13 AXIOM typů)
+- **Twitter/X Posts** (`artifacts/twitter_posts.py`) — příspěvky z cloud
+  exportu/warrant returnu (author/text/created_at; tolerantní klíče
+  tweet_id/from_user/body/date). Retweety a odpovědi nesou `post_type`
+  (retweet/reply). Name-based detekce s SNS markerem v cestě. AXIOM
+  `CloudTwitterPostsArtifact` + `CloudTwitterPostsPublicArtifact` +
+  `CloudTwitterWarrantReturnPostsArtifact`. Artifact type `sns_post`,
+  `details.engine=twitter_posts`.
+- **Twitter/X Direct Messages** (`artifacts/twitter_messages.py`) — DM
+  konverzace (sender/recipient/text/timestamp; tolerantní klíče from/to/body).
+  Konverzační formát (participants/messages) i plošný. Name-based detekce s SNS
+  markerem v cestě. AXIOM `CloudTwitterDirectMessagesArtifact` +
+  `CloudTwitterWarrantReturnDirectMessagesArtifact`. Artifact type
+  `chat_message`, `details.engine=twitter_messages`.
+- **Twitter/X Users** (`artifacts/twitter_users.py`) — uživatelé a sociální graf
+  (screen_name/name/followers_count; tolerantní klíče username/full_name).
+  Vlastní účet → `relationship=account`; sekce followers/following →
+  `relationship=follower`/`following`. Name-based detekce s SNS markerem v
+  cestě. AXIOM `CloudTwitterUsersArtifact` + `CloudTwitterUsersPublicArtifact` +
+  `CloudTwitterWarrantReturnUsersArtifact`. Artifact type `contact` s
+  `mimetype=sns:twitter`.
+- **Facebook Warrant Return** (`artifacts/facebook_wr.py`) — Messenger zprávy
+  (sender/recipient/body/timestamp; konverzační i flat formát), přátelé →
+  `contact` (`sns:facebook`), timeline příspěvky (author/text/created_time) →
+  `sns_post` s `post_type=timeline`, info o profilu (name/email/phone) →
+  `contact` s `relationship=account`. Auto-detekce sekcí podle struktury
+  payloadu. Name-based detekce s SNS markerem v cestě. AXIOM
+  `CloudFacebookMessengerMessagesArtifact` + `CloudFacebookFriendsArtifact` +
+  `CloudFacebookTimelineArtifact` + `CloudFacebookMobileTimelineArtifact` +
+  `CloudFacebookProfileInfoArtifact`. Artifact types `chat_message`, `contact`,
+  `sns_post`.
+
+### Pipeline dispatch + C3 registry
+- Všech 4 parserů napojeno do `_sns_prepass()` — pre-pass na celé cestě PŘED
+  basename chainem (z vlny 10). Pořadí: twitter_posts → twitter_messages →
+  twitter_users → facebook; bez kolizí s Instagram/Snapchat detektory ani s
+  Google detektory (generic basenames `messages.json`/`Friends.json` bez SNS
+  markery nepadnou do pre-passu — ověřeno dispatch testy).
+- C3 registry (`validation_registry.py`): nové záznamy `twitter_posts`,
+  `twitter_messages`, `twitter_users`, `facebook_wr`.
+  `build_registry()` = **58 parserů** (předtím 54).
+
+### Coverage matice (FÁZE 17)
+- Flip 13 AXIOM typů NOT_SUPPORTED → SUPPORTED: covered **134 → 147 / 232**;
+  cloud-export kategorie **64 → 51** (první vlna pod hranicí 50 se blíží);
+  memory 0, portable-local 0, base-class 34. Regen CSV/MD/JSON.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 10: cloud SNS exporty — Instagram/Snapchat warrant return)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 20 AXIOM typů)
