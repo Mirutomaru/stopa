@@ -39,6 +39,11 @@ from stopa.artifacts.amazon_ec2_s3 import (
 )
 from stopa.artifacts.bebo_chat import PARSER_VERSION as BEBO_CHAT_VERSION
 from stopa.artifacts.bebo_chat import extract_bebo_artifacts, is_bebo_chat_file
+from stopa.artifacts.box_cloud import PARSER_VERSION as BOX_CLOUD_VERSION
+from stopa.artifacts.box_cloud import (
+    extract_box_artifacts,
+    is_box_file,
+)
 from stopa.artifacts.chatroulette import PARSER_VERSION as CHATROULETTE_VERSION
 from stopa.artifacts.chatroulette import (
     extract_chatroulette_artifacts,
@@ -60,6 +65,12 @@ from stopa.artifacts.drive_activity import PARSER_VERSION as DRIVE_ACTIVITY_VERS
 from stopa.artifacts.drive_activity import (
     extract_drive_activity_artifacts,
     is_drive_activity_file,
+)
+from stopa.artifacts.dropbox_mega import PARSER_VERSION as DROPBOX_MEGA_VERSION
+from stopa.artifacts.dropbox_mega import (
+    extract_dropbox_mega_artifacts,
+    is_dropbox_file,
+    is_mega_file,
 )
 from stopa.artifacts.email_mbox import PARSER_VERSION as EMAIL_MBOX_VERSION
 from stopa.artifacts.email_mbox import extract_email_artifacts, is_email_file
@@ -86,6 +97,13 @@ from stopa.artifacts.google_aggregated_activities import (
     extract_identity_sessions_artifacts,
     is_aggregated_activities_file,
     is_identity_sessions_file,
+)
+from stopa.artifacts.google_calendar_events import (
+    PARSER_VERSION as GOOGLE_CALENDAR_EVENTS_VERSION,
+)
+from stopa.artifacts.google_calendar_events import (
+    extract_google_calendar_artifacts,
+    is_google_calendar_file,
 )
 from stopa.artifacts.google_chat_family import PARSER_VERSION as GOOGLE_CHAT_FAMILY_VERSION
 from stopa.artifacts.google_chat_family import (
@@ -117,6 +135,11 @@ from stopa.artifacts.google_contacts_wr import PARSER_VERSION as CONTACTS_WR_VER
 from stopa.artifacts.google_contacts_wr import (
     extract_contacts_wr_artifacts,
     is_contacts_wr_file,
+)
+from stopa.artifacts.google_keep_tasks import PARSER_VERSION as GOOGLE_KEEP_TASKS_VERSION
+from stopa.artifacts.google_keep_tasks import (
+    extract_google_keep_artifacts,
+    is_google_keep_file,
 )
 from stopa.artifacts.google_location_history import (
     PARSER_VERSION as GOOGLE_LOC_VERSION,
@@ -455,11 +478,19 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "sharepoint_wr": (extract_sharepoint_artifacts, SHAREPOINT_WR_VERSION),
     "amazon_cloudtrail": (extract_cloudtrail_artifacts, AMAZON_CLOUDTRAIL_VERSION),
     "amazon_ec2_s3": (extract_amazon_ec2_s3_artifacts, AMAZON_EC2_S3_VERSION),
+    # ETAPA B vlna 13 — cloud-export rodina Google II + Box/Dropbox/Mega
+    "google_calendar_events": (
+        extract_google_calendar_artifacts,
+        GOOGLE_CALENDAR_EVENTS_VERSION,
+    ),
+    "google_keep_tasks": (extract_google_keep_artifacts, GOOGLE_KEEP_TASKS_VERSION),
+    "box_cloud": (extract_box_artifacts, BOX_CLOUD_VERSION),
+    "dropbox_mega": (extract_dropbox_mega_artifacts, DROPBOX_MEGA_VERSION),
 }
 
 
 def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
-    """ETAPA B vlna 10/11/12 — cloud SNS + Microsoft/Amazon pre-pass na celé cestě.
+    """ETAPA B vlna 10/11/12/13 — cloud SNS + Microsoft/Amazon/Google II pre-pass na celé cestě.
 
     Instagram/Snapchat/Twitter/Facebook exporty mají generic basenames
     (``Messages.json``, ``Photos.json``, ``Friends.json``), které kolidují s
@@ -467,6 +498,9 @@ def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
     ETAPA B vlna 12: + Microsoft/Amazon cloud exporty (generic basenames
     ``contacts.json`` / ``events.json`` / ``instances.json``) — specifické
     detektory PŘED obecnějšími (conversations PŘED teams, contacts PŘED mail).
+    ETAPA B vlna 13: + Google Calendar/Keep a Box/Dropbox/Mega cloud exporty
+    (generic basenames ``events.json`` / ``notes.json`` / ``files.json``) —
+    calendar PŘED keep (oba mohou mít generic JSON), dropbox/mega dle markery.
     """
     for key, detector in (
         ("instagram_messages", is_instagram_messages_file),
@@ -489,6 +523,13 @@ def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
         ("sharepoint_wr", is_sharepoint_file),
         ("amazon_cloudtrail", is_amazon_cloudtrail_file),
         ("amazon_ec2_s3", is_amazon_ec2_s3_file),
+        # ETAPA B vlna 13 — Google II (calendar PŘED keep; oba generic JSON)
+        ("google_calendar_events", is_google_calendar_file),
+        ("google_keep_tasks", is_google_keep_file),
+        # ETAPA B vlna 13 — cloud storage Box/Dropbox/Mega (dle markery)
+        ("box_cloud", is_box_file),
+        ("dropbox_mega", is_dropbox_file),
+        ("dropbox_mega", is_mega_file),
     ):
         if detector(full_path):
             fn, ver = NAME_BASED_EXTRACTORS[key]

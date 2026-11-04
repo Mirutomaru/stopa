@@ -5,15 +5,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 159
+- **✅ COVERED**: 179
 - **🔧 PORTABLE-LOCAL**: 0
-- **☁️ CLOUD-EXPORT**: 39
+- **☁️ CLOUD-EXPORT**: 19
 - **💾 MEMORY**: 0
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (159)
+## ✅ COVERED — STOPA už umí (existující parser) (179)
 
 - `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
 - `ApiHooksArtifact` — mem_hooks parser (API hooky — apiFunction/callbackAddress/hookType)
@@ -31,14 +31,26 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudAmazonEC2InstanceArtifact` — amazon_ec2_s3 parser (instance → cloud_instance aws:ec2)
 - `CloudAmazonS3FilesArtifact` — amazon_ec2_s3 parser (S3 objekty → cloud_file aws:s3)
 - `CloudAppleDriveArtifact` — cloud_drive_files parser (Apple Drive soubory)
+- `CloudAppleIMessageArtifact` — imessage_cloud parser (iCloud Messages → chat_message apple:icloud_messages)
+- `CloudBoxEnterpriseEventArtifact` — box_cloud parser (enterprise eventy → document_metadata kind=event)
+- `CloudBoxFilesArtifact` — box_cloud parser (soubory/složky → document_metadata box:file|folder)
+- `CloudBoxUserEventArtifact` — box_cloud parser (auditní eventy → document_metadata kind=event)
 - `CloudDriveFileArtifact` — cloud_drive_files parser (Google Drive soubory — název/velikost/checksum/čas)
 - `CloudDriveFileVersionArtifact` — cloud_drive_files parser (verze souboru do details.versions)
+- `CloudDropboxEntryArtifact` — dropbox_mega parser (Dropbox položky → document_metadata provider=dropbox)
 - `CloudFacebookFriendsArtifact` — facebook_wr parser (přátelé → contact sns:facebook)
 - `CloudFacebookInstagramMessagesArtifact` — instagram_messages parser (FB↔IG cross-posted zprávy)
 - `CloudFacebookMessengerMessagesArtifact` — facebook_wr parser (Messenger zprávy → chat_message, konverzace i flat)
 - `CloudFacebookMobileTimelineArtifact` — facebook_wr parser (mobilní timeline → sns_post)
 - `CloudFacebookProfileInfoArtifact` — facebook_wr parser (info o profilu → contact relationship=account)
 - `CloudFacebookTimelineArtifact` — facebook_wr parser (timeline příspěvky → sns_post post_type=timeline)
+- `CloudGmailMessagesWarrantReturnArtifact` — google_mail_info parser (zprávy WR → email_message google:gmail)
+- `CloudGoogleActivityArtifact` — google_aggregated_activities parser (My Activity → google_activity)
+- `CloudGoogleCalendarEventsArtifact` — google_calendar_events parser (události WR → calendar_event google:calendar)
+- `CloudGoogleCalendarEventsTakeoutArtifact` — google_calendar_events parser (události Takeout → calendar_event google:calendar)
+- `CloudGoogleChatArtifact` — google_chat_family parser (Chat zprávy → chat_message google:chat)
+- `CloudGoogleChatSpacesArtifact` — google_chat_family parser (Chat spaces kontext → chat_message google:chat)
+- `CloudGoogleChatsArtifact` — google_chat_family parser (Chats konverzace → chat_message google:chats)
 - `CloudGoogleChromeAutofillArtifact` — google_chrome_autofill parser (Autofill/ContactInfo JSON, name/email/address)
 - `CloudGoogleChromeBookmarksArtifact` — google_chrome_bookmarks parser (Bookmarks JSON, date_added µs od 1601)
 - `CloudGoogleChromeBrowserHistoryArtifact` — browser_history
@@ -49,11 +61,19 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudGoogleChromeSyncSettingsAppsArtifact` — chrome_preferences parser (sync apps)
 - `CloudGoogleChromeSyncSettingsPreferencesArtifact` — chrome_preferences parser (sync preferences)
 - `CloudGoogleContactsArtifact` — google_contacts_wr parser (Contacts Takeout/warrant JSON, name/emails/phoneNumbers)
+- `CloudGoogleKeepArtifact` — google_keep_tasks parser (poznámky → document_metadata kind=keep_note)
 - `CloudGoogleLocationHistoryArtifact` — google_location_history parser (warrant return CSV/JSON)
+- `CloudGooglePhotosArtifact` — google_photos parser (album/fotky → media_file google:photos)
+- `CloudGooglePhotosAxiom2Pt8Artifact` — google_photos parser (AXIOM 2.8 varianta → media_file google:photos)
+- `CloudGoogleSemanticLocationHistoryActivitySegmentArtifact` — google_maps_activity parser (activity segment → location_point semantic)
+- `CloudGoogleSemanticLocationHistoryPlaceVisitArtifact` — google_maps_activity parser (place visit → location_point semantic)
+- `CloudGoogleTasksArtifact` — google_keep_tasks parser (úkoly → document_metadata kind=task)
+- `CloudHangoutsMessagesArtifact` — google_chat_family parser (Hangouts zprávy → chat_message google:hangouts)
 - `CloudInstagramDirectMessagesArtifact` — instagram_messages parser (cloud DM export)
 - `CloudInstagramPostsArtifact` — instagram_posts parser (posts — caption/likes/media_url/comments)
 - `CloudInstagramPostsAxiom2Pt1Artifact` — instagram_posts parser (AXIOM 2.1 posts varianta)
 - `CloudMboxEmailArtifact` — email_mbox parser
+- `CloudMegaFilesArtifact` — dropbox_mega parser (Mega soubory → document_metadata provider=mega)
 - `CloudMicrosoftContactsArtifact` — ms_contacts parser (kontakty účtu → contact ms:contacts)
 - `CloudMicrosoftMailPstArtifact` — ms_mail_pst parser (e-mailové zprávy → email_message ms:mail)
 - `CloudMicrosoftTeamsConversationsArtifact` — ms_teams_conversations parser (konverzace/zprávy → chat_message ms:teams)
@@ -175,38 +195,18 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## ☁️ CLOUD-EXPORT — JSON export / warrant return (39)
+## ☁️ CLOUD-EXPORT — JSON export / warrant return (19)
 
 - `CloudAccountsInfoArtifact` — JSON export / warrant return
 - `CloudAndroidBackupsArtifact` — JSON export / warrant return
 - `CloudAppleBackupArtifact` — JSON export / warrant return
 - `CloudAppleContactsArtifact` — JSON export / warrant return
-- `CloudAppleIMessageArtifact` — JSON export / warrant return
 - `CloudAppleKeychainArtifact` — JSON export / warrant return
 - `CloudAppleMailArtifact` — JSON export / warrant return
 - `CloudApplePhotosArtifact` — JSON export / warrant return
 - `CloudAzureVirtualMachineSnapshotArtifact` — JSON export / warrant return
-- `CloudBoxEnterpriseEventArtifact` — JSON export / warrant return
-- `CloudBoxFilesArtifact` — JSON export / warrant return
-- `CloudBoxUserEventArtifact` — JSON export / warrant return
 - `CloudConnectedAppsArtifact` — JSON export / warrant return
-- `CloudDropboxEntryArtifact` — JSON export / warrant return
 - `CloudGmailMessagesArtifact` — JSON export / warrant return
-- `CloudGmailMessagesWarrantReturnArtifact` — JSON export / warrant return
-- `CloudGoogleActivityArtifact` — JSON export / warrant return
-- `CloudGoogleCalendarEventsArtifact` — JSON export / warrant return
-- `CloudGoogleCalendarEventsTakeoutArtifact` — JSON export / warrant return
-- `CloudGoogleChatArtifact` — JSON export / warrant return
-- `CloudGoogleChatSpacesArtifact` — JSON export / warrant return
-- `CloudGoogleChatsArtifact` — JSON export / warrant return
-- `CloudGoogleKeepArtifact` — JSON export / warrant return
-- `CloudGooglePhotosArtifact` — JSON export / warrant return
-- `CloudGooglePhotosAxiom2Pt8Artifact` — JSON export / warrant return
-- `CloudGoogleSemanticLocationHistoryActivitySegmentArtifact` — JSON export / warrant return
-- `CloudGoogleSemanticLocationHistoryPlaceVisitArtifact` — JSON export / warrant return
-- `CloudGoogleTasksArtifact` — JSON export / warrant return
-- `CloudHangoutsMessagesArtifact` — JSON export / warrant return
-- `CloudMegaFilesArtifact` — JSON export / warrant return
 - `CloudPasswordsArtifact` — JSON export / warrant return
 - `CloudRecentDevicesArtifact` — JSON export / warrant return
 - `CloudTimelineArtifact` — JSON export / warrant return

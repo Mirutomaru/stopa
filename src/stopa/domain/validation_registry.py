@@ -889,6 +889,55 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_w12_parsers.py",),
     ),
+    # ETAPA B vlna 13 — cloud-export rodina Google II + Box/Dropbox/Mega
+    "google_calendar_events": ParserValidation(
+        parser_id="google_calendar_events",
+        version="",
+        formats=(
+            "Google Calendar Events JSON (Takeout / warrant return — události s start/end, organizátorem a účastníky)",
+        ),
+        limitations=(
+            "detekce name-based (google/takeout marker + calendar/event) — pre-pass PŘED basename chainem",
+            "událost = calendar_event; limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w13_parsers.py",),
+    ),
+    "google_keep_tasks": ParserValidation(
+        parser_id="google_keep_tasks",
+        version="",
+        formats=(
+            "Google Keep Notes + Tasks JSON (Takeout / warrant return — poznámky a úkoly)",
+        ),
+        limitations=(
+            "detekce name-based (google/takeout marker + keep/task/note) — pre-pass PŘED basename chainem",
+            "poznámka/úkol = document_metadata (kind=keep_note|task); limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w13_parsers.py",),
+    ),
+    "box_cloud": ParserValidation(
+        parser_id="box_cloud",
+        version="",
+        formats=(
+            "Box Cloud JSON (cloud export — soubory, složky a audit/enterprise eventy)",
+        ),
+        limitations=(
+            "detekce name-based (box marker + file/folder/event) — pre-pass PŘED basename chainem",
+            "soubor/složka = document_metadata (kind=file|folder), event = kind=event s akcí; limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w13_parsers.py",),
+    ),
+    "dropbox_mega": ParserValidation(
+        parser_id="dropbox_mega",
+        version="",
+        formats=(
+            "Dropbox + Mega Cloud JSON (cloud export — soubory a složky, auto-detekce provideru)",
+        ),
+        limitations=(
+            "detekce name-based (dropbox/mega marker) — pre-pass PŘED basename chainem",
+            "soubor/složka = document_metadata (provider=dropbox|mega); limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w13_parsers.py",),
+    ),
 }
 
 

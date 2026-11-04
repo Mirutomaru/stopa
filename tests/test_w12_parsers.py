@@ -773,7 +773,7 @@ class TestW12Registry:
             assert reg[pid].version == NAME_BASED_EXTRACTORS[pid][1]
 
     def test_registry_count(self):
-        """58 (před vlnou 12) + 8 = 66 parserů."""
+        """58 (před vlnou 12) + 8 = min. 66 parserů (vlny 13+ přidávají další)."""
         from stopa.domain.validation_registry import build_registry
 
-        assert len(build_registry()) == 66
+        assert len(build_registry()) >= 66

@@ -208,6 +208,28 @@ COVERED: dict[str, str] = {
     "CloudAmazonCloudTrailInsightsArtifact": "covered",  # amazon_cloudtrail (insights anomálie)
     "CloudAmazonEC2InstanceArtifact": "covered",  # amazon_ec2_s3 (instance)
     "CloudAmazonS3FilesArtifact": "covered",  # amazon_ec2_s3 (S3 objekty)
+    # ETAPA B vlna 13 — Google II + Box/Dropbox/Mega (nové parsery)
+    "CloudGoogleCalendarEventsArtifact": "covered",  # google_calendar_events (události WR)
+    "CloudGoogleCalendarEventsTakeoutArtifact": "covered",  # google_calendar_events (události Takeout)
+    "CloudGoogleKeepArtifact": "covered",  # google_keep_tasks (poznámky)
+    "CloudGoogleTasksArtifact": "covered",  # google_keep_tasks (úkoly)
+    "CloudBoxFilesArtifact": "covered",  # box_cloud (soubory/složky)
+    "CloudBoxEnterpriseEventArtifact": "covered",  # box_cloud (enterprise eventy)
+    "CloudBoxUserEventArtifact": "covered",  # box_cloud (auditní eventy)
+    "CloudDropboxEntryArtifact": "covered",  # dropbox_mega (Dropbox položky)
+    "CloudMegaFilesArtifact": "covered",  # dropbox_mega (Mega soubory)
+    # ETAPA B vlna 13 — čistý flip: existující parsery už typy pokrývají
+    "CloudAppleIMessageArtifact": "covered",  # imessage_cloud (iCloud Messages)
+    "CloudGooglePhotosArtifact": "covered",  # google_photos (album/fotky)
+    "CloudGooglePhotosAxiom2Pt8Artifact": "covered",  # google_photos (AXIOM 2.8 varianta)
+    "CloudGmailMessagesWarrantReturnArtifact": "covered",  # google_mail_info (zprávy WR)
+    "CloudGoogleChatArtifact": "covered",  # google_chat_family (Chat zprávy)
+    "CloudGoogleChatSpacesArtifact": "covered",  # google_chat_family (Chat spaces kontext)
+    "CloudGoogleChatsArtifact": "covered",  # google_chat_family (Chats konverzace)
+    "CloudHangoutsMessagesArtifact": "covered",  # google_chat_family (Hangouts zprávy)
+    "CloudGoogleActivityArtifact": "covered",  # google_aggregated_activities (My Activity)
+    "CloudGoogleSemanticLocationHistoryActivitySegmentArtifact": "covered",  # google_maps_activity (activity segment)
+    "CloudGoogleSemanticLocationHistoryPlaceVisitArtifact": "covered",  # google_maps_activity (place visit)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -444,6 +466,28 @@ def _covered_desc(name: str) -> str:
         "CloudAmazonCloudTrailInsightsArtifact": "amazon_cloudtrail parser (insights anomálie → event_log_entry insight=True)",
         "CloudAmazonEC2InstanceArtifact": "amazon_ec2_s3 parser (instance → cloud_instance aws:ec2)",
         "CloudAmazonS3FilesArtifact": "amazon_ec2_s3 parser (S3 objekty → cloud_file aws:s3)",
+        # ETAPA B vlna 13 — Google II + Box/Dropbox/Mega
+        "CloudGoogleCalendarEventsArtifact": "google_calendar_events parser (události WR → calendar_event google:calendar)",
+        "CloudGoogleCalendarEventsTakeoutArtifact": "google_calendar_events parser (události Takeout → calendar_event google:calendar)",
+        "CloudGoogleKeepArtifact": "google_keep_tasks parser (poznámky → document_metadata kind=keep_note)",
+        "CloudGoogleTasksArtifact": "google_keep_tasks parser (úkoly → document_metadata kind=task)",
+        "CloudBoxFilesArtifact": "box_cloud parser (soubory/složky → document_metadata box:file|folder)",
+        "CloudBoxEnterpriseEventArtifact": "box_cloud parser (enterprise eventy → document_metadata kind=event)",
+        "CloudBoxUserEventArtifact": "box_cloud parser (auditní eventy → document_metadata kind=event)",
+        "CloudDropboxEntryArtifact": "dropbox_mega parser (Dropbox položky → document_metadata provider=dropbox)",
+        "CloudMegaFilesArtifact": "dropbox_mega parser (Mega soubory → document_metadata provider=mega)",
+        # ETAPA B vlna 13 — čistý flip: existující parsery už typy pokrývají
+        "CloudAppleIMessageArtifact": "imessage_cloud parser (iCloud Messages → chat_message apple:icloud_messages)",
+        "CloudGooglePhotosArtifact": "google_photos parser (album/fotky → media_file google:photos)",
+        "CloudGooglePhotosAxiom2Pt8Artifact": "google_photos parser (AXIOM 2.8 varianta → media_file google:photos)",
+        "CloudGmailMessagesWarrantReturnArtifact": "google_mail_info parser (zprávy WR → email_message google:gmail)",
+        "CloudGoogleChatArtifact": "google_chat_family parser (Chat zprávy → chat_message google:chat)",
+        "CloudGoogleChatSpacesArtifact": "google_chat_family parser (Chat spaces kontext → chat_message google:chat)",
+        "CloudGoogleChatsArtifact": "google_chat_family parser (Chats konverzace → chat_message google:chats)",
+        "CloudHangoutsMessagesArtifact": "google_chat_family parser (Hangouts zprávy → chat_message google:hangouts)",
+        "CloudGoogleActivityArtifact": "google_aggregated_activities parser (My Activity → google_activity)",
+        "CloudGoogleSemanticLocationHistoryActivitySegmentArtifact": "google_maps_activity parser (activity segment → location_point semantic)",
+        "CloudGoogleSemanticLocationHistoryPlaceVisitArtifact": "google_maps_activity parser (place visit → location_point semantic)",
     }
     return m.get(name, "existující parser")
 
