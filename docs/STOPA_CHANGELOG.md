@@ -4,6 +4,48 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 13: cloud-export Google II + Box/Dropbox/Mega)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 9 typů + 11 čistých flipů)
+- **Google Calendar Events** (`artifacts/google_calendar_events.py`) — kalendářové události
+  z Google Takeout/warrant return (summary/organizer/start/end/location/attendees; tolerantní
+  klíče summary/subject, start.dateTime/date, organizer.displayName PŘED email). All-day i
+  timed události. AXIOM `CloudGoogleCalendarEventsArtifact` +
+  `CloudGoogleCalendarEventsTakeoutArtifact`. Artifact type `calendar_event`,
+  `details.engine=google_calendar_events`.
+- **Google Keep Notes + Tasks** (`artifacts/google_keep_tasks.py`) — poznámky (title/text/labels,
+  creationTime/modificationTime) a úkoly (title/dueDate/completed/listId); auto-detekce kind
+  podle klíčů. AXIOM `CloudGoogleKeepArtifact` + `CloudGoogleTasksArtifact`. Artifact type
+  `document_metadata`, `details.kind=keep_note|task`, `details.engine=google_keep_tasks`.
+- **Box Cloud** (`artifacts/box_cloud.py`) — soubory/složky (name/size/path_collection,
+  created_at/modified_at) + enterprise a auditní eventy (event_type/action, actor.name);
+  auto-detekce kind file/folder/comment/event. AXIOM `CloudBoxFilesArtifact` +
+  `CloudBoxEnterpriseEventArtifact` + `CloudBoxUserEventArtifact`. Artifact type
+  `document_metadata`, `details.kind=file|folder|comment|event`, `details.engine=box_cloud`.
+- **Dropbox + Mega** (`artifacts/dropbox_mega.py`) — cloud storage položky s auto-detekcí
+  provideru (Dropbox API klíče path_lower/bytes/is_dir PŘED Mega size/type; hint z cesty);
+  složky i soubory. AXIOM `CloudDropboxEntryArtifact` + `CloudMegaFilesArtifact`. Artifact type
+  `document_metadata`, `details.provider=dropbox|mega`, `details.engine=dropbox_mega`.
+- **Čisté flipy (bez nového kódu)** — existující parsery už typy pokrývaly, doplněno do COVERED
+  mapy: Apple iMessage cloud → `imessage_cloud`; Google Photos (+AXIOM 2.8) → `google_photos`;
+  Gmail Messages WR → `google_mail_info`; Google Chat/Chat Spaces/Chats/Hangouts →
+  `google_chat_family`; Google Activity → `google_aggregated_activities`; Semantic Location
+  History (activity segment + place visit) → `google_maps_activity`.
+
+### Changed
+- **Pipeline** — imports 4 nových parserů (abecedně), `NAME_BASED_EXTRACTORS` +4 položky,
+  `_sns_prepass()` rozšířen o vlnu 13 detektory (calendar PŘED keep; box/dropbox/mega dle
+  markery; specifické PŘED obecnými). Docstring pre-passu `ETAPA B vlna 10/11/12/13`.
+- **C3 registry** — 66 → **70 parserů** (4 nové záznamy za `amazon_ec2_s3`).
+- **Coverage matice** — 20 typů NOT_SUPPORTED → SUPPORTED: covered **159 → 179 / 232**;
+  cloud-export NOT_SUPPORTED **39 → 19**. Regen CSV/MD/JSON deterministicky.
+
+### Tests
+- `tests/test_w13_parsers.py` — 45 syntetických offline testů (parse/build/extract/detektoři +
+  dispatch routing vlny 13; generic basenames nepadnou do pre-passu).
+- `tests/test_w12_parsers.py::test_registry_count` robustní (`>= 66`) — registry roste s vlnami.
+- Full suite: **1671 passed, 1 skipped** (+45 přesně); ruff clean.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 12: cloud-export Microsoft + Amazon)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 8 nových parserů / 12 AXIOM typů)
