@@ -333,3 +333,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/artifacts/{instagram_messages,instagram_posts,instagram_account,snapchat_wr}.py`, `pipeline.py` (importy + `_sns_prepass()`), `validation_registry.py`, `scripts/build_axiom_coverage.py`
 - **Testy:** 81 nových testů zelených (`tests/test_w10_parsers.py`); full suite **1466 passed, 1 skipped** (baseline 1385 + 81); ruff clean; `build_registry()` = **54 parserů** (předtím 50)
 - **Dokončeno:** 2026-11-04 | Commit: ```da83a6f```
+
+### STP-033 — ETAPA B vlna 11: cloud SNS exporty (Twitter/X + Facebook warrant return)
+- **Oblast:** D (Artifact Engine) | **Priorita:** P0 | **Stav:** DONE
+- **Popis:** Port 13 cloud SNS AXIOM typů do čistého Pythonu — Twitter/X Posts (příspěvky author/text/created_at, tolerantní klíče tweet_id/from_user/body/date; retweety a odpovědi → `post_type`), Twitter/X Direct Messages (DM konverzace sender/recipient/text/timestamp; konverzační formát participants/messages i plošný), Twitter/X Users (uživatelé + sociální graf screen_name/name/followers_count; vlastní účet → relationship=account, sekce followers/following → follower/following), Facebook Warrant Return (Messenger zprávy konverzace i flat, přátelé → contact sns:facebook, timeline příspěvky → sns_post post_type=timeline, info o profilu → contact relationship=account; auto-detekce sekcí podle struktury payloadu). Coverage matice flip 13 typů NOT_SUPPORTED → SUPPORTED (**134 → 147 / 232**); cloud-export kategorie **64 → 51**.
+- **Závislosti:** pipeline dispatch — `_sns_prepass()` rozšířen o 4 nové detektory (twitter_posts/twitter_messages/twitter_users/facebook_wr) bez kolizí s Instagram/Snapchat ani Google detektory + C3 registry (nové záznamy twitter_posts/twitter_messages/twitter_users/facebook_wr)
+- **Dotčené moduly:** `src/stopa/artifacts/{twitter_posts,twitter_messages,twitter_users,facebook_wr}.py`, `pipeline.py` (importy + `_sns_prepass()`), `validation_registry.py`, `scripts/build_axiom_coverage.py`
+- **Testy:** 87 nových testů zelených (`tests/test_w11_parsers.py`); full suite **1553 passed, 1 skipped** (baseline 1466 + 87); ruff clean; `build_registry()` = **58 parserů** (předtím 54)
+- **Dokončeno:** 2026-11-04 | Commit: ```bea2a25```
