@@ -82,9 +82,9 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 - **Nedokončeno:** Validation Center / Audit Center moduly.
 
 ## P. Quality Assurance
-- **Stav:** 🔧 v průběhu (ETAPA D — CI benchmark job) | **Priorita:** P1
-- **Dokončeno:** 1792 testů plně offline (syntetické fixtures), ruff clean, deterministická coverage matice, DEV OS projektová paměť (`.stopa-dev/`). STP-022: CI pipeline `.github/workflows/ci.yml` (lint + pytest + JS DOM + pip-audit security job). Benchmark engine (`domain/benchmark.py` + `data/benchmark_engine.py`, CLI `stopa benchmark`) s detekcí regresí >20 %.
-- **Nedokončeno:** CI běh benchmarku proti baseline (job `benchmark` v ci.yml).
+- **Stav:** 🔧 v průběhu (ETAPA D — CI benchmark job; **Vlna 1 hotová ★**) | **Priorita:** P1
+- **Dokončeno:** 1807 testů plně offline (syntetické fixtures), ruff clean, deterministická coverage matice, DEV OS projektová paměť (`.stopa-dev/`). STP-022: CI pipeline `.github/workflows/ci.yml` (lint + pytest + JS DOM + pip-audit security job). Benchmark engine (`domain/benchmark.py` + `data/benchmark_engine.py`, CLI `stopa benchmark`) s detekcí regresí >20 %. **STP-043: CI job `benchmark`** — běh engine suite=all (77 položek) proti versionované baseline `benchmarks/baseline.json`, fail na regresi >20 % a ≥0.5 ms (CI noise guard), upload výsledků jako artifact.
+- **Nedokončeno:** Vlna 2 = testy + dokumentace CI benchmark jobu (STP-044).
 
 ## Q. Interoperability
 - **Stav:** 🔧 částečně | **Priorita:** P3
@@ -157,15 +157,19 @@ benchmark engine už je hotový a testovaný, chybí jen jeho zapojení do CI;
 (4) čistě definovaný rozsah: CI job + baseline artefakt + deterministické testy.
 
 **Plán vln ETAPY D:**
-- **Vlna 1 (STP-043):** CI benchmark job — `.github/workflows/ci.yml` + `scripts/ci_benchmark.py`:
-  běh `run_benchmark(suite="core")`, porovnání s baseline (`benchmarks/baseline.json`) přes
-  `detect_regressions(threshold=0.20)`, fail na regresii, upload výsledků jako artifact;
-  inicializace baseline z lokálního běhu (GitHub Actions runner = deterministické prostředí).
+- **Vlna 1 (STP-043):** ✅ **hotová** — CI benchmark job: `.github/workflows/ci.yml` + `scripts/ci_benchmark.py`:
+  běh `run_benchmark(suite="all")` (77 položek, ~0.25 s), porovnání s baseline (`benchmarks/baseline.json`) přes
+  `detect_regressions(threshold=0.20)`, fail na regresii >20 % a ≥0.5 ms (**CI noise guard** — relativní práh je pod
+  ~1 ms křehký; měření ukázalo falešné pozitivní, např. +22.7 % = šum 5 µs), upload výsledků jako artifact;
+  inicializace baseline z lokálního běhu (verze 1). Full suite **1807 passed** (+15 testů `test_stp043_ci_benchmark.py`).
 - **Vlna 2 (STP-044):** testy CI benchmarku (offline: syntetický baseline + fake results),
   dokumentace (docs/STOPA_BENCHMARKS.md), DEV OS follow-up.
 
 **Akceptační kritéria ETAPA D:** CI job `benchmark` běží po lint/test; regrese >20 % failuje build;
 baseline je versionovaný artefakt v repozitáři; testy offline (bez sítě); full suite zelená; ruff clean.
+
+**ETAPA D vlna 1 DOKONČENA ★ (2026-11-04)** — CI job `benchmark` aktivní, baseline artefakt versionován
+(`benchmarks/baseline.json`, verze 1), full suite **1807 passed, 1 skipped**, ruff clean. Další = STP-044 vlna 2.
 
 **Co reálně zbývá po ETAPĚ D (pořadí podle priority):** P2 M sandbox / H AI grounding /
 I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.

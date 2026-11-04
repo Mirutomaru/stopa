@@ -2,6 +2,21 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (STP-043: ETAPA D vlna 1 ★ = CI benchmark job hotový)
+
+### Added (oblast P, P1 — STP-043)
+- **CI benchmark job** `.github/workflows/ci.yml` → nový job `benchmark` (needs lint+test, Python 3.11): běh engine suite=all (77 položek, ~0.25 s), porovnání s versionovanou baseline, upload výsledků jako artifact, **fail na regresi >20 % a ≥0.5 ms**.
+- **`scripts/ci_benchmark.py`** (~150 ř.): běh `run_benchmark(suite="all")`, načtení versionované baseline (`benchmarks/baseline.json`), porovnání přes domain API `detect_regressions(threshold=0.20)`, JSON report + artifact, exit 0/1/2; **CI noise guard** `--min-delta-ms 0.5` — relativní práh 20 % je pod ~1 ms křehký (měření ukázalo falešné pozitivní, např. `win_schedtask` +22.7 % = šum 5 µs), proto se ignorují regresie s absolutním rozdílem < 0.5 ms.
+- **Versionovaný baseline artefakt** `benchmarks/baseline.json` (77 položek, verze 1) — inicializován lokálním během; regenerace ručně přes `--update-baseline` + commit artefaktu.
+
+### Tests
+- Nový test soubor `tests/test_stp043_ci_benchmark.py` (**15 testů**): baseline load/save round-trip, determinismus formátu, chybějící/poškozená baseline, detekce regresí přes domain API (umělá +25 % zachycena), **noise guard** (sub-ms falešné pozitivní se filtruje; reálná regrese ≥0.5 ms zůstává), report struktura.
+- Full suite **1807 passed, 1 skipped** (+15); ruff clean. E2E lokálně: update baseline → exit 0, běh proti baseline → exit 0 (0 regresí), umělá regrese +1 ms → exit 1, chybějící baseline → exit 0, poškozená baseline → exit 2.
+
+### Changed
+- **DEV OS:** TASKS záznam STP-043, PROJECT_STATE fáze → ETAPA D vlna 1 DOKONČENA ★ (completed tasks **43**), FEATURE_REGISTRY F-070, TEST_REGISTRY T-091 + total 1807, CHANGELOG/checkpoint/NEXT_ACTION.
+- **Obě roadmapy synchronizovány:** sekce P → Vlna 1 hotová ★; plán vln ETAPY D — Vlna 1 ✅ hotová; next = STP-044 vlna 2 (testy + dokumentace).
+
 ## [Unreleased] — 2026-11-04 (STP-042: volba ETAPY D ★ = ETAPA D ZAHÁJENA)
 
 ### Changed (oblast P, P1 — STP-042)

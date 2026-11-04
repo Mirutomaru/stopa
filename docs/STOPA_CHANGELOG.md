@@ -4,6 +4,16 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (STP-043: ETAPA D vlna 1 ★ = CI benchmark job hotový)
+
+### Added (oblast P, P1 — STP-043)
+- **CI benchmark job** `.github/workflows/ci.yml` → nový job `benchmark` (needs lint+test, Python 3.11): běh engine suite=all (77 položek, ~0.25 s), porovnání s versionovanou baseline, upload výsledků jako artifact, **fail na regresi >20 % a ≥0.5 ms**.
+- **`scripts/ci_benchmark.py`** (~150 ř.): běh `run_benchmark(suite="all")`, načtení versionované baseline (`benchmarks/baseline.json`), porovnání přes domain API `detect_regressions(threshold=0.20)`, JSON report + artifact, exit 0/1/2; **CI noise guard** `--min-delta-ms 0.5`.
+- **Versionovaný baseline artefakt** `benchmarks/baseline.json` (77 položek, verze 1).
+
+### Tests
+- Nový test soubor `tests/test_stp043_ci_benchmark.py` (**15 testů**); full suite **1807 passed, 1 skipped** (+15); ruff clean.
+
 ## [Unreleased] — 2026-11-04 (STP-042: volba ETAPY D ★ = ETAPA D ZAHÁJENA)
 
 ### Changed (oblast P, P1 — STP-042)

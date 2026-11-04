@@ -1,27 +1,21 @@
-# NEXT ACTION — po STP-042 (ETAPA D ZAHÁJENA ★)
+# NEXT ACTION — po STP-043 (ETAPA D vlna 1 hotová ★)
 
 ## Hotovo
-- **STP-042 / volba ETAPY D** — audit reálného stavu kandidátů v kódu + rozhodnutí: **ETAPA D = oblast P (QA): CI běh benchmarku proti baseline**. Obě roadmapy synchronizovány.
+- **STP-043 / ETAPA D vlna 1** — CI benchmark job proti baseline:
+  - `scripts/ci_benchmark.py` (~150 ř.): běh engine suite=all (77 položek, ~0.25 s), porovnání s versionovanou baseline přes domain API `detect_regressions(threshold=0.20)`, JSON report + artifact, exit 0/1/2; **CI noise guard** `--min-delta-ms 0.5` (relativní práh je pod ~1 ms křehký — měření ukázalo falešné pozitivní, např. `win_schedtask` +22.7 % = šum 5 µs).
+  - `.github/workflows/ci.yml`: nový job **`benchmark`** (needs lint+test, Python 3.11, upload výsledků jako artifact, fail na regresi >20 % a ≥0.5 ms).
+  - `benchmarks/baseline.json`: versionovaný baseline artefakt (77 položek, verze 1) — inicializován lokálním během; regenerace ručně přes `--update-baseline` + commit.
+  - `tests/test_stp043_ci_benchmark.py`: **15 testů** (baseline load/save round-trip, determinismus formátu, detekce regresí, noise guard, report struktura).
+- Full suite: **1807 passed, 1 skipped**; ruff clean.
+- Commit: ```0136e91``` — `feat(ci): ETAPA D vlna 1 — CI benchmark job proti baseline (STP-043)`.
 
-## Proč oblast P
-1. **Jediný zbývající P1 úkol** (ostatní kandidáti jsou P2/P3).
-2. Nejmenší rozsah s největším dopadem — benchmark engine už je hotový a testovaný (`domain/benchmark.py` + `data/benchmark_engine.py`, CLI `stopa benchmark`), chybí jen zapojení do CI.
-3. Chrání ETAPU C (refactor `db.py`) i budoucí vlny před tichou regresí výkonu (>20 % = fail).
-
-## Další krok — STP-043 / ETAPA D vlna 1: CI benchmark job
-1. `.github/workflows/ci.yml` — nový job `benchmark` (po lint/test, neblocking pro první běh? → blocking s baseline).
-2. `scripts/ci_benchmark.py`:
-   - `run_benchmark(suite="core")` z `stopa.data.benchmark_engine`
-   - načíst baseline `benchmarks/baseline.json` (name → duration_ms)
-   - `detect_regressions(baseline, current, threshold=0.20)` z `stopa.domain.benchmark`
-   - regrese >20 % → exit 1 s výpisem; jinak exit 0
-   - upload výsledků jako GitHub artifact (reprodukovatelnost)
-3. Inicializace baseline: lokální běh na CI-like prostředí → `benchmarks/baseline.json` do repozitáře (versionovaný artefakt).
-
-## Akceptační kritéria ETAPY D
-- CI job `benchmark` běží po lint/test; regrese >20 % failuje build.
-- Baseline je versionovaný artefakt v repozitáři (`benchmarks/baseline.json`).
-- Testy offline (bez sítě); full suite zelená; ruff clean.
+## Další krok
+**STP-044 — ETAPA D vlna 2:** testy + dokumentace CI benchmark jobu.
+Rozsah:
+1. Rozšíření pokrytí — end-to-end běh engine v izolovaném testu s umělou regresi (subprocess `ci_benchmark.py` proti syntetické baseline).
+2. Dokumentace `docs/STOPA_BENCHMARKS.md`: workflow baseline update (`--update-baseline` + commit artefaktu), prahy (relativní 20 % + absolutní guard 0.5 ms a proč), jak číst JSON report / CI artifact, kdy baseline regenerovat.
+3. Případně README sekce pro benchmark job.
+4. Finální verify (ruff + full suite) + DEV OS sync (TASKS/PROJECT_STATE/registries/changelog/checkpoint/NEXT_ACTION/root+mirror changelog/roadmapy).
 
 ## Po ETAPĚ D (pořadí podle priority)
 P2 M sandbox / H AI grounding / I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.
