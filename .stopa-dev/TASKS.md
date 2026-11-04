@@ -408,3 +408,12 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Testy:** 18 nových testů zelených (`tests/test_stp041_wave3_schema_migrations.py` — schema kompletnost (tabulky/FTS/triggery), legacy v10 DB migrace end-to-end přes `CaseDB`, audit chain backfill od GENESIS s obnovou triggerů, FTS backfill flagy, idempotence na nové DB, facade úklid + backward compat); full suite **1792 passed, 1 skipped** (baseline 1774 + 18); ruff clean
 - **Finální stav ETAPY C:** `db.py` = tenký agregátor 5 repozitářů na sdílené connection; **ETAPA C DOKONČENA ★** (cíl < ~600 ř. splněn — 476 ř.)
 - **Dokončeno:** 2026-11-04 | Commit: ```824755d```
+
+### STP-042 — Volba ETAPY D + synchronizace roadmapy (audit reálného stavu)
+- **Oblast:** P (Quality Assurance) | **Priorita:** P1 | **Stav:** DONE
+- **Popis:** Audit reálného stavu všech kandidátských oblastí pro ETAPU D (ne jen staré „Nedokončeno" v roadmapě): **P QA** — benchmark engine hotový (`domain/benchmark.py` 95 ř. + `data/benchmark_engine.py` 267 ř., CLI `stopa benchmark`, detekce regresí >20 %), CI má lint+test+security ale **benchmark chybí**, baseline soubor neexistuje; **M Security** — sandbox parserů neexistuje (parsery v hlavním procesu); **H AI Copilot** — citace existují (`CITATION_RE`, `extract_citations`), detekce rozporů chybí; **I+O Validation/Audit Center UI** — registry existuje, UI moduly chybí; **G/J/K/Q** — částečně/neexistují. **ROZHODNUTÍ: ETAPA D = oblast P (CI běh benchmarku proti baseline)** — jediný zbývající P1 úkol, nejmenší rozsah s největším dopadem (engine hotový, chybí jen zapojení do CI), chrání ETAPU C i budoucí vlny před tichou regresí výkonu.
+- **Závislosti:** STP-041 (ETAPA C dokončena)
+- **Dotčené moduly:** `.stopa-dev/ROADMAP.md` + `STOPA_ROADMAP.md` (sekce P → 🔧 v průběhu ETAPA D; nová sekce „ETAPA D — ROZHODNUTÍ O SMĚRU" s audit tabulkou, rozhodnutím a plánem vln 1–2)
+- **Testy:** bez změny kódu (docs/DEV OS); full suite **1792 passed, 1 skipped**; ruff clean
+- **Plán ETAPY D:** Vlna 1 (STP-043) = CI benchmark job (`ci.yml` + `scripts/ci_benchmark.py` + baseline artefakt), Vlna 2 (STP-044) = testy + dokumentace
+- **Dokončeno:** 2026-11-04 | Commit: ```docs follow-up```

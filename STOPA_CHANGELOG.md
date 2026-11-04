@@ -2,6 +2,17 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (STP-042: volba ETAPY D ★ = ETAPA D ZAHÁJENA)
+
+### Changed (oblast P, P1 — STP-042)
+- **Volba ETAPY D** na základě auditu reálného stavu kandidátských oblastí v kódu: **ETAPA D = oblast P (Quality Assurance): CI běh benchmarku proti baseline**. Jediný zbývající P1 úkol; benchmark engine už je hotový a testovaný (`domain/benchmark.py` + `data/benchmark_engine.py`, CLI `stopa benchmark`, detekce regresí >20 %), chybí jen zapojení do CI.
+- **Audit kandidátů:** M Security (sandbox parserů neexistuje), H AI Copilot (citace existují, detekce rozporů chybí), I+O Validation/Audit Center UI (registry existuje, UI moduly chybí), G/J/K/Q (částečně/neexistují) — všichni P2/P3.
+- **Obě roadmapy synchronizovány:** sekce P → 🔧 v průběhu ETAPA D + nová sekce „ETAPA D — ROZHODNUTÍ O SMĚRU" s audit tabulkou a plánem vln 1–2 (STP-043 CI benchmark job, STP-044 testy+dokumentace).
+- **DEV OS:** TASKS záznam STP-042, PROJECT_STATE fáze → ETAPA D ZAHÁJENA ★ (completed tasks **42**), CHANGELOG/checkpoint/NEXT_ACTION.
+
+### Tests
+- Bez změny kódu (docs/DEV OS); full suite **1792 passed, 1 skipped**; ruff clean.
+
 ## [Unreleased] — 2026-11-04 (ETAPA C vlna 3: rozdělení `db.py` ★ = ETAPA C DOKONČENA ★★)
 
 ### Changed (oblast A, P1 — STP-041)

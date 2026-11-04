@@ -99,9 +99,9 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Nedokončeno:** Validation Center / Audit Center moduly.
 
 ## P. Quality Assurance
-- **Stav:** ✅ hotovo | **Priorita:** P1
-- **Dokončeno:** 1742 testů plně offline (syntetické fixtures), ruff clean, deterministická coverage matice, DEV OS projektová paměť. STP-022: CI pipeline `.github/workflows/ci.yml` (lint + pytest + JS DOM + pip-audit).
-- **Nedokončeno:** CI běh benchmarku.
+- **Stav:** 🔧 v průběhu (ETAPA D — CI benchmark job) | **Priorita:** P1
+- **Dokončeno:** 1792 testů plně offline (syntetické fixtures), ruff clean, deterministická coverage matice, DEV OS projektová paměť. STP-022: CI pipeline `.github/workflows/ci.yml` (lint + pytest + JS DOM + pip-audit). Benchmark engine (`domain/benchmark.py` + `data/benchmark_engine.py`, CLI `stopa benchmark`) s detekcí regresí >20 %.
+- **Nedokončeno:** CI běh benchmarku proti baseline.
 
 ## Q. Interoperability
 - **Stav:** 🔧 částečně | **Priorita:** P3
@@ -139,3 +139,38 @@ backward compat zachován, full suite **1792 passed, 1 skipped**. Další = volb
 
 **Co reálně zbývá (pořadí podle priority):** P1 P QA CI benchmark job →
 P2 M sandbox / H AI grounding / I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.
+
+## ETAPA D — ROZHODNUTÍ O SMĚRU (STP-042, 2026-11-04)
+
+**Kontext:** ETAPA C (Core Architecture, oblast A) dokončena vlnou 3 (STP-041). `db.py`
+~2090 → **476 ř.** (−77 %), full suite **1792 passed, 1 skipped**; C3 registry **76 parserů**;
+covered **198 / 232 ★**.
+
+**Audit reálného stavu kandidátů (STP-042):**
+| Oblast | Stav v kódu | Rozsah | Priorita |
+|---|---|---|---|
+| **P QA — CI benchmark job** | Benchmark engine hotový (`domain/benchmark.py` 95 ř. + `data/benchmark_engine.py` 267 ř., CLI `stopa benchmark`, detekce regresí >20 %); CI má lint+test+security, **benchmark chybí**; baseline soubor neexistuje | malý–střední (CI job + baseline + testy) | **P1** |
+| M Security — sandbox parserů | `domain/sandbox*` neexistuje; parsery běží v hlavním procesu | velký (subprocess/namespace izolace) | P2 |
+| H AI Copilot — grounding | `ai_assistant.py` má citace (`CITATION_RE`, `extract_citations`), ale žádná detekce rozporů | střední–velký (LLM volání, heuristiky) | P2 |
+| I+O Validation/Audit Center UI | `validation_registry.py` existuje; UI moduly chybí | velký (SPA + endpointy) | P2/P3 |
+| G File preview / J Case Mgmt 2.0 / K Plaso / Q UCO | částečně/neexistují | střední–velký | P3 |
+
+**ROZHODNUTÍ — ETAPA D = oblast P (Quality Assurance): CI běh benchmarku proti baseline.**
+Důvody: (1) **jediný zbývající P1 úkol**; (2) nejmenší rozsah s největším dopadem —
+benchmark engine už je hotový a testovaný, chybí jen jeho zapojení do CI;
+(3) chrání ETAPU C (refactor `db.py`) i budoucí vlny před tichou regresí výkonu;
+(4) čistě definovaný rozsah: CI job + baseline artefakt + deterministické testy.
+
+**Plán vln ETAPY D:**
+- **Vlna 1 (STP-043):** CI benchmark job — `.github/workflows/ci.yml` + `scripts/ci_benchmark.py`:
+  běh `run_benchmark(suite="core")`, porovnání s baseline (`benchmarks/baseline.json`) přes
+  `detect_regressions(threshold=0.20)`, fail na regresii, upload výsledků jako artifact;
+  inicializace baseline z lokálního běhu (GitHub Actions runner = deterministické prostředí).
+- **Vlna 2 (STP-044):** testy CI benchmarku (offline: syntetický baseline + fake results),
+  dokumentace (docs/STOPA_BENCHMARKS.md), DEV OS follow-up.
+
+**Akceptační kritéria ETAPA D:** CI job `benchmark` běží po lint/test; regrese >20 % failuje build;
+baseline je versionovaný artefakt v repozitáři; testy offline (bez sítě); full suite zelená; ruff clean.
+
+**Co reálně zbývá po ETAPĚ D (pořadí podle priority):** P2 M sandbox / H AI grounding /
+I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.
