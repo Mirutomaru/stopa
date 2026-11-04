@@ -57,6 +57,7 @@ Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parser
 | F-034 | **Clipboard registry** (ETAPA B vlna 1) | Obsah schránky z NTUSER.DAT, CF_* formáty, UTF-8/UTF-16LE detekce | artifacts/win_clipboard.py | 1.0 | ✓ | ✓ (12) | ✓ `afc49a0` | plně funkční | sekundární průchod NTUSER.DAT | STP-015 |
 | F-035 | **SID extraction** (ETAPA B vlna 1) | Uživatelé SIDs z SAM/SECURITY + ProfileList, source_hint podle názvu souboru | artifacts/win_sids.py | 1.0 | ✓ | ✓ (12) | ✓ `afc49a0` | plně funkční | sekundární průchod registry hivy | STP-015 |
 | F-055 | **ETAPA B vlna 4 — portable-local AXIOM porty** (6 parserů) | DDG cookies (Chromium SQLite), DDG allowlisted websites (JSON), OpenOffice/LibreOffice Base (.odb ZIP), iOS parked car locations (Local.sqlite ZRTVEHICLEEVENTMO, CFAbsoluteTime), iOS voicemail (voicemail.db), Windows UserAssist MRU (NTUSER.DAT ROT13 + binárka) | artifacts/ddg_cookies.py, allowlisted_websites.py, openoffice_base.py, parked_car_locations.py, ios_voicemail.py, win_userassist.py | 1.0 | ✓ | ✓ (33) | ✓ ``cd932e1`` | plně funkční | SQLite chain + registry chain + name-based dispatch; C3 registrováno | STP-026 |
+| F-056 | **ETAPA B vlna 5 — Google Takeout rodina + Samsung voice** (6 parserů / 12 AXIOM typů) | Google Aggregated Activities + Identity Sessions (My Activity JSON), Google Maps Activity (semantic location history placeVisit/activitySegment E7→stupně), Google Chat rodina (Chat/Hangouts/PlusChat/Talk Takeout JSON, sdílený parser), Google Account metadata (change history/devices/export summary), Drive Activity (JSON log), Samsung Voice Recording (SQLite dispatch chain) | artifacts/google_aggregated_activities.py, google_maps_activity.py, google_chat_family.py, google_account_meta.py, drive_activity.py, samsung_voice_recording.py | 1.0 | ✓ | ✓ (43) | ✓ ```b786064``` | plně funkční | name-based dispatch (specifické PŘED vlna-2 Google detekcemi); Samsung do SQLite chainu; C3 registrováno (build_registry = 34 parserů) | STP-027 |
 
 ## Analytika & AI (E, F, H)
 
@@ -79,5 +80,5 @@ Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parser
 | F-054 | Export JSONL/XML/STIX 2.1 formáty | `to_jsonl` (1 objekt/řádek, streamovací), `to_xml` (deterministický ElementTree UTF-8, kořen stopa_<dataset>), `to_stix_bundle` (STIX 2.1 bundle — artefakty → file/message + x-stopa rozšíření, deterministická UUIDv5 ID pro C4 reprodukovatelnost); CLI --format csv|json|jsonl|xml|stix | domain/export.py, cli.py | 0.1.0 | ✓ | ✓ (17) | ✓ sada | plně funkční | UCO mapping + Plaso zbývají (volitelné) | STP-023 |
 
 ## Coverage AXIOM (D)
-- **covered 56 / 232** unikátních typů (po ETAPA B vlně 4; předtím 51). Matice: `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}`.
-- Zbývá: portable-local **16**, cloud-export **111**, memory **15**, base-class **34**.
+- **covered 68 / 232** unikátních typů (po ETAPA B vlně 5; předtím 56). Matice: `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}`.
+- Zbývá: portable-local **4**, cloud-export **111**, memory **15**, base-class **34**.

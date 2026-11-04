@@ -280,3 +280,15 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/artifacts/{ddg_cookies,allowlisted_websites,openoffice_base,parked_car_locations,ios_voicemail,win_userassist}.py` (nové), `sqlite_extract.py`, `pipeline.py`, `domain/validation_registry.py`, `scripts/build_axiom_coverage.py`, `tests/test_w4_parsers.py` (nový)
 - **Testy:** 33 nových testů zelených (`tests/test_w4_parsers.py`); full suite **1199 passed, 1 skipped** (baseline 1166 + 33); ruff clean — PASS
 - **Dokončeno:** 2026-11-04 | Commit: ``cd932e1``
+
+## STP-027 — ETAPA B vlna 5: Google Takeout rodina + Samsung voice (6 parserů / 12 AXIOM typů)
+- **Oblast:** D (Artifact Engine) | **Priorita:** P0 | **Stav:** DONE
+- **Popis:** Port 12 AXIOM extraktorů do čistého Pythonu — Google Aggregated Activities +
+  Identity Sessions, Google Maps Activity (semantic location history), Google Chat rodina
+  (Chat/Hangouts/PlusChat/Talk sdílený Takeout JSON parser), Google Account metadata
+  (change history/devices/export summary), Drive Activity, Samsung Voice Recording.
+  Coverage matice flip 12 přímých typů NOT_SUPPORTED → SUPPORTED (**56 → 68 / 232**).
+- **Závislosti:** pipeline dispatch (name-based — specifické detekce PŘED obecnějšími vlna-2 Google) + C3 registry (sdílený `sqlite` záznam rozšířen o Samsung)
+- **Dotčené moduly:** `src/stopa/artifacts/{google_aggregated_activities,google_maps_activity,google_chat_family,google_account_meta,drive_activity,samsung_voice_recording}.py` (nové), `sqlite_extract.py`, `pipeline.py`, `domain/validation_registry.py`, `scripts/build_axiom_coverage.py`, `tests/test_w5_parsers.py` (nový)
+- **Testy:** 43 nových testů zelených (`tests/test_w5_parsers.py`); full suite **1242 passed, 1 skipped** (baseline 1199 + 43); ruff clean; `build_registry()` = **34 parserů** — PASS
+- **Dokončeno:** 2026-11-04 | Commit: ```b786064```
