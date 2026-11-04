@@ -324,3 +324,12 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/artifacts/{mem_processes,mem_network,mem_handles,mem_modules,mem_hooks}.py`, `pipeline.py` (importy + NAME_BASED_EXTRACTORS + dispatch), `validation_registry.py`, `scripts/build_axiom_coverage.py`
 - **Testy:** 35 nových testů zelených (`tests/test_w9_parsers.py`); full suite **1385 passed, 1 skipped** (baseline 1350 + 35); ruff clean; `build_registry()` = **50 parserů** (předtím 45)
 - **Dokončeno:** 2026-11-04 | Commit: ```4747738```
+
+
+### STP-032 — ETAPA B vlna 10: cloud SNS exporty (Instagram/Snapchat warrant return)
+- **Oblast:** D (Artifact Engine) | **Priorita:** P0 | **Stav:** DONE
+- **Popis:** Port 20 cloud SNS AXIOM typů do čistého Pythonu — Instagram Direct Messages (DM konverzace participants/messages, tolerantní klíče sender/from + text/body; sdílená média → `message_type=share` + media_url), Instagram Posts/Media/Stories/Comments (`sns_post`/`sns_comment`, stories detekce `is_story=True`), Instagram Account Actions/History/Followers (akce účtu login/password/device/IP → `event_log_entry`; followery/following → `contact` s `mimetype=sns:instagram`), Snapchat Warrant Return (zprávy WR + skupinové chaty, přátelé → contact sns:snapchat:user, geolokace → location_data, IP historie → network_connection, info o účtu; auto-detekce subtypu podle obsahu). Coverage matice flip 20 typů NOT_SUPPORTED → SUPPORTED (**114 → 134 / 232**); cloud-export kategorie **84 → 64** (největší jednorázový skok v ETAPA B).
+- **Závislosti:** pipeline dispatch — **nový `_sns_prepass()` na celé cestě PŘED basename chainem** (generic basenames `photos.json`/`messages.json` kolidují s Google detektory, které dostávají jen `name`; account detektor PŘED posts — „AccountHistory" obsahuje substring „stor(y)") + C3 registry (nové záznamy instagram_messages/instagram_posts/instagram_account/snapchat_wr)
+- **Dotčené moduly:** `src/stopa/artifacts/{instagram_messages,instagram_posts,instagram_account,snapchat_wr}.py`, `pipeline.py` (importy + `_sns_prepass()`), `validation_registry.py`, `scripts/build_axiom_coverage.py`
+- **Testy:** 81 nových testů zelených (`tests/test_w10_parsers.py`); full suite **1466 passed, 1 skipped** (baseline 1385 + 81); ruff clean; `build_registry()` = **54 parserů** (předtím 50)
+- **Dokončeno:** 2026-11-04 | Commit: ```da83a6f```

@@ -2,34 +2,42 @@
 
 **Datum:** 2026-11-04
 **Verze aplikace:** 0.1.0 (`pyproject.toml`)
-**Commit:** ```4747738``` (předchozí: `96cf2b9` STP-030 docs, `1a3e007` STP-030 feature, `f96fd67`, `5e47850`)
+**Commit:** ```da83a6f``` (předchozí: `40c6305` STP-031 docs, `4747738` STP-031 feature, `96cf2b9`, `1a3e007`)
 
 ## Co se stalo
-**STP-031 — ETAPA B vlna 9: memory forensics (procesy/spojení/handlery/moduly/hooks) (5 parserů / 14 AXIOM typů)** (oblast D, P0) hotový.
+**STP-032 — ETAPA B vlna 10: cloud SNS exporty (Instagram/Snapchat warrant return) (4 parsery / 20 AXIOM typů)** (oblast D, P0) hotový.
 
 ### Nové parsery (`src/stopa/artifacts/`)
-- `mem_processes.py` — paměťový dump: seznam procesů (pid/name/ppid/cmdline/threads/user/start_time); **PsxView** subtyp: rozdílné jméno EPROCESS vs PEB → anomaly flag `psxview_mismatch`; artifact type `mem_process`.
-- `mem_network.py` — paměťový dump: síťová spojení (pid/processName/proto/localAddress/remoteAddress/state), proto i state uppercase normalizace; artifact type `mem_connection`.
-- `mem_handles.py` — paměťový dump: otevřené handlery procesů (pid/processName/handleValue/type/name), handle value hex normalizace (int/decimal/hex tolerantně); artifact type `mem_handle`.
-- `mem_modules.py` — paměťový dump: načtené moduly (pid/processName/baseAddress/size/name/inLdrList), adresa hex normalizace; **Malfind** subtyp: modul v paměti ale ne v LDR listu → anomaly flag `hidden_module` / indikátor DLL injection; artifact type `mem_module`.
-- `mem_hooks.py` — paměťový dump: zaregistrované hooky a callback funkce (pid/processName/apiFunction/callbackAddress/module/hookType), adresa hex normalizace; artifact type `mem_hook`.
+- `instagram_messages.py` — Instagram Direct Messages (DM konverzace participants/messages; tolerantní klíče sender/from + text/body; sdílená média → `message_type=share` + media_url); artifact type `chat_message`.
+- `instagram_posts.py` — Instagram Posts/Media/Photos/Stories/Comments (`sns_post`/`sns_comment`, stories detekce `is_story=True`; klíčové slovo `stor` chytí i `Stories.json`).
+- `instagram_account.py` — Instagram Account Actions/History/FollowersAndFollowing (akce účtu login/password/device/IP → `event_log_entry`; followery/following → `contact` s `mimetype=sns:instagram`).
+- `snapchat_wr.py` — Snapchat Warrant Return (6 subtypů s auto-detekcí podle obsahu: zprávy WR + skupinové chaty, přátelé, geolokace, IP historie, info o účtu); artifact types `chat_message`/`contact`/`location_data`/`network_connection`.
 
-### Pipeline & registry
-- `src/stopa/pipeline.py`: importy 5 parserů + záznamy do `NAME_BASED_EXTRACTORS` po `win_drivers` + dispatch větve **PŘED netstatem** (sdílená klíčová slova `connections`/`sockets`; detektory dostávají jen name → kolize řešena pořadím; ověřeno: `open_connections.json` → mem_network, `netstat.txt` → dál net_connections).
-- C3 registry (`domain/validation_registry.py`): 5 nových záznamů → **50 parserů** (předtím 45).
+### Pipeline dispatch
+- **Nový `_sns_prepass()` na celé cestě PŘED basename chainem** — generic basenames (`photos.json`, `messages.json`) kolidují s Google detektory, které dostávají jen `name`.
+- Pořadí pre-passu: instagram_messages → instagram_account (PŘED posts — „AccountHistory" obsahuje substring „stor(y)") → instagram_posts → snapchat_wr.
 
-### Coverage matice
-- Flip 14 memory typů NOT_SUPPORTED → SUPPORTED: covered **100 → 114 / 232**; **memory kategorie vyzerovala 14 → 0 ★** (jako portable-local ve vlně 4); cloud-export 84, base-class 34.
-- Regen `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}`; SHA-256 diff determinismus zachován.
+### C3 registry
+- 4 nové záznamy (`instagram_messages`/`instagram_posts`/`instagram_account`/`snapchat_wr`) — `build_registry()` = **54 parserů** (předtím 50).
 
-### Testy & verify
-- **35 nových testů** (`tests/test_w9_parsers.py`, syntetické offline fixtures).
-- Full suite: **1385 passed, 1 skipped** (baseline 1350 + 35); ruff clean.
+## Metriky
+| Metrika | Předtím | Po vlně 10 |
+|---------|---------|------------|
+| Full suite | 1385 passed, 1 skipped | **1466 passed, 1 skipped** (+81) |
+| C3 registry | 50 parserů | **54 parserů** |
+| Coverage covered | 114 / 232 | **134 / 232 ★** |
+| cloud-export NOT_SUPPORTED | 84 | **64 ★ největší jednorázový skok v ETAPA B** |
+| memory NOT_SUPPORTED | 0 ★ | 0 ★ |
+| portable-local NOT_SUPPORTED | 0 ★ | 0 ★ |
+
+## Testy
+- `tests/test_w10_parsers.py` — **81 syntetických offline testů**, ruff clean.
+- Full suite: **1466 passed, 1 skipped**.
 
 ## Registry
-- Feature: **F-060** ETAPA B vlna 9 — memory forensics (procesy/spojení/handlery/moduly/hooks).
-- Testy: **T-081** `tests/test_w9_parsers.py` (35).
-- Celkový stav TEST_REGISTRY: **1385 testů: 1384 PASS + 1 skipped**.
+- Feature: **F-061** ETAPA B vlna 10 — cloud SNS exporty (Instagram/Snapchat warrant return).
+- Testy: **T-082** `tests/test_w10_parsers.py` (81).
+- Celkový stav TEST_REGISTRY: **1466 testů: 1465 PASS + 1 skipped**.
 
 ## Další krok
-**ETAPA B vlna 10 — cloud-export typy** (zbývá cloud-export 84 + base-class 34; detail v `NEXT_ACTION.md`).
+ETAPA B vlna 11 — cloud-export typy (Google Docs/Sheets/Slides, Microsoft Graph) dle `.stopa-dev/NEXT_ACTION.md`.

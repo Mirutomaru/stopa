@@ -11,15 +11,16 @@
 ## Aktuální architektura
 Clean Architecture — 4 vrstvy:
 - `src/stopa/domain/` — čistá doménová logika bez I/O (**35 modulů**, +timeline_intel)
-- `src/stopa/artifacts/` — extraktory artifactů, I/O jen v entrypointech (**62 souborů**)
+- `src/stopa/artifacts/` — extraktory artifactů, I/O jen v entrypointech (**66 souborů**)
 - `src/stopa/data/` — I/O vrstva: db.py (SQLite), TSK, libewf, image_pipeline, ingest
 - `src/stopa/web/` + `cli.py` — prezentace (FastAPI 30 endpointů + CLI)
 Pipeline = jediný `analyze()` s dispatchem magic signatur + name-based fallback,
 ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 
 ## Aktuální fáze vývoje
-**Oblast D (Artifact Engine)** — **STP-031 hotový** (ETAPA B vlna 9: memory forensics — procesy/spojení/handlery/moduly/hooks,
-5 parserů / 14 AXIOM typů; dispatch PŘED netstatem). Předtím: **STP-030 ETAPA B vlna 8** (Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers),
+**Oblast D (Artifact Engine)** — **STP-032 hotový** (ETAPA B vlna 10: cloud SNS exporty — Instagram/Snapchat warrant return,
+4 parsery / 20 AXIOM typů; nový `_sns_prepass()` na celé cestě PŘED basename chainem). Předtím: **STP-031 ETAPA B vlna 9** (memory forensics — procesy/spojení/handlery/moduly/hooks),
+**STP-030 ETAPA B vlna 8** (Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers),
 **STP-029 ETAPA B vlna 7** (Chrome Bookmarks/History/Autofill + Contacts + Skype WR),
 **STP-028 ETAPA B vlna 6** (Google local profile/takeout + přílohy),
 **STP-027 ETAPA B vlna 5** (Google Takeout rodina + Samsung voice),
@@ -29,7 +30,7 @@ ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 **STP-021 stream parsing velkých E01 + web Processing Monitor**,
 **STP-019 AI governance + PII redaktor**, **STP-020 Report engine 9→20 sekcí**,
 **STP-018 Timeline Intelligence 2.0** a **ETAPA B vlny 1–3 hotové**.
-Coverage matice: covered **114 / 232** unikátních typů; portable-local NOT_SUPPORTED = **0 ★**; memory NOT_SUPPORTED = **0 ★** (vyzerovala vlnou 9).
+Coverage matice: covered **134 / 232** unikátních typů; portable-local NOT_SUPPORTED = **0 ★**; memory NOT_SUPPORTED = **0 ★** (vyzerovala vlnou 9); cloud-export NOT_SUPPORTED = **64**.
 
 ## Celkový stav projektu
 Stabilní — plná test suite zelená, ruff clean, deterministická coverage matice.
