@@ -5,15 +5,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 56
-- **🔧 PORTABLE-LOCAL**: 16
+- **✅ COVERED**: 68
+- **🔧 PORTABLE-LOCAL**: 4
 - **☁️ CLOUD-EXPORT**: 111
 - **💾 MEMORY**: 15
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (56)
+## ✅ COVERED — STOPA už umí (existující parser) (68)
 
 - `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
 - `AppleIMessageArtifact` — sqlite_extract → imessage
@@ -30,14 +30,25 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `ConnscanArtifact` — net_connections parser
 - `CurrentTabsArtifact` — ddg_current_tabs parser (JSON/text záložky)
 - `DocumentMetadataExtractor` — OOXML metadata
+- `DriveActivityArtifact` — drive_activity parser (Drive activity log JSON)
 - `DuckDuckGoCookiesArtifact` — ddg_cookies parser (Chromium cookies SQLite, µs od 1601)
 - `FileScanArtifact` — mem_scan parser (textový výstup — soubory v paměti)
 - `GetsidsArtifact` — win_sids (sekundární registry průchod SAM/SECURITY)
+- `GoogleAccountChangeHistoryArtifact` — google_account_meta parser (account change history JSON)
 - `GoogleAccountInfoArtifact` — google_account_info parser (account_info.json)
+- `GoogleAggregatedActivitiesArtifact` — google_aggregated_activities parser (My Activity daily JSON)
+- `GoogleAggregatedActivitiesIdentitySessionsArtifact` — google_aggregated_activities parser (identity sessions JSON)
 - `GoogleBrowsingHistoryArtifact` — browser_history
+- `GoogleChatArtifact` — google_chat_family parser (Takeout chat JSON)
+- `GoogleDevicesArtifact` — google_account_meta parser (linked devices JSON)
+- `GoogleExportSummaryArtifact` — google_account_meta parser (export summary JSON)
+- `GoogleHangoutsArtifact` — google_chat_family parser (Takeout Hangouts JSON)
 - `GoogleLocationHistoryArtifact` — google_location_history parser (JSON Takeout + CSV)
 - `GoogleLoginHistoryArtifact` — google_login_history parser (sign-ins JSON/CSV)
+- `GoogleMapsActivityArtifact` — google_maps_activity parser (semantic location history, placeVisit/activitySegment E7)
+- `GooglePlusChatArtifact` — google_chat_family parser (Takeout Plus Chat JSON)
 - `GoogleSearchHistoryArtifact` — google_search_history parser (JSON Takeout)
+- `GoogleTalkArtifact` — google_chat_family parser (Takeout Talk JSON)
 - `IeTypedUrlArtifact` — browser_history (chrome/firefox)
 - `ImageInfoArtifact` — magic bytes → image info
 - `JumpListsArtifact` — win_jumplist parser
@@ -63,6 +74,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `SamsungConnectionsArtifact` — mobile_extract → calllog
 - `SamsungContactArtifact` — mobile_extract → contacts2
 - `SamsungMessagesArtifact` — mobile_extract → sms
+- `SamsungVoiceRecordingArtifact` — samsung_voice_recording parser (SQLite dispatch chain, voice recorder DB)
 - `ScheduledTasksArtifact` — win_schedtask parser (Task Scheduler XML)
 - `SidsArtifact` — win_sids (sekundární registry průchod SAM/SECURITY)
 - `SockscanArtifact` — net_connections parser
@@ -72,24 +84,12 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (16)
+## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (4)
 
 - `AttachmentExtractor` — lokální parser (čistý Python)
-- `DriveActivityArtifact` — lokální parser (čistý Python)
-- `GoogleAccountChangeHistoryArtifact` — lokální profil / takeout
-- `GoogleAggregatedActivitiesArtifact` — lokální profil / takeout
-- `GoogleAggregatedActivitiesIdentitySessionsArtifact` — lokální profil / takeout
 - `GoogleBarArtifact` — lokální profil / takeout
-- `GoogleChatArtifact` — lokální profil / takeout
-- `GoogleDevicesArtifact` — lokální profil / takeout
-- `GoogleExportSummaryArtifact` — lokální profil / takeout
-- `GoogleHangoutsArtifact` — lokální profil / takeout
 - `GoogleMailMessageInformationArtifact` — lokální profil / takeout
-- `GoogleMapsActivityArtifact` — lokální profil / takeout
 - `GooglePhotosArtifact` — lokální profil / takeout
-- `GooglePlusChatArtifact` — lokální profil / takeout
-- `GoogleTalkArtifact` — lokální profil / takeout
-- `SamsungVoiceRecordingArtifact` — legacy mobile / messenger (SQLite)
 
 ## ☁️ CLOUD-EXPORT — JSON export / warrant return (111)
 

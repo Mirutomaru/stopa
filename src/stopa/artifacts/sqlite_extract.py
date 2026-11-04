@@ -9,6 +9,8 @@ AXIOM-style: každý soubor se SQLite signaturou projde schema detektorem.
 - ETAPA B vlna 4: DuckDuckGo cookies (Chromium `cookies`), iOS voicemail.db
   (`voicemail`, unix s + CFAbsoluteTime), iOS Local.sqlite parked car locations
   (`ZRTVEHICLEEVENTMO`, CFAbsoluteTime) — schéma-based, lazy import
+- ETAPA B vlna 5: Samsung Voice Recording (voice_recorder DB, epoch ms) —
+  schéma-based, lazy import
 - ostatní SQLite DB: jeden triage artifact se seznamem tabulek a počty řádků
 
 IO je jen v `extract_sqlite_artifacts()`; schema matchery jsou čisté funkce.
@@ -301,20 +303,29 @@ def extract_sqlite_artifacts(path: Path) -> list[Artifact]:
                     if is_parked_car_database(conn):
                         arts = extract_parked_car_artifacts(conn)
                     else:
-                        # ETAPA B vlna 3 — Kik Messenger (schéma-based, iOS ZKIK* / Android users+messages)
-                        from stopa.artifacts.kik_messenger import (
-                            extract_kik_artifacts,
-                            is_kik_database,
+                        # ETAPA B vlna 5 — Samsung Voice Recording (schéma-based, legacy mobile)
+                        from stopa.artifacts.samsung_voice_recording import (
+                            extract_samsung_voice_recording_artifacts,
+                            is_samsung_voice_recording_database,
                         )
 
-                        if is_kik_database(conn):
-                            arts = extract_kik_artifacts(conn)
+                        if is_samsung_voice_recording_database(conn):
+                            arts = extract_samsung_voice_recording_artifacts(conn)
                         else:
-                            # FÁZE 6a — mobilní logická extrakce (kontakty/WhatsApp/iOS Safari),
-                            # jinak generic triage (tabulky + počty řádků)
-                            from stopa.artifacts.mobile_extract import extract_mobile_artifacts
+                            # ETAPA B vlna 3 — Kik Messenger (schéma-based, iOS ZKIK* / Android users+messages)
+                            from stopa.artifacts.kik_messenger import (
+                                extract_kik_artifacts,
+                                is_kik_database,
+                            )
 
-                            arts = extract_mobile_artifacts(conn) or _extract_generic_sqlite(conn)
+                            if is_kik_database(conn):
+                                arts = extract_kik_artifacts(conn)
+                            else:
+                                # FÁZE 6a — mobilní logická extrakce (kontakty/WhatsApp/iOS Safari),
+                                # jinak generic triage (tabulky + počty řádků)
+                                from stopa.artifacts.mobile_extract import extract_mobile_artifacts
+
+                                arts = extract_mobile_artifacts(conn) or _extract_generic_sqlite(conn)
         return arts
     except sqlite3.Error as e:
         log.warning("SQLite extract %s: %s", path, e)

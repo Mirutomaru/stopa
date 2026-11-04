@@ -36,10 +36,40 @@ from stopa.artifacts.chatroulette import (
 )
 from stopa.artifacts.ddg_current_tabs import PARSER_VERSION as DDG_TABS_VERSION
 from stopa.artifacts.ddg_current_tabs import extract_current_tabs_artifacts, is_current_tabs_file
+from stopa.artifacts.drive_activity import PARSER_VERSION as DRIVE_ACTIVITY_VERSION
+from stopa.artifacts.drive_activity import (
+    extract_drive_activity_artifacts,
+    is_drive_activity_file,
+)
 from stopa.artifacts.email_mbox import PARSER_VERSION as EMAIL_MBOX_VERSION
 from stopa.artifacts.email_mbox import extract_email_artifacts, is_email_file
 from stopa.artifacts.google_account_info import PARSER_VERSION as GOOGLE_ACCT_VERSION
 from stopa.artifacts.google_account_info import extract_account_artifacts, is_account_info_file
+from stopa.artifacts.google_account_meta import (
+    PARSER_VERSION as GOOGLE_ACCOUNT_META_VERSION,
+)
+from stopa.artifacts.google_account_meta import (
+    extract_account_change_history_artifacts,
+    extract_export_summary_artifacts,
+    extract_linked_devices_artifacts,
+    is_account_change_history_file,
+    is_export_summary_file,
+    is_linked_devices_file,
+)
+from stopa.artifacts.google_aggregated_activities import (
+    PARSER_VERSION as GOOGLE_AGGREGATED_VERSION,
+)
+from stopa.artifacts.google_aggregated_activities import (
+    extract_aggregated_activities_artifacts,
+    extract_identity_sessions_artifacts,
+    is_aggregated_activities_file,
+    is_identity_sessions_file,
+)
+from stopa.artifacts.google_chat_family import PARSER_VERSION as GOOGLE_CHAT_FAMILY_VERSION
+from stopa.artifacts.google_chat_family import (
+    extract_google_chat_artifacts,
+    is_google_chat_file,
+)
 from stopa.artifacts.google_location_history import (
     PARSER_VERSION as GOOGLE_LOC_VERSION,
 )
@@ -49,6 +79,11 @@ from stopa.artifacts.google_location_history import (
 )
 from stopa.artifacts.google_login_history import PARSER_VERSION as GOOGLE_LOGIN_VERSION
 from stopa.artifacts.google_login_history import extract_login_artifacts, is_login_history_file
+from stopa.artifacts.google_maps_activity import PARSER_VERSION as GOOGLE_MAPS_ACTIVITY_VERSION
+from stopa.artifacts.google_maps_activity import (
+    extract_maps_activity_artifacts,
+    is_maps_activity_file,
+)
 from stopa.artifacts.google_search_history import (
     PARSER_VERSION as GOOGLE_SEARCH_VERSION,
 )
@@ -220,6 +255,21 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     # ETAPA B vlna 4 — AXIOM port: DDG allowlisted websites + OpenOffice Base (.odb)
     "allowlisted_websites": (extract_allowlisted_websites_artifacts, ALLOWLISTED_WEBSITES_VERSION),
     "openoffice_base": (extract_openoffice_base_artifacts, OPENOFFICE_BASE_VERSION),
+    # ETAPA B vlna 5 — AXIOM port: Google Takeout rodina + Drive activity
+    "google_aggregated_activities": (
+        extract_aggregated_activities_artifacts,
+        GOOGLE_AGGREGATED_VERSION,
+    ),
+    "google_identity_sessions": (extract_identity_sessions_artifacts, GOOGLE_AGGREGATED_VERSION),
+    "google_maps_activity": (extract_maps_activity_artifacts, GOOGLE_MAPS_ACTIVITY_VERSION),
+    "google_chat_family": (extract_google_chat_artifacts, GOOGLE_CHAT_FAMILY_VERSION),
+    "google_account_change_history": (
+        extract_account_change_history_artifacts,
+        GOOGLE_ACCOUNT_META_VERSION,
+    ),
+    "google_linked_devices": (extract_linked_devices_artifacts, GOOGLE_ACCOUNT_META_VERSION),
+    "google_export_summary": (extract_export_summary_artifacts, GOOGLE_ACCOUNT_META_VERSION),
+    "drive_activity": (extract_drive_activity_artifacts, DRIVE_ACTIVITY_VERSION),
 }
 
 
@@ -238,6 +288,11 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
     textové/JSON logy bez spolehlivé magiky. Kik běží schéma-based v SQLite
     dispatch chainu (viz sqlite_extract), ne zde. ETAPA B vlna 4: + DuckDuckGo
     Allowlisted Websites (JSON) a OpenOffice/LibreOffice Base (.odb ZIP kontejner).
+    ETAPA B vlna 5: + Google Takeout rodina — Aggregated Activities, Identity
+    Sessions, Maps Activity (semantic location history), IM chat rodina
+    (Chat/Hangouts/Plus/Talk), Account Change History, Linked Devices, Export
+    Summary a Drive activity logy. Samsung Voice Recording běží schéma-based v
+    SQLite dispatch chainu (viz sqlite_extract).
     """
     if is_icloud_messages_file(name):
         return NAME_BASED_EXTRACTORS["icloud_messages"]
@@ -253,6 +308,23 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["win_schedtask"]
     if is_netstat_file(name):
         return NAME_BASED_EXTRACTORS["net_connections"]
+    # ETAPA B vlna 5 — Google Takeout rodina (specifické PŘED obecnějšími vlna-2 detekcemi)
+    if is_aggregated_activities_file(name):
+        return NAME_BASED_EXTRACTORS["google_aggregated_activities"]
+    if is_identity_sessions_file(name):
+        return NAME_BASED_EXTRACTORS["google_identity_sessions"]
+    if is_maps_activity_file(name):
+        return NAME_BASED_EXTRACTORS["google_maps_activity"]
+    if is_google_chat_file(name):
+        return NAME_BASED_EXTRACTORS["google_chat_family"]
+    if is_account_change_history_file(name):
+        return NAME_BASED_EXTRACTORS["google_account_change_history"]
+    if is_linked_devices_file(name):
+        return NAME_BASED_EXTRACTORS["google_linked_devices"]
+    if is_export_summary_file(name):
+        return NAME_BASED_EXTRACTORS["google_export_summary"]
+    if is_drive_activity_file(name):
+        return NAME_BASED_EXTRACTORS["drive_activity"]
     # ETAPA B vlna 2 — Google profily (specifické názvy PŘED obecnějšími)
     if is_google_search_history_file(name):
         return NAME_BASED_EXTRACTORS["google_search_history"]

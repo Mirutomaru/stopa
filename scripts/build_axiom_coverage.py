@@ -97,6 +97,19 @@ COVERED: dict[str, str] = {
     "OpenOfficeBaseArtifact": "covered",  # openoffice_base (.odb ZIP kontejner)
     "ParkedCarLocationsArtifact": "covered",  # parked_car_locations (iOS Local.sqlite)
     "VoiceMailArtifact": "covered",  # ios_voicemail (voicemail.db)
+    # ETAPA B vlna 5 — port AXIOM extraktorů (6 nových parserů, testováno)
+    "GoogleAggregatedActivitiesArtifact": "covered",  # google_aggregated_activities (My Activity JSON)
+    "GoogleAggregatedActivitiesIdentitySessionsArtifact": "covered",  # google_aggregated_activities (identity sessions)
+    "GoogleMapsActivityArtifact": "covered",  # google_maps_activity (semantic location history)
+    "GoogleChatArtifact": "covered",  # google_chat_family (Takeout JSON)
+    "GoogleHangoutsArtifact": "covered",  # google_chat_family (Takeout JSON)
+    "GooglePlusChatArtifact": "covered",  # google_chat_family (Takeout JSON)
+    "GoogleTalkArtifact": "covered",  # google_chat_family (Takeout JSON)
+    "GoogleAccountChangeHistoryArtifact": "covered",  # google_account_meta (change history JSON)
+    "GoogleDevicesArtifact": "covered",  # google_account_meta (linked devices JSON)
+    "GoogleExportSummaryArtifact": "covered",  # google_account_meta (export summary JSON)
+    "DriveActivityArtifact": "covered",  # drive_activity (Drive activity log JSON)
+    "SamsungVoiceRecordingArtifact": "covered",  # samsung_voice_recording (SQLite dispatch chain)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -222,6 +235,19 @@ def _covered_desc(name: str) -> str:
         "OpenOfficeBaseArtifact": "openoffice_base parser (.odb = ZIP/ODF kontejner + DC metadata)",
         "ParkedCarLocationsArtifact": "parked_car_locations parser (iOS Local.sqlite ZRTVEHICLEEVENTMO, CFAbsoluteTime)",
         "VoiceMailArtifact": "ios_voicemail parser (voicemail.db, date=unix s / trashed_date=CFAbsoluteTime)",
+        # ETAPA B vlna 5 — port AXIOM extraktorů
+        "GoogleAggregatedActivitiesArtifact": "google_aggregated_activities parser (My Activity daily JSON)",
+        "GoogleAggregatedActivitiesIdentitySessionsArtifact": "google_aggregated_activities parser (identity sessions JSON)",
+        "GoogleMapsActivityArtifact": "google_maps_activity parser (semantic location history, placeVisit/activitySegment E7)",
+        "GoogleChatArtifact": "google_chat_family parser (Takeout chat JSON)",
+        "GoogleHangoutsArtifact": "google_chat_family parser (Takeout Hangouts JSON)",
+        "GooglePlusChatArtifact": "google_chat_family parser (Takeout Plus Chat JSON)",
+        "GoogleTalkArtifact": "google_chat_family parser (Takeout Talk JSON)",
+        "GoogleAccountChangeHistoryArtifact": "google_account_meta parser (account change history JSON)",
+        "GoogleDevicesArtifact": "google_account_meta parser (linked devices JSON)",
+        "GoogleExportSummaryArtifact": "google_account_meta parser (export summary JSON)",
+        "DriveActivityArtifact": "drive_activity parser (Drive activity log JSON)",
+        "SamsungVoiceRecordingArtifact": "samsung_voice_recording parser (SQLite dispatch chain, voice recorder DB)",
     }
     return m.get(name, "existující parser")
 

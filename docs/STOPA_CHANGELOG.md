@@ -4,6 +4,48 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 5: Google Takeout rodina + Samsung voice)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 6 nových parserů / 12 AXIOM typů)
+- **Google Aggregated Activities** (`artifacts/google_aggregated_activities.py`) —
+  „My Activity" daily JSON export (pole dní s `activities`); identity sessions
+  varianta (deviceInfo + session timestamps). Name-based detekce. AXIOM
+  `GoogleAggregatedActivitiesArtifact` + `…IdentitySessionsArtifact`. Artifact types
+  `google_activity` / `google_identity_session`.
+- **Google Maps Activity** (`artifacts/google_maps_activity.py`) — semantic location
+  history JSON (`timelineObjects`: placeVisit s E7 souřadnicemi → stupně,
+  activitySegment s distance/activityType/confidence). Name-based detekce. AXIOM
+  `GoogleMapsActivityArtifact`. Artifact type `google_maps_activity`.
+- **Google Chat rodina** (`artifacts/google_chat_family.py`) — sdílený Takeout JSON
+  parser pro 4 IM typy (conversations → events, segment text). Name-based detekce.
+  AXIOM `GoogleChatArtifact` / `GoogleHangoutsArtifact` / `GooglePlusChatArtifact` /
+  `GoogleTalkArtifact`. Artifact type `chat_message`.
+- **Google Account metadata** (`artifacts/google_account_meta.py`) — account change
+  history (eventy), linked devices, export summary. Name-based detekce. AXIOM
+  `GoogleAccountChangeHistoryArtifact` / `GoogleDevicesArtifact` /
+  `GoogleExportSummaryArtifact`. Artifact types `google_account_event` /
+  `google_device` / `google_export_summary`.
+- **Google Drive Activity** (`artifacts/drive_activity.py`) — JSON log aktivit souborů
+  (fileId/fileName/action/timestamp, unix s i ISO). Name-based detekce. AXIOM
+  `DriveActivityArtifact`. Artifact type `drive_activity`.
+- **Samsung Voice Recording** (`artifacts/samsung_voice_recording.py`) — legacy mobile
+  voice recorder SQLite DB; schéma-based (tabulka nahrávek, duration ms→s heuristika).
+  Napojen do `sqlite_extract.py` dispatch chainu. AXIOM `SamsungVoiceRecordingArtifact`.
+  Artifact type `voice_recording`.
+
+### Pipeline dispatch + C3 registry
+- Google Takeout JSON rodina (aggregated, maps, chat family, account meta, drive)
+  napojena do `NAME_BASED_EXTRACTORS` + `_name_based_match()`; specifické detekce
+  PŘED obecnějšími vlna-2 Google detekcemi.
+- Samsung Voice Recording (SQLite schéma-based) napojen do `sqlite_extract.py`
+  dispatch chainu před Kik/generic fallbackem.
+- C3 registry (`validation_registry.py`): nové záznamy pro 8 name-based parserů;
+  sdílený `sqlite` rozšířen o Samsung. `build_registry()` = **34 parserů** (předtím 26).
+
+### Coverage matice (FÁZE 15)
+- Flip 12 AXIOM typů NOT_SUPPORTED → SUPPORTED: covered **56 → 68 / 232**;
+  portable-local **16 → 4**. Regen CSV/MD/JSON.
+
 ## [Unreleased] — 2026-11-03 (ETAPA B vlna 4: portable-local AXIOM porty)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 6 nových parserů)
