@@ -49,7 +49,7 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-038 — ETAPA C: volba směru + synchronizace roadmapy (rozdělení `db.py`)** (oblast A, P1) | Commit: ```68da2f3```
+**STP-038 — ETAPA C: volba směru + synchronizace roadmapy (rozdělení `db.py`)** (oblast A, P1) | Commit: ```1292e72```
 Audit reálného stavu všech oblastí A–Q v kódu (ne jen roadmapě) — zjištěno, že několik „Nedokončeno" položek bylo mezitím dokončeno a roadmapu jsem synchronizoval: E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021). **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** (nejvyšší zbývající priorita P1, největší technický dluh). Plán vln: STP-039 (Case/File/Audit Repository), STP-040 (Artifact/Entity Repository), STP-041 (facade úklid + audit). Full suite **1742 passed, 1 skipped**, ruff clean.
 Předtím: STP-037 (ETAPA B vlna 15 závěrečný audit — ETAPA B dokončena ★, `166e42e`),
 STP-036 (vlna 14 dokončení cloud-export kategorie, `496391b`),

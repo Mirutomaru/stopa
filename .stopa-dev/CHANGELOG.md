@@ -2,7 +2,7 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
-## 2026-11-04 — STP-038 ETAPA C: volba směru + synchronizace roadmapy (rozdělení `db.py`) (oblast A, P1) | Commit: ```68da2f3```
+## 2026-11-04 — STP-038 ETAPA C: volba směru + synchronizace roadmapy (rozdělení `db.py`) (oblast A, P1) | Commit: ```1292e72```
 **Změněné soubory:** `STOPA_ROADMAP.md` (root — faktické opravy zastaralých „Nedokončeno" položek A/E/H/J/L/P/Q + nová sekce „ETAPA C — ROZHODNUTÍ O SMĚRU"), `.stopa-dev/ROADMAP.md` (autoritativní — synchronizace D–Q na reálný stav + sekce rozhodnutí), DEV OS registry (TASKS STP-038, PROJECT_STATE fáze/poslední úkol/aktuální+nejbližší/testování/datum).
 **Co se stalo:** audit reálného stavu všech oblastí A–Q v kódu (ne jen roadmapě) — zjištěno, že několik „Nedokončeno" položek bylo mezitím dokončeno a roadmapa je synchronizována: E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021). **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** (nejvyšší zbývající priorita P1, největší technický dluh). Plán vln: STP-039 (Case/File/Audit Repository ~28 metod), STP-040 (Artifact/Entity Repository ~23 metod), STP-041 (facade úklid + audit). Akceptační kritéria: `db.py` < ~600 ř., backward compat API, full suite zelená po každé vlně.
 **Testy:** full suite **1742 passed, 1 skipped** (bez změny — jen docs); ruff clean.

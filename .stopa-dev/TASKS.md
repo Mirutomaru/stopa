@@ -382,4 +382,4 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `STOPA_ROADMAP.md` (root — faktické opravy A/E/H/J/L/P/Q + sekce „ETAPA C — ROZHODNUTÍ O SMĚRU"), `.stopa-dev/ROADMAP.md` (autoritativní — synchronizace D–Q + sekce rozhodnutí), DEV OS registry/checkpoint/NEXT_ACTION
 - **Testy:** full suite **1742 passed, 1 skipped** (bez změny — jen docs); ruff clean
 - **Plán vln ETAPY C:** vlna 1 STP-039 (`CaseRepository`+`FileRepository`+`AuditRepository`, ~28 metod), vlna 2 STP-040 (`ArtifactRepository`+`EntityRepository`, ~23 metod), vlna 3 STP-041 (facade úklid + audit). Akceptační kritéria: `db.py` < ~600 ř., backward compat API, full suite zelená po každé vlně.
-- **Dokončeno:** 2026-11-04 | Commit: ```68da2f3```
+- **Dokončeno:** 2026-11-04 | Commit: ```1292e72```
