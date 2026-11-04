@@ -79,11 +79,18 @@ from stopa.artifacts.google_location_history import (
 )
 from stopa.artifacts.google_login_history import PARSER_VERSION as GOOGLE_LOGIN_VERSION
 from stopa.artifacts.google_login_history import extract_login_artifacts, is_login_history_file
+from stopa.artifacts.google_mail_info import PARSER_VERSION as GOOGLE_MAIL_INFO_VERSION
+from stopa.artifacts.google_mail_info import (
+    extract_mail_info_artifacts,
+    is_mail_info_file,
+)
 from stopa.artifacts.google_maps_activity import PARSER_VERSION as GOOGLE_MAPS_ACTIVITY_VERSION
 from stopa.artifacts.google_maps_activity import (
     extract_maps_activity_artifacts,
     is_maps_activity_file,
 )
+from stopa.artifacts.google_photos import PARSER_VERSION as GOOGLE_PHOTOS_VERSION
+from stopa.artifacts.google_photos import extract_photos_artifacts, is_photos_file
 from stopa.artifacts.google_search_history import (
     PARSER_VERSION as GOOGLE_SEARCH_VERSION,
 )
@@ -270,6 +277,9 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "google_linked_devices": (extract_linked_devices_artifacts, GOOGLE_ACCOUNT_META_VERSION),
     "google_export_summary": (extract_export_summary_artifacts, GOOGLE_ACCOUNT_META_VERSION),
     "drive_activity": (extract_drive_activity_artifacts, DRIVE_ACTIVITY_VERSION),
+    # ETAPA B vlna 6 — AXIOM port: Google Photos + Mail Message Information (WarrantReturn)
+    "google_photos": (extract_photos_artifacts, GOOGLE_PHOTOS_VERSION),
+    "google_mail_info": (extract_mail_info_artifacts, GOOGLE_MAIL_INFO_VERSION),
 }
 
 
@@ -325,6 +335,11 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["google_export_summary"]
     if is_drive_activity_file(name):
         return NAME_BASED_EXTRACTORS["drive_activity"]
+    # ETAPA B vlna 6 — Google Photos + Mail Message Information (WarrantReturn JSON)
+    if is_photos_file(name):
+        return NAME_BASED_EXTRACTORS["google_photos"]
+    if is_mail_info_file(name):
+        return NAME_BASED_EXTRACTORS["google_mail_info"]
     # ETAPA B vlna 2 — Google profily (specifické názvy PŘED obecnějšími)
     if is_google_search_history_file(name):
         return NAME_BASED_EXTRACTORS["google_search_history"]

@@ -66,7 +66,11 @@ def _is_firefox_history(conn: sqlite3.Connection) -> bool:
 
 
 def _extract_chrome_history(conn: sqlite3.Connection) -> list[Artifact]:
-    """Každá návštěva (visit) → artifact s URL, titulkem a časem."""
+    """Každá návštěva (visit) → artifact s URL, titulkem a časem.
+
+    ETAPA B vlna 6 — bonus: tabulka ``search_terms`` (omnibox dotazy z lišty)
+    → browser_search artifacty (AXIOM GoogleBarArtifact).
+    """
     rows = conn.execute(
         "SELECT v.visit_time, u.url, u.title"
         " FROM visits v JOIN urls u ON u.id = v.url"
@@ -87,6 +91,14 @@ def _extract_chrome_history(conn: sqlite3.Connection) -> list[Artifact]:
                 details={"page_title": r["title"], "engine": "chrome/edge"},
             )
         )
+
+    # ETAPA B vlna 6 — GoogleBar bonus: search_terms (omnibox dotazy z lišty)
+    try:
+        from stopa.artifacts.google_bar import extract_search_terms
+
+        out.extend(extract_search_terms(conn))
+    except Exception as e:  # noqa: BLE001 — bonus nesmí potopit hlavní extrakci
+        log.debug("chrome search_terms bonus: %s", e)
     return out
 
 

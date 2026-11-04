@@ -110,6 +110,11 @@ COVERED: dict[str, str] = {
     "GoogleExportSummaryArtifact": "covered",  # google_account_meta (export summary JSON)
     "DriveActivityArtifact": "covered",  # drive_activity (Drive activity log JSON)
     "SamsungVoiceRecordingArtifact": "covered",  # samsung_voice_recording (SQLite dispatch chain)
+    # ETAPA B vlna 6 — port AXIOM extraktorů (4 nové parsery, testováno)
+    "GooglePhotosArtifact": "covered",  # google_photos (Takeout/warrant JSON, photoTakenTime/geoData)
+    "GoogleMailMessageInformationArtifact": "covered",  # google_mail_info (Gmail warrant return JSON)
+    "GoogleBarArtifact": "covered",  # google_bar (Chrome History search_terms bonus v sqlite_extract)
+    "AttachmentExtractor": "covered",  # attachment_extractor (MIME/RFC822 přílohy, bonus v email_mbox)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -248,6 +253,11 @@ def _covered_desc(name: str) -> str:
         "GoogleExportSummaryArtifact": "google_account_meta parser (export summary JSON)",
         "DriveActivityArtifact": "drive_activity parser (Drive activity log JSON)",
         "SamsungVoiceRecordingArtifact": "samsung_voice_recording parser (SQLite dispatch chain, voice recorder DB)",
+        # ETAPA B vlna 6 — port AXIOM extraktorů
+        "GooglePhotosArtifact": "google_photos parser (Takeout/warrant JSON, photoTakenTime/geoData E7)",
+        "GoogleMailMessageInformationArtifact": "google_mail_info parser (Gmail warrant return JSON, threadId/internalDate µs)",
+        "GoogleBarArtifact": "google_bar parser (Chrome History search_terms — omnibox dotazy z lišty)",
+        "AttachmentExtractor": "attachment_extractor parser (MIME/RFC822 přílohy → email_attachment artifacty)",
     }
     return m.get(name, "existující parser")
 

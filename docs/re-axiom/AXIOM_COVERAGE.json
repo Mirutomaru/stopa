@@ -3,8 +3,7 @@
   "unique_types": 232,
   "counts": {
     "base-class": 34,
-    "covered": 68,
-    "portable-local": 4,
+    "covered": 72,
     "memory": 15,
     "cloud-export": 111
   },
@@ -48,6 +47,7 @@
     "covered": [
       "AllowlistedWebSitesArtifact",
       "AppleIMessageArtifact",
+      "AttachmentExtractor",
       "AuditDriveEventsArtifact",
       "AuditLoginEventsArtifact",
       "BeboArtifact",
@@ -69,6 +69,7 @@
       "GoogleAccountInfoArtifact",
       "GoogleAggregatedActivitiesArtifact",
       "GoogleAggregatedActivitiesIdentitySessionsArtifact",
+      "GoogleBarArtifact",
       "GoogleBrowsingHistoryArtifact",
       "GoogleChatArtifact",
       "GoogleDevicesArtifact",
@@ -76,7 +77,9 @@
       "GoogleHangoutsArtifact",
       "GoogleLocationHistoryArtifact",
       "GoogleLoginHistoryArtifact",
+      "GoogleMailMessageInformationArtifact",
       "GoogleMapsActivityArtifact",
+      "GooglePhotosArtifact",
       "GooglePlusChatArtifact",
       "GoogleSearchHistoryArtifact",
       "GoogleTalkArtifact",
@@ -114,12 +117,6 @@
       "VoiceMailArtifact",
       "WiFiLocationsArtifact",
       "WorldMapArtifact"
-    ],
-    "portable-local": [
-      "AttachmentExtractor",
-      "GoogleBarArtifact",
-      "GoogleMailMessageInformationArtifact",
-      "GooglePhotosArtifact"
     ],
     "memory": [
       "ApiHooksArtifact",

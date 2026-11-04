@@ -252,4 +252,16 @@ def extract_email_artifacts(path: Path) -> list[Artifact]:
     if len(messages) >= MAX_MESSAGES_PER_FILE:
         logger.warning("Email %s: dosáhnut limit %d zpráv", path, MAX_MESSAGES_PER_FILE)
 
-    return build_email_artifacts(messages)
+    artifacts = build_email_artifacts(messages)
+
+    # ETAPA B vlna 6 — AttachmentExtractor bonus (AXIOM Common.dll): každá MIME
+    # příloha → samostatný email_attachment artifact (nejen jméno v detailu).
+    try:
+        from stopa.artifacts.attachment_extractor import extract_attachments_from_message
+
+        for seg in split_mbox(data):
+            artifacts.extend(extract_attachments_from_message(seg))
+    except Exception as e:  # noqa: BLE001 — bonus nesmí potopit hlavní extrakci
+        logger.debug("attachment extractor bonus %s: %s", path, e)
+
+    return artifacts

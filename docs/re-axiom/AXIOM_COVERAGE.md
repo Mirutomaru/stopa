@@ -5,18 +5,19 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 68
-- **🔧 PORTABLE-LOCAL**: 4
+- **✅ COVERED**: 72
+- **🔧 PORTABLE-LOCAL**: 0
 - **☁️ CLOUD-EXPORT**: 111
 - **💾 MEMORY**: 15
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (68)
+## ✅ COVERED — STOPA už umí (existující parser) (72)
 
 - `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
 - `AppleIMessageArtifact` — sqlite_extract → imessage
+- `AttachmentExtractor` — attachment_extractor parser (MIME/RFC822 přílohy → email_attachment artifacty)
 - `AuditDriveEventsArtifact` — EVTX event log (evtx parser)
 - `AuditLoginEventsArtifact` — EVTX event log (evtx parser)
 - `BeboArtifact` — bebo_chat parser (text/JSON live chat)
@@ -38,6 +39,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GoogleAccountInfoArtifact` — google_account_info parser (account_info.json)
 - `GoogleAggregatedActivitiesArtifact` — google_aggregated_activities parser (My Activity daily JSON)
 - `GoogleAggregatedActivitiesIdentitySessionsArtifact` — google_aggregated_activities parser (identity sessions JSON)
+- `GoogleBarArtifact` — google_bar parser (Chrome History search_terms — omnibox dotazy z lišty)
 - `GoogleBrowsingHistoryArtifact` — browser_history
 - `GoogleChatArtifact` — google_chat_family parser (Takeout chat JSON)
 - `GoogleDevicesArtifact` — google_account_meta parser (linked devices JSON)
@@ -45,7 +47,9 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GoogleHangoutsArtifact` — google_chat_family parser (Takeout Hangouts JSON)
 - `GoogleLocationHistoryArtifact` — google_location_history parser (JSON Takeout + CSV)
 - `GoogleLoginHistoryArtifact` — google_login_history parser (sign-ins JSON/CSV)
+- `GoogleMailMessageInformationArtifact` — google_mail_info parser (Gmail warrant return JSON, threadId/internalDate µs)
 - `GoogleMapsActivityArtifact` — google_maps_activity parser (semantic location history, placeVisit/activitySegment E7)
+- `GooglePhotosArtifact` — google_photos parser (Takeout/warrant JSON, photoTakenTime/geoData E7)
 - `GooglePlusChatArtifact` — google_chat_family parser (Takeout Plus Chat JSON)
 - `GoogleSearchHistoryArtifact` — google_search_history parser (JSON Takeout)
 - `GoogleTalkArtifact` — google_chat_family parser (Takeout Talk JSON)
@@ -83,13 +87,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `VoiceMailArtifact` — ios_voicemail parser (voicemail.db, date=unix s / trashed_date=CFAbsoluteTime)
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
-
-## 🔧 PORTABLE-LOCAL — lokálně portovatelný (čistý Python) (4)
-
-- `AttachmentExtractor` — lokální parser (čistý Python)
-- `GoogleBarArtifact` — lokální profil / takeout
-- `GoogleMailMessageInformationArtifact` — lokální profil / takeout
-- `GooglePhotosArtifact` — lokální profil / takeout
 
 ## ☁️ CLOUD-EXPORT — JSON export / warrant return (111)
 

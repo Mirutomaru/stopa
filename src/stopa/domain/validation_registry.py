@@ -47,6 +47,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "iOS voicemail.db (`voicemail`, unix s + CFAbsoluteTime) (ETAPA B vlna 4)",
             "iOS Local.sqlite parked car locations (`ZRTVEHICLEEVENTMO`) (ETAPA B vlna 4)",
             "Samsung Voice Recording (voice_recorder DB, epoch ms) (ETAPA B vlna 5)",
+            "Chrome/Edge search_terms — omnibox dotazy z lišty (GoogleBarArtifact) (ETAPA B vlna 6)",
         ),
         limitations=(
             "časové epochy se liší dle databáze — detekce podle schématu",
@@ -149,6 +150,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         formats=(
             "mbox (Unix mailbox) — více zpráv, oddělené From řádky",
             "EML/MSG — jednotlivé zprávy (RFC 822)",
+            "MIME/RFC822 přílohy → email_attachment artifacty (AttachmentExtractor bonus) (ETAPA B vlna 6)",
         ),
         limitations=(
             "detekce name-based (.eml/.mbox) + content check (From header)",
@@ -478,6 +480,33 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
         test_files=("tests/test_w5_parsers.py",),
+    ),
+    # ── ETAPA B vlna 6 — AXIOM port: Google Photos + Mail Message Information (WarrantReturn) ──
+    "google_photos": ParserValidation(
+        parser_id="google_photos",
+        version="",
+        formats=(
+            "Google Photos metadata JSON (Takeout / warrant return sidecar, photoTakenTime/geoData)",
+        ),
+        limitations=(
+            "detekce name-based (photos/google_photos) + content check (JSON s photo klíči)",
+            "souřadnice E7 (×1e-7) → stupně; ISO 8601 / epoch s/ms konverze",
+            "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w6_parsers.py",),
+    ),
+    "google_mail_info": ParserValidation(
+        parser_id="google_mail_info",
+        version="",
+        formats=(
+            "Google Mail Message Information JSON (Gmail Takeout / warrant return, threadId/internalDate µs)",
+        ),
+        limitations=(
+            "detekce name-based (gmail/mail_message_information/messages.json) + content check (JSON s mail klíči)",
+            "internalDate = µs od Unix epochy; tolerantně i ISO 8601 / s / ms",
+            "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w6_parsers.py",),
     ),
 }
 

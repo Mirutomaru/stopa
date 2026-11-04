@@ -4,6 +4,41 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 6: Google local profile/takeout + přílohy)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 4 AXIOM typy)
+- **Google Photos** (`artifacts/google_photos.py`) — Photos Takeout/warrant JSON
+  (pole objektů; `photoTakenTime` ISO 8601 i epoch ms → unix s, `geoData` E7
+  souřadnice → stupně, description/mediaItemType). Name-based detekce. AXIOM
+  `GooglePhotosArtifact`. Artifact type `google_photo`.
+- **Google Mail Message Information** (`artifacts/google_mail_info.py`) — Gmail
+  warrant return JSON (pole zpráv; `threadId`, `internalDate` µs od Unix epochy i
+  epoch s, from/to/cc jako objekt `{"emailAddress": …}` i plain string). Name-based
+  detekce. AXIOM `GoogleMailMessageInformationArtifact`. Artifact type
+  `google_mail_info`.
+- **Google Bar** (`artifacts/google_bar.py`) — Chrome/Edge History DB tabulka
+  `search_terms` (omnibox dotazy z lišty; `term`, `time_last_used` Chrome µs,
+  weight/source). Bonus hook v `_extract_chrome_history` (`sqlite_extract.py`).
+  AXIOM `GoogleBarArtifact`. Artifact type `browser_search`.
+- **Attachment Extractor** (`artifacts/attachment_extractor.py`) — MIME/RFC822
+  přílohy (multipart walk; filename z Content-Disposition, content-type, velikost
+  z Content-Length bez dekodování payloadu). Bonus hook v `email_mbox` — každá
+  příloha → samostatný artifact. AXIOM `AttachmentExtractor`. Artifact type
+  `email_attachment`.
+
+### Pipeline dispatch + C3 registry
+- Photos a Mail Message Information napojeny do `NAME_BASED_EXTRACTORS` +
+  `_name_based_match()` (specifické detekce PŘED obecnějšími Google detekcemi).
+- Google Bar bonus v `_extract_chrome_history`; AttachmentExtractor bonus v
+  `email_mbox` (bezpečné — existující fixtures nemají přílohy/`search_terms`).
+- C3 registry (`validation_registry.py`): nové záznamy `google_photos`,
+  `google_mail_info`, `attachment_extractor`; sdílené `sqlite` + `email_mbox`
+  rozšířeny. `build_registry()` = **36 parserů** (předtím 34).
+
+### Coverage matice (FÁZE 15)
+- Flip 4 AXIOM typů NOT_SUPPORTED → SUPPORTED: covered **68 → 72 / 232**;
+  portable-local **4 → 0** ★ (všechny lokální typy pokryty). Regen CSV/MD/JSON.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 5: Google Takeout rodina + Samsung voice)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 6 nových parserů / 12 AXIOM typů)
