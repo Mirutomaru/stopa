@@ -150,6 +150,16 @@ from stopa.artifacts.limewire_p2p import (
 )
 from stopa.artifacts.mailru_agent import PARSER_VERSION as MAILRU_AGENT_VERSION
 from stopa.artifacts.mailru_agent import extract_mailru_artifacts, is_mailru_file
+from stopa.artifacts.mem_handles import PARSER_VERSION as MEM_HANDLES_VERSION
+from stopa.artifacts.mem_handles import extract_mem_handle_artifacts, is_mem_handles_file
+from stopa.artifacts.mem_hooks import PARSER_VERSION as MEM_HOOKS_VERSION
+from stopa.artifacts.mem_hooks import extract_mem_hook_artifacts, is_mem_hooks_file
+from stopa.artifacts.mem_modules import PARSER_VERSION as MEM_MODULES_VERSION
+from stopa.artifacts.mem_modules import extract_mem_module_artifacts, is_mem_modules_file
+from stopa.artifacts.mem_network import PARSER_VERSION as MEM_NETWORK_VERSION
+from stopa.artifacts.mem_network import extract_mem_connection_artifacts, is_mem_network_file
+from stopa.artifacts.mem_processes import PARSER_VERSION as MEM_PROCESSES_VERSION
+from stopa.artifacts.mem_processes import extract_mem_process_artifacts, is_mem_processes_file
 from stopa.artifacts.mem_scan import PARSER_VERSION as MEMSCAN_VERSION
 from stopa.artifacts.mem_scan import extract_mem_scan_artifacts, is_mem_scan_file
 from stopa.artifacts.msn_messenger import PARSER_VERSION as MSN_VERSION
@@ -342,6 +352,12 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "cloud_drive_files": (extract_cloud_drive_artifacts, CLOUD_DRIVE_FILES_VERSION),
     "google_voice_wr": (extract_google_voice_artifacts, GOOGLE_VOICE_WR_VERSION),
     "win_drivers": (extract_win_driver_artifacts, WIN_DRIVERS_VERSION),
+    # ETAPA B vlna 9 — AXIOM port: memory forensics (procesy/spojení/handlery/moduly/hooks)
+    "mem_processes": (extract_mem_process_artifacts, MEM_PROCESSES_VERSION),
+    "mem_network": (extract_mem_connection_artifacts, MEM_NETWORK_VERSION),
+    "mem_handles": (extract_mem_handle_artifacts, MEM_HANDLES_VERSION),
+    "mem_modules": (extract_mem_module_artifacts, MEM_MODULES_VERSION),
+    "mem_hooks": (extract_mem_hook_artifacts, MEM_HOOKS_VERSION),
 }
 
 
@@ -364,7 +380,10 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
     Sessions, Maps Activity (semantic location history), IM chat rodina
     (Chat/Hangouts/Plus/Talk), Account Change History, Linked Devices, Export
     Summary a Drive activity logy. Samsung Voice Recording běží schéma-based v
-    SQLite dispatch chainu (viz sqlite_extract).
+    SQLite dispatch chainu (viz sqlite_extract). ETAPA B vlna 9: + memory
+    forensics exporty (procesy, síťová spojení, handlery, moduly, API hooks) —
+    JSON výstupy paměťových scannerů bez spolehlivé magiky; detekce PŘED
+    netstatem kvůli sdíleným klíčovým slovům.
     """
     if is_icloud_messages_file(name):
         return NAME_BASED_EXTRACTORS["icloud_messages"]
@@ -378,6 +397,18 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["wifi_wlan"]
     if is_scheduled_task_file(name):
         return NAME_BASED_EXTRACTORS["win_schedtask"]
+    # ETAPA B vlna 9 — memory forensics (PŘED netstatem: sdílená klíčová slova
+    # "connections"/"sockets"; memory exporty jsou JSON, parsery defenzivní)
+    if is_mem_processes_file(name):
+        return NAME_BASED_EXTRACTORS["mem_processes"]
+    if is_mem_network_file(name):
+        return NAME_BASED_EXTRACTORS["mem_network"]
+    if is_mem_handles_file(name):
+        return NAME_BASED_EXTRACTORS["mem_handles"]
+    if is_mem_modules_file(name):
+        return NAME_BASED_EXTRACTORS["mem_modules"]
+    if is_mem_hooks_file(name):
+        return NAME_BASED_EXTRACTORS["mem_hooks"]
     if is_netstat_file(name):
         return NAME_BASED_EXTRACTORS["net_connections"]
     # ETAPA B vlna 5 — Google Takeout rodina (specifické PŘED obecnějšími vlna-2 detekcemi)

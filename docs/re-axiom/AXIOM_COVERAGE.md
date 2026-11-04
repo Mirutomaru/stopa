@@ -5,23 +5,25 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 100
+- **✅ COVERED**: 114
 - **🔧 PORTABLE-LOCAL**: 0
 - **☁️ CLOUD-EXPORT**: 84
-- **💾 MEMORY**: 14
+- **💾 MEMORY**: 0
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (100)
+## ✅ COVERED — STOPA už umí (existující parser) (114)
 
 - `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
+- `ApiHooksArtifact` — mem_hooks parser (API hooky — apiFunction/callbackAddress/hookType)
 - `AppleIMessageArtifact` — sqlite_extract → imessage
 - `AttachmentExtractor` — attachment_extractor parser (MIME/RFC822 přílohy → email_attachment artifacty)
 - `AuditDriveEventsArtifact` — EVTX event log (evtx parser)
 - `AuditLoginEventsArtifact` — EVTX event log (evtx parser)
 - `BeboArtifact` — bebo_chat parser (text/JSON live chat)
 - `CallLogsArtifact` — sqlite_extract → call_log
+- `CallbacksArtifact` — mem_hooks parser (callback funkce v paměti)
 - `ChatrouletteArtifact` — chatroulette parser (text/JSON video chat)
 - `ClipboardArtifact` — win_clipboard (sekundární registry průchod NTUSER.DAT)
 - `CloudAppleDriveArtifact` — cloud_drive_files parser (Apple Drive soubory)
@@ -48,6 +50,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `DriveActivityArtifact` — drive_activity parser (Drive activity log JSON)
 - `DriversArtifact` — win_drivers parser (načtené ovladače z paměti — baseAddress/signed, anomaly unsigned_driver)
 - `DuckDuckGoCookiesArtifact` — ddg_cookies parser (Chromium cookies SQLite, µs od 1601)
+- `ExecutiveObjectCallbacksArtifact` — mem_hooks parser (executive object callbacky)
 - `FileScanArtifact` — mem_scan parser (textový výstup — soubory v paměti)
 - `GetsidsArtifact` — win_sids (sekundární registry průchod SAM/SECURITY)
 - `GoogleAccountChangeHistoryArtifact` — google_account_meta parser (account change history JSON)
@@ -77,6 +80,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GoogleVoiceSubscriberInformation2026Artifact` — google_voice_wr parser (předplatitel — subscriberNumber/carrierName)
 - `GoogleVoiceTexts2025Artifact` — google_voice_wr parser (SMS texty — from/to/body/timestampMsInEpoch)
 - `GoogleVoicemail2025Artifact` — google_voice_wr parser (hlasové schránky — duration/transcript)
+- `HandlesArtifact` — mem_handles parser (handlery — handleValue/type/name, hex normalizace)
 - `IeTypedUrlArtifact` — browser_history (chrome/firefox)
 - `ImageInfoArtifact` — magic bytes → image info
 - `JumpListsArtifact` — win_jumplist parser
@@ -88,17 +92,26 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `MailRuChatArtifact` — mailru_agent parser (chat log text | formát)
 - `MailRuContactArtifact` — mailru_agent parser (kontakty)
 - `MailRuGroupArtifact` — mailru_agent parser (skupiny)
+- `MalfindArtifact` — mem_modules parser (skryté moduly, anomaly hidden_module / DLL injection)
 - `MapArtifact` — timeline / map
 - `MediaMetadataExtractor` — media family
 - `MftArtifact` — TSK disk image MFT
 - `MicrosoftTeamsMessagesArtifact` — sqlite generic (teams.db)
 - `MicrosoftTeamsMessagesBaseArtifact` — sqlite generic
 - `MicrosoftTeamsMessagesComputerArtifact` — sqlite generic
+- `ModScanArtifact` — mem_modules parser (načtené moduly — baseAddress/size/inLdrList)
 - `NetScanArtifact` — net_connections parser
+- `NetworkConnectionsArtifact` — mem_network parser (síťová spojení z paměti)
 - `OfficeArtifact` — OOXML document parser
 - `OfflineGmailArtifact` — email_mbox parser
+- `OpenConnectionsArtifact` — mem_network parser (otevřená spojení — proto/state)
+- `OpenHandlesArtifact` — mem_handles parser (otevřené handlery procesů)
 - `OpenOfficeBaseArtifact` — openoffice_base parser (.odb = ZIP/ODF kontejner + DC metadata)
 - `ParkedCarLocationsArtifact` — parked_car_locations parser (iOS Local.sqlite ZRTVEHICLEEVENTMO, CFAbsoluteTime)
+- `ProcessListArtifact` — mem_processes parser (seznam procesů — pid/name/cmdline/user)
+- `ProcessScanArtifact` — mem_processes parser (scan procesů — offset/pid/name)
+- `ProcessesArtifact` — mem_processes parser (procesy z paměti — pid/name/ppid/threads)
+- `PsxViewArtifact` — mem_processes parser (EPROCESS vs PEB mismatch, anomaly psxview_mismatch)
 - `SamsungConnectionsArtifact` — mobile_extract → calllog
 - `SamsungContactArtifact` — mobile_extract → contacts2
 - `SamsungMessagesArtifact` — mobile_extract → sms
@@ -109,6 +122,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `SkypeWarrantReturnChatHistoryRecordsArtifact` — skype_warrant_return parser (chat history records — conversationId/composetime)
 - `SkypeWarrantReturnConnectionHistoryArtifact` — skype_warrant_return parser (connection history — contact/status/dateAdded)
 - `SkypeWarrantReturnContactsArtifact` — skype_warrant_return parser (contacts — msnId/displayName/email)
+- `SocketsArtifact` — mem_network parser (sockety — pid/localAddress/remoteAddress/state)
 - `SockscanArtifact` — net_connections parser
 - `TimelineArtifact` — timeline engine
 - `UserSidsArtifact` — win_sids (sekundární registry průchod + ProfileList)
@@ -202,23 +216,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `SnapchatGroupChatMessagesArtifact` — JSON/DB export
 - `SnapchatIpHistoryArtifact` — JSON/DB export
 - `SnapchatMessagesWarrantReturnArtifact` — warrant return (JSON)
-
-## 💾 MEMORY — live forensics (paměťový dump) (14)
-
-- `ApiHooksArtifact` — live forensics (paměťový dump)
-- `CallbacksArtifact` — live forensics (paměťový dump)
-- `ExecutiveObjectCallbacksArtifact` — live forensics (paměťový dump)
-- `HandlesArtifact` — live forensics (paměťový dump)
-- `MalfindArtifact` — live forensics (paměťový dump)
-- `ModScanArtifact` — live forensics (paměťový dump)
-- `NetworkConnectionsArtifact` — live forensics (paměťový dump)
-- `OpenConnectionsArtifact` — live forensics (paměťový dump)
-- `OpenHandlesArtifact` — live forensics (paměťový dump)
-- `ProcessListArtifact` — live forensics (paměťový dump)
-- `ProcessScanArtifact` — live forensics (paměťový dump)
-- `ProcessesArtifact` — live forensics (paměťový dump)
-- `PsxViewArtifact` — live forensics (paměťový dump)
-- `SocketsArtifact` — live forensics (paměťový dump)
 
 ## 🧩 BASE-CLASS — rozhraní / základní třída (34)
 

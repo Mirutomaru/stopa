@@ -145,6 +145,21 @@ COVERED: dict[str, str] = {
     "GoogleVoiceContactsMetadata2026Artifact": "covered",  # google_voice_wr (kontakty)
     "GoogleVoiceSubscriberInformation2026Artifact": "covered",  # google_voice_wr (předplatitel)
     "DriversArtifact": "covered",  # win_drivers (načtené ovladače z paměti)
+    # ETAPA B vlna 9 — memory forensics (live forensics / paměťový dump)
+    "ProcessListArtifact": "covered",  # mem_processes (seznam procesů)
+    "ProcessesArtifact": "covered",  # mem_processes (procesy)
+    "ProcessScanArtifact": "covered",  # mem_processes (scan procesů)
+    "PsxViewArtifact": "covered",  # mem_processes (EPROCESS vs PEB mismatch)
+    "SocketsArtifact": "covered",  # mem_network (sockety)
+    "OpenConnectionsArtifact": "covered",  # mem_network (otevřená spojení)
+    "NetworkConnectionsArtifact": "covered",  # mem_network (síťová spojení)
+    "HandlesArtifact": "covered",  # mem_handles (handlery)
+    "OpenHandlesArtifact": "covered",  # mem_handles (otevřené handlery)
+    "ModScanArtifact": "covered",  # mem_modules (scan modulů)
+    "MalfindArtifact": "covered",  # mem_modules (skryté moduly / DLL injection)
+    "ApiHooksArtifact": "covered",  # mem_hooks (API hooky)
+    "CallbacksArtifact": "covered",  # mem_hooks (callback funkce)
+    "ExecutiveObjectCallbacksArtifact": "covered",  # mem_hooks (executive callbacky)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -318,6 +333,21 @@ def _covered_desc(name: str) -> str:
         "GoogleVoiceContactsMetadata2026Artifact": "google_voice_wr parser (kontakty — name/phoneNumber/emailAddress)",
         "GoogleVoiceSubscriberInformation2026Artifact": "google_voice_wr parser (předplatitel — subscriberNumber/carrierName)",
         "DriversArtifact": "win_drivers parser (načtené ovladače z paměti — baseAddress/signed, anomaly unsigned_driver)",
+        # ETAPA B vlna 9 — memory forensics (live forensics / paměťový dump)
+        "ProcessListArtifact": "mem_processes parser (seznam procesů — pid/name/cmdline/user)",
+        "ProcessesArtifact": "mem_processes parser (procesy z paměti — pid/name/ppid/threads)",
+        "ProcessScanArtifact": "mem_processes parser (scan procesů — offset/pid/name)",
+        "PsxViewArtifact": "mem_processes parser (EPROCESS vs PEB mismatch, anomaly psxview_mismatch)",
+        "SocketsArtifact": "mem_network parser (sockety — pid/localAddress/remoteAddress/state)",
+        "OpenConnectionsArtifact": "mem_network parser (otevřená spojení — proto/state)",
+        "NetworkConnectionsArtifact": "mem_network parser (síťová spojení z paměti)",
+        "HandlesArtifact": "mem_handles parser (handlery — handleValue/type/name, hex normalizace)",
+        "OpenHandlesArtifact": "mem_handles parser (otevřené handlery procesů)",
+        "ModScanArtifact": "mem_modules parser (načtené moduly — baseAddress/size/inLdrList)",
+        "MalfindArtifact": "mem_modules parser (skryté moduly, anomaly hidden_module / DLL injection)",
+        "ApiHooksArtifact": "mem_hooks parser (API hooky — apiFunction/callbackAddress/hookType)",
+        "CallbacksArtifact": "mem_hooks parser (callback funkce v paměti)",
+        "ExecutiveObjectCallbacksArtifact": "mem_hooks parser (executive object callbacky)",
     }
     return m.get(name, "existující parser")
 

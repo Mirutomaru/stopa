@@ -4,6 +4,50 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 9: memory forensics — procesy/spojení/handlery/moduly/hooks)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 5 nových parserů / 14 AXIOM typů)
+- **Memory Processes** (`artifacts/mem_processes.py`) — paměťový dump: seznam
+  procesů (pid/name/ppid/cmdline/threads/user/start_time). PsxView subtyp:
+  rozdílné jméno EPROCESS vs PEB → anomaly flag `psxview_mismatch` (skrytý
+  proces). Name-based detekce. AXIOM `ProcessListArtifact` + `ProcessesArtifact`
+  + `ProcessScanArtifact` + `PsxViewArtifact`. Artifact type `mem_process`.
+- **Memory Network Connections** (`artifacts/mem_network.py`) — paměťový dump:
+  síťová spojení (pid/processName/proto/localAddress/remoteAddress/state).
+  Proto i state normalizovány na uppercase. Name-based detekce. AXIOM
+  `SocketsArtifact` + `OpenConnectionsArtifact` + `NetworkConnectionsArtifact`.
+  Artifact type `mem_connection`.
+- **Memory Handles** (`artifacts/mem_handles.py`) — paměťový dump: otevřené
+  handlery procesů (pid/processName/handleValue/type/name). Handle value
+  normalizován na hex string (int / decimal / hex tolerantně). Name-based
+  detekce. AXIOM `HandlesArtifact` + `OpenHandlesArtifact`. Artifact type
+  `mem_handle`.
+- **Memory Modules** (`artifacts/mem_modules.py`) — paměťový dump: načtené
+  moduly (pid/processName/baseAddress/size/name/inLdrList). Adresa normalizována
+  na hex. Malfind subtyp: modul v paměti ale ne v LDR listu → anomaly flag
+  `hidden_module` (indikátor DLL injection). Name-based detekce. AXIOM
+  `ModScanArtifact` + `MalfindArtifact`. Artifact type `mem_module`.
+- **Memory API Hooks / Callbacks** (`artifacts/mem_hooks.py`) — paměťový dump:
+  zaregistrované hooky a callback funkce (pid/processName/apiFunction/
+  callbackAddress/module/hookType). Adresa normalizována na hex. Name-based
+  detekce. AXIOM `ApiHooksArtifact` + `CallbacksArtifact` +
+  `ExecutiveObjectCallbacksArtifact`. Artifact type `mem_hook`.
+
+### Pipeline dispatch + C3 registry
+- Všech 5 parserů napojeno do `NAME_BASED_EXTRACTORS` + `_name_based_match()`.
+- **Klíčové pořadí**: memory detektory jsou v dispatchi **PŘED netstatem** —
+  sdílená klíčová slova (`connections`, `sockets`) by jinak vedla memory exporty
+  do textového netstat parseru. Memory exporty jsou JSON, parsery defenzivní
+  (ne-JSON → `[]`), takže cizí soubory projdou bez artifactů.
+- C3 registry (`validation_registry.py`): nové záznamy `mem_processes`,
+  `mem_network`, `mem_handles`, `mem_modules`, `mem_hooks`.
+  `build_registry()` = **50 parserů** (předtím 45).
+
+### Coverage matice (FÁZE 17)
+- Flip 14 AXIOM typů NOT_SUPPORTED → SUPPORTED: covered **100 → 114 / 232**;
+  memory kategorie **vyzerovala 14 → 0 ★** (jako portable-local ve vlně 4);
+  cloud-export 84, base-class 34. Regen CSV/MD/JSON.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 8: Chrome prefs/sync + cloud Drive soubory + Google Voice WR + Windows drivers)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 16 AXIOM typů)

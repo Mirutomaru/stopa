@@ -627,6 +627,71 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_w8_parsers.py",),
     ),
+    "mem_processes": ParserValidation(
+        parser_id="mem_processes",
+        version="",
+        formats=(
+            "Memory processes JSON (live forensics / paměťový dump — ProcessList/Processes/ProcessScan/PsxView)",
+        ),
+        limitations=(
+            "detekce name-based (processlist/psxview/mem_process) + content check; PŘED netstatem",
+            "pid/name/commandline tolerantně; snapshot paměti bez času — timestamp=None",
+            "limit MAX_PROCESSES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w9_parsers.py",),
+    ),
+    "mem_network": ParserValidation(
+        parser_id="mem_network",
+        version="",
+        formats=(
+            "Memory network connections JSON (live forensics / paměťový dump — Sockets/OpenConnections/NetworkConnections)",
+        ),
+        limitations=(
+            "detekce name-based (open_connections/network_connections/connscan/sockets) + content check; PŘED netstatem",
+            "pid/localAddress/remoteAddress/state tolerantně; snapshot paměti bez času — timestamp=None",
+            "limit MAX_CONNECTIONS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w9_parsers.py",),
+    ),
+    "mem_handles": ParserValidation(
+        parser_id="mem_handles",
+        version="",
+        formats=(
+            "Memory handles JSON (live forensics / paměťový dump — Handles/OpenHandles)",
+        ),
+        limitations=(
+            "detekce name-based (open_handles/handles) + content check; PŘED netstatem a mem_processes",
+            "handle value normalizován na hex string; snapshot paměti bez času — timestamp=None",
+            "limit MAX_HANDLES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w9_parsers.py",),
+    ),
+    "mem_modules": ParserValidation(
+        parser_id="mem_modules",
+        version="",
+        formats=(
+            "Memory modules JSON (live forensics / paměťový dump — ModScan/Malfind)",
+        ),
+        limitations=(
+            "detekce name-based (modscan/malfind/mem_module) + content check; PŘED netstatem a mem_processes",
+            "adresa normalizována na hex; inLdrList=false → anomaly flag hidden_module (DLL injection)",
+            "snapshot paměti bez času — timestamp=None; limit MAX_MODULES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w9_parsers.py",),
+    ),
+    "mem_hooks": ParserValidation(
+        parser_id="mem_hooks",
+        version="",
+        formats=(
+            "Memory API hooks/callbacks JSON (live forensics / paměťový dump — ApiHooks/Callbacks/ExecutiveObjectCallbacks)",
+        ),
+        limitations=(
+            "detekce name-based (api_hooks/apishot/callbacks/executive_callbacks/mem_hook) + content check; PŘED netstatem",
+            "callbackAddress normalizován na hex; snapshot paměti bez času — timestamp=None",
+            "limit MAX_HOOKS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w9_parsers.py",),
+    ),
 }
 
 
