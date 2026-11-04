@@ -11,17 +11,13 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+from stopa.data._helpers import _iso  # ETAPA C vlna 1 (sdílené konverze)
+from stopa.data.audit_repository import AuditRepository  # ETAPA C vlna 1
+from stopa.data.case_repository import CaseRepository  # ETAPA C vlna 1
+from stopa.data.file_repository import FileRepository, _fts_query  # noqa: F401 — _fts_query backward compat (test_search)
 from stopa.domain.evidence_model import ConfidenceLevel, Finding, Provenance
-from stopa.domain.integrity import (
-    GENESIS,
-    ChainRow,
-    compute_audit_hash,
-    generate_keypair,
-    sign_hash,
-    verify_chain,
-)
+from stopa.domain.integrity import GENESIS, compute_audit_hash  # migrace audit chain
 from stopa.domain.lineage import LineageEvent
-from stopa.domain.rbac import ActorError, resolve_actor  # STP-022 — RBAC minimální
 from stopa.domain.reproducibility import AnalysisOperation, env_snapshot
 from stopa.models import Artifact, Case, EvidenceSource, FileRecord, new_id
 
@@ -407,6 +403,11 @@ class CaseDB:
                 (str(SCHEMA_VERSION),),
             )
             self.conn.commit()
+        # ETAPA C vlna 1 — doménová repozitáře (sdílená connection). Facade
+        # CaseDB deleguje; backward compat API zůstává na CaseDB.
+        self.case_repo = CaseRepository(self.conn)
+        self.file_repo = FileRepository(self.conn)
+        self.audit_repo = AuditRepository(self.conn)
 
     def schema_version(self) -> int:
         """Aktuální verze schématu case DB (E1 — diagnostika / migrace)."""
@@ -575,17 +576,11 @@ class CaseDB:
 
     def _last_audit_row(self) -> tuple[int | None, str]:
         """ID posledního audit řádku + jeho hash (GENESIS pokud log prázdný)."""
-        row = self.conn.execute(
-            "SELECT id, hash FROM audit_log ORDER BY id DESC LIMIT 1"
-        ).fetchone()
-        if row is None:
-            return None, GENESIS
-        return int(row["id"]), str(row["hash"] or "")
+        return self.audit_repo._last_audit_row()
 
     def _case_examiner(self) -> str | None:
         """Examiner případu (fallback actor pro audit trail). Case DB = jeden případ."""
-        row = self.conn.execute("SELECT examiner FROM cases LIMIT 1").fetchone()
-        return row["examiner"] if row is not None else None
+        return self.audit_repo._case_examiner()
 
     def log_operation(
         self,
@@ -595,193 +590,44 @@ class CaseDB:
         *,
         strict: bool = False,  # STP-022 — RBAC minimální (actor povinný)
     ) -> int:
-        """Neměnný záznam operace (append-only) + hash chaining (P0 Core C4). Vrací ID řádku.
-
-        `action` — kanonický verb: case_created / source_added / file_processed /
-        artifact_extracted / report_generated / hash_verified …
-        Každý řádek nese ``prev_hash`` (hash předchozího) a vlastní ``hash`` →
-        jakákoli změna starého řádku rozbití řetězec (ověřitelné bez klíče).
-
-        STP-022 RBAC minimální: actor se řeší prioritou **explicitní > case
-        examiner** (backward compat — volající bez explicitního actora dostanou
-        atribuci na examinera). ``strict=True`` vyžaduje vyřešeného actora,
-        jinak :class:`ActorError` (default False = původní chování).
-        """
-        resolved = resolve_actor(actor, self._case_examiner())
-        if strict and resolved is None:
-            raise ActorError(f"Actor je povinný při '{action}' — explicitní actor nebo case examiner")
-        _, prev = self._last_audit_row()
-        ts = datetime.now(timezone.utc).isoformat()
-        details_json = json.dumps(details or {}, ensure_ascii=False)
-        h = compute_audit_hash(prev, ts, action, resolved, details_json)
-        cur = self.conn.execute(
-            "INSERT INTO audit_log (ts, action, actor, details_json, prev_hash, hash)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (ts, action, resolved, details_json, prev, h),
-        )
-        self.conn.commit()
-        return int(cur.lastrowid)
+        """Neměnný záznam operace (append-only) + hash chaining (P0 Core C4). Vrací ID řádku."""
+        return self.audit_repo.log_operation(action, actor, details, strict=strict)
 
     def verify_audit_chain(self):
         """Ověří celý hash řetězec audit logu. Vrací :class:`ChainReport`."""
-        rows = [
-            ChainRow(
-                id=int(r["id"]),
-                ts=r["ts"],
-                action=r["action"],
-                actor=r["actor"],
-                details_json=r["details_json"] or "{}",
-                prev_hash=r["prev_hash"] or GENESIS,
-                hash=r["hash"] or "",
-            )
-            for r in self.conn.execute(
-                "SELECT id, ts, action, actor, details_json, prev_hash, hash"
-                " FROM audit_log ORDER BY id ASC"
-            ).fetchall()
-        ]
-        return verify_chain(rows)
+        return self.audit_repo.verify_audit_chain()
 
     # ── Ed25519 kontrolní body (P0 Core C4) ───────────────────
     def ensure_integrity_key(self) -> tuple[str, str]:
-        """Vygeneruje Ed25519 klíčový pár případu (idempotentní).
-
-        Soukromý klíč v meta (case DB), veřejný do reportu. Vrací
-        ``(private_b64, public_b64)``. Vyžaduje balík ``cryptography``.
-        """
-        row = self.conn.execute(
-            "SELECT value FROM meta WHERE key = 'integrity_pub'"
-        ).fetchone()
-        if row is not None:
-            priv_row = self.conn.execute(
-                "SELECT value FROM meta WHERE key = 'integrity_priv'"
-            ).fetchone()
-            return (priv_row["value"] if priv_row else "", row["value"])
-        priv_b64, pub_b64 = generate_keypair()
-        self.conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_priv', ?)",
-            (priv_b64,),
-        )
-        self.conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_pub', ?)",
-            (pub_b64,),
-        )
-        self.conn.commit()
-        return priv_b64, pub_b64
+        """Vygeneruje Ed25519 klíčový pár případu (idempotentní)."""
+        return self.audit_repo.ensure_integrity_key()
 
     def integrity_public_key(self) -> str | None:
         """Veřejný Ed25519 klíč případu (base64), pokud byl vygenerován."""
-        row = self.conn.execute(
-            "SELECT value FROM meta WHERE key = 'integrity_pub'"
-        ).fetchone()
-        return row["value"] if row else None
+        return self.audit_repo.integrity_public_key()
 
     def add_integrity_checkpoint(self, reason: str) -> int | None:
-        """Podpisne hash posledního audit řádku a uloží kontrolní bod.
-
-        Vrací ID kontrolního bodu; ``None`` pokud klíč nebyl vygenerován
-        (graceful degradation — bez balíku ``cryptography``).
-        """
-        pub = self.integrity_public_key()
-        if pub is None:
-            return None
-        row = self.conn.execute(
-            "SELECT value FROM meta WHERE key = 'integrity_priv'"
-        ).fetchone()
-        if row is None or not row["value"]:
-            return None
-        audit_id, last_hash = self._last_audit_row()
-        sig_b64 = sign_hash(row["value"], last_hash)
-        cur = self.conn.execute(
-            "INSERT INTO integrity_checkpoints (ts, audit_row_id, last_hash, signature_b64, reason)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (datetime.now(timezone.utc).isoformat(), audit_id or 0, last_hash, sig_b64, reason),
-        )
-        self.conn.commit()
-        return int(cur.lastrowid)
+        """Podpisne hash posledního audit řádku a uloží kontrolní bod."""
+        return self.audit_repo.add_integrity_checkpoint(reason)
 
     def list_integrity_checkpoints(self) -> list[dict]:
         """Kontrolní body (chronologicky) — pro report / nezávislou kontrolu."""
-        rows = self.conn.execute(
-            "SELECT id, ts, audit_row_id, last_hash, signature_b64, reason"
-            " FROM integrity_checkpoints ORDER BY id ASC"
-        ).fetchall()
-        return [
-            {
-                "id": r["id"],
-                "ts": r["ts"],
-                "audit_row_id": r["audit_row_id"],
-                "last_hash": r["last_hash"],
-                "signature_b64": r["signature_b64"],
-                "reason": r["reason"],
-            }
-            for r in rows
-        ]
+        return self.audit_repo.list_integrity_checkpoints()
 
     def verify_integrity_checkpoints(self) -> list[dict]:
-        """Ověří kontrolní body veřejným klíčem (nezávislá kontrola).
-
-        Každý bod: ``verify_signature(pub, last_hash, signature_b64)``. Vrací
-        seznam s ``ok`` per bod + souhrn.
-        """
-        pub = self.integrity_public_key()
-        from stopa.domain.integrity import verify_signature
-
-        out: list[dict] = []
-        if pub is None:
-            return [{"ok": False, "reason": "veřejný klíč nebyl vygenerován"}]
-        for cp in self.list_integrity_checkpoints():
-            ok = verify_signature(pub, cp["last_hash"], cp["signature_b64"])
-            out.append({"id": cp["id"], "ok": ok})
-        return out
+        """Ověří kontrolní body veřejným klíčem (nezávislá kontrola)."""
+        return self.audit_repo.verify_integrity_checkpoints()
 
     # ── cases ────────────────────────────────────────────────
     def add_case(self, case: Case) -> None:
-        self.conn.execute(
-            "INSERT INTO cases (id, name, created_at, examiner, notes, timezone_name)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                case.id,
-                case.name,
-                case.created_at.isoformat(),
-                case.examiner,
-                case.notes,
-                case.timezone_name,
-            ),
-        )
-        self.conn.commit()
+        self.case_repo.add_case(case)
 
     def list_cases(self) -> list[Case]:
         """Všechny případy v case DB (pro web GUI přehled)."""
-        rows = self.conn.execute("SELECT * FROM cases ORDER BY created_at DESC").fetchall()
-        out: list[Case] = []
-        for r in rows:
-            c = Case(
-                id=r["id"], name=r["name"], examiner=r["examiner"], notes=r["notes"]
-            )
-            cols = r.keys()  # E2: staré DB bez sloupce → default
-            if "timezone_name" in cols:
-                c.timezone_name = r["timezone_name"] or "Europe/Prague"
-            if r["created_at"]:
-                try:
-                    c.created_at = datetime.fromisoformat(r["created_at"])
-                except ValueError:
-                    pass
-            out.append(c)
-        return out
+        return self.case_repo.list_cases()
 
     def get_case(self, case_id: str) -> Case | None:
-        row = self.conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
-        if row is None:
-            return None
-        return Case(
-            id=row["id"],
-            name=row["name"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-            examiner=row["examiner"],
-            notes=row["notes"],
-            # E2: staré DB bez sloupce / NULL → default Europe/Prague
-            timezone_name=row["timezone_name"] or "Europe/Prague",
-        )
+        return self.case_repo.get_case(case_id)
 
     def update_case(
         self,
@@ -792,141 +638,28 @@ class CaseDB:
         timezone_name: str | None = None,
     ) -> bool:
         """E12 — aktualizace metadat případu (jen zadaná pole). True pokud existoval."""
-        sets: list[str] = []
-        vals: list[str] = []
-        for col, val in (
-            ("name", name),
-            ("examiner", examiner),
-            ("notes", notes),
-            ("timezone_name", timezone_name),
-        ):
-            if val is not None:
-                sets.append(f"{col} = ?")
-                vals.append(val)
-        if not sets:
-            return self.get_case(case_id) is not None
-        vals.append(case_id)
-        cur = self.conn.execute(
-            f"UPDATE cases SET {', '.join(sets)} WHERE id = ?", vals
+        return self.case_repo.update_case(
+            case_id, name=name, examiner=examiner, notes=notes, timezone_name=timezone_name
         )
-        self.conn.commit()
-        return cur.rowcount > 0
 
     def delete_case(self, case_id: str) -> bool:
-        """E12 — smaže případ i všechny jeho zdroje (kaskáda na files/artifacts/timeline).
-
-        `sources` nemá ON DELETE CASCADE na cases(id), takže je nutné smazat
-        zdroje explicitně; entities/correlations mají vlastní CASCADE.
-        Vrací True pokud případ existoval.
-        """
-        existing = self.get_case(case_id) is not None
-        if not existing:
-            return False
-        # zdroje → kaskáda na files/artifacts/timeline_events/evidence_marks/custody_items
-        self.conn.execute("DELETE FROM sources WHERE case_id = ?", (case_id,))
-        # entities + correlations mají ON DELETE CASCADE, ale explicitně pro jistotu
-        self.conn.execute("DELETE FROM entities WHERE case_id = ?", (case_id,))
-        self.conn.execute(
-            "DELETE FROM correlations WHERE case_id = ?", (case_id,)
-        )
-        self.conn.execute("DELETE FROM cases WHERE id = ?", (case_id,))
-        self.conn.commit()
-        return True
+        """E12 — smaže případ i všechny jeho zdroje (kaskáda na files/artifacts/timeline)."""
+        return self.case_repo.delete_case(case_id)
 
     # ── sources ──────────────────────────────────────────────
     def add_source(self, source: EvidenceSource) -> None:
-        self.conn.execute(
-            "INSERT INTO sources (id, case_id, kind, path, size_bytes, added_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                source.id,
-                source.case_id,
-                source.kind,
-                source.path,
-                source.size_bytes,
-                source.added_at.isoformat(),
-            ),
-        )
-        self.conn.commit()
+        self.case_repo.add_source(source)
 
     def get_source(self, source_id: str) -> EvidenceSource | None:
-        row = self.conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
-        if row is None:
-            return None
-        return EvidenceSource(
-            id=row["id"],
-            case_id=row["case_id"],
-            kind=row["kind"],  # type: ignore[arg-type]
-            path=row["path"],
-            size_bytes=row["size_bytes"],
-            added_at=datetime.fromisoformat(row["added_at"]),
-        )
+        return self.case_repo.get_source(source_id)
 
     def list_sources(self, case_id: str) -> list[EvidenceSource]:
-        rows = self.conn.execute(
-            "SELECT * FROM sources WHERE case_id = ? ORDER BY added_at", (case_id,)
-        ).fetchall()
-        return [
-            EvidenceSource(
-                id=r["id"],
-                case_id=r["case_id"],
-                kind=r["kind"],  # type: ignore[arg-type]
-                path=r["path"],
-                size_bytes=r["size_bytes"],
-                added_at=datetime.fromisoformat(r["added_at"]),
-            )
-            for r in rows
-        ]
+        return self.case_repo.list_sources(case_id)
 
     # ── files ────────────────────────────────────────────────
     def upsert_file(self, rec: FileRecord) -> str:
-        """Idempotentní insert/update podle (source_id, rel_path).
-
-        Vrací kanonický file id — při konfliktu (re-ingest) se drží původní id,
-        takže volající musí použít návratovou hodnotu pro FK (artifacts/timeline),
-        ne vlastní ``rec.id``.
-        """
-        self.conn.execute(
-            "INSERT INTO files (id, source_id, rel_path, name, size_bytes,"
-            " mtime, ctime, atime, sha256, md5, sha512, signature_type, extension,"
-            " bad_extension, is_duplicate_of, hash_set_hit, meta_addr)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            " ON CONFLICT (source_id, rel_path) DO UPDATE SET"
-            " name = excluded.name,"
-            " size_bytes = excluded.size_bytes,"
-            " mtime = excluded.mtime, ctime = excluded.ctime, atime = excluded.atime,"
-            " sha256 = excluded.sha256, md5 = excluded.md5, sha512 = excluded.sha512,"
-            " signature_type = excluded.signature_type, extension = excluded.extension,"
-            " bad_extension = excluded.bad_extension,"
-            " is_duplicate_of = excluded.is_duplicate_of,"
-            " hash_set_hit = excluded.hash_set_hit,"
-            " meta_addr = excluded.meta_addr",
-            (
-                rec.id,
-                rec.source_id,
-                rec.rel_path,
-                rec.name,
-                rec.size_bytes,
-                _iso(rec.mtime),
-                _iso(rec.ctime),
-                _iso(rec.atime),
-                rec.sha256,
-                rec.md5,
-                rec.sha512,
-                rec.signature_type,
-                rec.extension,
-                int(rec.bad_extension),
-                rec.is_duplicate_of,
-                rec.hash_set_hit,
-                rec.meta_addr,
-            ),
-        )
-        # kanonický id — při konfliktu (re-ingest) se drží původní řádek
-        row = self.conn.execute(
-            "SELECT id FROM files WHERE source_id = ? AND rel_path = ?",
-            (rec.source_id, rec.rel_path),
-        ).fetchone()
-        return row[0] if row else rec.id
+        """Idempotentní insert/update podle (source_id, rel_path). Vrací kanonický file id."""
+        return self.file_repo.upsert_file(rec)
 
     def commit(self) -> None:
         self.conn.commit()
@@ -940,95 +673,37 @@ class CaseDB:
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[FileRecord]:
-        q = "SELECT * FROM files"
-        where: list[str] = []
-        args: list[object] = []
-        if source_id is not None:
-            where.append("source_id = ?")
-            args.append(source_id)
-        if bad_extensions_only:
-            where.append("bad_extension = 1")
-        if duplicates_only:
-            where.append("is_duplicate_of IS NOT NULL")
-        if signature_family is not None:
-            # rodina je odvozená — filtrujeme přes typy dané rodiny (viz domain.signatures)
-            from stopa.domain.signatures import SIGNATURES
-
-            types = [t for _o, _m, t, fam in SIGNATURES if fam == signature_family]
-            if not types:
-                return []
-            where.append(f"signature_type IN ({','.join('?' * len(types))})")
-            args.extend(types)
-        if where:
-            q += " WHERE " + " AND ".join(where)
-        q += " ORDER BY rel_path"
-        if limit is not None:
-            q += f" LIMIT {int(limit)}"
-        if offset:
-            q += f" OFFSET {int(offset)}"
-        rows = self.conn.execute(q, args).fetchall()
-        return [_row_to_record(r) for r in rows]
+        return self.file_repo.list_files(
+            source_id=source_id,
+            bad_extensions_only=bad_extensions_only,
+            duplicates_only=duplicates_only,
+            signature_family=signature_family,
+            limit=limit,
+            offset=offset,
+        )
 
     def get_file(self, file_id: str) -> FileRecord | None:
         """Jeden soubor podle ID (File Inspector v GUI)."""
-        row = self.conn.execute("SELECT * FROM files WHERE id = ?", (file_id,)).fetchone()
-        return _row_to_record(row) if row else None
+        return self.file_repo.get_file(file_id)
 
     # ── file flags (GUI File Inspector: „Mark as Evidence“ / „Add to Report“) ──
     def set_file_flag(self, file_id: str, flag: str, on: bool) -> None:
         """Přepne flag souboru („evidence“ / „report“). Idempotentní."""
-        flags = self.get_file_flags(file_id)
-        new = (flags + (flag,)) if (on and flag not in flags) else tuple(f for f in flags if f != flag)
-        if new:
-            self.conn.execute(
-                "INSERT OR REPLACE INTO evidence_marks (file_id, marked_at, flags)"
-                " VALUES (?, ?, ?)",
-                (file_id, datetime.now(timezone.utc).isoformat(), ",".join(new)),
-            )
-        else:
-            self.conn.execute("DELETE FROM evidence_marks WHERE file_id = ?", (file_id,))
-        self.conn.commit()
+        self.file_repo.set_file_flag(file_id, flag, on)
 
     def get_file_flags(self, file_id: str) -> tuple[str, ...]:
-        row = self.conn.execute(
-            "SELECT flags FROM evidence_marks WHERE file_id = ?", (file_id,)
-        ).fetchone()
-        return tuple(row["flags"].split(",")) if row and row["flags"] else ()
+        return self.file_repo.get_file_flags(file_id)
 
     def list_marked(self) -> list[tuple[FileRecord, tuple[str, ...]]]:
         """Všechny označené soubory (pro report / Evidence modul)."""
-        rows = self.conn.execute(
-            "SELECT f.*, e.flags FROM evidence_marks e JOIN files f ON f.id = e.file_id"
-            " ORDER BY e.marked_at DESC"
-        ).fetchall()
-        out: list[tuple[FileRecord, tuple[str, ...]]] = []
-        for r in rows:
-            rec = _row_to_record(r)
-            flags = tuple(r["flags"].split(",")) if r["flags"] else ()
-            out.append((rec, flags))
-        return out
+        return self.file_repo.list_marked()
 
     # ── E1 Evidence Manager: audit log + custody items ────────
     def list_audit_log(
         self, limit: int | None = 100, offset: int | None = None
     ) -> list[dict]:
         """Audit trail — nejnovější operace první (chronologická stopa)."""
-        q = "SELECT id, ts, action, actor, details_json FROM audit_log ORDER BY id DESC"
-        if limit is not None:
-            q += f" LIMIT {int(limit)}"
-        if offset:
-            q += f" OFFSET {int(offset)}"
-        rows = self.conn.execute(q).fetchall()
-        return [
-            {
-                "id": r["id"],
-                "ts": r["ts"],
-                "action": r["action"],
-                "actor": r["actor"],
-                "details": json.loads(r["details_json"] or "{}"),
-            }
-            for r in rows
-        ]
+        return self.audit_repo.list_audit_log(limit=limit, offset=offset)
 
     def set_custody_item(
         self,
@@ -1039,49 +714,15 @@ class CaseDB:
         notes: str | None = None,
     ) -> None:
         """Metadata nabytí důkazu pro jeden source (idempotentní upsert)."""
-        ts = acquired_at or datetime.now(timezone.utc)
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-        self.conn.execute(
-            "INSERT INTO custody_items (source_id, acquired_at, method, custodian, notes)"
-            " VALUES (?, ?, ?, ?, ?)"
-            " ON CONFLICT (source_id) DO UPDATE SET"
-            " acquired_at = excluded.acquired_at,"
-            " method = COALESCE(excluded.method, custody_items.method),"
-            " custodian = COALESCE(excluded.custodian, custody_items.custodian),"
-            " notes = COALESCE(excluded.notes, custody_items.notes)",
-            (source_id, ts.isoformat(), method, custodian, notes),
+        self.audit_repo.set_custody_item(
+            source_id, acquired_at=acquired_at, method=method, custodian=custodian, notes=notes
         )
-        self.conn.commit()
 
     def get_custody_item(self, source_id: str) -> dict | None:
-        row = self.conn.execute(
-            "SELECT * FROM custody_items WHERE source_id = ?", (source_id,)
-        ).fetchone()
-        if row is None:
-            return None
-        return {
-            "source_id": row["source_id"],
-            "acquired_at": row["acquired_at"],
-            "method": row["method"],
-            "custodian": row["custodian"],
-            "notes": row["notes"],
-        }
+        return self.audit_repo.get_custody_item(source_id)
 
     def list_custody_items(self) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT c.* FROM custody_items c ORDER BY c.acquired_at"
-        ).fetchall()
-        return [
-            {
-                "source_id": r["source_id"],
-                "acquired_at": r["acquired_at"],
-                "method": r["method"],
-                "custodian": r["custodian"],
-                "notes": r["notes"],
-            }
-            for r in rows
-        ]
+        return self.audit_repo.list_custody_items()
 
     def search(
         self,
@@ -1098,103 +739,7 @@ class CaseDB:
 
         Výsledek je řazen podle relevance (bm25) a omezen na existující soubory.
         """
-        from stopa.domain.search_filters import (
-            mtime_sql,
-            parse_search_query,
-            size_sql,
-        )
-
-        if not query.strip():
-            return []
-
-        parsed = parse_search_query(query)
-
-        # ── in-artifact: prefix → artifacts_fts lookup ────────────────
-        artifact_file_ids: set[str] | None = None
-        art_terms = [t for t in parsed.text_terms if t.lower().startswith("in-artifact:")]
-        file_terms = [t for t in parsed.text_terms if not t.lower().startswith("in-artifact:")]
-
-        if art_terms:
-            # extrahuj text za prefixem a hledej v artifacts_fts
-            art_queries = " ".join(t[len("in-artifact:"):] for t in art_terms)
-            art_expr = _fts_query(art_queries)
-            rows_art = self.conn.execute(
-                "SELECT DISTINCT file_id FROM artifacts_fts"
-                " JOIN artifacts a ON a.rowid = artifacts_fts.rowid"
-                " WHERE artifacts_fts MATCH ? AND file_id IS NOT NULL",
-                (art_expr,),
-            ).fetchall()
-            artifact_file_ids = {r["file_id"] for r in rows_art}
-
-        # ── metadata filtry → SQL WHERE na files ───────────────────────
-        where_clauses: list[str] = []
-        args: list[object] = []
-
-        if parsed.size is not None:
-            frag, val = size_sql(parsed.size)
-            where_clauses.append(frag)
-            args.append(val)
-        if parsed.mtime is not None:
-            for frag, val in mtime_sql(parsed.mtime):
-                where_clauses.append(frag)
-                args.append(val)
-        if parsed.exts:
-            placeholders = ",".join("?" * len(parsed.exts))
-            where_clauses.append(f"extension IN ({placeholders})")
-            args.extend(parsed.exts)
-
-        # ── FTS textový dotaz (jen file_terms, bez in-artifact:) ───────
-        has_fts = bool(file_terms)
-        if has_fts:
-            expr = _fts_query(" ".join(file_terms))
-            q = (
-                "SELECT f.* FROM files_fts"
-                " JOIN files f ON f.rowid = files_fts.rowid"
-                " WHERE files_fts MATCH ?"
-            )
-            args.insert(0, expr)
-        else:
-            # jen filtry / in-artifact → SELECT přímo z files (bez FTS joinu)
-            q = "SELECT f.* FROM files f WHERE 1=1"
-
-        # ── in-artifact: bez textových termínů → omezení na file_ids ───
-        if not has_fts and artifact_file_ids is not None:
-            if artifact_file_ids:
-                ph = ",".join("?" * len(artifact_file_ids))
-                where_clauses.append(f"f.id IN ({ph})")
-                args.extend(sorted(artifact_file_ids))
-            else:
-                # žádné artifacty neodpovídají → prázdný výsledek
-                return []
-
-        # ── in-artifact: S textovými termíny → intersect přes subquery ──
-        if has_fts and artifact_file_ids is not None:
-            if artifact_file_ids:
-                ph = ",".join("?" * len(artifact_file_ids))
-                where_clauses.append(f"f.id IN ({ph})")
-                args.extend(sorted(artifact_file_ids))
-            else:
-                # žádné artifacty neodpovídají → prázdný výsledek
-                return []
-
-        if source_id is not None:
-            where_clauses.append("f.source_id = ?")
-            args.append(source_id)
-
-        if where_clauses:
-            q += " AND " + " AND ".join(where_clauses)
-
-        # řazení: s FTS → bm25 relevance; bez FTS → mtime desc
-        if has_fts:
-            q += " ORDER BY bm25(files_fts)"
-        else:
-            q += " ORDER BY f.mtime DESC, f.name"
-
-        if limit is not None:
-            q += f" LIMIT {int(limit)}"
-
-        rows = self.conn.execute(q, args).fetchall()
-        return [_row_to_record(r) for r in rows]
+        return self.file_repo.search(query, source_id=source_id, limit=limit)
 
     def search_by_hash(
         self, hash_hex: str, source_id: str | None = None, limit: int | None = 100
@@ -1204,32 +749,10 @@ class CaseDB:
         `hash_hex` — hex string bez prefixu; porovnává se s columnami
         sha256, sha512 a md5 (case-insensitive přes LOWER). STP-022: +SHA-512.
         """
-        h = hash_hex.strip().lower()
-        if not h:
-            return []
-        q = "SELECT * FROM files WHERE LOWER(sha256) = ? OR LOWER(sha512) = ? OR LOWER(md5) = ?"
-        args: list[object] = [h, h, h]
-        if source_id is not None:
-            q += " AND source_id = ?"
-            args.append(source_id)
-        if limit is not None:
-            q += f" LIMIT {int(limit)}"
-        rows = self.conn.execute(q, args).fetchall()
-        return [_row_to_record(r) for r in rows]
+        return self.file_repo.search_by_hash(hash_hex, source_id=source_id, limit=limit)
 
     def stats(self, source_id: str | None = None) -> dict[str, int]:
-        where = "WHERE source_id = ?" if source_id else ""
-        args = (source_id,) if source_id else ()
-        row = self.conn.execute(
-            f"""SELECT COUNT(*) AS files,
-                       COALESCE(SUM(size_bytes), 0) AS bytes,
-                       SUM(CASE WHEN bad_extension = 1 THEN 1 ELSE 0 END) AS bad_ext,
-                       SUM(CASE WHEN is_duplicate_of IS NOT NULL THEN 1 ELSE 0 END) AS dups,
-                       SUM(CASE WHEN signature_type IS NOT NULL THEN 1 ELSE 0 END) AS signed
-                FROM files {where}""",
-            args,
-        ).fetchone()
-        return {k: int(row[k] or 0) for k in ("files", "bytes", "bad_ext", "dups", "signed")}
+        return self.file_repo.stats(source_id)
 
     # ── artifacts (AXIOM-style) ──────────────────────────────
     def upsert_artifact(self, art: Artifact) -> None:
@@ -1945,40 +1468,6 @@ class CaseDB:
         self.conn.close()
 
 
-def _iso(dt) -> str | None:
-
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat()
-
-
-def _row_to_record(r: sqlite3.Row) -> FileRecord:
-    def parse(v):
-        return datetime.fromisoformat(v) if v else None
-
-    return FileRecord(
-        id=r["id"],
-        source_id=r["source_id"],
-        rel_path=r["rel_path"],
-        name=r["name"],
-        size_bytes=r["size_bytes"],
-        mtime=parse(r["mtime"]),
-        ctime=parse(r["ctime"]),
-        atime=parse(r["atime"]),
-        sha256=r["sha256"],
-        md5=r["md5"],
-        sha512=r["sha512"] if "sha512" in r else None,  # noqa: SIM401 (Row bez .get)
-        signature_type=r["signature_type"],
-        extension=r["extension"],
-        bad_extension=bool(r["bad_extension"]),
-        is_duplicate_of=r["is_duplicate_of"],
-        hash_set_hit=r["hash_set_hit"],
-        meta_addr=r["meta_addr"] if "meta_addr" in r else None,  # noqa: SIM401 (Row bez .get)
-    )
-
-
 def _row_to_artifact(r: sqlite3.Row) -> Artifact:
     def parse(v):
         return datetime.fromisoformat(v) if v else None
@@ -2072,19 +1561,5 @@ def _row_to_analysis_operation(r: sqlite3.Row) -> AnalysisOperation:
     )
 
 
-_FTS5_OPS = {"AND", "OR", "NOT", "NEAR"}
-
-
-def _fts_query(query: str) -> str:
-    """Normalizace uživatelského dotazu na bezpečný FTS5 výraz.
-
-    - obsahuje operátor/úvodky/* → raw FTS5 syntaxe (power user)
-    - jinak: každé slovo jako fráze, implicitní AND (bezpečné i pro `.` a `-`)
-    """
-    q = query.strip()
-    has_ops = any(ch in q for ch in ('"', "*", "(", ")")) or any(
-        w.upper() in _FTS5_OPS for w in q.split()
-    )
-    if has_ops:
-        return q
-    return " ".join(f'"{w}"' for w in q.split())
+# ETAPA C vlna 1: _FTS5_OPS + _fts_query přesunuty do file_repository.py
+# (import nahoře; backward compat pro `from stopa.data.db import _fts_query`).
