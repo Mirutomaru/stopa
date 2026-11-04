@@ -300,3 +300,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/artifacts/{google_photos,google_mail_info,google_bar,attachment_extractor}.py`, `pipeline.py`, `sqlite_extract.py`, `email_mbox.py`, `validation_registry.py`, `scripts/build_axiom_coverage.py`
 - **Testy:** 37 nových testů zelených (`tests/test_w6_parsers.py`); full suite **1279 passed, 1 skipped** (baseline 1242 + 37); ruff clean; `build_registry()` = **36 parserů** (předtím 34)
 - **Dokončeno:** 2026-11-04 | Commit: ```9ffde5b```
+
+## STP-029 — ETAPA B vlna 7: Chrome Bookmarks/History/Autofill + Contacts + Skype WR (5 parserů / 12 AXIOM typů)
+- **Oblast:** D (Artifact Engine) | **Priorita:** P0 | **Stav:** DONE
+- **Popis:** Port 12 cloud-export AXIOM typů do čistého Pythonu — Google Chrome Bookmarks (Bookmarks JSON, rekurzivní walk `roots`, date_added µs/1601), Google Chrome History Warrant Return (visit_time µs/1601), Google Contacts Warrant Return (Takeout/warrant JSON + People API fallback), Google Chrome Autofill/Contact Info (name/email/adresa), Skype Warrant Return (4 subtypy s auto-detekcí: account/chat/connection/contacts, composetime ISO 8601 i epoch ms). Coverage matice flip 12 typů NOT_SUPPORTED → SUPPORTED (**72 → 84 / 232**); cloud-export **111 → 99**.
+- **Závislosti:** pipeline dispatch (name-based 5 parserů, specifické detekce PŘED obecnějšími Google/Skype) + C3 registry (nové záznamy chrome_bookmarks/chrome_history_wr/contacts_wr/chrome_autofill/skype_warrant_return)
+- **Dotčené moduly:** `src/stopa/artifacts/{google_chrome_bookmarks,google_chrome_history_wr,google_contacts_wr,google_chrome_autofill,skype_warrant_return}.py`, `pipeline.py`, `validation_registry.py`, `scripts/build_axiom_coverage.py`
+- **Testy:** 39 nových testů zelených (`tests/test_w7_parsers.py`); full suite **1318 passed, 1 skipped** (baseline 1279 + 39); ruff clean; `build_registry()` = **41 parserů** (předtím 36)
+- **Dokončeno:** 2026-11-04 | Commit: ```5e47850```
