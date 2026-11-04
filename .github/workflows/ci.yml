@@ -80,3 +80,49 @@ jobs:
         run: |
           pip freeze | grep -v "^-e \|^stopa @\|^stopa==" > requirements.txt
           pip-audit --no-deps -r requirements.txt
+
+  # ETAPA D vlna 1 (STP-043): benchmark proti baseline — fail na regresi >20 %
+  # a ≥0.5 ms absolutního rozdílu (CI noise guard pro sub-ms položky).
+  benchmark:
+    name: Benchmark (regrese výkonu)
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,web]"
+
+      # continue-on-error: výsledek se vždy uploadne; fail se vyhodnotí níže.
+      - name: Benchmark proti baseline (fail na regresi)
+        id: bench
+        continue-on-error: true
+        run: |
+          python scripts/ci_benchmark.py \
+            --baseline benchmarks/baseline.json \
+            --threshold 0.20 \
+            --min-delta-ms 0.5 \
+            --output benchmark-result.json
+
+      - name: Upload výsledků (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            benchmark-result.json
+            benchmarks/baseline.json
+
+      # Baseline chybí (první běh bez commitnutého baseline) → warning, ne fail.
+      - name: Fail na regresi
+        if: steps.bench.outcome == 'failure'
+        run: |
+          echo "::error::Benchmark detekoval regresii >20 % (a ≥0.5 ms) oproti baseline."
+          exit 1
