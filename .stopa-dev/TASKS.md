@@ -365,3 +365,12 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/artifacts/{apple_cloud,google_2025_wr,whatsapp_cloud,cloud_generic,gmail_messages,maps_labeled_places}.py`, `pipeline.py` (importy + NAME_BASED_EXTRACTORS + `_sns_prepass()`), `validation_registry.py`, `scripts/build_axiom_coverage.py`
 - **Testy:** 58 nových testů zelených (`tests/test_w14_parsers.py`); full suite **1729 passed, 1 skipped** (baseline 1671 + 58); ruff clean; `build_registry()` = **76 parserů** (předtím 70)
 - **Dokončeno:** 2026-11-04 | Commit: ```496391b```
+
+### STP-037 — ETAPA B vlna 15: ZÁVĚREČNÝ AUDIT (ETAPA B dokončena ★)
+- **Oblast:** D (Artifact Engine) | **Priorita:** P0 | **Stav:** DONE
+- **Popis:** Závěrečný audit celé ETAPY B po vlnách 1–14 — nový `tests/test_etapa_b_final_audit.py` s 13 invariantními testy: bijekce coverage matice ↔ AXIOM RE reference (232 typů oběma směry), SUPPORTED = 198 typů každý s parserem + `stav_testovani=testováno`, DEPRECATED = 34 base-class rozhraní (multi, ne extraktory — potvrzeno v AXIOM RE jsonu), NOT_SUPPORTED = **0 ★**, C3 registry = 76 verzovaných parserů (všechny test_files existují, verze neprázdné), pipeline dispatch (signatura + name-based) ↔ C3 registry sync. Spouští se offline — jen čtení CSV/JSON + importy.
+- **Závislosti:** žádná (jen čtení `STOPA_COVERAGE_MATRIX.csv`, `docs/re-axiom/axiom-artifact-extractors.json` + importy)
+- **Dotčené moduly:** `tests/test_etapa_b_final_audit.py` (nový soubor, 13 testů)
+- **Testy:** 13 nových testů zelených; full suite **1742 passed, 1 skipped** (baseline 1729 + 13); ruff clean
+- **Finální stav ETAPY B:** covered **198 / 232** unikátních AXIOM typů ★, NOT_SUPPORTED celkem **0**, C3 registry **76 parserů**; oblast D v roadmapě ✅ hotovo (vlny 1–15)
+- **Dokončeno:** 2026-11-04 | Commit: ```166e42e```

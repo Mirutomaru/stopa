@@ -18,7 +18,7 @@ Pipeline = jediný `analyze()` s dispatchem magic signatur + name-based fallback
 ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 
 ## Aktuální fáze vývoje
-**Oblast D (Artifact Engine)** — **STP-036 hotový** (ETAPA B vlna 14: dokončení cloud-export kategorie,
+**Oblast D (Artifact Engine)** — **STP-037 hotový = ETAPA B DOKONČENA ★** (vlna 15: závěrečný audit, `tests/test_etapa_b_final_audit.py` s 13 invariantními testy; covered **198 / 232 ★**, NOT_SUPPORTED celkem **0**, C3 registry **76 parserů**; oblast D v roadmapě ✅ hotovo). Předtím: **STP-036 ETAPA B vlna 14** (dokončení cloud-export kategorie,
 6 nových parserů / 19 AXIOM typů → NOT_SUPPORTED celkem **0 ★**; `_sns_prepass()` rozšířen o 6 vlna-14 detektorů). Předtím: **STP-035 ETAPA B vlna 13** (cloud-export Google II + Box/Dropbox/Mega,
 4 nové parsery / 9 AXIOM typů + 11 čistých flipů; `_sns_prepass()` rozšířen o vlnu 13 detektory). Předtím: **STP-034 ETAPA B vlna 12** (cloud-export Microsoft + Amazon,
 8 parserů / 12 AXIOM typů; `_sns_prepass()` rozšířen o 8 MS+Amazon detektorů bez kolizí). Předtím: **STP-033 ETAPA B vlna 11** (cloud SNS exporty — Twitter/X + Facebook warrant return,
@@ -43,16 +43,16 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 
 | Metrika | Hodnota |
 |---|---|
-| Dokončené úkoly (TASKS.md) | **36** |
+| Dokončené úkoly (TASKS.md) | **37** |
 | Rozpracované (IN_PROGRESS) | 0 |
-| Čekající (BACKLOG/READY) | **0** (všechny STP-001..036 DONE; další = ETAPA B vlna 15 base-class typy) |
+| Čekající (BACKLOG/READY) | **0** (všechny STP-001..037 DONE; ETAPA B dokončena — další = volba oblasti pro ETAPU C) |
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-036 — ETAPA B vlna 14: dokončení cloud-export kategorie (6 nových parserů / 19 typů → NOT_SUPPORTED celkem 0 ★)** (oblast D, P0) | Commit: ```496391b```
-Šest nových extraktorů: `apple_cloud.py` (Apple Cloud rodina — Contacts/Keychain/Mail/Photos/Backup, auto-detekce podtypu `_detect_kind`; detektor vyžaduje `.json` příponu, aby nekradl iMessage TSV), `google_2025_wr.py` (Google 2025 WR — AccessLogDevices + AccountTargetAssociation + Calls; klíčová slova bez podtržítek pro CamelCase exporty), `whatsapp_cloud.py` (WhatsApp Chats + Backups), `cloud_generic.py` (generic cloud metadata — AccountsInfo/ConnectedApps/RecentDevices/Timeline/Passwords/AndroidBackups/AzureVM snapshots; nejobecnější detektor, v pre-passu poslední), `gmail_messages.py` (Gmail Messages → `email_message`), `maps_labeled_places.py` (Maps Labeled Places WR → `location_point`). Pipeline `_sns_prepass()` rozšířen o 6 vlna-14 detektorů (specifické PŘED obecným `cloud_generic`); C3 registry **76 parserů**; full suite **1729 passed, 1 skipped**; coverage flip 19 typů: covered **179 → 198 / 232 ★**, cloud-export kategorie **19 → 0 ★ (vyčerpána)**.
-**58 nových testů** (`tests/test_w14_parsers.py`); full suite **1729 passed, 1 skipped**, ruff clean.
-Předtím: STP-035 (vlna 13 cloud-export Google II + Box/Dropbox/Mega, `31bceb2`),
+**STP-037 — ETAPA B vlna 15: ZÁVĚREČNÝ AUDIT (ETAPA B dokončena ★)** (oblast D, P0) | Commit: ```166e42e```
+Nový `tests/test_etapa_b_final_audit.py` s **13 invariantními testy**: bijekce coverage matice ↔ AXIOM RE reference (232 typů oběma směry), SUPPORTED = 198 typů každý s parserem + `stav_testovani=testováno`, DEPRECATED = 34 base-class rozhraní (multi, ne extraktory — potvrzeno v AXIOM RE jsonu), NOT_SUPPORTED = **0 ★**, C3 registry = 76 verzovaných parserů (všechny test_files existují, verze neprázdné), pipeline dispatch (signatura + name-based) ↔ C3 registry sync. Spouští se offline — jen čtení CSV/JSON + importy. Full suite **1742 passed, 1 skipped**, ruff clean; oblast D v roadmapě ✅ hotovo (vlny 1–15).
+Předtím: STP-036 (vlna 14 dokončení cloud-export kategorie, `496391b`),
+STP-035 (vlna 13 cloud-export Google II + Box/Dropbox/Mega, `31bceb2`),
 STP-034 (vlna 12 cloud-export Microsoft + Amazon, `47e7103`),
 STP-033 (vlna 11 cloud SNS Twitter/X + Facebook WR, `bea2a25`),
 STP-032 (vlna 10 cloud SNS Instagram/Snapchat WR, `da83a6f`),
@@ -69,15 +69,14 @@ STP-018 (Timeline Intel 2.0, `cd5aa25`), STP-017 (vlna 3), STP-016 (vlna 2), STP
 STP-012b, STP-012 (`e227929`), STP-013..015 (vlna 1, `afc49a0`).
 
 ## Aktuální úkol
-Žádný aktivní — čeká na zahájení **ETAPA B vlna 15** (Artifact Engine: base-class typy, zbývá 34).
+Žádný aktivní — **ETAPA B dokončena** (STP-037, vlna 15); čeká na zahájení ETAPY C.
 
 ## Nejbližší následující úkol
-**STP-037 — ETAPA B vlna 15 — Artifact Engine: base-class typy (zbývá 34)** (oblast D, P0)
-Pokračování portu AXIOM extraktorů; po vlně 14 je covered **198 / 232 ★**.
-Zbývá portable-local **0 ★** + cloud-export **0 ★** + base-class **34** (rozhraní, ne extraktory).
+**Volba oblasti pro ETAPU C** (oblast D ✅ hotovo; kandidáti dle roadmapy: E Advanced Timeline / F Evidence Graph / N Performance — dle priority P0→P2).
+Po vlně 15 je covered **198 / 232 ★**; zbývá jen base-class **34** (rozhraní, ne extraktory = DEPRECATED).
 
 ## Poslední úspěšné testování
-- **2026-11-04:** `.venv/bin/python -m pytest -q` → **1729 passed, 1 skipped** (~18s)
+- **2026-11-04:** `.venv/bin/python -m pytest -q` → **1742 passed, 1 skipped** (~18s)
 - `.venv/bin/ruff check src/stopa tests scripts` → All checks passed!
 - Coverage matice deterministická (SHA-256 diff ✓), covered **198 / 232 ★**, portable-local NOT_SUPPORTED = **0 ★**, cloud-export NOT_SUPPORTED = **0 ★**
 
@@ -87,4 +86,4 @@ Zbývá portable-local **0 ★** + cloud-export **0 ★** + base-class **34** (r
 - izolace parserů (sandbox) zbývá v oblasti M
 
 ## Datum poslední aktualizace
-**2026-11-04** — po dokončení STP-036 ETAPA B vlna 14: dokončení cloud-export kategorie (6 nových parserů / 19 typů, 58 testů; NOT_SUPPORTED celkem **0 ★**).
+**2026-11-04** — po dokončení STP-037 ETAPA B vlna 15 (závěrečný audit, 13 testů; **ETAPA B DOKONČENA ★**, covered **198 / 232 ★**, NOT_SUPPORTED celkem **0**, full suite **1742 passed, 1 skipped**).

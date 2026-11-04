@@ -4,6 +4,19 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 15: ZÁVĚREČNÝ AUDIT — ETAPA B dokončena ★)
+
+### Added (oblast D, P0 — závěrečný audit celé ETAPY B po vlnách 1–14)
+- **Závěrečný audit test** (`tests/test_etapa_b_final_audit.py`, 13 invariantních testů):
+  bijekce coverage matice ↔ AXIOM RE reference (232 typů oběma směry), SUPPORTED = 198
+  typů každý s parserem + `stav_testovani=testováno`, DEPRECATED = 34 base-class rozhraní
+  (multi, ne extraktory), NOT_SUPPORTED = **0 ★**, C3 registry = 76 verzovaných parserů
+  (všechny test_files existují, verze neprázdné), pipeline dispatch (signatura + name-based)
+  ↔ C3 registry sync. Spouští se offline — jen čtení CSV/JSON + importy.
+- **Finální stav ETAPY B:** covered **198 / 232** unikátních AXIOM typů ★, NOT_SUPPORTED
+  celkem **0** (zbývají jen 34 base-class rozhraní = DEPRECATED), C3 registry **76 parserů**,
+  full suite **1742 passed, 1 skipped**, ruff clean.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 14: dokončení cloud-export kategorie)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 6 nových parserů / 19 typů → NOT_SUPPORTED celkem 0 ★)
