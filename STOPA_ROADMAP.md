@@ -6,9 +6,9 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 
 ## A. Core Architecture
 - **Stav:** 🔧 v průběhu (ETAPA C — rozklad monolitu `db.py`) | **Priorita:** P1
-- **Dokončeno:** Evidence Model + Lineage, Integrity (SHA-256/MD5, Ed25519 podpisy, hash-chained audit log), Reproducibility Engine, Benchmark Engine (detekce regresí >20%), C3 Parser Validation Registry (13 parserů, 1:1 sync s pipeline). **ETAPA C vlna 1 hotová (STP-039):** vyčleněny `CaseRepository` + `FileRepository` + `AuditRepository` (+ `_helpers.py`), facade `CaseDB` deleguje na sdílenou connection, backward compat zachován; `db.py` 2090 → **1565 řádků**.
-- **Nedokončeno:** rozdělení monolitu `db.py` (vlny 2–3: Artifact/Entity repozitáře + facade úklid, cíl < ~600 ř.). SHA-512 v integrity vrstvě hotové (STP-022).
-- **Závislosti:** — | **Nejbližší úkol:** ETAPA C vlna 2 (STP-040) — extrakce `ArtifactRepository` + `EntityRepository`
+- **Dokončeno:** Evidence Model + Lineage, Integrity (SHA-256/MD5, Ed25519 podpisy, hash-chained audit log), Reproducibility Engine, Benchmark Engine (detekce regresí >20%), C3 Parser Validation Registry (13 parserů, 1:1 sync s pipeline). **ETAPA C vlna 1 hotová (STP-039):** vyčleněny `CaseRepository` + `FileRepository` + `AuditRepository` (+ `_helpers.py`), facade `CaseDB` deleguje na sdílenou connection, backward compat zachován; `db.py` 2090 → **1565 řádků**. **ETAPA C vlna 2 hotová (STP-040):** vyčleněny `ArtifactRepository` + `EntityRepository`, facade deleguje ~23 metod, backward compat zachován; `db.py` 1565 → **1011 řádků** (monolit o ~54 % menší).
+- **Nedokončeno:** rozdělení monolitu `db.py` — zbývá vlna 3: facade úklid + závěrečný audit (cíl < ~600 ř.). SHA-512 v integrity vrstvě hotové (STP-022).
+- **Závislosti:** — | **Nejbližší úkol:** ETAPA C vlna 3 (STP-041) — facade úklid + závěrečný audit (`db.py` < ~600 ř.)
 
 ## B. Evidence Acquisition
 - **Stav:** ✅ hotovo | **Priorita:** P1
@@ -122,8 +122,9 @@ Důvody: (1) nejvyšší zbývající priorita **P1**; (2) největší technick�
 - **Vlna 1 (STP-039):** ✅ **hotová** — extrakce `CaseRepository` + `FileRepository` + `AuditRepository`
   (~28 metod: case/source/custody, file/flags/marked, audit log/operations/integrity checkpoints);
   `CaseDB` deleguje; facade zachován pro backward compat. `db.py` 2090 → **1565 řádků** (−525), full suite **1757 passed**.
-- **Vlna 2 (STP-040):** extrakce `ArtifactRepository` + `EntityRepository`
-  (~23 metod: artifacts/findings/timeline events/intel groups, entities/correlations/lineage).
+- **Vlna 2 (STP-040):** ✅ **hotová** — extrakce `ArtifactRepository` + `EntityRepository`
+  (~23 metod: artifacts/findings/timeline events/intel groups, entities/correlations/lineage);
+  `CaseDB` deleguje; facade zachován pro backward compat. `db.py` 1565 → **1011 řádků** (−554), full suite **1774 passed**.
 - **Vlna 3 (STP-041):** finální facade úklid (`CaseDB` = tenký agregátor), full regression + audit.
 
 **Akceptační kritéria ETAPY C:** `db.py` < ~600 ř.; každé repozitářové modulu vlastní testy;

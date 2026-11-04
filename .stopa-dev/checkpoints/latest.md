@@ -1,26 +1,20 @@
 # STOPA — Checkpoint (poslední dokončený stav)
 
 **Datum:** 2026-11-04
-**Poslední dokončený úkol:** STP-039 — ETAPA C vlna 1: rozdělení monolitu `db.py` (Case/File/Audit repozitáře) | Commit: ```58628a9```
+**Poslední dokončený úkol:** STP-040 — ETAPA C vlna 2: rozdělení monolitu `db.py` (Artifact/Entity repozitáře) | Commit: ```28b6222```
 
 ## Stav projektu
-- **Fáze:** Oblast A (Core Architecture) — **ETAPA C vlna 1 DOKONČENA ★**
-- **Full suite:** 1757 passed, 1 skipped (~18s); ruff clean (`src/stopa tests scripts`)
+- **Fáze:** Oblast A (Core Architecture) — **ETAPA C vlna 2 DOKONČENA ★**
+- **Full suite:** 1774 passed, 1 skipped (~18s); ruff clean (`src/stopa tests scripts`)
 - **Coverage AXIOM:** covered **198 / 232 ★**, NOT_SUPPORTED celkem **0** (base-class 34 = rozhraní)
-- **C3 registry:** 76 parserů (bez změny — vlna 1 je refactor datové vrstvy, ne parsery)
+- **C3 registry:** 76 parserů (bez změny — vlna 2 je refactor datové vrstvy, ne parsery)
 
-## Co se stalo (STP-039)
-Rozklad monolitu `src/stopa/data/db.py` (~2090 ř., 67 metod) na doménová repozitáře — vlna 1:
-- **CaseRepository** (`data/case_repository.py`) — cases, sources, custody metadata
-- **FileRepository** (`data/file_repository.py`) — files, evidence_marks, FTS5 search + `_fts_query`
-- **AuditRepository** (`data/audit_repository.py`) — audit log + hash chaining (P0 Core C4) + Ed25519 kontrolní body + custody items
-- **_helpers.py** — sdílené konverze (`_iso`, `_row_to_record`)
-- Facade `CaseDB` drží tři repozitáře na **sdílené SQLite connection** a deleguje; **backward compat zachován** (veřejné API beze změny, `_fts_query` re-export pro `test_search`)
-- `db.py`: 2090 → **1565 řádků** (−525)
-- Nové testy: `tests/test_stp039_wave1_repos.py` (**15 testů**)
+## Co se stalo (STP-040)
+Rozklad monolitu `src/stopa/data/db.py` na doménová repozitáře — vlna 2:
+- **ArtifactRepository** (`data/artifact_repository.py`, 712 ř.) — artifacts upsert/replace/list/get, findings CRUD, lineage_events append-only + dohledání řetězce, analysis_operations, timeline events + intel groups + window; konvertory `_row_to_artifact`/`_row_to_finding`/`_row_to_lineage_event`/`_row_to_analysis_operation`
+- **EntityRepository** (`data/entity_repository.py`, 138 ř.) — entities upsert s agregací first/last_seen při re-runu, correlations clear/add/list
+- `db.py`: 1565 → **1011 řádků** (−554); facade `CaseDB` drží pět repozitářů na sdílené connection a deleguje; backward compat zachován (`CaseDB`, `SCHEMA_VERSION`, `_fts_query`)
+- Testy: 17 nových testů zelených (`tests/test_stp040_wave2_repos.py`)
 
 ## Nejbližší krok
-**STP-040 — ETAPA C vlna 2:** extrakce `ArtifactRepository` + `EntityRepository` (~23 metod: artifacts CRUD/FTS5, findings, lineage_events, analysis_operations, entity resolution). Akceptační kritéria: žádná změna veřejného API `CaseDB`, full suite zelená, ruff clean.
-
-## Po vlně 3 (STP-041)
-facade úklid + audit — cíl `db.py` < ~600 řádků = ETAPA C dokončena ★
+**STP-041 — ETAPA C vlna 3:** facade úklid + závěrečný audit; cíl `db.py` < ~600 ř. = **ETAPA C dokončena ★**.

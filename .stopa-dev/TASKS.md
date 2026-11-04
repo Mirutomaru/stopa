@@ -391,3 +391,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/data/{case_repository,file_repository,audit_repository,_helpers}.py` (nové), `db.py` (facade — 2090 → **1565 řádků**, −525; zbývají artifacts/findings/lineage/analysis_operations pro vlny 2–3)
 - **Testy:** 15 nových testů zelených (`tests/test_stp039_wave1_repos.py` — wiring sdílené connection, delegace přes facade i přímé čtení z repo, nezávislé repozitáře na stejném spojení, backward compat `_fts_query`); full suite **1757 passed, 1 skipped** (baseline 1742 + 15); ruff clean
 - **Dokončeno:** 2026-11-04 | Commit: ```58628a9```
+
+### STP-040 — ETAPA C vlna 2: rozdělení `db.py` (Artifact/Entity repozitáře)
+- **Oblast:** A (Core Architecture) | **Priorita:** P1 | **Stav:** DONE
+- **Popis:** Druhá vlna rozkladu monolitu `src/stopa/data/db.py` na doménová repozitáře. Vyčleněny dvě tenké SQLite vrstvy bez business logiky: **ArtifactRepository** (artifacts, findings, lineage_events, analysis_operations, timeline events + konvertory `_row_to_artifact`/`_row_to_finding`/`_row_to_lineage_event`/`_row_to_analysis_operation`) a **EntityRepository** (entities s agregací first/last_seen při re-runu, correlations). Facade `CaseDB` drží pět repozitářů na sdílené SQLite connection a deleguje; **backward compat zachován** (veřejné API beze změny — `CaseDB`, `SCHEMA_VERSION`, `_fts_query`).
+- **Závislosti:** STP-039 (vlna 1 — Case/File/Audit repozitáře)
+- **Dotčené moduly:** `src/stopa/data/{artifact_repository,entity_repository}.py` (nové), `db.py` (facade — 1565 → **1011 řádků**, −554; zbývá vlna 3 = facade úklid + audit)
+- **Testy:** 17 nových testů zelených (`tests/test_stp040_wave2_repos.py` — wiring sdílené connection, delegace přes facade i přímé čtení z repo, idempotentní upsert artifactu podle klíče, výměna artifactů souboru při re-ingestu, lineage chain dohledání, entity agregace first/last_seen, correlations); full suite **1774 passed, 1 skipped** (baseline 1757 + 17); ruff clean
+- **Dokončeno:** 2026-11-04 | Commit: ```28b6222```

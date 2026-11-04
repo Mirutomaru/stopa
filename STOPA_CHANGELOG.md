@@ -2,6 +2,14 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (ETAPA C vlna 2: rozdělení `db.py` ★)
+
+### Changed (oblast A, P1 — STP-040)
+- **Pokračování rozkladu monolitu** `src/stopa/data/db.py` — vlna 2: vyčleněny **ArtifactRepository** (`data/artifact_repository.py`, artifacts upsert/replace/list/get + findings CRUD + lineage_events append-only s dohledáním řetězce + analysis_operations + timeline events/intel groups; konvertory `_row_to_artifact`/`_row_to_finding`/`_row_to_lineage_event`/`_row_to_analysis_operation`) a **EntityRepository** (`data/entity_repository.py`, entities upsert s agregací first/last_seen při re-runu + correlations clear/add/list).
+- Facade `CaseDB` drží **pět repozitářů na sdílené SQLite connection** a deleguje ~23 metod; **backward compat zachován** (`CaseDB`, `SCHEMA_VERSION`, `_fts_query`).
+- `db.py`: 1565 → **1011 řádků** (−554); celkem od původních ~2090 ř. monolit o **~54 % menší**. Zbývá vlna 3 = facade úklid + audit (cíl < ~600 ř.).
+- Nové testy: `tests/test_stp040_wave2_repos.py` (**17 testů** — wiring, sdílená connection, delegace přes facade, standalone repo přístup, backward compat; respektují CHECK constraints `entities.kind`, `correlations.relation/confidence`). Full suite **1774 passed, 1 skipped**, ruff clean.
+
 ## [Unreleased] — 2026-11-04 (ETAPA C vlna 1: rozdělení `db.py` ★)
 
 ### Changed (oblast A, P1 — STP-039)
