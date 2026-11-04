@@ -2,42 +2,43 @@
 
 **Datum:** 2026-11-04
 **Verze aplikace:** 0.1.0 (`pyproject.toml`)
-**Commit:** ```bea2a25``` (předchozí: `9fa52dc` STP-032 docs, `da83a6f` STP-032 feature, `40c6305`, `4747738`)
+**Commit:** ```47e7103``` (předchozí: `bea2a25` STP-033 feature, `9fa52dc` STP-032 docs, `da83a6f` STP-032 feature)
 
 ## Co se stalo
-**STP-033 — ETAPA B vlna 11: cloud SNS exporty (Twitter/X + Facebook warrant return) (4 parsery / 13 AXIOM typů)** (oblast D, P0) hotový.
+**STP-034 — ETAPA B vlna 12: cloud-export Microsoft + Amazon (8 parserů / 12 AXIOM typů)** (oblast D, P0) hotový.
 
 ### Nové parsery (`src/stopa/artifacts/`)
-- `twitter_posts.py` — Twitter/X Posts (příspěvky author/text/created_at; tolerantní klíče tweet_id/from_user/body/date; retweety a odpovědi → `post_type=retweet/reply`); artifact type `sns_post`.
-- `twitter_messages.py` — Twitter/X Direct Messages (DM konverzace sender/recipient/text/timestamp; konverzační formát participants/messages i plošný); artifact type `chat_message`.
-- `twitter_users.py` — Twitter/X Users + sociální graf (screen_name/name/followers_count; vlastní účet → relationship=account, sekce followers/following → follower/following); artifact type `contact` s `mimetype=sns:twitter`.
-- `facebook_wr.py` — Facebook Warrant Return (Messenger zprávy konverzace i flat formát, přátelé → contact sns:facebook, timeline příspěvky → sns_post post_type=timeline, info o profilu → contact relationship=account; auto-detekce sekcí podle struktury payloadu).
+- `ms_contacts.py` — Microsoft Graph/Outlook kontakty (displayName/email/phone; tolerantní klíče; vlastní účet → relationship=account); artifact type `contact`.
+- `ms_mail_pst.py` — Outlook mail PST export (from/to/subject/body/date; konverzační i flat formát); artifact type `email_message`.
+- `ms_teams_conversations.py` — Teams konverzace/zprávy (senderDisplayName/from, body, date; konverzační i plochý formát); artifact type `chat_message`.
+- `ms_teams_teams.py` — Teams týmy + členové (team name/description, členové s rolí owner/member → contact sns:microsoft:teams); artifact type `contact`.
+- `ms_outlook_calendar.py` — Outlook kalendář události (subject/organizer/start/end/location; tolerantní klíče); artifact type `calendar_event`.
+- `sharepoint_wr.py` — SharePoint Warrant Return (strany → `web_page`, dokumenty → `file_metadata`; auto-detekce kind page/document podle struktury).
+- `amazon_cloudtrail.py` — Amazon CloudTrail API akce (eventName/userIdentity/sourceIPAddress; explicitní isinstance fallback pro userIdentity); artifact type `event_log_entry`.
+- `amazon_ec2_s3.py` — Amazon EC2 instance + S3 objekty (instance → `network_connection`, S3 key/size/bucket → `file_metadata`; union detekce podle struktury).
 
 ### Pipeline dispatch
-- `_sns_prepass()` rozšířen o 4 nové detektory (pořadí twitter_posts → twitter_messages → twitter_users → facebook_wr) — bez kolizí s Instagram/Snapchat ani Google detektory.
-- Dispatch verify: **20/20** nových basenames + 3/3 bez kolize (`Google/Messages.json`, `Drive/Files.json`, `Voice/Texts.json` → None).
+- `_sns_prepass()` rozšířen o 8 MS+Amazon detektorů (pořadí: specifické PŘED obecnými — ms_mail_pst → ms_contacts → ms_outlook_calendar → ms_teams_conversations PŘED ms_teams_teams → sharepoint_wr → amazon_cloudtrail → amazon_ec2_s3) — bez kolizí s Google contacts ani Twitter/SNS detektory.
+- `NAME_BASED_EXTRACTORS` +8 položek; imports v abecedním pořadí (Amazon před bebo_chat, MS mezi mem_scan a msn_messenger, SharePoint mezi registry_extract a skype_warrant_return).
 
 ### C3 registry
-- 4 nové záznamy (`twitter_posts`/`twitter_messages`/`twitter_users`/`facebook_wr`) — `build_registry()` = **58 parserů** (předtím 54).
+- 8 nových záznamů (`ms_contacts`/`ms_mail_pst`/`ms_teams_conversations`/`ms_teams_teams`/`ms_outlook_calendar`/`sharepoint_wr`/`amazon_cloudtrail`/`amazon_ec2_s3`) — `build_registry()` = **66 parserů** (předtím 58). Limity v textu srovnány s reálnými konstantami parserů (5000).
 
 ## Metriky
-| Metrika | Předtím | Po vlně 11 |
+| Metrika | Předtím | Po vlně 12 |
 |---------|---------|------------|
-| Full suite | 1466 passed, 1 skipped | **1553 passed, 1 skipped** (+87) |
-| C3 registry | 54 parserů | **58 parserů** |
-| Coverage covered | 134 / 232 | **147 / 232 ★** |
-| cloud-export NOT_SUPPORTED | 64 | **51** |
+| Full suite | 1553 passed, 1 skipped | **1626 passed, 1 skipped** (+73) |
+| C3 registry | 58 parserů | **66 parserů** |
+| Coverage covered | 147 / 232 | **159 / 232 ★** |
+| cloud-export NOT_SUPPORTED | 51 | **39** |
 | memory NOT_SUPPORTED | 0 ★ | 0 ★ |
 | portable-local NOT_SUPPORTED | 0 ★ | 0 ★ |
 
 ## Testy
-- `tests/test_w11_parsers.py` — **87 syntetických offline testů**, ruff clean.
-- Full suite: **1553 passed, 1 skipped**.
+- `tests/test_w12_parsers.py` — **73 syntetických offline testů**, ruff clean.
+- Full suite: **1626 passed, 1 skipped**.
 
 ## Registry
-- Feature: **F-062** ETAPA B vlna 11 — cloud SNS exporty (Twitter/X + Facebook warrant return).
-- Testy: **T-083** `tests/test_w11_parsers.py` (87).
-- Celkový stav TEST_REGISTRY: **1553 testů: 1552 PASS + 1 skipped**.
-
-## Další krok
-STP-034 — ETAPA B vlna 12 — cloud-export typy (Microsoft rodina, Amazon rodina) dle `.stopa-dev/NEXT_ACTION.md`.
+- Feature: **F-063** ETAPA B vlna 12 — cloud-export Microsoft + Amazon (8 parserů / 12 AXIOM typů).
+- Testy: **T-084** `tests/test_w12_parsers.py` (73).
+- Celkový stav TEST_REGISTRY: **1626 testů: 1625 PASS + 1 skipped**.

@@ -4,6 +4,28 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 12: cloud-export Microsoft + Amazon)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 8 nových parserů / 12 AXIOM typů)
+- **Microsoft Contacts** (`artifacts/ms_contacts.py`) — kontakty z Microsoft Graph/Outlook exportu (displayName/email/phone; tolerantní klíče). Vlastní účet → `relationship=account`. Name-based detekce s MS markerem v cestě. AXIOM `CloudMicrosoftContactsArtifact` + `CloudMicrosoftGraphContactsArtifact`. Artifact type `contact`, `details.engine=ms_contacts`.
+- **Outlook Mail (PST export)** (`artifacts/ms_mail_pst.py`) — e-maily z Outlook/PST cloud exportu (subject/from/to/body/date; tolerantní klíče). Konverzační formát i plošný. AXIOM `CloudOutlookMessagesArtifact` + `CloudMicrosoftGraphMailMessagesArtifact`. Artifact type `email_message`, `details.engine=ms_mail_pst`.
+- **Teams Conversations** (`artifacts/ms_teams_conversations.py`) — Teams konverzace/zprávy (senderDisplayName/body/timestamp; tolerantní klíče from/sender, body/content/text). Konverzační formát participants/messages i plošný. AXIOM `CloudMicrosoftTeamsConversationsArtifact` + `CloudMicrosoftGraphTeamsChatMessagesArtifact`. Artifact type `chat_message`, `details.engine=ms_teams_conversations`.
+- **Teams Teams & Members** (`artifacts/ms_teams_teams.py`) — Teams týmy a členové (displayName/email/role). Člen → `contact` s `mimetype=sns:microsoft:teams`, role owner/member. AXIOM `CloudMicrosoftTeamsArtifact`. Artifact type `contact`, `details.engine=ms_teams_teams`.
+- **Outlook Calendar** (`artifacts/ms_outlook_calendar.py`) — Outlook kalendářové události (subject/organizer/start/end/location; tolerantní klíče). AXIOM `CloudMicrosoftCalendarEventsArtifact` + `CloudOutlookCalendarEventsArtifact`. Artifact type `calendar_event`, `details.engine=ms_outlook_calendar`.
+- **SharePoint Warrant Return** (`artifacts/sharepoint_wr.py`) — SharePoint WR (strany → `web_page`, dokumenty → `document`; tolerantní klíče title/name, url/webUrl/link). Auto-detekce kind podle struktury payloadu. AXIOM `CloudSharePointPagesArtifact` + `CloudSharePointDocumentsArtifact`. Artifact types `web_page`, `document`, `details.engine=sharepoint_wr`.
+- **Amazon CloudTrail** (`artifacts/amazon_cloudtrail.py`) — CloudTrail API akce (eventName/eventTime/userIdentity/sourceIPAddress; explicitní isinstance fallback). AXIOM `CloudAmazonCloudTrailEventsArtifact` + `CloudAmazonWarrantReturnCloudTrailArtifact`. Artifact type `event_log_entry`, `details.engine=amazon_cloudtrail`.
+- **Amazon EC2 & S3** (`artifacts/amazon_ec2_s3.py`) — EC2 instance (instanceId/state/privateIp/publicIp) → `network_connection` + S3 objekty (key/bucket/size/lastModified) → `file_metadata`. Union detekce podle struktury. AXIOM `CloudAmazonEC2InstancesArtifact` + `CloudAmazonS3ObjectsArtifact`. Artifact types `network_connection`, `file_metadata`, `details.engine=amazon_ec2_s3`.
+
+### Pipeline dispatch + C3 registry
+- Všech 8 parserů napojeno do `_sns_prepass()` — pre-pass na celé cestě PŘED basename chainem. Pořadí: specifické MS/Amazon detektory PŘED obecnějšími (conversations PŘED teams); bez kolizí s Google contacts ani Twitter/SNS.
+- C3 registry (`validation_registry.py`): 8 nových záznamů `ms_contacts`, `ms_mail_pst`, `ms_teams_conversations`, `ms_teams_teams`, `ms_outlook_calendar`, `sharepoint_wr`, `amazon_cloudtrail`, `amazon_ec2_s3`; limity srovnány s reálnými konstantami parserů (5000). `build_registry()` = **66 parserů** (předtím 58).
+
+### Coverage matice
+- Flip 12 AXIOM typů NOT_SUPPORTED → SUPPORTED. Regen `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}` deterministicky (SHA-256 diff ✓). covered **147 → 159 / 232**; cloud-export NOT_SUPPORTED **51 → 39**.
+
+### Testy + verify
+- `tests/test_w12_parsers.py` — **73 syntetických offline testů** (parse/build/detektory/pipeline pre-pass dispatch/C3 registry kontrakt per parser). Full suite **1626 passed, 1 skipped** (baseline 1553 + 73); ruff clean.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 11: cloud SNS exporty — Twitter/X + Facebook warrant return)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 13 AXIOM typů)
