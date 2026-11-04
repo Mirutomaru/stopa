@@ -5,15 +5,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 114
+- **✅ COVERED**: 134
 - **🔧 PORTABLE-LOCAL**: 0
-- **☁️ CLOUD-EXPORT**: 84
+- **☁️ CLOUD-EXPORT**: 64
 - **💾 MEMORY**: 0
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (114)
+## ✅ COVERED — STOPA už umí (existující parser) (134)
 
 - `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
 - `ApiHooksArtifact` — mem_hooks parser (API hooky — apiFunction/callbackAddress/hookType)
@@ -29,6 +29,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudAppleDriveArtifact` — cloud_drive_files parser (Apple Drive soubory)
 - `CloudDriveFileArtifact` — cloud_drive_files parser (Google Drive soubory — název/velikost/checksum/čas)
 - `CloudDriveFileVersionArtifact` — cloud_drive_files parser (verze souboru do details.versions)
+- `CloudFacebookInstagramMessagesArtifact` — instagram_messages parser (FB↔IG cross-posted zprávy)
 - `CloudGoogleChromeAutofillArtifact` — google_chrome_autofill parser (Autofill/ContactInfo JSON, name/email/address)
 - `CloudGoogleChromeBookmarksArtifact` — google_chrome_bookmarks parser (Bookmarks JSON, date_added µs od 1601)
 - `CloudGoogleChromeBrowserHistoryArtifact` — browser_history
@@ -40,6 +41,9 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudGoogleChromeSyncSettingsPreferencesArtifact` — chrome_preferences parser (sync preferences)
 - `CloudGoogleContactsArtifact` — google_contacts_wr parser (Contacts Takeout/warrant JSON, name/emails/phoneNumbers)
 - `CloudGoogleLocationHistoryArtifact` — google_location_history parser (warrant return CSV/JSON)
+- `CloudInstagramDirectMessagesArtifact` — instagram_messages parser (cloud DM export)
+- `CloudInstagramPostsArtifact` — instagram_posts parser (posts — caption/likes/media_url/comments)
+- `CloudInstagramPostsAxiom2Pt1Artifact` — instagram_posts parser (AXIOM 2.1 posts varianta)
 - `CloudMboxEmailArtifact` — email_mbox parser
 - `CloudOneDriveFileArtifact` — cloud_drive_files parser (OneDrive soubory — lastModifiedDateTime marker)
 - `CloudOneDriveFileVersionArtifact` — cloud_drive_files parser (OneDrive verze souboru)
@@ -83,6 +87,16 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `HandlesArtifact` — mem_handles parser (handlery — handleValue/type/name, hex normalizace)
 - `IeTypedUrlArtifact` — browser_history (chrome/firefox)
 - `ImageInfoArtifact` — magic bytes → image info
+- `InstagramAccountActionsArtifact` — instagram_account parser (akce účtu → event_log_entry, ip_address/device)
+- `InstagramAccountHistoryArtifact` — instagram_account parser (historie účtu → event_log_entry)
+- `InstagramArchivedStoriesArtifact` — instagram_posts parser (archivované stories, is_story=True)
+- `InstagramCommentsArtifact` — instagram_posts parser (komentáře — user/text/post_id)
+- `InstagramDirectSharesArtifact` — instagram_messages parser (sdílená média v DM, message_type=share)
+- `InstagramDirectStoriesArtifact` — instagram_posts parser (direct stories)
+- `InstagramFollowersAndFollowingArtifact` — instagram_account parser (followery/following → contact sns:instagram)
+- `InstagramMediaArtifact` — instagram_posts parser (média — url/type)
+- `InstagramMessagesArtifact` — instagram_messages parser (DM konverzace — participants/messages, tolerantní klíče)
+- `InstagramPhotosArtifact` — instagram_posts parser (fotky)
 - `JumpListsArtifact` — win_jumplist parser
 - `KikLocalUserExtractor` — kik_messenger parser (SQLite dispatch chain, iOS ZKIK*/Android users+messages)
 - `LimerunnerArtifact` — limewire_p2p parser (P2P shared files JSON/pipe)
@@ -122,6 +136,12 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `SkypeWarrantReturnChatHistoryRecordsArtifact` — skype_warrant_return parser (chat history records — conversationId/composetime)
 - `SkypeWarrantReturnConnectionHistoryArtifact` — skype_warrant_return parser (connection history — contact/status/dateAdded)
 - `SkypeWarrantReturnContactsArtifact` — skype_warrant_return parser (contacts — msnId/displayName/email)
+- `SnapchatAccountInformationArtifact` — snapchat_wr parser (info o účtu → contact user/email/phone)
+- `SnapchatFriendsArtifact` — snapchat_wr parser (přátelé → contact sns:snapchat:user)
+- `SnapchatGeolocationArtifact` — snapchat_wr parser (geolokace → location_data, lat/lon tolerantní klíče)
+- `SnapchatGroupChatMessagesArtifact` — snapchat_wr parser (skupinové chaty — group_id)
+- `SnapchatIpHistoryArtifact` — snapchat_wr parser (IP historie → network_connection, ip_address/event_type)
+- `SnapchatMessagesWarrantReturnArtifact` — snapchat_wr parser (zprávy WR — from/to/body/time, konverzace i flat)
 - `SocketsArtifact` — mem_network parser (sockety — pid/localAddress/remoteAddress/state)
 - `SockscanArtifact` — net_connections parser
 - `TimelineArtifact` — timeline engine
@@ -130,7 +150,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## ☁️ CLOUD-EXPORT — JSON export / warrant return (84)
+## ☁️ CLOUD-EXPORT — JSON export / warrant return (64)
 
 - `CloudAccountsInfoArtifact` — JSON export / warrant return
 - `CloudAmazonCloudTrailEventsArtifact` — JSON export / warrant return
@@ -151,7 +171,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudConnectedAppsArtifact` — JSON export / warrant return
 - `CloudDropboxEntryArtifact` — JSON export / warrant return
 - `CloudFacebookFriendsArtifact` — JSON export / warrant return
-- `CloudFacebookInstagramMessagesArtifact` — JSON export / warrant return
 - `CloudFacebookMessengerMessagesArtifact` — JSON export / warrant return
 - `CloudFacebookMobileTimelineArtifact` — JSON export / warrant return
 - `CloudFacebookProfileInfoArtifact` — JSON export / warrant return
@@ -171,9 +190,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudGoogleSemanticLocationHistoryPlaceVisitArtifact` — JSON export / warrant return
 - `CloudGoogleTasksArtifact` — JSON export / warrant return
 - `CloudHangoutsMessagesArtifact` — JSON export / warrant return
-- `CloudInstagramDirectMessagesArtifact` — JSON export / warrant return
-- `CloudInstagramPostsArtifact` — JSON export / warrant return
-- `CloudInstagramPostsAxiom2Pt1Artifact` — JSON export / warrant return
 - `CloudMegaFilesArtifact` — JSON export / warrant return
 - `CloudMicrosoftContactsArtifact` — JSON export / warrant return
 - `CloudMicrosoftMailPstArtifact` — JSON export / warrant return
@@ -200,22 +216,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GoogleAccountTargetAssociation2025Artifact` — warrant return (JSON)
 - `GoogleCalls2025Artifact` — warrant return (JSON)
 - `GoogleMapsLabeledPlacesWarrantReturnArtifact` — warrant return (JSON)
-- `InstagramAccountActionsArtifact` — JSON/DB export
-- `InstagramAccountHistoryArtifact` — JSON/DB export
-- `InstagramArchivedStoriesArtifact` — JSON/DB export
-- `InstagramCommentsArtifact` — JSON/DB export
-- `InstagramDirectSharesArtifact` — JSON/DB export
-- `InstagramDirectStoriesArtifact` — JSON/DB export
-- `InstagramFollowersAndFollowingArtifact` — JSON/DB export
-- `InstagramMediaArtifact` — JSON/DB export
-- `InstagramMessagesArtifact` — JSON/DB export
-- `InstagramPhotosArtifact` — JSON/DB export
-- `SnapchatAccountInformationArtifact` — JSON/DB export
-- `SnapchatFriendsArtifact` — JSON/DB export
-- `SnapchatGeolocationArtifact` — JSON/DB export
-- `SnapchatGroupChatMessagesArtifact` — JSON/DB export
-- `SnapchatIpHistoryArtifact` — JSON/DB export
-- `SnapchatMessagesWarrantReturnArtifact` — warrant return (JSON)
 
 ## 🧩 BASE-CLASS — rozhraní / základní třída (34)
 

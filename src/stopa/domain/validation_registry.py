@@ -692,6 +692,56 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_w9_parsers.py",),
     ),
+    "instagram_messages": ParserValidation(
+        parser_id="instagram_messages",
+        version="",
+        formats=(
+            "Instagram Direct Messages JSON (cloud export / warrant return — DM konverzace)",
+        ),
+        limitations=(
+            "detekce name-based (instagram marker + message/direct) — SNS pre-pass PŘED basename chainem",
+            "konverzační i plošný formát; limit MAX_MESSAGES_PER_FILE=20000 záznamů",
+        ),
+        test_files=("tests/test_w10_parsers.py",),
+    ),
+    "instagram_posts": ParserValidation(
+        parser_id="instagram_posts",
+        version="",
+        formats=(
+            "Instagram Posts/Media/Photos/Stories/Comments JSON (cloud export — obsah účtu)",
+        ),
+        limitations=(
+            "detekce name-based (instagram marker + post/media/photo/story/comment) — SNS pre-pass",
+            "příspěvek = sns_post, komentář = sns_comment; limit MAX_POSTS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w10_parsers.py",),
+    ),
+    "instagram_account": ParserValidation(
+        parser_id="instagram_account",
+        version="",
+        formats=(
+            "Instagram Account Actions/History/Followers JSON (cloud export — akce účtu + sociální graf)",
+        ),
+        limitations=(
+            "detekce name-based (instagram marker + account/follower) — SNS pre-pass",
+            "akce = event_log_entry, follower/following = contact (mimetype sns:instagram)",
+            "limit MAX_EVENTS_PER_FILE=20000 záznamů",
+        ),
+        test_files=("tests/test_w10_parsers.py",),
+    ),
+    "snapchat_wr": ParserValidation(
+        parser_id="snapchat_wr",
+        version="",
+        formats=(
+            "Snapchat Warrant Return JSON (cloud export — zprávy/přátelé/geolokace/IP historie/účet)",
+        ),
+        limitations=(
+            "detekce name-based (snapchat marker) — SNS pre-pass PŘED basename chainem",
+            "auto-detekce sekcí podle struktury payloadu; zprávy = chat_message, přátelé = contact,",
+            "geolokace = location_data, IP historie = network_connection",
+        ),
+        test_files=("tests/test_w10_parsers.py",),
+    ),
 }
 
 

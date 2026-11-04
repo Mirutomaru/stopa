@@ -143,6 +143,21 @@ from stopa.artifacts.imessage_cloud import (
     PARSER_VERSION as IMESSAGE_CLOUD_VERSION,
 )
 from stopa.artifacts.imessage_cloud import extract_icloud_messages, is_icloud_messages_file
+from stopa.artifacts.instagram_account import PARSER_VERSION as INSTAGRAM_ACCOUNT_VERSION
+from stopa.artifacts.instagram_account import (
+    extract_instagram_account_artifacts,
+    is_instagram_account_file,
+)
+from stopa.artifacts.instagram_messages import PARSER_VERSION as INSTAGRAM_MESSAGES_VERSION
+from stopa.artifacts.instagram_messages import (
+    extract_instagram_message_artifacts,
+    is_instagram_messages_file,
+)
+from stopa.artifacts.instagram_posts import PARSER_VERSION as INSTAGRAM_POSTS_VERSION
+from stopa.artifacts.instagram_posts import (
+    extract_instagram_post_artifacts,
+    is_instagram_posts_file,
+)
 from stopa.artifacts.limewire_p2p import PARSER_VERSION as LIMEWIRE_P2P_VERSION
 from stopa.artifacts.limewire_p2p import (
     extract_shared_files_artifacts,
@@ -180,6 +195,8 @@ from stopa.artifacts.skype_warrant_return import (
     extract_skype_artifacts,
     is_skype_warrant_file,
 )
+from stopa.artifacts.snapchat_wr import PARSER_VERSION as SNAPCHAT_WR_VERSION
+from stopa.artifacts.snapchat_wr import extract_snapchat_artifacts, is_snapchat_file
 from stopa.artifacts.sqlite_extract import PARSER_VERSION as SQLITE_VERSION
 from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
 from stopa.artifacts.sqlite_recover import recover_deleted_rows
@@ -358,7 +375,32 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "mem_handles": (extract_mem_handle_artifacts, MEM_HANDLES_VERSION),
     "mem_modules": (extract_mem_module_artifacts, MEM_MODULES_VERSION),
     "mem_hooks": (extract_mem_hook_artifacts, MEM_HOOKS_VERSION),
+    # ETAPA B vlna 10 — cloud SNS exporty (Instagram/Snapchat)
+    "instagram_messages": (extract_instagram_message_artifacts, INSTAGRAM_MESSAGES_VERSION),
+    "instagram_posts": (extract_instagram_post_artifacts, INSTAGRAM_POSTS_VERSION),
+    "instagram_account": (extract_instagram_account_artifacts, INSTAGRAM_ACCOUNT_VERSION),
+    "snapchat_wr": (extract_snapchat_artifacts, SNAPCHAT_WR_VERSION),
 }
+
+
+def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
+    """ETAPA B vlna 10 — cloud SNS pre-pass na celé cestě.
+
+    Instagram/Snapchat exporty mají generic basenames (``Messages.json``,
+    ``Photos.json``, ``Friends.json``), které kolidují s Google detektory v
+    basename chainu → SNS markery (instagram/snapchat) se zkoušejí PŘED ním.
+    """
+    for key, detector in (
+        ("instagram_messages", is_instagram_messages_file),
+        # account PŘED posts — "AccountHistory" obsahuje substring "stor(y)"
+        ("instagram_account", is_instagram_account_file),
+        ("instagram_posts", is_instagram_posts_file),
+        ("snapchat_wr", is_snapchat_file),
+    ):
+        if detector(full_path):
+            fn, ver = NAME_BASED_EXTRACTORS[key]
+            return fn, ver
+    return None
 
 
 def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
@@ -529,6 +571,12 @@ def _extract_artifacts_for(
     """
     if signature_type in ARTIFACT_EXTRACTORS:
         fn, ver = ARTIFACT_EXTRACTORS[signature_type]
+        return fn(path), ver
+    # ETAPA B vlna 10 — cloud SNS (Instagram/Snapchat): generic basenames kolidují
+    # s Google detektory → pre-pass na celé cestě PŘED basename chainem.
+    sns_match = _sns_prepass(str(path))
+    if sns_match is not None:
+        fn, ver = sns_match
         return fn(path), ver
     name_match = _name_based_match(path.name)  # name-based fallback (AXIOM Hunter)
     if name_match is None:

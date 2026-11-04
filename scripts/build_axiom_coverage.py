@@ -160,6 +160,27 @@ COVERED: dict[str, str] = {
     "ApiHooksArtifact": "covered",  # mem_hooks (API hooky)
     "CallbacksArtifact": "covered",  # mem_hooks (callback funkce)
     "ExecutiveObjectCallbacksArtifact": "covered",  # mem_hooks (executive callbacky)
+    # ETAPA B vlna 10 — cloud SNS exporty (Instagram/Snapchat warrant return)
+    "InstagramMessagesArtifact": "covered",  # instagram_messages (DM konverzace)
+    "CloudInstagramDirectMessagesArtifact": "covered",  # instagram_messages (cloud DM)
+    "CloudFacebookInstagramMessagesArtifact": "covered",  # instagram_messages (FB↔IG cross-posting)
+    "InstagramDirectSharesArtifact": "covered",  # instagram_messages (sdílená média v DM)
+    "CloudInstagramPostsArtifact": "covered",  # instagram_posts (posts/media/stories)
+    "CloudInstagramPostsAxiom2Pt1Artifact": "covered",  # instagram_posts (AXIOM 2.1 varianta)
+    "InstagramMediaArtifact": "covered",  # instagram_posts (média)
+    "InstagramPhotosArtifact": "covered",  # instagram_posts (fotky)
+    "InstagramArchivedStoriesArtifact": "covered",  # instagram_posts (archivované stories)
+    "InstagramDirectStoriesArtifact": "covered",  # instagram_posts (direct stories)
+    "InstagramCommentsArtifact": "covered",  # instagram_posts (komentáře)
+    "InstagramAccountActionsArtifact": "covered",  # instagram_account (akce účtu — login/password/device)
+    "InstagramAccountHistoryArtifact": "covered",  # instagram_account (historie účtu)
+    "InstagramFollowersAndFollowingArtifact": "covered",  # instagram_account (followery/following)
+    "SnapchatMessagesWarrantReturnArtifact": "covered",  # snapchat_wr (zprávy WR)
+    "SnapchatGroupChatMessagesArtifact": "covered",  # snapchat_wr (skupinové chaty)
+    "SnapchatFriendsArtifact": "covered",  # snapchat_wr (přátelé)
+    "SnapchatGeolocationArtifact": "covered",  # snapchat_wr (geolokace)
+    "SnapchatIpHistoryArtifact": "covered",  # snapchat_wr (IP historie)
+    "SnapchatAccountInformationArtifact": "covered",  # snapchat_wr (info o účtu)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -348,6 +369,27 @@ def _covered_desc(name: str) -> str:
         "ApiHooksArtifact": "mem_hooks parser (API hooky — apiFunction/callbackAddress/hookType)",
         "CallbacksArtifact": "mem_hooks parser (callback funkce v paměti)",
         "ExecutiveObjectCallbacksArtifact": "mem_hooks parser (executive object callbacky)",
+        # ETAPA B vlna 10 — cloud SNS exporty (Instagram/Snapchat warrant return)
+        "InstagramMessagesArtifact": "instagram_messages parser (DM konverzace — participants/messages, tolerantní klíče)",
+        "CloudInstagramDirectMessagesArtifact": "instagram_messages parser (cloud DM export)",
+        "CloudFacebookInstagramMessagesArtifact": "instagram_messages parser (FB↔IG cross-posted zprávy)",
+        "InstagramDirectSharesArtifact": "instagram_messages parser (sdílená média v DM, message_type=share)",
+        "CloudInstagramPostsArtifact": "instagram_posts parser (posts — caption/likes/media_url/comments)",
+        "CloudInstagramPostsAxiom2Pt1Artifact": "instagram_posts parser (AXIOM 2.1 posts varianta)",
+        "InstagramMediaArtifact": "instagram_posts parser (média — url/type)",
+        "InstagramPhotosArtifact": "instagram_posts parser (fotky)",
+        "InstagramArchivedStoriesArtifact": "instagram_posts parser (archivované stories, is_story=True)",
+        "InstagramDirectStoriesArtifact": "instagram_posts parser (direct stories)",
+        "InstagramCommentsArtifact": "instagram_posts parser (komentáře — user/text/post_id)",
+        "InstagramAccountActionsArtifact": "instagram_account parser (akce účtu → event_log_entry, ip_address/device)",
+        "InstagramAccountHistoryArtifact": "instagram_account parser (historie účtu → event_log_entry)",
+        "InstagramFollowersAndFollowingArtifact": "instagram_account parser (followery/following → contact sns:instagram)",
+        "SnapchatMessagesWarrantReturnArtifact": "snapchat_wr parser (zprávy WR — from/to/body/time, konverzace i flat)",
+        "SnapchatGroupChatMessagesArtifact": "snapchat_wr parser (skupinové chaty — group_id)",
+        "SnapchatFriendsArtifact": "snapchat_wr parser (přátelé → contact sns:snapchat:user)",
+        "SnapchatGeolocationArtifact": "snapchat_wr parser (geolokace → location_data, lat/lon tolerantní klíče)",
+        "SnapchatIpHistoryArtifact": "snapchat_wr parser (IP historie → network_connection, ip_address/event_type)",
+        "SnapchatAccountInformationArtifact": "snapchat_wr parser (info o účtu → contact user/email/phone)",
     }
     return m.get(name, "existující parser")
 

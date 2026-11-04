@@ -2,6 +2,57 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (ETAPA B vlna 10: cloud SNS exporty — Instagram/Snapchat warrant return)
+
+### Added (oblast D, P2 — port AXIOM extraktorů, 4 nové parsery / 20 AXIOM typů)
+- **Instagram Direct Messages** (`artifacts/instagram_messages.py`) — DM
+  konverzace z cloud exportu (participants/messages; tolerantní klíče
+  sender/from, text/body, timestamp/time). Sdílená média v DM → `message_type=share`
+  + `details.media_url`. Name-based detekce s SNS markerem v cestě. AXIOM
+  `InstagramMessagesArtifact` + `CloudInstagramDirectMessagesArtifact` +
+  `CloudFacebookInstagramMessagesArtifact` + `InstagramDirectSharesArtifact`.
+  Artifact type `chat_message`, `details.engine=instagram_messages`.
+- **Instagram Posts/Media/Stories/Comments** (`artifacts/instagram_posts.py`) —
+  posts (caption/likes/media_url/timestamp), média, fotky, stories
+  (`is_story=True` pro story_id/type) a komentáře (user/text/post_id). Name-based
+  detekce s SNS markerem v cestě. AXIOM `CloudInstagramPostsArtifact` +
+  `CloudInstagramPostsAxiom2Pt1Artifact` + `InstagramMediaArtifact` +
+  `InstagramPhotosArtifact` + `InstagramArchivedStoriesArtifact` +
+  `InstagramDirectStoriesArtifact` + `InstagramCommentsArtifact`. Artifact types
+  `sns_post`, `sns_comment`.
+- **Instagram Account Actions/History/Followers** (`artifacts/instagram_account.py`) —
+  akce účtu (login/password_change/device/ip_address → `event_log_entry`) a
+  followery/following (username/full_name/relationship → `contact` s
+  `mimetype=sns:instagram`). Name-based detekce s SNS markerem v cestě. AXIOM
+  `InstagramAccountActionsArtifact` + `InstagramAccountHistoryArtifact` +
+  `InstagramFollowersAndFollowingArtifact`. Artifact types `event_log_entry`,
+  `contact`.
+- **Snapchat Warrant Return** (`artifacts/snapchat_wr.py`) — zprávy WR (from/to/
+  body/time; konverzace i flat formát, group_id pro skupinové chaty), přátelé →
+  `contact` (`sns:snapchat:user`), geolokace (lat/lon tolerantní klíče →
+  `location_data`), IP historie (ip_address/event_type → `network_connection`) a
+  info o účtu (username/email/phone → `contact`). Auto-detekce subtypu podle
+  obsahu. Name-based detekce s SNS markerem v cestě. AXIOM
+  `SnapchatMessagesWarrantReturnArtifact` + `SnapchatGroupChatMessagesArtifact` +
+  `SnapchatFriendsArtifact` + `SnapchatGeolocationArtifact` +
+  `SnapchatIpHistoryArtifact` + `SnapchatAccountInformationArtifact`. Artifact
+  types `chat_message`, `contact`, `location_data`, `network_connection`.
+
+### Pipeline dispatch + C3 registry
+- Všech 4 parserů napojeno do `_sns_prepass()` — **nový pre-pass na celé cestě**
+  PŘED basename chainem. Důvod: generic basenames (`photos.json`, `messages.json`)
+  kolidují s Google detektory (Google Photos/Mail), které dostávají jen `name`.
+- **Klíčové pořadí v pre-passu**: account detektor je PŘED posts — „AccountHistory"
+  obsahuje substring „stor(y)", který by jinak chytil posts detektor.
+- C3 registry (`validation_registry.py`): nové záznamy `instagram_messages`,
+  `instagram_posts`, `instagram_account`, `snapchat_wr`.
+  `build_registry()` = **54 parserů** (předtím 50).
+
+### Coverage matice (FÁZE 17)
+- Flip 20 AXIOM typů NOT_SUPPORTED → SUPPORTED: covered **114 → 134 / 232**;
+  cloud-export kategorie **84 → 64** (největší jednorázový skok v ETAPA B);
+  memory 0, portable-local 0, base-class 34. Regen CSV/MD/JSON.
+
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 9: memory forensics — procesy/spojení/handlery/moduly/hooks)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 5 nových parserů / 14 AXIOM typů)
