@@ -792,6 +792,103 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_w11_parsers.py",),
     ),
+    # ── ETAPA B vlna 12 — cloud-export rodina Microsoft + Amazon ─────────────
+    "ms_contacts": ParserValidation(
+        parser_id="ms_contacts",
+        version="",
+        formats=(
+            "Microsoft Contacts JSON (cloud export / warrant return — kontakty účtu)",
+        ),
+        limitations=(
+            "detekce name-based (microsoft/outlook marker + contact) — pre-pass PŘED basename chainem",
+            "kontakt = contact (mimetype ms:contacts); limit MAX_CONTACTS_PER_FILE=20000 záznamů",
+        ),
+        test_files=("tests/test_w12_parsers.py",),
+    ),
+    "ms_mail_pst": ParserValidation(
+        parser_id="ms_mail_pst",
+        version="",
+        formats=(
+            "Microsoft Mail/PST JSON (cloud export / warrant return — e-mailové zprávy)",
+        ),
+        limitations=(
+            "detekce name-based (microsoft/outlook marker + mail/pst/message/email) — pre-pass PŘED basename chainem",
+            "zpráva = email_message (mimetype ms:mail); limit MAX_MESSAGES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w12_parsers.py",),
+    ),
+    "ms_teams_conversations": ParserValidation(
+        parser_id="ms_teams_conversations",
+        version="",
+        formats=(
+            "Microsoft Teams Conversations JSON (cloud export — konverzace/zprávy)",
+        ),
+        limitations=(
+            "detekce name-based (microsoft/teams marker + conversation/message/chat) — pre-pass PŘED basename chainem",
+            "zpráva = chat_message (mimetype ms:teams); limit MAX_MESSAGES_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w12_parsers.py",),
+    ),
+    "ms_teams_teams": ParserValidation(
+        parser_id="ms_teams_teams",
+        version="",
+        formats=(
+            "Microsoft Teams Teams JSON (cloud export — týmy + členství)",
+        ),
+        limitations=(
+            "detekce name-based (teams.json / ms_teams.json, nebo team + microsoft/teams v cestě) — pre-pass PŘED basename chainem",
+            "tým = contact s rolí team_member; členství se agreguje do details",
+        ),
+        test_files=("tests/test_w12_parsers.py",),
+    ),
+    "ms_outlook_calendar": ParserValidation(
+        parser_id="ms_outlook_calendar",
+        version="",
+        formats=(
+            "Microsoft Outlook Calendar JSON (cloud export — události/kalendář)",
+        ),
+        limitations=(
+            "detekce name-based (microsoft/outlook marker + calendar/event/appointment) — pre-pass PŘED basename chainem",
+            "událost = calendar_event (mimetype ms:calendar); limit MAX_EVENTS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w12_parsers.py",),
+    ),
+    "sharepoint_wr": ParserValidation(
+        parser_id="sharepoint_wr",
+        version="",
+        formats=(
+            "SharePoint JSON (cloud export / warrant return — obsah/dokumenty/site pages)",
+        ),
+        limitations=(
+            "detekce name-based (sharepoint marker) — pre-pass PŘED basename chainem",
+            "dokument = cloud_file, site page = web_page; limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w12_parsers.py",),
+    ),
+    "amazon_cloudtrail": ParserValidation(
+        parser_id="amazon_cloudtrail",
+        version="",
+        formats=(
+            "Amazon CloudTrail JSON (cloud export — auditní události + Insights anomálie)",
+        ),
+        limitations=(
+            "detekce name-based (cloudtrail marker) — pre-pass PŘED basename chainem",
+            "událost = event_log_entry (mimetype aws:cloudtrail); limit MAX_EVENTS_PER_FILE=20000 záznamů",
+        ),
+        test_files=("tests/test_w12_parsers.py",),
+    ),
+    "amazon_ec2_s3": ParserValidation(
+        parser_id="amazon_ec2_s3",
+        version="",
+        formats=(
+            "Amazon EC2/S3 JSON (cloud export — instance + S3 objekty, auto-detekce formátu)",
+        ),
+        limitations=(
+            "detekce name-based (amazon/aws marker + ec2/s3/instance/bucket) — pre-pass PŘED basename chainem",
+            "instance = cloud_instance (aws:ec2), S3 objekt = cloud_file (aws:s3); limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w12_parsers.py",),
+    ),
 }
 
 

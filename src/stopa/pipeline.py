@@ -27,6 +27,16 @@ from stopa.artifacts.allowlisted_websites import (
     extract_allowlisted_websites_artifacts,
     is_allowlisted_websites_file,
 )
+from stopa.artifacts.amazon_cloudtrail import PARSER_VERSION as AMAZON_CLOUDTRAIL_VERSION
+from stopa.artifacts.amazon_cloudtrail import (
+    extract_cloudtrail_artifacts,
+    is_amazon_cloudtrail_file,
+)
+from stopa.artifacts.amazon_ec2_s3 import PARSER_VERSION as AMAZON_EC2_S3_VERSION
+from stopa.artifacts.amazon_ec2_s3 import (
+    extract_amazon_ec2_s3_artifacts,
+    is_amazon_ec2_s3_file,
+)
 from stopa.artifacts.bebo_chat import PARSER_VERSION as BEBO_CHAT_VERSION
 from stopa.artifacts.bebo_chat import extract_bebo_artifacts, is_bebo_chat_file
 from stopa.artifacts.chatroulette import PARSER_VERSION as CHATROULETTE_VERSION
@@ -179,6 +189,29 @@ from stopa.artifacts.mem_processes import PARSER_VERSION as MEM_PROCESSES_VERSIO
 from stopa.artifacts.mem_processes import extract_mem_process_artifacts, is_mem_processes_file
 from stopa.artifacts.mem_scan import PARSER_VERSION as MEMSCAN_VERSION
 from stopa.artifacts.mem_scan import extract_mem_scan_artifacts, is_mem_scan_file
+from stopa.artifacts.ms_contacts import PARSER_VERSION as MS_CONTACTS_VERSION
+from stopa.artifacts.ms_contacts import (
+    extract_ms_contact_artifacts,
+    is_ms_contacts_file,
+)
+from stopa.artifacts.ms_mail_pst import PARSER_VERSION as MS_MAIL_PST_VERSION
+from stopa.artifacts.ms_mail_pst import extract_ms_mail_artifacts, is_ms_mail_file
+from stopa.artifacts.ms_outlook_calendar import (
+    PARSER_VERSION as MS_OUTLOOK_CALENDAR_VERSION,
+)
+from stopa.artifacts.ms_outlook_calendar import (
+    extract_outlook_calendar_artifacts,
+    is_ms_outlook_calendar_file,
+)
+from stopa.artifacts.ms_teams_conversations import (
+    PARSER_VERSION as MS_TEAMS_CONVERSATIONS_VERSION,
+)
+from stopa.artifacts.ms_teams_conversations import (
+    extract_teams_conversation_artifacts,
+    is_ms_teams_conversations_file,
+)
+from stopa.artifacts.ms_teams_teams import PARSER_VERSION as MS_TEAMS_TEAMS_VERSION
+from stopa.artifacts.ms_teams_teams import extract_teams, is_ms_teams_file
 from stopa.artifacts.msn_messenger import PARSER_VERSION as MSN_VERSION
 from stopa.artifacts.msn_messenger import extract_msn_artifacts, is_msn_chat_file
 from stopa.artifacts.net_connections import PARSER_VERSION as NETSTAT_VERSION
@@ -192,6 +225,11 @@ from stopa.artifacts.plist_extract import PARSER_VERSION as PLIST_VERSION
 from stopa.artifacts.plist_extract import extract_plist_artifacts
 from stopa.artifacts.registry_extract import PARSER_VERSION as REGISTRY_VERSION
 from stopa.artifacts.registry_extract import extract_registry_artifacts
+from stopa.artifacts.sharepoint_wr import PARSER_VERSION as SHAREPOINT_WR_VERSION
+from stopa.artifacts.sharepoint_wr import (
+    extract_sharepoint_artifacts,
+    is_sharepoint_file,
+)
 from stopa.artifacts.skype_warrant_return import PARSER_VERSION as SKYPE_WR_VERSION
 from stopa.artifacts.skype_warrant_return import (
     extract_skype_artifacts,
@@ -402,15 +440,33 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "twitter_messages": (extract_twitter_message_artifacts, TWITTER_MESSAGES_VERSION),
     "twitter_users": (extract_twitter_user_artifacts, TWITTER_USERS_VERSION),
     "facebook_wr": (extract_facebook_artifacts, FACEBOOK_WR_VERSION),
+    # ETAPA B vlna 12 — cloud-export rodina Microsoft + Amazon
+    "ms_contacts": (extract_ms_contact_artifacts, MS_CONTACTS_VERSION),
+    "ms_mail_pst": (extract_ms_mail_artifacts, MS_MAIL_PST_VERSION),
+    "ms_teams_conversations": (
+        extract_teams_conversation_artifacts,
+        MS_TEAMS_CONVERSATIONS_VERSION,
+    ),
+    "ms_teams_teams": (extract_teams, MS_TEAMS_TEAMS_VERSION),
+    "ms_outlook_calendar": (
+        extract_outlook_calendar_artifacts,
+        MS_OUTLOOK_CALENDAR_VERSION,
+    ),
+    "sharepoint_wr": (extract_sharepoint_artifacts, SHAREPOINT_WR_VERSION),
+    "amazon_cloudtrail": (extract_cloudtrail_artifacts, AMAZON_CLOUDTRAIL_VERSION),
+    "amazon_ec2_s3": (extract_amazon_ec2_s3_artifacts, AMAZON_EC2_S3_VERSION),
 }
 
 
 def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
-    """ETAPA B vlna 10/11 — cloud SNS pre-pass na celé cestě.
+    """ETAPA B vlna 10/11/12 — cloud SNS + Microsoft/Amazon pre-pass na celé cestě.
 
     Instagram/Snapchat/Twitter/Facebook exporty mají generic basenames
     (``Messages.json``, ``Photos.json``, ``Friends.json``), které kolidují s
     Google detektory v basename chainu → SNS markery se zkoušejí PŘED ním.
+    ETAPA B vlna 12: + Microsoft/Amazon cloud exporty (generic basenames
+    ``contacts.json`` / ``events.json`` / ``instances.json``) — specifické
+    detektory PŘED obecnějšími (conversations PŘED teams, contacts PŘED mail).
     """
     for key, detector in (
         ("instagram_messages", is_instagram_messages_file),
@@ -423,6 +479,16 @@ def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
         ("twitter_users", is_twitter_users_file),
         ("twitter_posts", is_twitter_posts_file),
         ("facebook_wr", is_facebook_file),
+        # ETAPA B vlna 12 — Microsoft (contacts PŘED mail; conversations PŘED teams)
+        ("ms_contacts", is_ms_contacts_file),
+        ("ms_mail_pst", is_ms_mail_file),
+        ("ms_teams_conversations", is_ms_teams_conversations_file),
+        ("ms_teams_teams", is_ms_teams_file),
+        ("ms_outlook_calendar", is_ms_outlook_calendar_file),
+        # ETAPA B vlna 12 — SharePoint + Amazon (cloudtrail PŘED ec2_s3)
+        ("sharepoint_wr", is_sharepoint_file),
+        ("amazon_cloudtrail", is_amazon_cloudtrail_file),
+        ("amazon_ec2_s3", is_amazon_ec2_s3_file),
     ):
         if detector(full_path):
             fn, ver = NAME_BASED_EXTRACTORS[key]

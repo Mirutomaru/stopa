@@ -195,6 +195,19 @@ COVERED: dict[str, str] = {
     "CloudFacebookTimelineArtifact": "covered",  # facebook_wr (timeline příspěvky)
     "CloudFacebookMobileTimelineArtifact": "covered",  # facebook_wr (mobilní timeline)
     "CloudFacebookProfileInfoArtifact": "covered",  # facebook_wr (info o profilu)
+    # ETAPA B vlna 12 — cloud-export rodina Microsoft + Amazon (8 nových parserů, testováno)
+    "CloudMicrosoftContactsArtifact": "covered",  # ms_contacts (kontakty účtu)
+    "CloudMicrosoftMailPstArtifact": "covered",  # ms_mail_pst (e-mailové zprávy)
+    "CloudMicrosoftTeamsConversationsArtifact": "covered",  # ms_teams_conversations (konverzace)
+    "CloudMicrosoftTeamsTeamsArtifact": "covered",  # ms_teams_teams (týmy + členství)
+    "CloudOutlookCalendarArtifact": "covered",  # ms_outlook_calendar (události/kalendář)
+    "CloudSharePointContentArtifact": "covered",  # sharepoint_wr (obsah)
+    "CloudSharePointDocumentsArtifact": "covered",  # sharepoint_wr (dokumenty)
+    "CloudSharePointSitePagesArtifact": "covered",  # sharepoint_wr (site pages)
+    "CloudAmazonCloudTrailEventsArtifact": "covered",  # amazon_cloudtrail (auditní události)
+    "CloudAmazonCloudTrailInsightsArtifact": "covered",  # amazon_cloudtrail (insights anomálie)
+    "CloudAmazonEC2InstanceArtifact": "covered",  # amazon_ec2_s3 (instance)
+    "CloudAmazonS3FilesArtifact": "covered",  # amazon_ec2_s3 (S3 objekty)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -418,6 +431,19 @@ def _covered_desc(name: str) -> str:
         "CloudFacebookTimelineArtifact": "facebook_wr parser (timeline příspěvky → sns_post post_type=timeline)",
         "CloudFacebookMobileTimelineArtifact": "facebook_wr parser (mobilní timeline → sns_post)",
         "CloudFacebookProfileInfoArtifact": "facebook_wr parser (info o profilu → contact relationship=account)",
+        # ETAPA B vlna 12 — cloud-export rodina Microsoft + Amazon
+        "CloudMicrosoftContactsArtifact": "ms_contacts parser (kontakty účtu → contact ms:contacts)",
+        "CloudMicrosoftMailPstArtifact": "ms_mail_pst parser (e-mailové zprávy → email_message ms:mail)",
+        "CloudMicrosoftTeamsConversationsArtifact": "ms_teams_conversations parser (konverzace/zprávy → chat_message ms:teams)",
+        "CloudMicrosoftTeamsTeamsArtifact": "ms_teams_teams parser (týmy + členství → contact role=team_member)",
+        "CloudOutlookCalendarArtifact": "ms_outlook_calendar parser (události/kalendář → calendar_event ms:calendar)",
+        "CloudSharePointContentArtifact": "sharepoint_wr parser (obsah → cloud_file / web_page)",
+        "CloudSharePointDocumentsArtifact": "sharepoint_wr parser (dokumenty → cloud_file)",
+        "CloudSharePointSitePagesArtifact": "sharepoint_wr parser (site pages → web_page)",
+        "CloudAmazonCloudTrailEventsArtifact": "amazon_cloudtrail parser (auditní události → event_log_entry aws:cloudtrail)",
+        "CloudAmazonCloudTrailInsightsArtifact": "amazon_cloudtrail parser (insights anomálie → event_log_entry insight=True)",
+        "CloudAmazonEC2InstanceArtifact": "amazon_ec2_s3 parser (instance → cloud_instance aws:ec2)",
+        "CloudAmazonS3FilesArtifact": "amazon_ec2_s3 parser (S3 objekty → cloud_file aws:s3)",
     }
     return m.get(name, "existující parser")
 

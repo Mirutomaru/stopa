@@ -5,15 +5,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 147
+- **✅ COVERED**: 159
 - **🔧 PORTABLE-LOCAL**: 0
-- **☁️ CLOUD-EXPORT**: 51
+- **☁️ CLOUD-EXPORT**: 39
 - **💾 MEMORY**: 0
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (147)
+## ✅ COVERED — STOPA už umí (existující parser) (159)
 
 - `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
 - `ApiHooksArtifact` — mem_hooks parser (API hooky — apiFunction/callbackAddress/hookType)
@@ -26,6 +26,10 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CallbacksArtifact` — mem_hooks parser (callback funkce v paměti)
 - `ChatrouletteArtifact` — chatroulette parser (text/JSON video chat)
 - `ClipboardArtifact` — win_clipboard (sekundární registry průchod NTUSER.DAT)
+- `CloudAmazonCloudTrailEventsArtifact` — amazon_cloudtrail parser (auditní události → event_log_entry aws:cloudtrail)
+- `CloudAmazonCloudTrailInsightsArtifact` — amazon_cloudtrail parser (insights anomálie → event_log_entry insight=True)
+- `CloudAmazonEC2InstanceArtifact` — amazon_ec2_s3 parser (instance → cloud_instance aws:ec2)
+- `CloudAmazonS3FilesArtifact` — amazon_ec2_s3 parser (S3 objekty → cloud_file aws:s3)
 - `CloudAppleDriveArtifact` — cloud_drive_files parser (Apple Drive soubory)
 - `CloudDriveFileArtifact` — cloud_drive_files parser (Google Drive soubory — název/velikost/checksum/čas)
 - `CloudDriveFileVersionArtifact` — cloud_drive_files parser (verze souboru do details.versions)
@@ -50,8 +54,16 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudInstagramPostsArtifact` — instagram_posts parser (posts — caption/likes/media_url/comments)
 - `CloudInstagramPostsAxiom2Pt1Artifact` — instagram_posts parser (AXIOM 2.1 posts varianta)
 - `CloudMboxEmailArtifact` — email_mbox parser
+- `CloudMicrosoftContactsArtifact` — ms_contacts parser (kontakty účtu → contact ms:contacts)
+- `CloudMicrosoftMailPstArtifact` — ms_mail_pst parser (e-mailové zprávy → email_message ms:mail)
+- `CloudMicrosoftTeamsConversationsArtifact` — ms_teams_conversations parser (konverzace/zprávy → chat_message ms:teams)
+- `CloudMicrosoftTeamsTeamsArtifact` — ms_teams_teams parser (týmy + členství → contact role=team_member)
 - `CloudOneDriveFileArtifact` — cloud_drive_files parser (OneDrive soubory — lastModifiedDateTime marker)
 - `CloudOneDriveFileVersionArtifact` — cloud_drive_files parser (OneDrive verze souboru)
+- `CloudOutlookCalendarArtifact` — ms_outlook_calendar parser (události/kalendář → calendar_event ms:calendar)
+- `CloudSharePointContentArtifact` — sharepoint_wr parser (obsah → cloud_file / web_page)
+- `CloudSharePointDocumentsArtifact` — sharepoint_wr parser (dokumenty → cloud_file)
+- `CloudSharePointSitePagesArtifact` — sharepoint_wr parser (site pages → web_page)
 - `CloudTwitterDirectMessagesArtifact` — twitter_messages parser (DM konverzace → chat_message, konverzační i flat formát)
 - `CloudTwitterPostsArtifact` — twitter_posts parser (příspěvky → sns_post, retweety/odpovědi post_type)
 - `CloudTwitterPostsPublicArtifact` — twitter_posts parser (veřejné příspěvky → sns_post)
@@ -163,13 +175,9 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## ☁️ CLOUD-EXPORT — JSON export / warrant return (51)
+## ☁️ CLOUD-EXPORT — JSON export / warrant return (39)
 
 - `CloudAccountsInfoArtifact` — JSON export / warrant return
-- `CloudAmazonCloudTrailEventsArtifact` — JSON export / warrant return
-- `CloudAmazonCloudTrailInsightsArtifact` — JSON export / warrant return
-- `CloudAmazonEC2InstanceArtifact` — JSON export / warrant return
-- `CloudAmazonS3FilesArtifact` — JSON export / warrant return
 - `CloudAndroidBackupsArtifact` — JSON export / warrant return
 - `CloudAppleBackupArtifact` — JSON export / warrant return
 - `CloudAppleContactsArtifact` — JSON export / warrant return
@@ -199,16 +207,8 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudGoogleTasksArtifact` — JSON export / warrant return
 - `CloudHangoutsMessagesArtifact` — JSON export / warrant return
 - `CloudMegaFilesArtifact` — JSON export / warrant return
-- `CloudMicrosoftContactsArtifact` — JSON export / warrant return
-- `CloudMicrosoftMailPstArtifact` — JSON export / warrant return
-- `CloudMicrosoftTeamsConversationsArtifact` — JSON export / warrant return
-- `CloudMicrosoftTeamsTeamsArtifact` — JSON export / warrant return
-- `CloudOutlookCalendarArtifact` — JSON export / warrant return
 - `CloudPasswordsArtifact` — JSON export / warrant return
 - `CloudRecentDevicesArtifact` — JSON export / warrant return
-- `CloudSharePointContentArtifact` — JSON export / warrant return
-- `CloudSharePointDocumentsArtifact` — JSON export / warrant return
-- `CloudSharePointSitePagesArtifact` — JSON export / warrant return
 - `CloudTimelineArtifact` — JSON export / warrant return
 - `CloudWhatsAppBackupsArtifact` — JSON export / warrant return
 - `CloudWhatsAppChatsArtifact` — JSON export / warrant return
