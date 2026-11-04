@@ -1,31 +1,26 @@
-# STOPA — Checkpoint (latest)
+# STOPA — Checkpoint (poslední dokončený stav)
 
 **Datum:** 2026-11-04
-**Úkol:** STP-038 — ETAPA C: volba směru + synchronizace roadmapy (rozdělení `db.py`)
-**Oblast / priorita:** A (Core Architecture) / P1
-**Stav:** DONE ★ **ETAPA C ZAHÁJENA**
+**Poslední dokončený úkol:** STP-039 — ETAPA C vlna 1: rozdělení monolitu `db.py` (Case/File/Audit repozitáře) | Commit: ```58628a9```
 
-## Co se stalo
-- Audit reálného stavu všech oblastí A–Q v kódu (ne jen roadmapě).
-- Synchronizace zastaralých „Nedokončeno" položek — mezitím dokončeno: E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021).
-- **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** (nejvyšší zbývající priorita P1, největší technický dluh).
+## Stav projektu
+- **Fáze:** Oblast A (Core Architecture) — **ETAPA C vlna 1 DOKONČENA ★**
+- **Full suite:** 1757 passed, 1 skipped (~18s); ruff clean (`src/stopa tests scripts`)
+- **Coverage AXIOM:** covered **198 / 232 ★**, NOT_SUPPORTED celkem **0** (base-class 34 = rozhraní)
+- **C3 registry:** 76 parserů (bez změny — vlna 1 je refactor datové vrstvy, ne parsery)
 
-## Plán vln ETAPY C
-| Vlna | Úkol | Obsah | Akceptační kritéria |
-|---|---|---|---|
-| 1 | STP-039 | `CaseRepository` + `FileRepository` + `AuditRepository` (~28 metod) | backward compat API, full suite zelená, ruff clean |
-| 2 | STP-040 | `ArtifactRepository` + `EntityRepository` (~23 metod) | totéž |
-| 3 | STP-041 | facade úklid + audit (`db.py` < ~600 ř.) | totéž + finální audit test |
-
-## Metriky (bez změny — jen docs)
-- Full suite: **1742 passed, 1 skipped** (~18s)
-- Ruff: clean
-- Coverage: covered **198 / 232 ★**, NOT_SUPPORTED **0**
-- C3 registry: **76 parserů**
-
-## Commity
-- Feature (docs): viz `git log` — `docs(stp-038): ETAPA C volba směru + synchronizace roadmapy (db.py)`
-- Předchozí HEAD: `a4307c8` (STP-037 docs)
+## Co se stalo (STP-039)
+Rozklad monolitu `src/stopa/data/db.py` (~2090 ř., 67 metod) na doménová repozitáře — vlna 1:
+- **CaseRepository** (`data/case_repository.py`) — cases, sources, custody metadata
+- **FileRepository** (`data/file_repository.py`) — files, evidence_marks, FTS5 search + `_fts_query`
+- **AuditRepository** (`data/audit_repository.py`) — audit log + hash chaining (P0 Core C4) + Ed25519 kontrolní body + custody items
+- **_helpers.py** — sdílené konverze (`_iso`, `_row_to_record`)
+- Facade `CaseDB` drží tři repozitáře na **sdílené SQLite connection** a deleguje; **backward compat zachován** (veřejné API beze změny, `_fts_query` re-export pro `test_search`)
+- `db.py`: 2090 → **1565 řádků** (−525)
+- Nové testy: `tests/test_stp039_wave1_repos.py` (**15 testů**)
 
 ## Nejbližší krok
-**STP-039 — ETAPA C vlna 1:** extrakce `CaseRepository` + `FileRepository` + `AuditRepository` z `db.py`; `CaseDB` deleguje, facade zachován.
+**STP-040 — ETAPA C vlna 2:** extrakce `ArtifactRepository` + `EntityRepository` (~23 metod: artifacts CRUD/FTS5, findings, lineage_events, analysis_operations, entity resolution). Akceptační kritéria: žádná změna veřejného API `CaseDB`, full suite zelená, ruff clean.
+
+## Po vlně 3 (STP-041)
+facade úklid + audit — cíl `db.py` < ~600 řádků = ETAPA C dokončena ★

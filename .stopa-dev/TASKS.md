@@ -383,3 +383,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Testy:** full suite **1742 passed, 1 skipped** (bez změny — jen docs); ruff clean
 - **Plán vln ETAPY C:** vlna 1 STP-039 (`CaseRepository`+`FileRepository`+`AuditRepository`, ~28 metod), vlna 2 STP-040 (`ArtifactRepository`+`EntityRepository`, ~23 metod), vlna 3 STP-041 (facade úklid + audit). Akceptační kritéria: `db.py` < ~600 ř., backward compat API, full suite zelená po každé vlně.
 - **Dokončeno:** 2026-11-04 | Commit: ```1292e72```
+
+### STP-039 — ETAPA C vlna 1: rozdělení `db.py` (Case/File/Audit repozitáře)
+- **Oblast:** A (Core Architecture) | **Priorita:** P1 | **Stav:** DONE
+- **Popis:** První vlna rozkladu monolitu `src/stopa/data/db.py` (~2090 ř., 67 metod) na doménová repozitáře. Vyčleněny tři tenké SQLite vrstvy bez business logiky: **CaseRepository** (cases, sources, custody metadata), **FileRepository** (files, evidence_marks, FTS5 search + `_fts_query`), **AuditRepository** (audit log + hash chaining P0 Core C4 + Ed25519 kontrolní body). Sdílené konverze (`_iso`, `_row_to_record`) přesunuty do `_helpers.py`. Facade `CaseDB` drží tři repozitáře na sdílené SQLite connection a deleguje; **backward compat zachován** (veřejné API beze změny, `_fts_query` re-export pro `test_search`).
+- **Závislosti:** STP-038 (volba směru ETAPY C)
+- **Dotčené moduly:** `src/stopa/data/{case_repository,file_repository,audit_repository,_helpers}.py` (nové), `db.py` (facade — 2090 → **1565 řádků**, −525; zbývají artifacts/findings/lineage/analysis_operations pro vlny 2–3)
+- **Testy:** 15 nových testů zelených (`tests/test_stp039_wave1_repos.py` — wiring sdílené connection, delegace přes facade i přímé čtení z repo, nezávislé repozitáře na stejném spojení, backward compat `_fts_query`); full suite **1757 passed, 1 skipped** (baseline 1742 + 15); ruff clean
+- **Dokončeno:** 2026-11-04 | Commit: ```58628a9```

@@ -18,7 +18,7 @@ Pipeline = jediný `analyze()` s dispatchem magic signatur + name-based fallback
 ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 
 ## Aktuální fáze vývoje
-**Oblast A (Core Architecture)** — **STP-038 hotový = ETAPA C ZAHÁJENA ★** (volba směru + synchronizace roadmapy: audit reálného stavu všech oblastí A–Q v kódu, oprava zastaralých „Nedokončeno" položek — E Timeline Intel 2.0 ✓ STP-018, L report **20 sekcí** ✓ STP-020, H PII redactor ✓ STP-019, J RBAC ✓ STP-022, K/Q STIX+JSONL/XML ✓ STP-023, N/O stream parsing + Processing Monitor ✓ STP-021; **ROZHODNUTÍ: ETAPA C = rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** — vlny 1–3 = STP-039/040/041). Předtím: **STP-037 hotový = ETAPA B DOKONČENA ★** (vlna 15: závěrečný audit, `tests/test_etapa_b_final_audit.py` s 13 invariantními testy; covered **198 / 232 ★**, NOT_SUPPORTED celkem **0**, C3 registry **76 parserů**; oblast D v roadmapě ✅ hotovo). Předtím: **STP-036 ETAPA B vlna 14** (dokončení cloud-export kategorie,
+**Oblast A (Core Architecture)** — **STP-039 hotový = ETAPA C vlna 1 DOKONČENA ★** (rozdělení monolitu `db.py`: vyčleněny **CaseRepository** + **FileRepository** + **AuditRepository** do samostatných modulů, sdílené konverze do `_helpers.py`; facade `CaseDB` deleguje na sdílenou connection, backward compat zachován; `db.py` 2090 → **1565 řádků**; full suite **1757 passed, 1 skipped**). Předtím: **STP-038 hotový = ETAPA C ZAHÁJENA ★** (volba směru + synchronizace roadmapy: audit reálného stavu všech oblastí A–Q v kódu, oprava zastaralých „Nedokončeno" položek — E Timeline Intel 2.0 ✓ STP-018, L report **20 sekcí** ✓ STP-020, H PII redactor ✓ STP-019, J RBAC ✓ STP-022, K/Q STIX+JSONL/XML ✓ STP-023, N/O stream parsing + Processing Monitor ✓ STP-021; **ROZHODNUTÍ: ETAPA C = rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** — vlny 1–3 = STP-039/040/041). Předtím: **STP-037 hotový = ETAPA B DOKONČENA ★** (vlna 15: závěrečný audit, `tests/test_etapa_b_final_audit.py` s 13 invariantními testy; covered **198 / 232 ★**, NOT_SUPPORTED celkem **0**, C3 registry **76 parserů**; oblast D v roadmapě ✅ hotovo). Předtím: **STP-036 ETAPA B vlna 14** (dokončení cloud-export kategorie,
 6 nových parserů / 19 AXIOM typů → NOT_SUPPORTED celkem **0 ★**; `_sns_prepass()` rozšířen o 6 vlna-14 detektorů). Předtím: **STP-035 ETAPA B vlna 13** (cloud-export Google II + Box/Dropbox/Mega,
 4 nové parsery / 9 AXIOM typů + 11 čistých flipů; `_sns_prepass()` rozšířen o vlnu 13 detektory). Předtím: **STP-034 ETAPA B vlna 12** (cloud-export Microsoft + Amazon,
 8 parserů / 12 AXIOM typů; `_sns_prepass()` rozšířen o 8 MS+Amazon detektorů bez kolizí). Předtím: **STP-033 ETAPA B vlna 11** (cloud SNS exporty — Twitter/X + Facebook warrant return,
@@ -43,15 +43,16 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 
 | Metrika | Hodnota |
 |---|---|
-| Dokončené úkoly (TASKS.md) | **38** |
+| Dokončené úkoly (TASKS.md) | **39** |
 | Rozpracované (IN_PROGRESS) | 0 |
-| Čekající (BACKLOG/READY) | **0** (všechny STP-001..038 DONE; ETAPA C zahájena — další = vlna 1 STP-039 rozdělení `db.py`) |
+| Čekající (BACKLOG/READY) | **0** (všechny STP-001..039 DONE; ETAPA C vlna 1 hotová — další = vlna 2 STP-040 rozdělení `db.py`) |
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-038 — ETAPA C: volba směru + synchronizace roadmapy (rozdělení `db.py`)** (oblast A, P1) | Commit: ```1292e72```
-Audit reálného stavu všech oblastí A–Q v kódu (ne jen roadmapě) — zjištěno, že několik „Nedokončeno" položek bylo mezitím dokončeno a roadmapu jsem synchronizoval: E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021). **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** (nejvyšší zbývající priorita P1, největší technický dluh). Plán vln: STP-039 (Case/File/Audit Repository), STP-040 (Artifact/Entity Repository), STP-041 (facade úklid + audit). Full suite **1742 passed, 1 skipped**, ruff clean.
-Předtím: STP-037 (ETAPA B vlna 15 závěrečný audit — ETAPA B dokončena ★, `166e42e`),
+**STP-039 — ETAPA C vlna 1: rozdělení `db.py` (Case/File/Audit repozitáře)** (oblast A, P1) | Commit: ```58628a9```
+První vlna rozkladu monolitu `src/stopa/data/db.py` (~2090 ř., 67 metod) na doménová repozitáře. Vyčleněny tři tenké SQLite vrstvy bez business logiky: **CaseRepository** (cases, sources, custody metadata), **FileRepository** (files, evidence_marks, FTS5 search + `_fts_query`), **AuditRepository** (audit log + hash chaining P0 Core C4 + Ed25519 kontrolní body); sdílené konverze (`_iso`, `_row_to_record`) do `_helpers.py`. Facade `CaseDB` drží tři repozitáře na sdílené SQLite connection a deleguje; **backward compat zachován** (veřejné API beze změny, `_fts_query` re-export pro `test_search`). `db.py` 2090 → **1565 řádků** (−525); zbývají artifacts/findings/lineage/analysis_operations pro vlny 2–3. Full suite **1757 passed, 1 skipped**, ruff clean.
+Předtím: STP-038 (ETAPA C volba směru + synchronizace roadmapy — ETAPA C ZAHÁJENA ★, `1292e72`),
+STP-037 (ETAPA B vlna 15 závěrečný audit — ETAPA B dokončena ★, `166e42e`),
 STP-036 (vlna 14 dokončení cloud-export kategorie, `496391b`),
 STP-035 (vlna 13 cloud-export Google II + Box/Dropbox/Mega, `31bceb2`),
 STP-034 (vlna 12 cloud-export Microsoft + Amazon, `47e7103`),
@@ -70,20 +71,20 @@ STP-018 (Timeline Intel 2.0, `cd5aa25`), STP-017 (vlna 3), STP-016 (vlna 2), STP
 STP-012b, STP-012 (`e227929`), STP-013..015 (vlna 1, `afc49a0`).
 
 ## Aktuální úkol
-Žádný aktivní — **ETAPA C zahájena** (STP-038 volba směru hotová); čeká na zahájení vlny 1.
+Žádný aktivní — **ETAPA C vlna 1 hotová** (STP-039 dokončen); čeká na zahájení vlny 2.
 
 ## Nejbližší následující úkol
-**STP-039 — ETAPA C vlna 1: rozdělení `db.py` — extrakce `CaseRepository` + `FileRepository` + `AuditRepository`** (oblast A, P1). ~28 metod (case/source/custody, file/flags/marked, audit log/operations/integrity checkpoints) přesunuty do doménových repozitářů; `CaseDB` deleguje, facade zachován pro backward compat. Akceptační kritéria: žádná změna veřejného API `CaseDB`, full suite zelená, ruff clean.
+**STP-040 — ETAPA C vlna 2: rozdělení `db.py` — extrakce `ArtifactRepository` + `EntityRepository`** (oblast A, P1). ~23 metod (artifacts CRUD/FTS5, findings, lineage_events, analysis_operations, entity resolution) přesunuty do doménových repozitářů; `CaseDB` deleguje, facade zachován pro backward compat. Akceptační kritéria: žádná změna veřejného API `CaseDB`, full suite zelená, ruff clean.
 
 ## Poslední úspěšné testování
-- **2026-11-04:** `.venv/bin/python -m pytest -q` → **1742 passed, 1 skipped** (~18s)
+- **2026-11-04:** `.venv/bin/python -m pytest -q` → **1757 passed, 1 skipped** (~18s) — po STP-039 vlna 1 (+15 testů `test_stp039_wave1_repos.py`)
 - `.venv/bin/ruff check src/stopa tests scripts` → All checks passed!
 - Coverage matice deterministická (SHA-256 diff ✓), covered **198 / 232 ★**, portable-local NOT_SUPPORTED = **0 ★**, cloud-export NOT_SUPPORTED = **0 ★**
 
 ## Známé kritické problémy
 Žádné blokující. Technický dluh viz `docs/STOPA_TECHNICAL_AUDIT.md`:
-- `db.py` ~2090 řádků (monolit — **rozkládán v ETAPĚ C, vlny 1–3 = STP-039/040/041**)
+- `db.py` **1565 řádků** (monolit — **rozkládán v ETAPĚ C, vlny 1–3 = STP-039/040/041**; vlna 1 hotová: Case/File/Audit repozitáře vyčleněny)
 - izolace parserů (sandbox) zbývá v oblasti M
 
 ## Datum poslední aktualizace
-**2026-11-04** — po dokončení STP-038 ETAPA C volba směru + synchronizace roadmapy (**ETAPA C ZAHÁJENA ★**: rozdělení `db.py` na doménová repozitáře; full suite **1742 passed, 1 skipped**, ruff clean).
+**2026-11-04** — po dokončení STP-039 ETAPA C vlna 1 (**rozdělení `db.py`: Case/File/Audit repozitáře**; full suite **1757 passed, 1 skipped**, ruff clean).

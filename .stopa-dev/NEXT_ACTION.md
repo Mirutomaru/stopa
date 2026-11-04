@@ -1,21 +1,21 @@
 # STOPA — NEXT ACTION
 
 **Datum:** 2026-11-04
-**Poslední hotový úkol:** STP-038 — ETAPA C volba směru + synchronizace roadmapy (oblast A, P1) ★ **ETAPA C ZAHÁJENA**
+**Poslední hotový úkol:** STP-039 — ETAPA C vlna 1: rozdělení monolitu `db.py` (Case/File/Audit repozitáře) | Commit ```58628a9``` ★ **ETAPA C vlna 1 DOKONČENA**
 
 ## Co je hotové
 - ETAPA B dokončena (STP-037, vlna 15 — závěrečný audit; commit `166e42e`); oblast D ✅ hotovo.
-- Audit reálného stavu všech oblastí A–Q v kódu + synchronizace zastaralých „Nedokončeno" položek roadmapy (E/L/H/J/K/Q/N/O).
-- **ROZHODNUTÍ: ETAPA C = rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře.**
+- ETAPA C zahájena (STP-038 volba směru + synchronizace roadmapy; commit `1292e72`).
+- **ETAPA C vlna 1 dokončena (STP-039):** vyčleněny CaseRepository + FileRepository + AuditRepository do samostatných modulů, sdílené konverze do `_helpers.py`; facade `CaseDB` deleguje na sdílenou connection; backward compat zachován. `db.py` 2090 → **1565 řádků** (−525). Full suite **1757 passed, 1 skipped**, ruff clean.
 
-## Nejbližší úkol — STP-039 (ETAPA C vlna 1)
-**Rozdělení `db.py` — extrakce `CaseRepository` + `FileRepository` + `AuditRepository`:**
-1. Nové moduly `src/stopa/data/repositories/case_repository.py`, `file_repository.py`, `audit_repository.py`.
-2. Přesun ~28 metod (case/source/custody, file/flags/marked, audit log/operations/integrity checkpoints).
+## Nejbližší úkol — STP-040 (ETAPA C vlna 2)
+**Rozdělení `db.py` — extrakce `ArtifactRepository` + `EntityRepository`:**
+1. Nové moduly `src/stopa/data/artifact_repository.py`, `entity_repository.py`.
+2. Přesun ~23 metod (artifacts CRUD/FTS5, findings, lineage_events, analysis_operations, entity resolution).
 3. `CaseDB` deleguje do repozitářů — facade zachován pro backward compat (žádná změna veřejného API).
 4. Testy: existující suite musí zůstat zelená + nové testy repozitářů; ruff clean.
 
-**Akceptační kritéria:** žádná změna veřejného API `CaseDB`, full suite **1742+ passed**, ruff clean, commit `refactor(data): ETAPA C vlna 1 — Case/File/Audit Repository`.
+**Akceptační kritéria:** žádná změna veřejného API `CaseDB`, full suite **1757+ passed**, ruff clean, commit `refactor(data): ETAPA C vlna 2 — Artifact/Entity Repository`.
 
-## Po STP-039
-STP-040 (vlna 2: Artifact/Entity Repository ~23 metod) → STP-041 (vlna 3: facade úklid + audit, `db.py` < ~600 ř.).
+## Po STP-040
+STP-041 (vlna 3: facade úklid + audit, cíl `db.py` < ~600 ř.) = **ETAPA C dokončena ★**.

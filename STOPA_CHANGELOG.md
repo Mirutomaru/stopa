@@ -2,6 +2,14 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-04 (ETAPA C vlna 1: rozdělení `db.py` ★)
+
+### Changed (oblast A, P1 — STP-039)
+- **Rozdělil monolit `src/stopa/data/db.py` (~2090 ř., 67 metod)** na doménová repozitáře — vlna 1: vyčleněny **CaseRepository** (`data/case_repository.py`), **FileRepository** (`data/file_repository.py`, včetně FTS5 search + `_fts_query`) a **AuditRepository** (`data/audit_repository.py`, audit log + hash chaining P0 Core C4 + Ed25519 kontrolní body); sdílené konverze do `data/_helpers.py`.
+- Facade `CaseDB` drží tři repozitáře na **sdílené SQLite connection** a deleguje; **backward compat zachován** (veřejné API beze změny, `_fts_query` re-export pro `test_search`).
+- `db.py`: 2090 → **1565 řádků** (−525); zbývají artifacts/findings/lineage/analysis_operations pro vlny 2–3.
+- Nové testy: `tests/test_stp039_wave1_repos.py` (**15 testů** — wiring, sdílená connection, delegace, backward compat). Full suite **1757 passed, 1 skipped**, ruff clean.
+
 ## [Unreleased] — 2026-11-04 (ETAPA C: volba směru + synchronizace roadmapy ★)
 
 ### Changed (oblast A, P1 — STP-038)
