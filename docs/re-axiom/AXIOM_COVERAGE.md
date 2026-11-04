@@ -5,15 +5,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 179
+- **✅ COVERED**: 198
 - **🔧 PORTABLE-LOCAL**: 0
-- **☁️ CLOUD-EXPORT**: 19
+- **☁️ CLOUD-EXPORT**: 0
 - **💾 MEMORY**: 0
 - **🧩 BASE-CLASS**: 34
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (179)
+## ✅ COVERED — STOPA už umí (existující parser) (198)
 
 - `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
 - `ApiHooksArtifact` — mem_hooks parser (API hooky — apiFunction/callbackAddress/hookType)
@@ -26,15 +26,24 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CallbacksArtifact` — mem_hooks parser (callback funkce v paměti)
 - `ChatrouletteArtifact` — chatroulette parser (text/JSON video chat)
 - `ClipboardArtifact` — win_clipboard (sekundární registry průchod NTUSER.DAT)
+- `CloudAccountsInfoArtifact` — cloud_generic parser (účetní info → account_info cloud:accounts)
 - `CloudAmazonCloudTrailEventsArtifact` — amazon_cloudtrail parser (auditní události → event_log_entry aws:cloudtrail)
 - `CloudAmazonCloudTrailInsightsArtifact` — amazon_cloudtrail parser (insights anomálie → event_log_entry insight=True)
 - `CloudAmazonEC2InstanceArtifact` — amazon_ec2_s3 parser (instance → cloud_instance aws:ec2)
 - `CloudAmazonS3FilesArtifact` — amazon_ec2_s3 parser (S3 objekty → cloud_file aws:s3)
+- `CloudAndroidBackupsArtifact` — cloud_generic parser (Android zálohy → backup_record android:backups)
+- `CloudAppleBackupArtifact` — apple_cloud parser (iCloud zálohy → backup_record apple:backup)
+- `CloudAppleContactsArtifact` — apple_cloud parser (kontakty → contact_record apple:contacts)
 - `CloudAppleDriveArtifact` — cloud_drive_files parser (Apple Drive soubory)
 - `CloudAppleIMessageArtifact` — imessage_cloud parser (iCloud Messages → chat_message apple:icloud_messages)
+- `CloudAppleKeychainArtifact` — apple_cloud parser (keychain → credential_record apple:keychain)
+- `CloudAppleMailArtifact` — apple_cloud parser (e-mail zprávy → email_message apple:mail)
+- `CloudApplePhotosArtifact` — apple_cloud parser (fotky → media_asset apple:photos)
+- `CloudAzureVirtualMachineSnapshotArtifact` — cloud_generic parser (Azure VM snapshoty → vm_snapshot azure:vm)
 - `CloudBoxEnterpriseEventArtifact` — box_cloud parser (enterprise eventy → document_metadata kind=event)
 - `CloudBoxFilesArtifact` — box_cloud parser (soubory/složky → document_metadata box:file|folder)
 - `CloudBoxUserEventArtifact` — box_cloud parser (auditní eventy → document_metadata kind=event)
+- `CloudConnectedAppsArtifact` — cloud_generic parser (připojené aplikace → app_link cloud:apps)
 - `CloudDriveFileArtifact` — cloud_drive_files parser (Google Drive soubory — název/velikost/checksum/čas)
 - `CloudDriveFileVersionArtifact` — cloud_drive_files parser (verze souboru do details.versions)
 - `CloudDropboxEntryArtifact` — dropbox_mega parser (Dropbox položky → document_metadata provider=dropbox)
@@ -44,6 +53,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudFacebookMobileTimelineArtifact` — facebook_wr parser (mobilní timeline → sns_post)
 - `CloudFacebookProfileInfoArtifact` — facebook_wr parser (info o profilu → contact relationship=account)
 - `CloudFacebookTimelineArtifact` — facebook_wr parser (timeline příspěvky → sns_post post_type=timeline)
+- `CloudGmailMessagesArtifact` — gmail_messages parser (zprávy → email_message gmail:messages)
 - `CloudGmailMessagesWarrantReturnArtifact` — google_mail_info parser (zprávy WR → email_message google:gmail)
 - `CloudGoogleActivityArtifact` — google_aggregated_activities parser (My Activity → google_activity)
 - `CloudGoogleCalendarEventsArtifact` — google_calendar_events parser (události WR → calendar_event google:calendar)
@@ -81,9 +91,12 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudOneDriveFileArtifact` — cloud_drive_files parser (OneDrive soubory — lastModifiedDateTime marker)
 - `CloudOneDriveFileVersionArtifact` — cloud_drive_files parser (OneDrive verze souboru)
 - `CloudOutlookCalendarArtifact` — ms_outlook_calendar parser (události/kalendář → calendar_event ms:calendar)
+- `CloudPasswordsArtifact` — cloud_generic parser (hesla → credential_record cloud:passwords)
+- `CloudRecentDevicesArtifact` — cloud_generic parser (nedávná zařízení → device_access cloud:devices)
 - `CloudSharePointContentArtifact` — sharepoint_wr parser (obsah → cloud_file / web_page)
 - `CloudSharePointDocumentsArtifact` — sharepoint_wr parser (dokumenty → cloud_file)
 - `CloudSharePointSitePagesArtifact` — sharepoint_wr parser (site pages → web_page)
+- `CloudTimelineArtifact` — cloud_generic parser (timeline události → timeline_event cloud:timeline)
 - `CloudTwitterDirectMessagesArtifact` — twitter_messages parser (DM konverzace → chat_message, konverzační i flat formát)
 - `CloudTwitterPostsArtifact` — twitter_posts parser (příspěvky → sns_post, retweety/odpovědi post_type)
 - `CloudTwitterPostsPublicArtifact` — twitter_posts parser (veřejné příspěvky → sns_post)
@@ -92,6 +105,8 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `CloudTwitterWarrantReturnDirectMessagesArtifact` — twitter_messages parser (DM WR → chat_message)
 - `CloudTwitterWarrantReturnPostsArtifact` — twitter_posts parser (posts WR — tweet_id/from_user/body/date tolerantní klíče)
 - `CloudTwitterWarrantReturnUsersArtifact` — twitter_users parser (uživatelé WR — followers/following relace)
+- `CloudWhatsAppBackupsArtifact` — whatsapp_cloud parser (zálohy → backup_record whatsapp:backups)
+- `CloudWhatsAppChatsArtifact` — whatsapp_cloud parser (chaty → chat_message whatsapp:chats)
 - `CmdScanArtifact` — mem_scan parser (textový výstup — procesy v paměti)
 - `ConnscanArtifact` — net_connections parser
 - `CurrentTabsArtifact` — ddg_current_tabs parser (JSON/text záložky)
@@ -102,12 +117,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `ExecutiveObjectCallbacksArtifact` — mem_hooks parser (executive object callbacky)
 - `FileScanArtifact` — mem_scan parser (textový výstup — soubory v paměti)
 - `GetsidsArtifact` — win_sids (sekundární registry průchod SAM/SECURITY)
+- `GoogleAccessLogDevices2025Artifact` — google_2025_wr parser (access log zařízení → device_access google:accesslog)
 - `GoogleAccountChangeHistoryArtifact` — google_account_meta parser (account change history JSON)
 - `GoogleAccountInfoArtifact` — google_account_info parser (account_info.json)
+- `GoogleAccountTargetAssociation2025Artifact` — google_2025_wr parser (target association → account_link google:targetassoc)
 - `GoogleAggregatedActivitiesArtifact` — google_aggregated_activities parser (My Activity daily JSON)
 - `GoogleAggregatedActivitiesIdentitySessionsArtifact` — google_aggregated_activities parser (identity sessions JSON)
 - `GoogleBarArtifact` — google_bar parser (Chrome History search_terms — omnibox dotazy z lišty)
 - `GoogleBrowsingHistoryArtifact` — browser_history
+- `GoogleCalls2025Artifact` — google_2025_wr parser (hovory → call_record google:calls)
 - `GoogleChatArtifact` — google_chat_family parser (Takeout chat JSON)
 - `GoogleChromeAutofillWarrantReturnArtifact` — google_chrome_autofill parser (Autofill/ContactInfo JSON, name/email/address)
 - `GoogleChromeBookmarksWarrantReturnArtifact` — google_chrome_bookmarks parser (Bookmarks JSON, date_added µs od 1601)
@@ -121,6 +139,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `GoogleLoginHistoryArtifact` — google_login_history parser (sign-ins JSON/CSV)
 - `GoogleMailMessageInformationArtifact` — google_mail_info parser (Gmail warrant return JSON, threadId/internalDate µs)
 - `GoogleMapsActivityArtifact` — google_maps_activity parser (semantic location history, placeVisit/activitySegment E7)
+- `GoogleMapsLabeledPlacesWarrantReturnArtifact` — maps_labeled_places parser (označená místa WR → location_point google:labeledplaces)
 - `GooglePhotosArtifact` — google_photos parser (Takeout/warrant JSON, photoTakenTime/geoData E7)
 - `GooglePlusChatArtifact` — google_chat_family parser (Takeout Plus Chat JSON)
 - `GoogleSearchHistoryArtifact` — google_search_history parser (JSON Takeout)
@@ -194,28 +213,6 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `VoiceMailArtifact` — ios_voicemail parser (voicemail.db, date=unix s / trashed_date=CFAbsoluteTime)
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
-
-## ☁️ CLOUD-EXPORT — JSON export / warrant return (19)
-
-- `CloudAccountsInfoArtifact` — JSON export / warrant return
-- `CloudAndroidBackupsArtifact` — JSON export / warrant return
-- `CloudAppleBackupArtifact` — JSON export / warrant return
-- `CloudAppleContactsArtifact` — JSON export / warrant return
-- `CloudAppleKeychainArtifact` — JSON export / warrant return
-- `CloudAppleMailArtifact` — JSON export / warrant return
-- `CloudApplePhotosArtifact` — JSON export / warrant return
-- `CloudAzureVirtualMachineSnapshotArtifact` — JSON export / warrant return
-- `CloudConnectedAppsArtifact` — JSON export / warrant return
-- `CloudGmailMessagesArtifact` — JSON export / warrant return
-- `CloudPasswordsArtifact` — JSON export / warrant return
-- `CloudRecentDevicesArtifact` — JSON export / warrant return
-- `CloudTimelineArtifact` — JSON export / warrant return
-- `CloudWhatsAppBackupsArtifact` — JSON export / warrant return
-- `CloudWhatsAppChatsArtifact` — JSON export / warrant return
-- `GoogleAccessLogDevices2025Artifact` — warrant return (JSON)
-- `GoogleAccountTargetAssociation2025Artifact` — warrant return (JSON)
-- `GoogleCalls2025Artifact` — warrant return (JSON)
-- `GoogleMapsLabeledPlacesWarrantReturnArtifact` — warrant return (JSON)
 
 ## 🧩 BASE-CLASS — rozhraní / základní třída (34)
 

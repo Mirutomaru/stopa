@@ -37,6 +37,8 @@ from stopa.artifacts.amazon_ec2_s3 import (
     extract_amazon_ec2_s3_artifacts,
     is_amazon_ec2_s3_file,
 )
+from stopa.artifacts.apple_cloud import PARSER_VERSION as APPLE_CLOUD_VERSION
+from stopa.artifacts.apple_cloud import extract_apple_cloud_artifacts, is_apple_file
 from stopa.artifacts.bebo_chat import PARSER_VERSION as BEBO_CHAT_VERSION
 from stopa.artifacts.bebo_chat import extract_bebo_artifacts, is_bebo_chat_file
 from stopa.artifacts.box_cloud import PARSER_VERSION as BOX_CLOUD_VERSION
@@ -59,6 +61,11 @@ from stopa.artifacts.cloud_drive_files import (
     extract_cloud_drive_artifacts,
     is_cloud_drive_file,
 )
+from stopa.artifacts.cloud_generic import PARSER_VERSION as CLOUD_GENERIC_VERSION
+from stopa.artifacts.cloud_generic import (
+    extract_cloud_generic_artifacts,
+    is_cloud_generic_file,
+)
 from stopa.artifacts.ddg_current_tabs import PARSER_VERSION as DDG_TABS_VERSION
 from stopa.artifacts.ddg_current_tabs import extract_current_tabs_artifacts, is_current_tabs_file
 from stopa.artifacts.drive_activity import PARSER_VERSION as DRIVE_ACTIVITY_VERSION
@@ -76,6 +83,13 @@ from stopa.artifacts.email_mbox import PARSER_VERSION as EMAIL_MBOX_VERSION
 from stopa.artifacts.email_mbox import extract_email_artifacts, is_email_file
 from stopa.artifacts.facebook_wr import PARSER_VERSION as FACEBOOK_WR_VERSION
 from stopa.artifacts.facebook_wr import extract_facebook_artifacts, is_facebook_file
+from stopa.artifacts.gmail_messages import PARSER_VERSION as GMAIL_MESSAGES_VERSION
+from stopa.artifacts.gmail_messages import extract_gmail_artifacts, is_gmail_file
+from stopa.artifacts.google_2025_wr import PARSER_VERSION as GOOGLE_2025_WR_VERSION
+from stopa.artifacts.google_2025_wr import (
+    extract_google_2025_artifacts,
+    is_google_2025_file,
+)
 from stopa.artifacts.google_account_info import PARSER_VERSION as GOOGLE_ACCT_VERSION
 from stopa.artifacts.google_account_info import extract_account_artifacts, is_account_info_file
 from stopa.artifacts.google_account_meta import (
@@ -200,6 +214,13 @@ from stopa.artifacts.limewire_p2p import (
 )
 from stopa.artifacts.mailru_agent import PARSER_VERSION as MAILRU_AGENT_VERSION
 from stopa.artifacts.mailru_agent import extract_mailru_artifacts, is_mailru_file
+from stopa.artifacts.maps_labeled_places import (
+    PARSER_VERSION as MAPS_LABELED_PLACES_VERSION,
+)
+from stopa.artifacts.maps_labeled_places import (
+    extract_maps_labeled_artifacts,
+    is_maps_labeled_file,
+)
 from stopa.artifacts.mem_handles import PARSER_VERSION as MEM_HANDLES_VERSION
 from stopa.artifacts.mem_handles import extract_mem_handle_artifacts, is_mem_handles_file
 from stopa.artifacts.mem_hooks import PARSER_VERSION as MEM_HOOKS_VERSION
@@ -278,6 +299,8 @@ from stopa.artifacts.twitter_users import (
     extract_twitter_user_artifacts,
     is_twitter_users_file,
 )
+from stopa.artifacts.whatsapp_cloud import PARSER_VERSION as WHATSAPP_CLOUD_VERSION
+from stopa.artifacts.whatsapp_cloud import extract_whatsapp_artifacts, is_whatsapp_file
 from stopa.artifacts.win_amcache import extract_amcache_artifacts
 from stopa.artifacts.win_clipboard import extract_clipboard_artifacts
 from stopa.artifacts.win_drivers import PARSER_VERSION as WIN_DRIVERS_VERSION
@@ -486,11 +509,22 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "google_keep_tasks": (extract_google_keep_artifacts, GOOGLE_KEEP_TASKS_VERSION),
     "box_cloud": (extract_box_artifacts, BOX_CLOUD_VERSION),
     "dropbox_mega": (extract_dropbox_mega_artifacts, DROPBOX_MEGA_VERSION),
+    # ETAPA B vlna 14 — dokončení cloud-export: Apple rodina + Google 2025 WR + WhatsApp
+    # + generic cloud metadata + Gmail Messages + Maps Labeled Places
+    "apple_cloud": (extract_apple_cloud_artifacts, APPLE_CLOUD_VERSION),
+    "google_2025_wr": (extract_google_2025_artifacts, GOOGLE_2025_WR_VERSION),
+    "whatsapp_cloud": (extract_whatsapp_artifacts, WHATSAPP_CLOUD_VERSION),
+    "cloud_generic": (extract_cloud_generic_artifacts, CLOUD_GENERIC_VERSION),
+    "gmail_messages": (extract_gmail_artifacts, GMAIL_MESSAGES_VERSION),
+    "maps_labeled_places": (
+        extract_maps_labeled_artifacts,
+        MAPS_LABELED_PLACES_VERSION,
+    ),
 }
 
 
 def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
-    """ETAPA B vlna 10/11/12/13 — cloud SNS + Microsoft/Amazon/Google II pre-pass na celé cestě.
+    """ETAPA B vlna 10/11/12/13/14 — cloud SNS + Microsoft/Amazon/Google II pre-pass na celé cestě.
 
     Instagram/Snapchat/Twitter/Facebook exporty mají generic basenames
     (``Messages.json``, ``Photos.json``, ``Friends.json``), které kolidují s
@@ -501,6 +535,9 @@ def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
     ETAPA B vlna 13: + Google Calendar/Keep a Box/Dropbox/Mega cloud exporty
     (generic basenames ``events.json`` / ``notes.json`` / ``files.json``) —
     calendar PŘED keep (oba mohou mít generic JSON), dropbox/mega dle markery.
+    ETAPA B vlna 14: + dokončení cloud-export — Apple rodina, Google 2025 WR,
+    WhatsApp, Gmail Messages a Maps Labeled Places (specifické PŘED obecným
+    ``cloud_generic`` metadata parserem).
     """
     for key, detector in (
         ("instagram_messages", is_instagram_messages_file),
@@ -530,6 +567,15 @@ def _sns_prepass(full_path: str) -> tuple[Callable[[Path], list], str] | None:
         ("box_cloud", is_box_file),
         ("dropbox_mega", is_dropbox_file),
         ("dropbox_mega", is_mega_file),
+        # ETAPA B vlna 14 — dokončení cloud-export: specifické PŘED obecným generic
+        ("apple_cloud", is_apple_file),
+        ("google_2025_wr", is_google_2025_file),
+        ("whatsapp_cloud", is_whatsapp_file),
+        ("gmail_messages", is_gmail_file),
+        ("maps_labeled_places", is_maps_labeled_file),
+        # nejobecnější poslední — chytí AccountsInfo/ConnectedApps/RecentDevices/
+        # Timeline/Passwords/AndroidBackups/AzureVM, co nezachytilo nic výše
+        ("cloud_generic", is_cloud_generic_file),
     ):
         if detector(full_path):
             fn, ver = NAME_BASED_EXTRACTORS[key]

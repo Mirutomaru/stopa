@@ -938,6 +938,80 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_w13_parsers.py",),
     ),
+    # ETAPA B vlna 14 — dokončení cloud-export: Apple rodina + Google 2025 WR + WhatsApp
+    # + generic cloud metadata + Gmail Messages + Maps Labeled Places
+    "apple_cloud": ParserValidation(
+        parser_id="apple_cloud",
+        version="",
+        formats=(
+            "Apple Cloud JSON (cloud export — kontakty, keychain, e-mail, fotky a zálohy; auto-detekce podtypu)",
+        ),
+        limitations=(
+            "detekce name-based (apple/icloud marker) — pre-pass PŘED basename chainem",
+            "podtyp = contact|keychain|mail|photo|backup (auto-detekce); limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w14_parsers.py",),
+    ),
+    "google_2025_wr": ParserValidation(
+        parser_id="google_2025_wr",
+        version="",
+        formats=(
+            "Google 2025 Warrant Return JSON (AccessLogDevices + AccountTargetAssociation + Calls)",
+        ),
+        limitations=(
+            "detekce name-based (accesslog/targetassoc/google+call) — pre-pass PŘED basename chainem",
+            "podtyp = access_log|target_assoc|call (auto-detekce); limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w14_parsers.py",),
+    ),
+    "whatsapp_cloud": ParserValidation(
+        parser_id="whatsapp_cloud",
+        version="",
+        formats=(
+            "WhatsApp Cloud JSON (cloud export — chaty a zálohy; auto-detekce podtypu)",
+        ),
+        limitations=(
+            "detekce name-based (whatsapp marker) — pre-pass PŘED basename chainem",
+            "podtyp = chat|backup (auto-detekce); limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w14_parsers.py",),
+    ),
+    "cloud_generic": ParserValidation(
+        parser_id="cloud_generic",
+        version="",
+        formats=(
+            "Generic Cloud Metadata JSON (AccountsInfo + ConnectedApps + RecentDevices + Timeline + Passwords + AndroidBackups + AzureVM)",
+        ),
+        limitations=(
+            "detekce name-based (cloud marker + klíčové slovo) — pre-pass POSLEDNÍ (nejobecnější)",
+            "podtyp = accounts|apps|devices|timeline|passwords|android_backup|azure_vm; limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w14_parsers.py",),
+    ),
+    "gmail_messages": ParserValidation(
+        parser_id="gmail_messages",
+        version="",
+        formats=(
+            "Gmail Messages JSON (cloud export — e-mailové zprávy s odesílatelem/příjemcem/tématem)",
+        ),
+        limitations=(
+            "detekce name-based (gmail marker) — pre-pass PŘED basename chainem",
+            "zpráva = email_message; limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w14_parsers.py",),
+    ),
+    "maps_labeled_places": ParserValidation(
+        parser_id="maps_labeled_places",
+        version="",
+        formats=(
+            "Google Maps Labeled Places Warrant Return JSON (označená místa s label + souřadnicemi)",
+        ),
+        limitations=(
+            "detekce name-based (maps marker + labeled/place) — pre-pass PŘED basename chainem",
+            "místo = location_point (label + lat/lon); limit MAX_ITEMS_PER_FILE=5000 záznamů",
+        ),
+        test_files=("tests/test_w14_parsers.py",),
+    ),
 }
 
 

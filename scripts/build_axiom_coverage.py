@@ -230,6 +230,27 @@ COVERED: dict[str, str] = {
     "CloudGoogleActivityArtifact": "covered",  # google_aggregated_activities (My Activity)
     "CloudGoogleSemanticLocationHistoryActivitySegmentArtifact": "covered",  # google_maps_activity (activity segment)
     "CloudGoogleSemanticLocationHistoryPlaceVisitArtifact": "covered",  # google_maps_activity (place visit)
+    # ETAPA B vlna 14 — dokončení cloud-export: Apple rodina + Google 2025 WR + WhatsApp
+    # + generic cloud metadata + Gmail Messages + Maps Labeled Places (nové parsery)
+    "CloudAppleContactsArtifact": "covered",  # apple_cloud (kontakty)
+    "CloudAppleKeychainArtifact": "covered",  # apple_cloud (keychain hesla)
+    "CloudAppleMailArtifact": "covered",  # apple_cloud (e-mail zprávy)
+    "CloudApplePhotosArtifact": "covered",  # apple_cloud (fotky)
+    "CloudAppleBackupArtifact": "covered",  # apple_cloud (iCloud zálohy)
+    "GoogleAccessLogDevices2025Artifact": "covered",  # google_2025_wr (access log zařízení)
+    "GoogleAccountTargetAssociation2025Artifact": "covered",  # google_2025_wr (target association)
+    "GoogleCalls2025Artifact": "covered",  # google_2025_wr (hovory)
+    "CloudWhatsAppChatsArtifact": "covered",  # whatsapp_cloud (chaty)
+    "CloudWhatsAppBackupsArtifact": "covered",  # whatsapp_cloud (zálohy)
+    "CloudAccountsInfoArtifact": "covered",  # cloud_generic (účetní info)
+    "CloudConnectedAppsArtifact": "covered",  # cloud_generic (připojené aplikace)
+    "CloudRecentDevicesArtifact": "covered",  # cloud_generic (nedávná zařízení)
+    "CloudTimelineArtifact": "covered",  # cloud_generic (timeline události)
+    "CloudPasswordsArtifact": "covered",  # cloud_generic (hesla)
+    "CloudAndroidBackupsArtifact": "covered",  # cloud_generic (Android zálohy)
+    "CloudAzureVirtualMachineSnapshotArtifact": "covered",  # cloud_generic (Azure VM snapshoty)
+    "CloudGmailMessagesArtifact": "covered",  # gmail_messages (zprávy)
+    "GoogleMapsLabeledPlacesWarrantReturnArtifact": "covered",  # maps_labeled_places (označená místa WR)
 }
 
 # base-class / rozhraní — ne extraktor jako takový
@@ -488,6 +509,26 @@ def _covered_desc(name: str) -> str:
         "CloudGoogleActivityArtifact": "google_aggregated_activities parser (My Activity → google_activity)",
         "CloudGoogleSemanticLocationHistoryActivitySegmentArtifact": "google_maps_activity parser (activity segment → location_point semantic)",
         "CloudGoogleSemanticLocationHistoryPlaceVisitArtifact": "google_maps_activity parser (place visit → location_point semantic)",
+        # ETAPA B vlna 14 — dokončení cloud-export (nové parsery)
+        "CloudAppleContactsArtifact": "apple_cloud parser (kontakty → contact_record apple:contacts)",
+        "CloudAppleKeychainArtifact": "apple_cloud parser (keychain → credential_record apple:keychain)",
+        "CloudAppleMailArtifact": "apple_cloud parser (e-mail zprávy → email_message apple:mail)",
+        "CloudApplePhotosArtifact": "apple_cloud parser (fotky → media_asset apple:photos)",
+        "CloudAppleBackupArtifact": "apple_cloud parser (iCloud zálohy → backup_record apple:backup)",
+        "GoogleAccessLogDevices2025Artifact": "google_2025_wr parser (access log zařízení → device_access google:accesslog)",
+        "GoogleAccountTargetAssociation2025Artifact": "google_2025_wr parser (target association → account_link google:targetassoc)",
+        "GoogleCalls2025Artifact": "google_2025_wr parser (hovory → call_record google:calls)",
+        "CloudWhatsAppChatsArtifact": "whatsapp_cloud parser (chaty → chat_message whatsapp:chats)",
+        "CloudWhatsAppBackupsArtifact": "whatsapp_cloud parser (zálohy → backup_record whatsapp:backups)",
+        "CloudAccountsInfoArtifact": "cloud_generic parser (účetní info → account_info cloud:accounts)",
+        "CloudConnectedAppsArtifact": "cloud_generic parser (připojené aplikace → app_link cloud:apps)",
+        "CloudRecentDevicesArtifact": "cloud_generic parser (nedávná zařízení → device_access cloud:devices)",
+        "CloudTimelineArtifact": "cloud_generic parser (timeline události → timeline_event cloud:timeline)",
+        "CloudPasswordsArtifact": "cloud_generic parser (hesla → credential_record cloud:passwords)",
+        "CloudAndroidBackupsArtifact": "cloud_generic parser (Android zálohy → backup_record android:backups)",
+        "CloudAzureVirtualMachineSnapshotArtifact": "cloud_generic parser (Azure VM snapshoty → vm_snapshot azure:vm)",
+        "CloudGmailMessagesArtifact": "gmail_messages parser (zprávy → email_message gmail:messages)",
+        "GoogleMapsLabeledPlacesWarrantReturnArtifact": "maps_labeled_places parser (označená místa WR → location_point google:labeledplaces)",
     }
     return m.get(name, "existující parser")
 
