@@ -441,3 +441,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `.stopa-dev/ROADMAP.md` (sekce M + ETAPA E), `STOPA_ROADMAP.md` (sync), DEV OS TASKS/PROJECT_STATE/CHANGELOG/checkpoint/NEXT_ACTION, root+mirror changelog
 - **Testy:** full suite **1813 passed, 1 skipped** (bez změny — volba etapy = docs); ruff clean
 - **Dokončeno:** 2026-11-05 | Commit: ```586e85a```
+
+### STP-046 — ETAPA E vlna 1: parser sandbox kontrakt (`domain/sandbox.py`)
+- **Oblast:** M (Security) | **Priorita:** P2 | **Stav:** DONE
+- **Popis:** Sandbox kontrakt pro izolaci artifact extraktorů od hlavního procesu pipeline. Nové moduly: `src/stopa/domain/sandbox.py` (čistá logika — `SandboxConfig` s limity timeout_s/max_result_bytes, `SandboxResult`, `validate_artifact_payload()` strukturální validace JSON kontraktu, `build_worker_command()`, `failure_category()` s prioritou timeout>truncated>bad_payload>crash, `sandbox_available()`, tenký IO wrapper `run_extractor_sandboxed()` přes subprocess) + `src/stopa/sandbox_worker.py` (dceřiný proces `python -m stopa.sandbox_worker <module> <func> <path>`; stdout = POUZE JSON array artifactů, exit 0/1 kontrakt, RLIMIT_CPU backstop na POSIX z env STOPA_SANDBOX_TIMEOUT).
+- **Závislosti:** STP-045 (volba ETAPY E)
+- **Dotčené moduly:** `src/stopa/domain/sandbox.py` (nový), `src/stopa/sandbox_worker.py` (nový), `tests/test_stp046_sandbox.py` (nový, 21 testů)
+- **Testy:** 21 nových testů zelených; full suite **1834 passed, 1 skipped** (baseline 1813 + 21); ruff clean. E2E přes reálný subprocess: timeout (hang modul), crash (ValueError), bad_payload (chybějící artifact_type), truncated (payload > limit).
+- **Dokončeno:** 2026-11-05 | Commit: ```91854d8```

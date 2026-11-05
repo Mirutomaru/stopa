@@ -1,24 +1,16 @@
 # STOPA — NEXT ACTION
 
-## Po dokončení STP-045 (volba ETAPY E)
+## Aktuální stav (2026-11-05)
+**ETAPA E vlna 1 hotová ★** — STP-046 parser sandbox kontrakt dokončen.
 
-**ETAPA E ZAHÁJENA ★** — oblast M (Security): izolace parserů (sandbox).
+## Hotové
+- **STP-046:** `src/stopa/domain/sandbox.py` (SandboxConfig, SandboxResult, validate_artifact_payload, build_worker_command, failure_category s prioritou timeout>truncated>bad_payload>crash, sandbox_available, run_extractor_sandboxed) + `src/stopa/sandbox_worker.py` (dceřiný proces, stdout=JSON array, exit 0/1, RLIMIT_CPU backstop). 21 testů, full suite **1834 passed, 1 skipped**, ruff clean. Feature commit `91854d8`.
 
-### Hotové v ETAPĚ E zatím
-- **STP-045:** volba směru + audit reálného stavu kandidátů (M/H/I+O) + synchronizace roadmapy.
-  Klíčový nález: reálný hang `sqlite_carver.recover_rows` na poškozeném SQLite souboru (>15 s).
+## Další krok — STP-047 / ETAPA E vlna 2
+**Zapojení sandboxu do pipeline + fix hang bugu:**
+1. `_extract_artifacts_for` (pipeline.py) volá extraktory přes `run_extractor_sandboxed()` místo přímého volání; selhání → `parser_error` artifact s kategorií z `SandboxResult`.
+2. **Fix reálného hang bugu** v `src/stopa/domain/sqlite_carver.py` — validace `db_size_pages` proti velikosti souboru (poškozený header tvrdí 1.7 mld. stránek v 920 B → smyčka visí).
+3. Deterministické testy offline; full suite zelená; ruff clean.
 
-### Nejbližší úkol — STP-046 (ETAPA E vlna 1)
-**`domain/sandbox.py`** — čistá doménová logika sandbox kontraktu:
-- definice kontraktu: parser → subprocess s timeout + JSON marshalling výsledků,
-- detekce dostupnosti backendu (subprocess fallback),
-- konfigurace limitů (`timeout_s`, `max_result_bytes`).
-
-Deterministické testy offline; full suite zelená po vlně; ruff clean.
-
-### Následné vlny
-- **STP-047 (vlna 2):** zapojení do pipeline + fix hang bugu v `sqlite_carver.recover_rows`.
-- **STP-048 (vlna 3):** testy (umělý hangující parser, corrupt-file regression) + `docs/STOPA_SANDBOX.md`.
-
-### Akceptační kritéria ETAPY E
-Žádný parser nesmí zastavit pipeline (timeout + catch); poškozený soubor → `parser_error` artifact, ne crash; deterministické testy offline; full suite zelená po každé vlně; ruff clean.
+## Poté — STP-048 / ETAPA E vlna 3
+Testy (umělý hangující parser, corrupt-file regression) + `docs/STOPA_SANDBOX.md` = **ETAPA E dokončena ★★**.

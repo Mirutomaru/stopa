@@ -4,6 +4,15 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-05 (STP-046: ETAPA E vlna 1 ★ = parser sandbox kontrakt `domain/sandbox.py`, **ETAPA E vlna 1 hotová**)
+
+### Added (oblast M, P2 — STP-046)
+- **Parser sandbox kontrakt** `src/stopa/domain/sandbox.py` (čistá doménová logika): `SandboxConfig` (timeout_s, max_result_bytes), `SandboxResult` (ok/category/artifacts/error/duration_s), `validate_artifact_payload()` (strukturální validace JSON payloadu dceřiného procesu), `build_worker_command()` (argv dceřiného procesu), `failure_category()` s prioritou timeout > truncated > bad_payload > crash, `sandbox_available()`, tenký IO wrapper `run_extractor_sandboxed()` přes subprocess.
+- **Worker modul** `src/stopa/sandbox_worker.py`: dceřiný proces pro izolovaný běh jednoho extraktoru — stdout = POUZE JSON array artifactů, exit 0/1 kontrakt, RLIMIT_CPU backstop na POSIX.
+
+### Tests
+- Full suite **1834 passed, 1 skipped** (+21 testů `tests/test_stp046_sandbox.py`); ruff clean.
+
 ## [Unreleased] — 2026-11-05 (STP-045: volba ETAPY E ★ = oblast M Security — izolace parserů, **ETAPA E ZAHÁJENA**)
 
 ### Added (oblast M + DEV OS, P2 — STP-045)
