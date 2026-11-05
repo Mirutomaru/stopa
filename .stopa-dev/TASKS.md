@@ -448,4 +448,4 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Závislosti:** STP-045 (volba ETAPY E)
 - **Dotčené moduly:** `src/stopa/domain/sandbox.py` (nový), `src/stopa/sandbox_worker.py` (nový), `tests/test_stp046_sandbox.py` (nový, 21 testů)
 - **Testy:** 21 nových testů zelených; full suite **1834 passed, 1 skipped** (baseline 1813 + 21); ruff clean. E2E přes reálný subprocess: timeout (hang modul), crash (ValueError), bad_payload (chybějící artifact_type), truncated (payload > limit).
-- **Dokončeno:** 2026-11-05 | Commit: ```91854d8```
+- **Dokončeno:** 2026-11-05 | Commity: ```91854d8``` (feature) + ```de18452``` (fix benchmark stabilizace)

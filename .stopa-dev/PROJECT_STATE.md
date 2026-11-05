@@ -49,7 +49,7 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-046 — ETAPA E vlna 1: parser sandbox kontrakt (`domain/sandbox.py`)** (oblast M, P2) | Commit: ```91854d8```
+**STP-046 — ETAPA E vlna 1: parser sandbox kontrakt (`domain/sandbox.py`)** (oblast M, P2) | Commity: ```91854d8``` (feature) + ```de18452``` (fix benchmark stabilizace)
 Sandbox kontrakt pro izolaci artifact extraktorů od hlavního procesu pipeline. Nové moduly: `src/stopa/domain/sandbox.py` (čistá logika — `SandboxConfig`, `SandboxResult`, `validate_artifact_payload()`, `build_worker_command()`, `failure_category()` s prioritou timeout>truncated>bad_payload>crash, `sandbox_available()`, tenký IO wrapper `run_extractor_sandboxed()` přes subprocess) + `src/stopa/sandbox_worker.py` (dceřiný proces; stdout = POUZE JSON array artifactů, exit 0/1 kontrakt, RLIMIT_CPU backstop na POSIX). Full suite **1834 passed, 1 skipped** (+21 testů), ruff clean.
 Předtím: STP-045 (volba ETAPY E — oblast M Security izolace parserů; ETAPA E ZAHÁJENA ★, `586e85a`),
 STP-044 (ETAPA D vlna 2 — testy + dokumentace CI benchmark jobu; CELÁ ETAPA D DOKONČENA ★★, `ca93d58`),

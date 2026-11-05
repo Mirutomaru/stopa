@@ -13,6 +13,9 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 ### Tests
 - Full suite **1834 passed, 1 skipped** (+21 testů `tests/test_stp046_sandbox.py`); ruff clean.
 
+### Fixed
+- **Flaky benchmark test** (`test_run_against_own_baseline_passes`): `_workload_core` iterations=1 → průměr **5 iterací**; baseline pipeline.core 63.546 → 37.476 ms; ověřeno ±1 % variabilita, test 5/5 passed.
+
 ## [Unreleased] — 2026-11-05 (STP-045: volba ETAPY E ★ = oblast M Security — izolace parserů, **ETAPA E ZAHÁJENA**)
 
 ### Added (oblast M + DEV OS, P2 — STP-045)

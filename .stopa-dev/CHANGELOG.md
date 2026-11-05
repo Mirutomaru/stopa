@@ -2,10 +2,11 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
-## 2026-11-05 — STP-046 ETAPA E vlna 1: parser sandbox kontrakt (`domain/sandbox.py`) = **ETAPA E vlna 1 hotová ★** (oblast M, P2) | Commit: ```91854d8```
+## 2026-11-05 — STP-046 ETAPA E vlna 1: parser sandbox kontrakt (`domain/sandbox.py`) = **ETAPA E vlna 1 hotová ★** (oblast M, P2) | Commity: ```91854d8``` (feature), ```de18452``` (fix benchmark stabilizace)
 **Změněné soubory:** `src/stopa/domain/sandbox.py` (nový — čistá doménová logika sandbox kontraktu), `src/stopa/sandbox_worker.py` (nový — dceřiný proces pro izolovaný běh extraktoru), `tests/test_stp046_sandbox.py` (nový, 21 testů), DEV OS TASKS/PROJECT_STATE/FEATURE_REGISTRY (F-072)/TEST_REGISTRY (T-093)/CHANGELOG/checkpoint/NEXT_ACTION.
 **Nové funkce:** Sandbox kontrakt pro izolaci artifact extraktorů od hlavního procesu pipeline: `SandboxConfig` (timeout_s, max_result_bytes), `SandboxResult` (ok/category/artifacts/error/duration_s), `validate_artifact_payload()` (strukturální validace JSON payloadu dceřiného procesu), `build_worker_command()` (argv dceřiného procesu), `failure_category()` s prioritou timeout > truncated > bad_payload > crash, `sandbox_available()`, tenký IO wrapper `run_extractor_sandboxed()` přes subprocess. Worker modul: stdout = POUZE JSON array artifactů, exit 0/1 kontrakt, RLIMIT_CPU backstop na POSIX.
 **Testy:** full suite **1834 passed, 1 skipped** (+21 testů — validace configu/payloadu/argv/kategorie + E2E přes reálný subprocess s dočasnými moduly: úspěch/hang→timeout/crash/bad_payload/truncation); ruff clean.
+**Fix (flaky benchmark):** `test_stp044_ci_benchmark_e2e.py::test_run_against_own_baseline_passes` selhal při finálním verify (pipeline.core 43→57 ms = +33 %, přesáhlo i 0.5 ms noise guard) — kořenová příčina: `_workload_core` měřil plnou pipeline s `iterations=1` (run-to-run variabilita ±15 %). Oprava: průměr **5 iterací** (`benchmark_engine.py`) + regenerace baseline (pipeline.core 63.546 → 37.476 ms); ověřeno 3× měření = 39.3/38.5/39.1 ms (±1 %) a flaky test 5/5 passed.
 **Zbývá ETAPA E:** vlna 2 STP-047 (zapojení sandboxu do pipeline `_extract_artifacts_for` + fix reálného hang bugu `sqlite_carver.recover_rows`), vlna 3 STP-048 (testy + dokumentace `docs/STOPA_SANDBOX.md`).
 
 ## 2026-11-05 — STP-045 Volba ETAPY E: oblast M Security — izolace parserů (sandbox) = **ETAPA E ZAHÁJENA ★** (oblast M, P2) | Commit: ```586e85a```

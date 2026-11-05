@@ -1,7 +1,7 @@
 # STOPA — CHECKPOINT (latest)
 
 - **Datum:** 2026-11-05
-- **HEAD:** `docs follow-up` (STP-046 ETAPA E vlna 1 = docs commit; feature commit `91854d8`; předchozí HEAD `5fdf53c`)
+- **HEAD:** `de18452` (STP-046 ETAPA E vlna 1: feature commit `91854d8`, docs commit `67049e8`, fix benchmark stabilizace `de18452`; předchozí HEAD `5fdf53c`)
 - **Fáze:** Oblast M (Security) — **ETAPA E vlna 1 hotová ★** (sandbox kontrakt, čeká na vlnu 2)
 - **Poslední dokončený úkol:** STP-046 — ETAPA E vlna 1: parser sandbox kontrakt (`domain/sandbox.py`)
 

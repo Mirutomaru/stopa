@@ -11,6 +11,9 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 ### Tests
 - Full suite **1834 passed, 1 skipped** (+21 testů `tests/test_stp046_sandbox.py` — validace configu/payloadu/argv/kategorie + E2E přes reálný subprocess s dočasnými moduly: úspěch/hang→timeout/crash/bad_payload/truncation); ruff clean.
 
+### Fixed
+- **Flaky benchmark test** `test_stp044_ci_benchmark_e2e.py::test_run_against_own_baseline_passes`: `_workload_core` měřil plnou pipeline s `iterations=1` (run-to-run variabilita ±15 % → selhání +33 %) → průměr **5 iterací** v `benchmark_engine.py`; baseline regenerována (pipeline.core 63.546 → 37.476 ms); ověřeno 3× měření = 39.3/38.5/39.1 ms (±1 %), test 5/5 passed.
+
 ### Changed
 - **DEV OS:** TASKS záznam STP-046, PROJECT_STATE fáze → ETAPA E vlna 1 hotová ★ (completed tasks **46**), FEATURE_REGISTRY F-072, TEST_REGISTRY T-093 + total 1834, CHANGELOG/checkpoint/NEXT_ACTION.
 - **Obě roadmapy synchronizovány:** sekce M → 🔧 v průběhu (ETAPA E; vlna 1 hotová ★); plán vln ETAPY E — Vlna 1 ✅ hotová; next = STP-047 vlna 2 (zapojení do pipeline + fix hang bugu `sqlite_carver`).
