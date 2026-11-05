@@ -433,3 +433,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `tests/test_stp044_ci_benchmark_e2e.py` (nový, 6 E2E testů), `docs/STOPA_BENCHMARKS.md` (nová), `README.md` (odkaz + počet testů)
 - **Testy:** 6 nových E2E testů zelených; full suite **1813 passed, 1 skipped** (baseline 1807 + 6); ruff clean
 - **Dokončeno:** 2026-11-04 | Commit: ```ca93d58```
+
+### STP-045 — Volba ETAPY E: oblast M Security — izolace parserů (sandbox)
+- **Oblast:** M (Security) + DEV OS | **Priorita:** P2 | **Stav:** DONE
+- **Popis:** Audit reálného stavu kandidátů ETAPY E (M sandbox / H AI grounding / I+O Validation Center) ověřený v kódu + empirickým probe. **Klíčový nález auditu:** poškozený SQLite soubor (garbage `db_size_pages` = 1 696 622 191 stránek v 920 B souboru) visí >15 s v `sqlite_carver.recover_rows` (smyčka `range(1, db_size_pages+1)` bez validace proti velikosti souboru) a zastaví celou pipeline — parsery běží přímo ve worker vláknech (`_process_file_worker` → `_extract_artifacts_for`) bez izolace. Vybráno **ETAPA E = M Security: izolace parserů (sandbox)** — nejvyšší zbývající priorita P2 + největší dopad na spolehlivost (forenzní nástroj zpracovává neověřený vstup). Plán vln 1–3: STP-046 `domain/sandbox.py` (kontrakt, timeout, marshalling), STP-047 zapojení do pipeline + fix hang bugu, STP-048 testy + dokumentace.
+- **Závislosti:** STP-044 (ETAPA D dokončena ★★)
+- **Dotčené moduly:** `.stopa-dev/ROADMAP.md` (sekce M + ETAPA E), `STOPA_ROADMAP.md` (sync), DEV OS TASKS/PROJECT_STATE/CHANGELOG/checkpoint/NEXT_ACTION, root+mirror changelog
+- **Testy:** full suite **1813 passed, 1 skipped** (bez změny — volba etapy = docs); ruff clean
+- **Dokončeno:** 2026-11-05 | Commit: ```docs follow-up```

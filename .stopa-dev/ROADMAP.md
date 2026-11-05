@@ -84,9 +84,9 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Nejbližší úkol:** —
 
 ## M. Security
-- **Stav:** 🔧 částečně | **Priorita:** P2
+- **Stav:** 🔧 v průběhu (ETAPA E — izolace parserů / sandbox) | **Priorita:** P2
 - **Dokončeno:** Ed25519 podpisy, hash chaining audit logu, prompt injection ochrana RAG. STP-022: SHA-512 v integrity + pipeline, RBAC minimální, pip-audit CI job `security`.
-- **Nedokončeno:** izolace parserů (sandbox).
+- **Nedokončeno:** izolace parserů (sandbox) — **STP-045 audit prokázal reálný hang**: poškozený SQLite soubor (garbage `db_size_pages` = 1.7 mld. stránek v 920 B souboru) visí >15 s v `sqlite_carver.recover_rows` a zastaví celou pipeline; parsery běží přímo ve worker vláknech bez izolace, nativní extenze (PIL/openpyxl/cryptography/regipy) v hlavním procesu.
 
 ## N. Performance
 - **Stav:** ✅ hotovo | **Priorita:** P2
@@ -182,3 +182,40 @@ Další = volba ETAPY E (kandidát M Security sandbox P2).
 
 **Co reálně zbývá po ETAPĚ D (pořadí podle priority):** P2 M sandbox / H AI grounding /
 I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.
+
+## ETAPA E — ROZHODNUTÍ O SMĚRU (STP-045, 2026-11-05)
+
+**Kontext:** ETAPA D (Quality Assurance, oblast P) dokončena vlnou 2 (STP-044). CI benchmark
+job aktivní s baseline artefaktem + E2E testy; full suite **1813 passed, 1 skipped**; C3 registry
+**76 parserů**; covered **198 / 232 ★**.
+
+**Audit reálného stavu kandidátů (STP-045) — ověřeno v kódu + empirickým probe:**
+| Oblast | Stav v kódu | Rozsah | Priorita |
+|---|---|---|---|
+| **M Security — sandbox parserů** | Parsery běží přímo ve worker vláknech (`pipeline._process_file_worker` → `_extract_artifacts_for`, bez try/except na úrovni extraktoru); nativní extenze (PIL, openpyxl, cryptography, regipy) v hlavním procesu; **empirický probe: poškozený SQLite soubor visí >15 s** (`sqlite_carver.recover_rows` — garbage `db_size_pages` = 1.7 mld. stránek v 920 B souboru → nekonečná smyčka) | velký (subprocess izolace + timeout + result marshalling) | **P2** |
+| H AI Copilot — grounding | `ai_assistant.py` má citace (`CITATION_RE`, `extract_citations` validuje ID proti DB), ale žádná detekce rozporů mezi odpovědí a artifacty; LLM volání = externí závislost (LM Studio) | střední–velký (heuristiky + prompt engineering, méně deterministické testy) | P2 |
+| I+O Validation/Audit Center UI | `validation_registry.py` existuje (76 parserů); web má 30+ endpointů ale žádný Validation/Audit modul v SPA | velký (SPA moduly + endpointy + JS DOM testy) | P2/P3 |
+
+**ROZHODNUTÍ — ETAPA E = oblast M (Security): izolace parserů (sandbox).**
+Důvody: (1) **nejvyšší zbývající priorita P2** a zároveň největší dopad na spolehlivost —
+audit prokázal, že jeden poškozený soubor dokáže zastavit celou pipeline (reálný hang, ne teorie);
+(2) forenzní nástroj zpracovává **neověřený vstup** (diskové obrazy, registry hives, EVTX) —
+bez izolace je každý parser potenciální vektor crashu/hangu/DoS; (3) čistě definovaný rozsah:
+subprocess wrapper + timeout + deterministické testy s umělým hangujícím parserem;
+(4) chrání ETAPY B–D (76 parserů, 1813 testů) před regresí spolehlivosti.
+
+**Plán vln ETAPY E:**
+- **Vlna 1 (STP-046):** `domain/sandbox.py` — čistá logika: definice sandbox kontraktu
+  (parser → subprocess s timeout, JSON marshalling výsledků), detekce dostupnosti backendu
+  (multiprocessing/subprocess fallback), konfigurace limitů (timeout_s, max_result_bytes).
+- **Vlna 2 (STP-047):** zapojení do pipeline — `_extract_artifacts_for` přes sandbox wrapper
+  (per-parser timeout + catch → `parser_error` artifact místo crashu), fix reálného hang bugu
+  v `sqlite_carver.recover_rows` (validace `db_size_pages` proti velikosti souboru).
+- **Vlna 3 (STP-048):** testy + dokumentace — deterministické testy s umělým hangujícím parserem,
+  corrupt-file regression testy (SQLite/EVTX/LNK), `docs/STOPA_SANDBOX.md`.
+
+**Akceptační kritéria ETAPA E:** žádný parser nesmí zastavit pipeline (timeout + catch);
+poškozený soubor → `parser_error` artifact, ne crash; deterministické testy offline;
+full suite zelená po každé vlně; ruff clean.
+
+**Co reálně zbývá po ETAPĚ E (pořadí podle priority):** P2 H AI grounding / I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.

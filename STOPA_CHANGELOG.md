@@ -2,6 +2,16 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-05 (STP-045: volba ETAPY E ★ = oblast M Security — izolace parserů, **ETAPA E ZAHÁJENA**)
+
+### Added (oblast M + DEV OS, P2 — STP-045)
+- **Audit reálného stavu kandidátů ETAPY E** (M sandbox / H AI grounding / I+O Validation Center) ověřený v kódu + empirickým probe. **Klíčový nález:** poškozený SQLite soubor (garbage `db_size_pages` = 1 696 622 191 stránek v 920 B souboru) visí >15 s v `sqlite_carver.recover_rows` a zastaví celou pipeline — parsery běží přímo ve worker vláknech bez izolace.
+- **ROZHODNUTÍ: ETAPA E = oblast M (Security) — izolace parserů (sandbox)**; plán vln 1–3 = STP-046 (`domain/sandbox.py` kontrakt), STP-047 (zapojení do pipeline + fix hang bugu), STP-048 (testy + dokumentace).
+- **Roadmapy:** DEV OS + root sekce M → 🔧 v průběhu (ETAPA E) + nová sekce „ETAPA E — ROZHODNUTÍ O SMĚRU“ s audit tabulkou; TASKS/PROJECT_STATE/CHANGELOG/checkpoint/NEXT_ACTION synchronizovány.
+
+### Tests
+- Full suite **1813 passed, 1 skipped** (bez změny — volba etapy = docs); ruff clean.
+
 ## [Unreleased] — 2026-11-04 (STP-044: ETAPA D vlna 2 ★★ = testy + dokumentace CI benchmark jobu, **ETAPA D DOKONČENA**)
 
 ### Added (oblast P, P1 — STP-044)

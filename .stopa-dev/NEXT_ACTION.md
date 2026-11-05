@@ -1,21 +1,24 @@
-# STOPA — Nejbližší akce
+# STOPA — NEXT ACTION
 
-**Po dokončení:** STP-044 (ETAPA D vlna 2) | **Datum:** 2026-11-04
+## Po dokončení STP-045 (volba ETAPY E)
 
-## ✅ Co je hotové
-- ETAPA D dokončena ★★: CI benchmark job (STP-043, ```0136e91```) + E2E testy a dokumentace (STP-044, ```ca93d58```)
-- Full suite **1813 passed, 1 skipped**, ruff clean
+**ETAPA E ZAHÁJENA ★** — oblast M (Security): izolace parserů (sandbox).
 
-## 🎯 Nejbližší úkol: **Volba ETAPY E**
-Audit reálného stavu kandidátů (ne jen staré „Nedokončeno" v roadmapě):
-- **M Security — sandbox izolace parserů** (P2, nejvyšší zbývající priorita)
-- H AI Copilot — detekce rozporů citací (P2)
-- I+O Validation/Audit Center UI (P2)
-- G/J/K/Q = P3
+### Hotové v ETAPĚ E zatím
+- **STP-045:** volba směru + audit reálného stavu kandidátů (M/H/I+O) + synchronizace roadmapy.
+  Klíčový nález: reálný hang `sqlite_carver.recover_rows` na poškozeném SQLite souboru (>15 s).
 
-Postup: audit kódu → rozhodnutí → synchronizace DEV OS + root roadmapy → TASKS/PROJECT_STATE/CHANGELOG/checkpoint/NEXT_ACTION.
+### Nejbližší úkol — STP-046 (ETAPA E vlna 1)
+**`domain/sandbox.py`** — čistá doménová logika sandbox kontraktu:
+- definice kontraktu: parser → subprocess s timeout + JSON marshalling výsledků,
+- detekce dostupnosti backendu (subprocess fallback),
+- konfigurace limitů (`timeout_s`, `max_result_bytes`).
 
-## 📌 Kontext pro pokračování
-- Benchmark engine: `domain/benchmark.py` (detect_regressions, threshold 20 %), `data/benchmark_engine.py` (run_benchmark suite=all / 77 položek)
-- CI benchmark job: `.github/workflows/ci.yml` (job `benchmark`), `scripts/ci_benchmark.py`, baseline `benchmarks/baseline.json`
-- Dokumentace: `docs/STOPA_BENCHMARKS.md`
+Deterministické testy offline; full suite zelená po vlně; ruff clean.
+
+### Následné vlny
+- **STP-047 (vlna 2):** zapojení do pipeline + fix hang bugu v `sqlite_carver.recover_rows`.
+- **STP-048 (vlna 3):** testy (umělý hangující parser, corrupt-file regression) + `docs/STOPA_SANDBOX.md`.
+
+### Akceptační kritéria ETAPY E
+Žádný parser nesmí zastavit pipeline (timeout + catch); poškozený soubor → `parser_error` artifact, ne crash; deterministické testy offline; full suite zelená po každé vlně; ruff clean.
