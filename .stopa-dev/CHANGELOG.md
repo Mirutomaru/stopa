@@ -2,7 +2,7 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
-## 2026-11-05 — STP-045 Volba ETAPY E: oblast M Security — izolace parserů (sandbox) = **ETAPA E ZAHÁJENA ★** (oblast M, P2) | Commit: ```docs follow-up```
+## 2026-11-05 — STP-045 Volba ETAPY E: oblast M Security — izolace parserů (sandbox) = **ETAPA E ZAHÁJENA ★** (oblast M, P2) | Commit: ```586e85a```
 **Změněné soubory:** `.stopa-dev/ROADMAP.md` (sekce M → 🔧 v průběhu ETAPA E + nová sekce „ETAPA E — ROZHODNUTÍ O SMĚRU“ s audit tabulkou kandidátů a plánem vln 1–3), `STOPA_ROADMAP.md` (sync sekce M + ETAPA E), `.stopa-dev/TASKS.md` (STP-045 DONE), `.stopa-dev/PROJECT_STATE.md` (fáze, počítadla 45, poslední úkol, aktuální/nejbližší STP-046, testování, datum), DEV OS CHANGELOG/checkpoint/NEXT_ACTION, root+mirror changelog.
 **Audit (kód + empirický probe):** M Security — parsery běží přímo ve worker vláknech (`_process_file_worker` → `_extract_artifacts_for`) bez izolace; nativní extenze (PIL/openpyxl/cryptography/regipy) v hlavním procesu; **reálný hang prokázán** — poškozený SQLite soubor (garbage `db_size_pages` = 1 696 622 191 stránek v 920 B) visí >15 s v `sqlite_carver.recover_rows` a zastaví celou pipeline. H AI Copilot — citace existují, detekce rozporů chybí (LLM = externí závislost). I+O Validation/Audit Center UI — registry existuje, UI moduly chybí.
 **ROZHODNUTÍ:** ETAPA E = oblast M (Security) — izolace parserů (sandbox); nejvyšší zbývající priorita P2 + největší dopad na spolehlivost (forenzní nástroj zpracovává neověřený vstup). Plán vln 1–3: STP-046 `domain/sandbox.py` (kontrakt, timeout, marshalling), STP-047 zapojení do pipeline + fix hang bugu, STP-048 testy + dokumentace.

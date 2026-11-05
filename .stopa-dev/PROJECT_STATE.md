@@ -49,7 +49,7 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-045 — Volba ETAPY E: oblast M Security — izolace parserů (sandbox)** (oblast M, P2) | Commit: ```docs follow-up```
+**STP-045 — Volba ETAPY E: oblast M Security — izolace parserů (sandbox)** (oblast M, P2) | Commit: ```586e85a```
 Audit reálného stavu kandidátů ETAPY E ověřený v kódu + empirickým probe. **Klíčový nález:** poškozený SQLite soubor (garbage `db_size_pages` = 1 696 622 191 stránek v 920 B souboru) visí >15 s v `sqlite_carver.recover_rows` a zastaví celou pipeline — parsery běží přímo ve worker vláknech bez izolace. **ROZHODNUTÍ: ETAPA E = oblast M (Security) — izolace parserů (sandbox)**; plán vln 1–3 = STP-046/047/048. Full suite **1813 passed, 1 skipped** (bez změny), ruff clean.
 Předtím: STP-044 (ETAPA D vlna 2 — testy + dokumentace CI benchmark jobu; CELÁ ETAPA D DOKONČENA ★★, `ca93d58`),
 STP-043 (ETAPA D vlna 1 — CI benchmark job proti baseline, `0136e91`),

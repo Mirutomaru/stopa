@@ -1,7 +1,7 @@
 # STOPA — CHECKPOINT (latest)
 
 - **Datum:** 2026-11-05
-- **HEAD:** `docs follow-up` (STP-045 volba ETAPY E = docs commit; předchozí HEAD `fe76901`)
+- **HEAD:** `586e85a` (STP-045 volba ETAPY E = docs commit; předchozí HEAD `fe76901`)
 - **Fáze:** Oblast M (Security) — **ETAPA E ZAHÁJENA ★** (volba směru hotová, čeká na vlnu 1)
 - **Poslední dokončený úkol:** STP-045 — Volba ETAPY E: oblast M Security — izolace parserů (sandbox)
 

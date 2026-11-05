@@ -440,4 +440,4 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Závislosti:** STP-044 (ETAPA D dokončena ★★)
 - **Dotčené moduly:** `.stopa-dev/ROADMAP.md` (sekce M + ETAPA E), `STOPA_ROADMAP.md` (sync), DEV OS TASKS/PROJECT_STATE/CHANGELOG/checkpoint/NEXT_ACTION, root+mirror changelog
 - **Testy:** full suite **1813 passed, 1 skipped** (bez změny — volba etapy = docs); ruff clean
-- **Dokončeno:** 2026-11-05 | Commit: ```docs follow-up```
+- **Dokončeno:** 2026-11-05 | Commit: ```586e85a```
