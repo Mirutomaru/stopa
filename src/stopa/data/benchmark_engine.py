@@ -97,7 +97,10 @@ def _workload_core(workdir: Path, n_files: int = 48) -> BenchmarkResult:
         finally:
             db.close()
 
-    ms, peak, res = _time_and_ram(run, iterations=1)
+    # iterations=5: plná pipeline je nejhlučnější workload (jednorázový běh má
+    # run-to-run variabilitu ±15 %) → průměr 5 běhů stabilizuje měření pro
+    # regresní detekci (parsery používají 3; core je těžší, proto více).
+    ms, peak, res = _time_and_ram(run, iterations=5)
     return BenchmarkResult(
         name="pipeline.core",
         suite="core",
