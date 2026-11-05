@@ -164,9 +164,11 @@ export STOPA_DB_DIR=~/stopa_cases   # kde se ukládají case DB (default: ./case
 ## Testy & lint
 
 ```bash
-.venv/bin/pytest -q        # 1087 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze + P0 Core + P0 Intelligence + ETAPA B vlna 1+2+3 + STP-018 Timeline Intel + STP-020 Report engine)
-.venv/bin/ruff check src tests
+.venv/bin/pytest -q        # 1807 testů, plně offline (magic bytes + SQLite DB + FTS5 + registry/plist + messaging + disk images/carving + Windows parsery + E-fáze + P0 Core + P0 Intelligence + ETAPA B vlny 1–15 + ETAPA C db.py split + ETAPA D CI benchmark)
+.venv/bin/ruff check src tests scripts
 ```
+
+**CI benchmark:** job `benchmark` chrání výkon engine proti regresím (>20 % a ≥0.5 ms) — detail: [`docs/STOPA_BENCHMARKS.md`](docs/STOPA_BENCHMARKS.md).
 
 ## Architektura
 
