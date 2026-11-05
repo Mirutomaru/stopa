@@ -425,3 +425,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `.github/workflows/ci.yml` (+benchmark job), `scripts/ci_benchmark.py` (nový, 157 ř.), `benchmarks/baseline.json` (nový artefakt), `tests/test_stp043_ci_benchmark.py` (nový)
 - **Testy:** 15 nových testů zelených (`tests/test_stp043_ci_benchmark.py` — load/save baseline, determinismus formátu, detekce regresí přes domain API, noise guard sub-ms falešné pozitivní, exit kódy main() 0/1/2 s monkeypatchovaným engine); full suite **1807 passed, 1 skipped** (baseline 1792 + 15); ruff clean
 - **Dokončeno:** 2026-11-04 | Commit: ```0136e91```
+
+### STP-044 — ETAPA D vlna 2: testy + dokumentace CI benchmark jobu
+- **Oblast:** P (Quality Assurance) | **Priorita:** P1 | **Stav:** DONE
+- **Popis:** Dokončení ETAPY D. (1) **E2E subprocess testy** `tests/test_stp044_ci_benchmark_e2e.py` (6): spouští `scripts/ci_benchmark.py` jako skutečný subprocess (stejný způsob jako GitHub Actions) s dočasnou baseline — první běh bez baseline (exit 0, baseline_present=False), `--update-baseline` (versionovaný artefakt), běh proti vlastní baseline (exit 0, noise guard), umělá regrese na položce ≥1 ms (baseline /2 → exit 1 + `REGRESIE` na stderr), poškozená baseline (exit 2), artifact výstup identický se stdout reportem. (2) **Dokumentace** `docs/STOPA_BENCHMARKS.md`: komponenty, workflow, exit codes, proč dva prahy (relativní 20 % + absolutní guard 0.5 ms — reálné falešné pozitivní win_schedtask +22.7 % = šum 5 µs), jak aktualizovat baseline (`--update-baseline` + commit s vysvětlením), jak číst report/artifact, ukázkové hodnoty baseline (pipeline.core ~63.5 ms, registry_hive ~22.6 ms, ostatní sub-ms). README: odkaz na benchmark docs + aktuální počet testů.
+- **Závislosti:** STP-043 (CI benchmark job)
+- **Dotčené moduly:** `tests/test_stp044_ci_benchmark_e2e.py` (nový, 6 E2E testů), `docs/STOPA_BENCHMARKS.md` (nová), `README.md` (odkaz + počet testů)
+- **Testy:** 6 nových E2E testů zelených; full suite **1813 passed, 1 skipped** (baseline 1807 + 6); ruff clean
+- **Dokončeno:** 2026-11-04 | Commit: ```ca93d58```

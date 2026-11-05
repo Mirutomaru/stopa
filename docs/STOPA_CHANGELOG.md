@@ -4,6 +4,20 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-04 (STP-044: ETAPA D vlna 2 ★★ = testy + dokumentace CI benchmark jobu, **ETAPA D DOKONČENA**)
+
+### Added (oblast P, P1 — STP-044)
+- **E2E subprocess testy** `tests/test_stp044_ci_benchmark_e2e.py` (**6 testů**): spouští `scripts/ci_benchmark.py` jako skutečný subprocess (stejný způsob jako GitHub Actions) s dočasnou baseline — první běh bez baseline (exit 0, `baseline_present=False`), `--update-baseline` (versionovaný artefakt verze 1), běh proti vlastní baseline (exit 0, noise guard), umělá regrese na položce ≥1 ms (baseline /2 → exit 1 + REGRESIE na stderr + report `ok=False`), poškozená baseline (chybí pole `results` → exit 2), artifact výstup `--output` identický se stdout reportem.
+- **Dokumentace** `docs/STOPA_BENCHMARKS.md`: komponenty, workflow CI jobu, exit codes, proč dva prahy (relativní 20 % + absolutní guard 0.5 ms — reálné falešné pozitivní `win_schedtask` +22.7 % = šum 5 µs), jak aktualizovat baseline (`--update-baseline` + commit s vysvětlením), jak číst report/artifact, ukázkové hodnoty (pipeline.core ~63.5 ms, registry_hive ~22.6 ms, ostatní sub-ms).
+- **README:** odkaz na benchmark dokumentaci + aktuální počet testů.
+
+### Tests
+- Full suite **1813 passed, 1 skipped** (+6 E2E testů); ruff clean.
+
+### Changed
+- **DEV OS:** TASKS záznam STP-044, PROJECT_STATE fáze → ETAPA D vlna 2 DOKONČENA ★ = CELÁ ETAPA D DOKONČENA ★★ (completed tasks **44**), FEATURE_REGISTRY F-071, TEST_REGISTRY T-092 + total 1813, CHANGELOG/checkpoint/NEXT_ACTION.
+- **Obě roadmapy synchronizovány:** sekce P → ✅ hotovo (ETAPA D dokončena ★★); plán vln ETAPY D — Vlna 2 ✅ hotová; next = volba ETAPY E (kandidát M Security sandbox P2).
+
 ## [Unreleased] — 2026-11-04 (STP-043: ETAPA D vlna 1 ★ = CI benchmark job hotový)
 
 ### Added (oblast P, P1 — STP-043)

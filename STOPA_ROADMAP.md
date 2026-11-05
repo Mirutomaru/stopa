@@ -82,9 +82,8 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 - **Nedokončeno:** Validation Center / Audit Center moduly.
 
 ## P. Quality Assurance
-- **Stav:** 🔧 v průběhu (ETAPA D — CI benchmark job; **Vlna 1 hotová ★**) | **Priorita:** P1
-- **Dokončeno:** 1807 testů plně offline (syntetické fixtures), ruff clean, deterministická coverage matice, DEV OS projektová paměť (`.stopa-dev/`). STP-022: CI pipeline `.github/workflows/ci.yml` (lint + pytest + JS DOM + pip-audit security job). Benchmark engine (`domain/benchmark.py` + `data/benchmark_engine.py`, CLI `stopa benchmark`) s detekcí regresí >20 %. **STP-043: CI job `benchmark`** — běh engine suite=all (77 položek) proti versionované baseline `benchmarks/baseline.json`, fail na regresi >20 % a ≥0.5 ms (CI noise guard), upload výsledků jako artifact.
-- **Nedokončeno:** Vlna 2 = testy + dokumentace CI benchmark jobu (STP-044).
+- **Stav:** ✅ hotovo (ETAPA D dokončena ★★ — CI benchmark job + E2E testy + dokumentace) | **Priorita:** P1
+- **Dokončeno:** 1813 testů plně offline (syntetické fixtures), ruff clean, deterministická coverage matice, DEV OS projektová paměť (`.stopa-dev/`). STP-022: CI pipeline `.github/workflows/ci.yml` (lint + pytest + JS DOM + pip-audit security job). Benchmark engine (`domain/benchmark.py` + `data/benchmark_engine.py`, CLI `stopa benchmark`) s detekcí regresí >20 %. **STP-043: CI job `benchmark`** — běh engine suite=all (77 položek) proti versionované baseline `benchmarks/baseline.json`, fail na regresi >20 % a ≥0.5 ms (CI noise guard), upload výsledků jako artifact. **STP-044: E2E subprocess testy** (`tests/test_stp044_ci_benchmark_e2e.py`, 6) + dokumentace `docs/STOPA_BENCHMARKS.md` (workflow, prahy a proč, baseline update, report/artifact).
 
 ## Q. Interoperability
 - **Stav:** 🔧 částečně | **Priorita:** P3
@@ -162,14 +161,19 @@ benchmark engine už je hotový a testovaný, chybí jen jeho zapojení do CI;
   `detect_regressions(threshold=0.20)`, fail na regresii >20 % a ≥0.5 ms (**CI noise guard** — relativní práh je pod
   ~1 ms křehký; měření ukázalo falešné pozitivní, např. +22.7 % = šum 5 µs), upload výsledků jako artifact;
   inicializace baseline z lokálního běhu (verze 1). Full suite **1807 passed** (+15 testů `test_stp043_ci_benchmark.py`).
-- **Vlna 2 (STP-044):** testy CI benchmarku (offline: syntetický baseline + fake results),
-  dokumentace (docs/STOPA_BENCHMARKS.md), DEV OS follow-up.
+- **Vlna 2 (STP-044):** ✅ **hotová** — E2E subprocess testy `tests/test_stp044_ci_benchmark_e2e.py` (6): běh
+  `scripts/ci_benchmark.py` jako skutečný subprocess (stejný způsob jako GitHub Actions) s dočasnou baseline —
+  první běh bez baseline (exit 0), `--update-baseline`, běh proti vlastní baseline (exit 0, noise guard), umělá
+  regrese na položce ≥1 ms (baseline /2 → exit 1 + REGRESIE na stderr), poškozená baseline (exit 2), artifact výstup
+  identický se stdout reportem; dokumentace `docs/STOPA_BENCHMARKS.md` (workflow, prahy a proč, baseline update,
+  report/artifact) + README odkaz. Full suite **1813 passed** (+6 testů).
 
 **Akceptační kritéria ETAPA D:** CI job `benchmark` běží po lint/test; regrese >20 % failuje build;
 baseline je versionovaný artefakt v repozitáři; testy offline (bez sítě); full suite zelená; ruff clean.
 
-**ETAPA D vlna 1 DOKONČENA ★ (2026-11-04)** — CI job `benchmark` aktivní, baseline artefakt versionován
-(`benchmarks/baseline.json`, verze 1), full suite **1807 passed, 1 skipped**, ruff clean. Další = STP-044 vlna 2.
+**ETAPA D DOKONČENA ★★ (2026-11-04)** — CI job `benchmark` aktivní, baseline artefakt versionován
+(`benchmarks/baseline.json`, verze 1), E2E testy + dokumentace hotové; full suite **1813 passed, 1 skipped**, ruff clean.
+Další = volba ETAPY E (kandidát M Security sandbox P2).
 
 **Co reálně zbývá po ETAPĚ D (pořadí podle priority):** P2 M sandbox / H AI grounding /
 I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.

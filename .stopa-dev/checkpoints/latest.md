@@ -1,19 +1,19 @@
-# CHECKPOINT — STP-043 hotový = ETAPA D vlna 1 DOKONČENA ★ (2026-11-04)
+# STOPA — Checkpoint (aktuální stav)
 
-## Stav
-- **ETAPA D vlna 1 dokončena** — CI benchmark job proti baseline aktivní.
-- `scripts/ci_benchmark.py` (~150 ř.): běh `run_benchmark(suite="all")` (77 položek, ~0.25 s), porovnání s versionovanou baseline přes domain API `detect_regressions(threshold=0.20)`, JSON report + artifact, exit 0/1/2; **CI noise guard** `--min-delta-ms 0.5` (relativní práh je pod ~1 ms křehký — měření ukázalo falešné pozitivní, např. `win_schedtask` +22.7 % = šum 5 µs).
-- `.github/workflows/ci.yml`: nový job **`benchmark`** (needs lint+test, Python 3.11, upload výsledků jako artifact, fail na regresi >20 % a ≥0.5 ms).
-- `benchmarks/baseline.json`: versionovaný baseline artefakt (77 položek, verze 1) — inicializován lokálním během; regenerace ručně přes `--update-baseline` + commit.
+**Datum:** 2026-11-04 | **HEAD:** ```ca93d58``` (feature STP-044; docs follow-up navazuje)
 
-## Čísla
-- Full suite: **1807 passed, 1 skipped** (+15 testů `tests/test_stp043_ci_benchmark.py`)
-- Ruff: All checks passed! (src/stopa tests scripts)
-- E2E lokálně: update baseline → exit 0; běh proti baseline → exit 0 (0 regresí); umělá regrese +1 ms → exit 1; chybějící baseline → exit 0; poškozená baseline → exit 2.
+## Aktuální fáze
+**Oblast P (Quality Assurance)** — **STP-044 hotový = ETAPA D vlna 2 DOKONČENA ★ = CELÁ ETAPA D DOKONČENA ★★**
 
-## Commity
-- Feature: ```0136e91``` — `feat(ci): ETAPA D vlna 1 — CI benchmark job proti baseline (STP-043)` (5 souborů)
-- Docs follow-up: viz DEV OS CHANGELOG / TASKS.
+## Co se stalo (STP-044)
+1. **E2E subprocess testy** `tests/test_stp044_ci_benchmark_e2e.py` (6): spouští `scripts/ci_benchmark.py` jako skutečný subprocess (stejný způsob jako GitHub Actions) s dočasnou baseline — první běh bez baseline (exit 0), `--update-baseline`, běh proti vlastní baseline (exit 0, noise guard), umělá regrese na položce ≥1 ms (baseline /2 → exit 1 + REGRESIE na stderr), poškozená baseline (exit 2), artifact výstup identický se stdout reportem.
+2. **Dokumentace** `docs/STOPA_BENCHMARKS.md`: komponenty, workflow, exit codes, proč dva prahy (relativní 20 % + absolutní guard 0.5 ms — reálné falešné pozitivní win_schedtask +22.7 % = šum 5 µs), jak aktualizovat baseline (`--update-baseline` + commit s vysvětlením), jak číst report/artifact, ukázkové hodnoty (pipeline.core ~63.5 ms, registry_hive ~22.6 ms, ostatní sub-ms).
+3. **README:** odkaz na benchmark docs + aktuální počet testů.
 
-## Další krok
-**STP-044 — ETAPA D vlna 2:** testy + dokumentace CI benchmark jobu (docs/STOPA_BENCHMARKS.md, workflow baseline update, prahy 20 % / 0.5 ms guard), DEV OS follow-up.
+## Klíčová čísla
+- Full suite: **1813 passed, 1 skipped** (+6 E2E testů) | ruff clean
+- Benchmark suite=all: 77 položek, ~0.25 s; baseline `benchmarks/baseline.json` (verze 1)
+- CI jobs: lint, test, security, **benchmark**
+
+## Nejbližší krok
+**Volba ETAPY E** — audit reálného stavu kandidátů (M Security sandbox P2, H AI detekce rozporů citací P2, I+O Validation Center UI P2; G/J/K/Q P3) + synchronizace DEV OS + root roadmapy.
