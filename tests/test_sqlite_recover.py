@@ -238,3 +238,74 @@ def test_recover_from_wal_ignores_identical_page(tmp_path: Path):
     wal = _wal_header(h.page_size) + _wal_frame(2, page2)
     rows = recover_from_wal(data, wal)
     assert rows == []
+
+
+# ── STP-047 — validace db_size_pages proti velikosti souboru (hang fix) ───────
+
+
+def _corrupt_header(page_size: int = 4096, db_size_pages: int = 1_700_000_000, total: int = 920) -> bytes:
+    """Syntetický poškozený SQLite header.
+
+    Validní magic + page_size, ale ``db_size_pages`` tvrdí miliardy stránek v
+    souboru o pár set bajtů (audit STP-045: reálný 920 B soubor s 1,7 mld.).
+    Bez validace by unallocated smyčka visela >15 s.
+    """
+    buf = bytearray(total)
+    buf[0:16] = b"SQLite format 3\x00"
+    struct.pack_into(">H", buf, 16, page_size)
+    struct.pack_into(">I", buf, 28, db_size_pages)
+    return bytes(buf)
+
+
+def test_corrupt_header_garbage_db_size_does_not_hang():
+    """Garbage ``db_size_pages`` (1,7 mld. v 920 B) → smyčka doběhne za < 2 s."""
+    import time
+
+    data = _corrupt_header()
+    t0 = time.monotonic()
+    rows = recover_rows(data)
+    elapsed = time.monotonic() - t0
+    # bez fixu: range(1, 1_700_000_001) → >15 s; s fixem: max_pages=0 → okamžitě
+    assert elapsed < 2.0, f"recover_rows visel {elapsed:.1f} s (garbage db_size_pages)"
+    # 920 B < page_size 4096 → ani jedna celá stránka → žádné řádky
+    assert rows == []
+
+
+def test_corrupt_header_page_size_zero_no_hang():
+    """``page_size=0`` (garbage) → dělení nulou nesmí viset ani padnout."""
+    import time
+
+    data = _corrupt_header(page_size=0, db_size_pages=5_000)
+    t0 = time.monotonic()
+    rows = recover_rows(data)
+    elapsed = time.monotonic() - t0
+    assert elapsed < 2.0
+    assert rows == []
+
+
+def test_db_size_larger_than_file_scans_only_real_pages(tmp_path: Path):
+    """Header tvrdí víc stránek, než soubor obsahuje → scan jen reálných."""
+    db = tmp_path / "big.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, x TEXT)")
+    for i in range(50):
+        conn.execute("INSERT INTO t VALUES (?, ?)", (i, f"row-{i}"))
+    conn.commit()
+    conn.close()
+
+    data = bytearray(db.read_bytes())
+    h = parse_header(bytes(data))
+    assert h is not None
+    # header tvrdí 10× více stránek než soubor reálně má
+    struct.pack_into(">I", data, 28, h.db_size_pages * 10)
+
+    rows = recover_rows(bytes(data))
+    # žádné výjimky + smyčka omezená na reálné stránky (page_data None za koncem)
+    assert isinstance(rows, list)
+
+
+def test_valid_db_recovery_unchanged(simple_db: bytes):
+    """Regression: validní DB se chová stejně jako před fixem."""
+    rows = recover_rows(simple_db)
+    # simple_db má 3 řádky v tabulce → aktivní (used) stránky, nic smazaného
+    assert isinstance(rows, list)

@@ -181,8 +181,17 @@ def recover_rows(data: bytes) -> list[RecoveredRow]:
             rows.extend(rows_from_page("freelist", page_no, page))
 
     # 3) unallocated: v rozsahu DB, ale ani b-tree ani freelist — raw-scan vždy
-    # (smazaná tabulka může mít už přepsaný page-type byte)
-    for page_no in range(1, header.db_size_pages + 1):
+    # (smazaná tabulka může mít už přepsaný page-type byte).
+    # STP-047 — validace db_size_pages proti reálné velikosti souboru: poškozený
+    # header může tvrdit miliardy stránek (audit STP-045: 1,7 mld. v 920 B
+    # souboru → smyčka visela >15 s), ale stránka za koncem souboru neexistuje
+    # (page_data by vrátila None) → omezení na skutečný rozsah zabrání visící
+    # smyčce. page_size==0 (garbage header) → max_pages=0 → žádné iterace.
+    # Pro validní DB platí len(data) == db_size_pages * page_size, takže
+    # min() nemění chování (last_page == db_size_pages).
+    max_pages = len(data) // header.page_size if header.page_size else 0
+    last_page = min(header.db_size_pages, max_pages)
+    for page_no in range(1, last_page + 1):
         if page_no in used or page_no in freelist:
             continue
         page = page_data(data, header, page_no)

@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from pydantic import ValidationError
+
 import stopa as _stopa_pkg  # __version__ (single-source z pyproject)
 from stopa.artifacts.allowlisted_websites import PARSER_VERSION as ALLOWLISTED_WEBSITES_VERSION
 from stopa.artifacts.allowlisted_websites import (
@@ -343,6 +345,14 @@ from stopa.domain.reproducibility import (
     compare_outputs,
     verify_inputs,
 )
+from stopa.domain.sandbox import (
+    CATEGORY_BAD_PAYLOAD,
+    CATEGORY_CRASH,
+    SandboxConfig,
+    SandboxResult,
+    run_extractor_sandboxed,
+    sandbox_available,
+)
 from stopa.domain.signatures import detect_signature
 from stopa.domain.timeline_anomaly import AnomalyContext, detect_anomalies
 from stopa.domain.timeline_intel import analyze_timeline
@@ -351,6 +361,12 @@ from stopa.models import Artifact, FileRecord, ProcessingProfile, ProcessResult
 log = logging.getLogger("stopa.pipeline")
 
 SIGNATURE_HEAD_BYTES = 65536  # stačí pro všechny signatury v hlavičce
+
+# ETAPA E vlna 2 (STP-047) — parser sandbox: extraktory běží v dceřiném
+# procesu s timeoutem, aby poškozený vstupní soubor nevisel a nepadl pipeline.
+# Vypnutí pro debug / CI bez subprocessu: STOPA_SANDBOX=0 (fallback = přímé volání).
+SANDBOX_ENABLED = os.environ.get("STOPA_SANDBOX", "1") != "0"
+SANDBOX_CONFIG = SandboxConfig()  # defaultní limity (30 s / 16 MiB) z domain/sandbox.py
 
 
 def _extract_sqlite_all(path: Path) -> list[Artifact]:
@@ -737,6 +753,69 @@ def summarize_outputs(result: ProcessResult) -> dict:
     }
 
 
+def _parser_error_artifact(
+    fn: Callable[[Path], list[Artifact]], ver: str | None, res: SandboxResult
+) -> Artifact:
+    """Selhání parseru → ``parser_error`` artifact (ETAPA E vlna 2, STP-047).
+
+    Pipeline nepadne — selhání je záznam s kategorií z ``SandboxResult``
+    (timeout | truncated | bad_payload | crash) pro audit log.
+    """
+    category = res.category or CATEGORY_CRASH
+    return Artifact(
+        artifact_type="parser_error",
+        title=f"parser selhal ({category})",
+        details={
+            "category": category,
+            "error": res.error or "",
+            "parser": f"{fn.__module__}.{fn.__name__}",
+        },
+        parser_version=ver,
+    )
+
+
+def _run_extractor(
+    fn: Callable[[Path], list[Artifact]], path: Path, ver: str | None
+) -> list[Artifact]:
+    """Jeden extraktor — přes sandbox subprocess (default) nebo přímo.
+
+    ETAPA E vlna 2 (STP-047): poškozený vstupní soubor nesmí viset ani
+    crashnout celou pipeline. Sandbox běží parser v dceřiném procesu s
+    timeoutem; selhání → ``parser_error`` artifact s kategorií z
+    ``SandboxResult``. Fallback (sandbox vypnutý / worker nedostupný) =
+    přímé volání, původní chování.
+    """
+    if SANDBOX_ENABLED and sandbox_available():
+        res = run_extractor_sandboxed(fn.__module__, fn.__name__, path, SANDBOX_CONFIG)
+        if res.ok:
+            try:
+                return [Artifact.model_validate(d) for d in res.artifacts]
+            except ValidationError as e:  # payload prošel strukturou, ale ne modelem
+                log.warning(
+                    "sandbox parser %s.%s — model validace selhala: %s",
+                    fn.__module__,
+                    fn.__name__,
+                    e,
+                )
+                return [
+                    _parser_error_artifact(
+                        fn,
+                        ver,
+                        SandboxResult(ok=False, category=CATEGORY_BAD_PAYLOAD, error=str(e)),
+                    )
+                ]
+        log.warning(
+            "sandbox parser %s.%s selhal (%s): %s",
+            fn.__module__,
+            fn.__name__,
+            res.category,
+            res.error,
+        )
+        return [_parser_error_artifact(fn, ver, res)]
+    # fallback — přímé volání (STOPA_SANDBOX=0 nebo worker modul chybí)
+    return fn(path)
+
+
 def _extract_artifacts_for(
     path: Path, signature_type: str | None
 ) -> tuple[list[Artifact], str | None]:
@@ -748,16 +827,20 @@ def _extract_artifacts_for(
 
     Vrací ``(artifacts, parser_version)`` — verze se eviduje na každém artifactu
     (E2 provenience / reprodukovatelnost). Bez extraktoru → ``([], None)``.
+
+    ETAPA E vlna 2 (STP-047): všechny cesty běží přes ``_run_extractor`` —
+    sandbox subprocess s timeoutem; selhání parseru → ``parser_error`` artifact
+    (pipeline nepadne). Fallback bez sandboxu = přímé volání.
     """
     if signature_type in ARTIFACT_EXTRACTORS:
         fn, ver = ARTIFACT_EXTRACTORS[signature_type]
-        return fn(path), ver
+        return _run_extractor(fn, path, ver), ver
     # ETAPA B vlna 10 — cloud SNS (Instagram/Snapchat): generic basenames kolidují
     # s Google detektory → pre-pass na celé cestě PŘED basename chainem.
     sns_match = _sns_prepass(str(path))
     if sns_match is not None:
         fn, ver = sns_match
-        return fn(path), ver
+        return _run_extractor(fn, path, ver), ver
     name_match = _name_based_match(path.name)  # name-based fallback (AXIOM Hunter)
     if name_match is None:
         # ETAPA B vlna 8 — Takeout soubory se generic názvy (Drive/Files.json, Voice/Texts.json):
@@ -766,7 +849,7 @@ def _extract_artifacts_for(
         name_match = _name_based_match(str(path))
     if name_match is not None:
         fn, ver = name_match
-        return fn(path), ver
+        return _run_extractor(fn, path, ver), ver
     return [], None
 
 
