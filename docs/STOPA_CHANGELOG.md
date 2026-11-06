@@ -4,6 +4,16 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-06 (STP-052: oblast O Audit Center ★ = neměnná stopa hash chain + Ed25519 kontrolní body)
+
+### Added (oblast O, P3 — STP-052)
+- **Audit Center endpoint** `web/app.py`: `GET /api/cases/{id}/audit` — agregace C4 integrity vrstvy: `verify_audit_chain()` (SHA-512 hash chain, first/last hash, broken index), Ed25519 kontrolní body (`list_integrity_checkpoints`) + nezávislé ověření podpisů (`verify_integrity_checkpoints`), public key (base64), audit záznamy (`list_audit_log`); defenzivní obaly — selhání → 500 s logem.
+- **SPA modul** `mod-audit`: nový `js/components/audit.js` (`renderAuditCenter()` — stat karty chain/checkpoints/záznamy, chain status badge valid/broken, kontrolní body se stavem podpisu verified/invalid, tabulka audit záznamů s operací/aktérem/datem), registrace v modules.js/sidebar.js (🛡).
+- **Testy** `tests/test_stp052.py` (+8): endpoint E2E (chain valid, kontrolní body verified, public key base64, audit záznamy) + tampering — UPDATE detailu je na úrovni DB blokován append-only triggerem (`audit_no_update`), test simuluje útočníka s přímým přístupem k souboru (drop triggeru + UPDATE) a ověří, že chain verifikaci odhalí broken index.
+
+### Changed
+- Full suite: **1927 passed, 1 skipped** (+8); ruff clean. Oblast O dokončena ★ — další podle priority: J Case Mgmt 2.0 / K Plaso / Q Interop.
+
 ## [Unreleased] — 2026-11-06 (STP-051: oblast G File Preview v UI ★ = inline media + text preview)
 
 ### Added (oblast G, P3 — STP-051)

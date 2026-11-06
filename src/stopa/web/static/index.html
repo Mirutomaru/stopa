@@ -262,6 +262,31 @@
     <div id="val-registry" class="muted small">Načítám…</div>
   </section>
 
+  <!-- ── STP-052 — AUDIT CENTER (C4 chain + Ed25519 checkpoints) ── -->
+  <section id="mod-audit" class="module">
+    <h2>Audit Center</h2>
+    <p class="muted small">Neměnná stopa operací: hash chaining audit logu (C4), Ed25519 kontrolní body a nezávislé ověření podpisů. Každý řádek je kryptograficky propojen s předchozím — úprava historie je detekovatelná.</p>
+
+    <div class="stat-grid" id="audit-stats"></div>
+    <h2>Integrita hash chainu</h2>
+    <div id="audit-chain" class="muted small">Načítám…</div>
+    <div id="audit-chain-reason" class="muted small"></div>
+
+    <h2>Kontrolní body (Ed25519)</h2>
+    <p class="muted small">Periodické kontrolní body s nezávislým podpisem — ověření nepotřebuje celý řetězec.</p>
+    <table id="audit-cps">
+      <thead><tr><th>Čas (UTC)</th><th>Audit řádek</th><th>Last hash</th><th>Podpis</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Audit trail</h2>
+    <p class="muted small">Nejnovější operace první (limit 200).</p>
+    <table id="audit-entries">
+      <thead><tr><th>Čas (UTC)</th><th>Operace</th><th>Aktor</th><th>Detaily</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
   <!-- ── E12 — CASES (případy, zařízení, workspace) ─────────── -->
   <section id="mod-cases" class="module">
     <h2>Případy</h2>
@@ -396,6 +421,7 @@
 <script src="/static/js/components/graph.js"></script>
 <script src="/static/js/components/ai.js"></script>
 <script src="/static/js/components/validation.js"></script>
+<script src="/static/js/components/audit.js"></script>
 <script src="/static/js/components/modules.js"></script>
 <script src="/static/app.js"></script>
 </body>

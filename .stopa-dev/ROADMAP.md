@@ -66,7 +66,7 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Dokončeno:** C3 Parser Validation Registry (13 parserů), validační reporty per-artifact
   (ID+verze, status, confidence, provenance). STP-050: UI Validation Center — `GET /api/cases/{id}/validation`
   (C6 report) + `GET /api/validation/registry` (C3 registry), SPA modul `mod-validation`.
-- **Nedokončeno:** — | **Nejbližší úkol:** Audit Center modul (oblast O).
+- **Nedokončeno:** — | **Nejbližší úkol:** — (Audit Center hotový STP-052).
 
 ## J. Case Management
 - **Stav:** ✅ základ hotov | **Priorita:** P3
@@ -94,9 +94,9 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Nedokončeno:** CI běh benchmarku.
 
 ## O. User Interface
-- **Stav:** ✅ základ hotov | **Priorita:** P3
-- **Dokončeno:** FastAPI 30+ endpointů + vanilla JS SPA (dark mode), graph.js. STP-021: Processing Monitor (`GET /api/cases/{id}/processing` + async ingest s živým progress). STP-050: Validation Center modul (`mod-validation`, `js/components/validation.js`).
-- **Nedokončeno:** Audit Center modul.
+- **Stav:** ✅ hotovo | **Priorita:** P3
+- **Dokončeno:** FastAPI 30+ endpointů + vanilla JS SPA (dark mode), graph.js. STP-021: Processing Monitor (`GET /api/cases/{id}/processing` + async ingest s živým progress). STP-050: Validation Center modul (`mod-validation`, `js/components/validation.js`). STP-051: File Preview v UI (inline media + text preview v inspectoru). **STP-052: Audit Center modul** (`mod-audit`, `js/components/audit.js` — hash chain status, Ed25519 kontrolní body s ověřením podpisů, tabulka audit záznamů; endpoint `GET /api/cases/{id}/audit`).
+- **Nedokončeno:** — | **Nejbližší úkol:** J Case Management 2.0 (rozšíření RBAC) nebo K Export Engine (Plaso).
 
 ## P. Quality Assurance
 - **Stav:** ✅ hotovo (ETAPA D dokončena ★★ — CI benchmark job + E2E testy + dokumentace) | **Priorita:** P1

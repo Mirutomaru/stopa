@@ -792,6 +792,43 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             raise HTTPException(500, f"parser registry selhal: {e}") from e
         return {"count": len(rows), "parsers": rows}
 
+    # ── STP-052 — Audit Center (oblast O) ─────────────────────
+    @app.get("/api/cases/{case_id}/audit")
+    def audit_center(case_id: str, limit: int = 100) -> dict:
+        """Audit Center — neměnná stopa + integrity v jednom reportu.
+
+        Agreguje (čistá čtení nad DB):
+        - ``chain`` — výsledek ověření hash řetězce audit logu (C4),
+        - ``entries`` — nejnovější záznamy audit trailu (limit, default 100),
+        - ``checkpoints`` — Ed25519 kontrolní body + nezávislé ověření podpisů.
+
+        Selhání degraduje na 500 s logem (defenzivní obal).
+        """
+        db = open_db(case_id)
+        try:
+            report = db.verify_audit_chain()
+            entries = db.list_audit_log(limit=max(1, min(int(limit), 1000)))
+            checkpoints = db.list_integrity_checkpoints()
+            checkpoint_checks = db.verify_integrity_checkpoints()
+            return {
+                "chain": {
+                    "ok": report.ok,
+                    "rows_checked": report.rows_checked,
+                    "broken_at_id": report.broken_at_id,
+                    "reason": report.reason,
+                },
+                "total_entries": len(entries),
+                "entries": entries,
+                "public_key": db.integrity_public_key(),
+                "checkpoints": checkpoints,
+                "checkpoint_checks": checkpoint_checks,
+            }
+        except Exception as e:  # doplňková vrstva — log + degradace
+            log.warning("audit center selhal pro %s: %s", case_id, e)
+            raise HTTPException(500, f"audit report selhal: {e}") from e
+        finally:
+            db.close()
+
     # ── E11 — AI Forensic Assistant (LM Studio) ───────────────
     @app.get("/api/ai/status")
     def ai_status() -> dict:

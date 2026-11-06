@@ -19,6 +19,7 @@ const MODULES = {
   "reporting":       ["Reporting", "Court-ready reporty + ručně označené soubory"],
   "ai":              ["AI Assistant", "LM Studio — hledání přirozenou řečí, shrnutí a vysvětlení artifactů (E11)"],
   "validation":      ["Validation Center", "Parser Validation Registry + validační reporty per-artifact (C3/C6)"],
+  "audit":           ["Audit Center", "Neměnná stopa: hash chain audit logu + Ed25519 kontrolní body (C4)"],
   "cases":           ["Cases", "Případy v workspace — přehled, zařízení a poslední aktivita (E12)"],
   "diagnostics":     ["Diagnostics", "Verze knihoven + dostupnost TSK/EWF/FDE + audit log (E12)"],
   "settings":        ["Settings", "Časové pásmo, AI URL, role a bind address (E12)"],
@@ -28,7 +29,7 @@ const MODULE_ICONS = {
   "dashboard": "▦", "disk-image": "◫", "file-system": "🗀", "partition-map": "▤",
   "system-recovery": "⚙", "sql-recovery": "∞", "messaging-chat": "✉",
   "deletion-check": "⌫", "artifacts": "◈", "entity-graph": "❖", "correlation": "⇄",
-  "reporting": "▤", "ai": "✦", "validation": "✓", "cases": "🗂", "diagnostics": "🩺", "settings": "⚙︎",
+  "reporting": "▤", "ai": "✦", "validation": "✓", "audit": "🛡", "cases": "🗂", "diagnostics": "🩺", "settings": "⚙︎",
 };
 
 function renderSidebarNav() {

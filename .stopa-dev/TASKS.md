@@ -473,3 +473,27 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/domain/ai_grounding.py` (nový), `src/stopa/web/app.py` (`_ground_answer_safe()` + grounding ve všech 3 AI režimech), `src/stopa/web/static/js/components/ai.js` (⚠ štítky citací + findings panel), `src/stopa/web/static/style.css` (`.flagged`, `.ai-grounding`), `tests/test_stp049_grounding.py` (nový, 33 testů), `tests/test_stp049_grounding_e2e.py` (nový, 8 testů), `docs/STOPA_AI_ARCHITECTURE.md` (§1.1)
 - **Testy:** 41 nových testů zelených; full suite **1891 passed, 1 skipped** (baseline 1850 + 41); ruff clean
 - **Dokončeno:** 2026-11-06 | Commity: viz git log (feature + docs) — **ETAPA H dokončena ★★**
+
+### STP-050 — Oblast I+O: Validation Center UI (C3 registry + C6 report v SPA)
+- **Oblast:** I+O (Validation Engine / User Interface) | **Priorita:** P2 | **Stav:** DONE
+- **Popis:** Doložitelnost extrakce v GUI. **(A)** `web/app.py` — `GET /api/cases/{id}/validation` (C6 `build_validation_report`: total_artifacts, coverage per-parser, validační statusy, per-artifact řádky s parser ID+verze/confidence/provenance) + `GET /api/validation/registry` (C3 `build_registry`/`registry_report`); defenzivní obaly — selhání → 500 s logem. **(B)** SPA: sekce `mod-validation` v index.html (statistické karty, coverage bar, per-parser tabulka, validační statusy, per-artifact report), nový `js/components/validation.js` (`renderValidationCenter()` — badge validated/needs_validation, fetch obou endpointů přes Promise.all), registrace modulu v modules.js/sidebar.js + styling.
+- **Závislosti:** STP-049 (ETAPA H dokončena ★★)
+- **Dotčené moduly:** `src/stopa/web/app.py`, `index.html`, `js/components/validation.js` (nový), `modules.js`, `sidebar.js`, `style.css`, `tests/test_stp050_validation_center.py` (nový, 10 testů)
+- **Testy:** 10 nových testů zelených; full suite **1901 passed, 1 skipped** (baseline 1891 + 10); ruff clean
+- **Dokončeno:** 2026-11-06 | Commit: `0b761ab`
+
+### STP-051 — Oblast G: File Preview v UI (inline media + text preview)
+- **Oblast:** G (File Intelligence / User Interface) | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** Vizualizace souborů přímo v inspectoru. **(A)** `domain/file_preview.py` (nový, čistá logika bez IO): `classify_preview(data, name)` → image/audio/video/text/None podle magic bytes (PNG/JPEG/GIF/WebP/BMP/WAV/RIFF-WMA/FLAC/MP3/ID3/MP4-ISO-BMFF) s fallbackem na příponu; `extract_text_preview()` — UTF-8 decode + BOM, NUL → 400 znaků nečitelných → binární, truncace na max_chars (default 4000); `preview_media_type()` → MIME. **(B)** `web/app.py` — `GET /api/files/{fid}/preview`: media → inline Response s Content-Type + Cache-Control no-store; text → JSON {text, truncated}; neznámý typ → 415; chybějící/nesčitatelný soubor → 404. **(C)** SPA: sekce PREVIEW v inspector draweru (index.html), `inspector.js` — `loadPreview()` (fetch + render img/audio/video/text, object URL lifecycle `_revokePreview()`, 415 → „preview není dostupné"), styling `.preview-box`/`.preview-text`.
+- **Závislosti:** STP-050 (Validation Center hotový)
+- **Dotčené moduly:** `src/stopa/domain/file_preview.py` (nový), `src/stopa/web/app.py`, `index.html`, `js/components/inspector.js`, `style.css`, `tests/test_stp051.py` (nový, 18 testů)
+- **Testy:** 18 nových testů zelených; full suite **1919 passed, 1 skipped** (baseline 1901 + 18); ruff clean
+- **Dokončeno:** 2026-11-06 | Commit: `11d80e4` — **Oblast G dokončena ★**
+
+### STP-052 — Oblast O: Audit Center (neměnná stopa: hash chain + Ed25519 kontrolní body)
+- **Oblast:** O (User Interface / Integrity C4) | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** Neměnný audit trail v GUI. **(A)** `web/app.py` — `GET /api/cases/{id}/audit`: agregace C4 integrity vrstvy — `verify_audit_chain()` (SHA-512 hash chain, first/last hash, broken index), Ed25519 kontrolní body (`list_integrity_checkpoints`) + nezávislé ověření podpisů (`verify_integrity_checkpoints`), public key (base64), audit záznamy (`list_audit_log`); defenzivní obaly — selhání → 500 s logem. **(B)** SPA: sekce `mod-audit` v index.html, nový `js/components/audit.js` (`renderAuditCenter()` — stat karty chain/checkpoints/záznamy, chain status badge valid/broken, kontrolní body se stavem podpisu verified/invalid, tabulka audit záznamů s operací/aktérem/datem), registrace v modules.js/sidebar.js (🛡). **(C)** Testy: tampering test simuluje útočníka s přímým přístupem k souboru — UPDATE detailu je na úrovni DB blokován append-only triggerem (`audit_no_update`), test ho dropne a ověří, že chain verifikaci odhalí broken index.
+- **Závislosti:** STP-051 (File Preview hotový)
+- **Dotčené moduly:** `src/stopa/web/app.py`, `index.html`, `js/components/audit.js` (nový), `modules.js`, `sidebar.js`, `tests/test_stp052.py` (nový, 8 testů)
+- **Testy:** 8 nových testů zelených; full suite **1927 passed, 1 skipped** (baseline 1919 + 8); ruff clean
+- **Dokončeno:** 2026-11-06 | Commit: viz git log — **Oblast O dokončena ★**
