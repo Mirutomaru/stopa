@@ -714,6 +714,40 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
+    # ── STP-050 — Validation Center (C3 registry + C6 report) ──
+    @app.get("/api/cases/{case_id}/validation")
+    def validation_report(case_id: str) -> dict:
+        """Validační report případu — coverage parserů, statusy, per-artifact řádky.
+
+        Čistá agregace nad DB (C6 ``build_validation_report``); selhání registry
+        degraduje na 500 s logem (defenzivní obal).
+        """
+        from stopa.data.validation_report import build_validation_report
+
+        db = open_db(case_id)
+        try:
+            return build_validation_report(db, case_id)
+        except Exception as e:  # doplňková vrstva — log + degradace
+            log.warning("validation report selhal pro %s: %s", case_id, e)
+            raise HTTPException(500, f"validační report selhal: {e}") from e
+        finally:
+            db.close()
+
+    @app.get("/api/validation/registry")
+    def validation_registry() -> dict:
+        """Parser Validation Registry (C3) — řádky s identitou a validací parserů.
+
+        Synchronizace registry × pipeline; nesoulad → 500 s logem (defenzivní obal).
+        """
+        from stopa.domain.validation_registry import build_registry, registry_report
+
+        try:
+            rows = registry_report(build_registry())
+        except Exception as e:  # doplňková vrstva — log + degradace
+            log.warning("parser validation registry selhal: %s", e)
+            raise HTTPException(500, f"parser registry selhal: {e}") from e
+        return {"count": len(rows), "parsers": rows}
+
     # ── E11 — AI Forensic Assistant (LM Studio) ───────────────
     @app.get("/api/ai/status")
     def ai_status() -> dict:

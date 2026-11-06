@@ -233,6 +233,35 @@
     <div id="ai-chat"></div>
   </section>
 
+  <!-- ── STP-050 — VALIDATION CENTER (C3 registry + C6 report) ── -->
+  <section id="mod-validation" class="module">
+    <h2>Validation Center</h2>
+    <p class="muted small">Doložitelnost extrakce: Parser Validation Registry (C3) × validační report případu (C6). Coverage = podíl artifactů z parserů s platným záznamem v registry.</p>
+
+    <div class="stat-grid" id="val-stats"></div>
+    <div class="val-coverage" id="val-covbar" title="Coverage registry — podíl artifactů z validovaných parserů"><div class="val-coverage-fill" style="width:0%"></div></div>
+
+    <h2>Coverage per-parser</h2>
+    <table id="val-parsers">
+      <thead><tr><th>Parser</th><th>Verze</th><th>Artifacty</th><th>Pokryto registry</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Validační statusy artifactů</h2>
+    <div id="val-status" class="muted small">Načítám…</div>
+
+    <h2>Per-artifact report</h2>
+    <p class="muted small">Každý artifact: parser ID+verze, validační status, confidence a počet provenance záznamů.</p>
+    <table id="val-artifacts">
+      <thead><tr><th>ID</th><th>Typ</th><th>Parser</th><th>Status</th><th>Confidence</th><th>Provenance</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Parser Validation Registry (C3)</h2>
+    <p class="muted small">Kompletní registry parserů — formáty, omezení a referenční datasety. Synchronizováno s pipeline.</p>
+    <div id="val-registry" class="muted small">Načítám…</div>
+  </section>
+
   <!-- ── E12 — CASES (případy, zařízení, workspace) ─────────── -->
   <section id="mod-cases" class="module">
     <h2>Případy</h2>
@@ -363,6 +392,7 @@
 <script src="/static/js/components/search.js"></script>
 <script src="/static/js/components/graph.js"></script>
 <script src="/static/js/components/ai.js"></script>
+<script src="/static/js/components/validation.js"></script>
 <script src="/static/js/components/modules.js"></script>
 <script src="/static/app.js"></script>
 </body>

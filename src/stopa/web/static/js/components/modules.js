@@ -35,6 +35,7 @@ async function renderModule() {
       case "correlation":     await renderCorrelation(cid); break;
       case "reporting":       await renderReporting(cid); break;
       case "ai":              await renderAiModule(cid); break;
+      case "validation":      await renderValidationCenter(cid); break;
       // E12 — globální moduly (bez case ID)
       case "cases":           await renderCasesModule(); break;
       case "diagnostics":     await renderDiagnosticsModule(); break;
