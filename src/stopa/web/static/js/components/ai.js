@@ -95,16 +95,32 @@ function pushAiMsg(msg) {
   Store.set("aiMessages", hist);
 }
 
-function citationChipsHtml(citations) {
+function citationChipsHtml(citations, grounding) {
   if (!citations?.length) return "";
+  // STP-049 — citace s rozporu (grounding findings) dostanou ⚠ štítek
+  const flagged = new Set((grounding?.findings || []).map((f) => f.citation_id));
   return `<div class="ai-cites">${citations.map((c) => {
     const isFile = !!c.file_id;
     const label = c.rel_path || c.name || c.title || c.artifact_id || c.file_id;
     const cls = isFile ? "file" : "artifact";
-    return `<button class="ai-cite ${cls}" data-fid="${esc(c.file_id || "")}" ` +
-      `data-title="${esc(label)}" title="${esc(label)}">` +
-      `${isFile ? "📄" : "◈"} <span>${esc(shortLabel(label))}</span></button>`;
+    const cid = c.file_id || c.artifact_id || "";
+    const bad = flagged.has(cid);
+    return `<button class="ai-cite ${cls}${bad ? " flagged" : ""}" data-fid="${esc(c.file_id || "")}" ` +
+      `data-title="${esc(label)}" title="${esc(bad ? label + " — ⚠ rozpor s daty (viz níže)" : label)}">` +
+      `${isFile ? "📄" : "◈"}${bad ? " ⚠" : ""} <span>${esc(shortLabel(label))}</span></button>`;
   }).join("")}</div>`;
+}
+
+/* STP-049 — panel rozporů mezi odpovědí a daty citací (grounding report) */
+function groundingHtml(grounding) {
+  if (!grounding?.findings?.length) return "";
+  const catLabel = { mismatch_date: "datum", mismatch_type: "typ", unverified_claim: "neověřeno" };
+  const rows = grounding.findings.map((f) =>
+    `<li><b>${esc(catLabel[f.category] || f.category)}</b> — ${esc(f.claim || "")}` +
+    (f.actual ? ` <span class="muted">→ v DB: ${esc(String(f.actual))}</span>` : "") + "</li>"
+  ).join("");
+  return `<div class="ai-grounding"><div class="ai-grounding-title">` +
+    `⚠ ${grounding.findings.length}× rozpor s daty citace</div><ul>${rows}</ul></div>`;
 }
 
 function renderAiChat() {
@@ -130,9 +146,10 @@ function renderAiChat() {
     if (typeof d.confidence === "number") {
       extra += ` <span class="conf-badge ${d.confidence >= 0.8 ? "verified" : "inferred"}">confidence ${d.confidence.toFixed(2)}</span>`;
     }
-    const cites = citationChipsHtml(d.citations);
+    const cites = citationChipsHtml(d.citations, d.grounding);
+    const groundingPanel = groundingHtml(d.grounding);
     return `<div class="ai-msg assistant"><span class="who">AI</span>
-      <div class="body">${esc(d.answer || "—")}${extra}</div>${cites}</div>`;
+      <div class="body">${esc(d.answer || "—")}${extra}</div>${cites}${groundingPanel}</div>`;
   }).join("");
 
   // klikací citace → File Inspector (soubor) / toast (artifact bez file_id)

@@ -982,6 +982,27 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     return app
 
 
+def _ground_answer_safe(
+    text: str, cited_ids: list[str], artifacts_by_id: dict[str, dict]
+) -> dict | None:
+    """STP-049 — grounding odpovědi LLM proti citovaným záznamům (defenzivní obal).
+
+    Vrací report ``to_dict()`` nebo ``None`` (žádné citace / interní chyba).
+    Grounding je doplňková vrstva — nesmí rozbít hlavní odpověď, proto se
+    jakákoli výjimka loguje a degraduje na ``None``.
+    """
+    if not cited_ids:
+        return None
+    try:
+        from stopa.domain.ai_grounding import ground_answer
+
+        report = ground_answer(text, list(cited_ids), artifacts_by_id)
+    except Exception:  # doplňková vrstva, log + degradace
+        log.exception("AI grounding selhalo (odpověď se vrací bez reportu)")
+        return None
+    return report.to_dict()
+
+
 def _ai_nl_search(
     db: CaseDB, case_id: str, case_name: str, question: str, client: LmStudioClient, *, redact_pii: bool = True, model: str | None = None
 ) -> dict:
@@ -1009,6 +1030,12 @@ def _ai_nl_search(
     citations = [
         {"file_id": r.id, "rel_path": r.rel_path, "name": r.name} for r in records[:20]
     ]
+    # STP-049 — grounding: tvrzení v odpovědi vs mtime citovaných souborů
+    file_by_id = {
+        r.id: {"id": r.id, "timestamp": r.mtime.isoformat() if r.mtime else None}
+        for r in records
+    }
+    grounding = _ground_answer_safe(text, [c["file_id"] for c in citations], file_by_id)
     # STP-019 — audit AI volání (model + hash skutečně odeslaného promptu)
     audit_ai_query(
         db,
@@ -1026,6 +1053,7 @@ def _ai_nl_search(
         "confidence": confidence,
         "citations": citations,
         "files": [r.model_dump(mode="json") for r in records],
+        "grounding": grounding,
     }
 
 
@@ -1051,6 +1079,8 @@ def _ai_summary(
         {"artifact_id": aid, "title": by_id[aid].get("title"), "rel_path": by_id[aid].get("rel_path")}
         for aid in cited
     ]
+    # STP-049 — grounding: tvrzení v odpovědi vs data citovaných artifactů
+    grounding = _ground_answer_safe(text, list(cited), by_id)
     # STP-019 — audit AI volání (model + hash skutečně odeslaného promptu)
     audit_ai_query(
         db,
@@ -1066,6 +1096,7 @@ def _ai_summary(
         "answer": answer or text.strip(),
         "confidence": parse_confidence(text),
         "citations": citations,
+        "grounding": grounding,
     }
 
 
@@ -1088,6 +1119,8 @@ def _ai_explain(
     messages = build_explain_prompt(payload, redact_pii=redact_pii)
     text = client.chat(messages)
     answer, cited = extract_citations(text, {art.id})
+    # STP-049 — grounding: tvrzení v odpovědi vs data citovaného artifactu
+    grounding = _ground_answer_safe(text, list(cited), {art.id: payload})
     # STP-019 — audit AI volání (model + hash skutečně odeslaného promptu)
     audit_ai_query(
         db,
@@ -1107,6 +1140,7 @@ def _ai_explain(
             if cited
             else []
         ),
+        "grounding": grounding,
     }
 
 

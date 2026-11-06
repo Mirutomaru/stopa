@@ -9,6 +9,28 @@
 - `data/lmstudio_client.py` — OpenAI-kompatibilní API (default localhost:1234/v1)
 - Graceful degradation: bez LM Studio → 503, jádro funguje dál ✓
 
+### 1.1 STP-049 — AI Copilot grounding (implementováno)
+
+První konkrétní realizace úrovně I5 pro existující E11 režimy (bez orchestrátoru):
+detekce rozporů mezi textem odpovědi LLM a daty citovaných záznamů.
+
+- `domain/ai_grounding.py` — **čistá logika, bez IO**: vstup = původní text odpovědi
+  (s tokeny `[art:<id>]`) + validovaná ID citací + dict záznamů (`model_dump(mode="json")`);
+  výstup = deterministický `GroundingReport` (`.findings`, `.verified_citations`, `.to_dict()`)
+- Tři kategorie rozporu:
+  - `mismatch_date` — odpověď uvádí datum neodpovídající timestamp citovaného záznamu
+  - `mismatch_type` — odpověď zmiňuje typ artifactu (slovník 62 typů) lišící se od reálného
+  - `unverified_claim` — citace bez ověřitelné kotvy (žádné shodné datum/typ/hodnota z details)
+- Atribuce tvrdění: každé tvrzení (datum/zmiňovaný typ) se přiřadí k **nejbližší** citaci
+  podle vzdálenosti znaků; tie → menší index. Deterministické — stejný vstup → stejný report
+- Zapojení v `web/app.py` (`_ground_answer_safe`, defenzivní obal): všechny tři režimy
+  vracejí pole `grounding` (report nebo `None` bez citací); grounding je doplňková vrstva,
+  interní chyba se loguje a degraduje na `None` — hlavní odpověď se nedorozbije
+- GUI (`js/components/ai.js` + `style.css`): citace s rozporu dostanou ⚠ štítek (`.flagged`)
+  + panel findings pod odpovědí (kategorie, tvrzení → skutečná hodnota v DB)
+- Testy: `tests/test_stp049_grounding.py` (domain, offline) +
+  `tests/test_stp049_grounding_e2e.py` (web E2E přes TestClient + fake LmStudioClient)
+
 ## 2. Cílová architektura — Multi-Agent Engine (I1)
 
 ```

@@ -59,8 +59,8 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Dokončeno:** I1 AI orchestrace (5 agentů, routing, fail-closed validace), I2 Forensic RAG
   (3 vrstvy, citace, prompt injection ochrana), LM Studio klient. AI = volitelná závislost.
 - **Dokončeno (STP-019):** PII redaktor před inference (`domain/pii_redaction.py`, toggle `ai_redact_pii`), audit modelových volání, `STOPA_AI_GOVERNANCE.md`.
-- **Nedokončeno:** AI grounding + detekce rozporů.
-- **Nejbližší úkol:** —
+- **Dokončeno (STP-049):** AI grounding + detekce rozporů — `domain/ai_grounding.py` (čistá logika: extrakce tvrdění + porovnání s daty citací, 3 kategorie rozporu), zapojení do všech 3 AI režimů web endpointu (pole `grounding` v odpovědi) + GUI ⚠ štítky citací a findings panel; **ETAPA H dokončena ★★**.
+- **Nedokončeno:** — | **Nejbližší úkol:** —
 
 ## I. Validation Engine
 - **Stav:** ✅ hotovo | **Priorita:** P2
