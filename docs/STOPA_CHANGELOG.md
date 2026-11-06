@@ -4,6 +4,17 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-06 (STP-051: oblast G File Preview v UI ★ = inline media + text preview)
+
+### Added (oblast G, P3 — STP-051)
+- **File Preview domain** `domain/file_preview.py` (čistá logika bez IO): `classify_preview(data, name)` → image/audio/video/text/None podle magic bytes (PNG/JPEG/GIF/WebP/BMP/WAV/RIFF-WMA/FLAC/MP3/ID3/MP4-ISO-BMFF) s fallbackem na příponu; `extract_text_preview()` — UTF-8 decode + BOM, NUL → 400 znaků nečitelných → binární, truncace na max_chars (default 4000); `preview_media_type()` → MIME.
+- **Preview endpoint** `web/app.py`: `GET /api/files/{fid}/preview` — media → inline Response s Content-Type + Cache-Control no-store; text → JSON {text, truncated}; neznámý typ → 415; chybějící/nesčitatelný soubor → 404.
+- **SPA**: sekce PREVIEW v inspector draweru (index.html), `inspector.js` — `loadPreview()` (fetch + render img/audio/video/text, object URL lifecycle `_revokePreview()`, 415 → „preview není dostupné"), styling `.preview-box`/`.preview-text`.
+- **Testy** `tests/test_stp051.py` (+18): domain klasifikace/extract/MIME + web E2E (PNG inline, text JSON, 415, 404).
+
+### Changed
+- Full suite: **1919 passed, 1 skipped**; ruff clean. Oblast G dokončena ★ — zbývá Audit Center modul.
+
 ## [Unreleased] — 2026-11-06 (STP-050: oblast I+O Validation Center UI ★ = C3 registry + C6 report v SPA)
 
 ### Added (oblast I+O, P2 — STP-050)
@@ -39,7 +50,7 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ### Added (oblast M, P2 — STP-047)
 - **Sandbox izolace aktivní v produkční pipeline** `src/stopa/pipeline.py`: nový dispatch `_run_extractor()` vede všechny tři extrakční cesty `_extract_artifacts_for` (signatura, SNS pre-pass, name-based fallback) přes `run_extractor_sandboxed()` — dceřiný proces s timeoutem 30 s a payload limitem 16 MiB; selhání parseru → **`parser_error` artifact** s kategorií z `SandboxResult` (timeout/truncated/bad_payload/crash), pipeline nepadne. Fallback bez sandboxu = přímé in-process volání (`SANDBOX_ENABLED`, env `STOPA_SANDBOX=0`).
-- **Testy:** nový `tests/test_stp047_sandbox_integration.py` (**8 E2E testů** přes reálný subprocess) + 4 carver regression testy v `tests/test_sqlite_recover.py`.
+- **Testy:** nový `tests/test_stp047_sandbox_integration.py` (**8 E2E testů** přes reálný subprocess — úspěch/crash→parser_error/timeout→parser_error s měřením času/fallback/corrupt SQLite přes celou pipeline) + 4 carver regression testy v `tests/test_sqlite_recover.py`.
 
 ### Fixed
 - **Reálný hang bug** `src/stopa/domain/sqlite_carver.py`: smyčka `range(1, db_size_pages+1)` bez validace proti velikosti souboru — poškozený SQLite (garbage `db_size_pages` = 1.7 mld. stránek v 920 B) visel >15 s a zastavil celou pipeline; oprava: iterace omezená reálnou velikostí (`max_pages = len(data) // page_size`) → corrupt header **0.000 s** (naměřeno).
@@ -58,10 +69,14 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 - **Worker modul** `src/stopa/sandbox_worker.py`: dceřiný proces pro izolovaný běh jednoho extraktoru — stdout = POUZE JSON array artifactů, exit 0/1 kontrakt, RLIMIT_CPU backstop na POSIX.
 
 ### Tests
-- Full suite **1834 passed, 1 skipped** (+21 testů `tests/test_stp046_sandbox.py`); ruff clean.
+- Full suite **1834 passed, 1 skipped** (+21 testů `tests/test_stp046_sandbox.py` — validace configu/payloadu/argv/kategorie + E2E přes reálný subprocess s dočasnými moduly: úspěch/hang→timeout/crash/bad_payload/truncation); ruff clean.
 
 ### Fixed
-- **Flaky benchmark test** (`test_run_against_own_baseline_passes`): `_workload_core` iterations=1 → průměr **5 iterací**; baseline pipeline.core 63.546 → 37.476 ms; ověřeno ±1 % variabilita, test 5/5 passed.
+- **Flaky benchmark test** `test_stp044_ci_benchmark_e2e.py::test_run_against_own_baseline_passes`: `_workload_core` měřil plnou pipeline s `iterations=1` (run-to-run variabilita ±15 % → selhání +33 %) → průměr **5 iterací** v `benchmark_engine.py`; baseline regenerována (pipeline.core 63.546 → 37.476 ms); ověřeno 3× měření = 39.3/38.5/39.1 ms (±1 %), test 5/5 passed.
+
+### Changed
+- **DEV OS:** TASKS záznam STP-046, PROJECT_STATE fáze → ETAPA E vlna 1 hotová ★ (completed tasks **46**), FEATURE_REGISTRY F-072, TEST_REGISTRY T-093 + total 1834, CHANGELOG/checkpoint/NEXT_ACTION.
+- **Obě roadmapy synchronizovány:** sekce M → 🔧 v průběhu (ETAPA E; vlna 1 hotová ★); plán vln ETAPY E — Vlna 1 ✅ hotová; next = STP-047 vlna 2 (zapojení do pipeline + fix hang bugu `sqlite_carver`).
 
 ## [Unreleased] — 2026-11-05 (STP-045: volba ETAPY E ★ = oblast M Security — izolace parserů, **ETAPA E ZAHÁJENA**)
 
@@ -91,11 +106,16 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ### Added (oblast P, P1 — STP-043)
 - **CI benchmark job** `.github/workflows/ci.yml` → nový job `benchmark` (needs lint+test, Python 3.11): běh engine suite=all (77 položek, ~0.25 s), porovnání s versionovanou baseline, upload výsledků jako artifact, **fail na regresi >20 % a ≥0.5 ms**.
-- **`scripts/ci_benchmark.py`** (~150 ř.): běh `run_benchmark(suite="all")`, načtení versionované baseline (`benchmarks/baseline.json`), porovnání přes domain API `detect_regressions(threshold=0.20)`, JSON report + artifact, exit 0/1/2; **CI noise guard** `--min-delta-ms 0.5`.
-- **Versionovaný baseline artefakt** `benchmarks/baseline.json` (77 položek, verze 1).
+- **`scripts/ci_benchmark.py`** (~150 ř.): běh `run_benchmark(suite="all")`, načtení versionované baseline (`benchmarks/baseline.json`), porovnání přes domain API `detect_regressions(threshold=0.20)`, JSON report + artifact, exit 0/1/2; **CI noise guard** `--min-delta-ms 0.5` — relativní práh 20 % je pod ~1 ms křehký (měření ukázalo falešné pozitivní, např. `win_schedtask` +22.7 % = šum 5 µs), proto se ignorují regresie s absolutním rozdílem < 0.5 ms.
+- **Versionovaný baseline artefakt** `benchmarks/baseline.json` (77 položek, verze 1) — inicializován lokálním během; regenerace ručně přes `--update-baseline` + commit artefaktu.
 
 ### Tests
-- Nový test soubor `tests/test_stp043_ci_benchmark.py` (**15 testů**); full suite **1807 passed, 1 skipped** (+15); ruff clean.
+- Nový test soubor `tests/test_stp043_ci_benchmark.py` (**15 testů**): baseline load/save round-trip, determinismus formátu, chybějící/poškozená baseline, detekce regresí přes domain API (umělá +25 % zachycena), **noise guard** (sub-ms falešné pozitivní se filtruje; reálná regrese ≥0.5 ms zůstává), report struktura.
+- Full suite **1807 passed, 1 skipped** (+15); ruff clean. E2E lokálně: update baseline → exit 0, běh proti baseline → exit 0 (0 regresí), umělá regrese +1 ms → exit 1, chybějící baseline → exit 0, poškozená baseline → exit 2.
+
+### Changed
+- **DEV OS:** TASKS záznam STP-043, PROJECT_STATE fáze → ETAPA D vlna 1 DOKONČENA ★ (completed tasks **43**), FEATURE_REGISTRY F-070, TEST_REGISTRY T-091 + total 1807, CHANGELOG/checkpoint/NEXT_ACTION.
+- **Obě roadmapy synchronizovány:** sekce P → Vlna 1 hotová ★; plán vln ETAPY D — Vlna 1 ✅ hotová; next = STP-044 vlna 2 (testy + dokumentace).
 
 ## [Unreleased] — 2026-11-04 (STP-042: volba ETAPY D ★ = ETAPA D ZAHÁJENA)
 
@@ -135,8 +155,10 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 ## [Unreleased] — 2026-11-04 (ETAPA C: volba směru + synchronizace roadmapy ★)
 
 ### Changed (oblast A, P1 — STP-038)
-- **Audit reálného stavu všech oblastí A–Q v kódu** a synchronizace zastaralých „Nedokončeno" položek: E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021).
-- **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře.** Plán vln: STP-039 (Case/File/Audit Repository), STP-040 (Artifact/Entity Repository), STP-041 (facade úklid + audit, `db.py` < ~600 ř.).
+- **Audit reálného stavu všech oblastí A–Q v kódu** (ne jen roadmapě) a synchronizace zastaralých „Nedokončeno" položek: E Timeline Intel 2.0 ✓ (STP-018), L report **20 sekcí** ✓ (STP-020), H PII redactor + governance ✓ (STP-019), J RBAC minimální ✓ (STP-022), K/Q STIX 2.1 + JSONL/XML ✓ (STP-023), N/O stream parsing + Processing Monitor ✓ (STP-021).
+- **ROZHODNUTÍ: ETAPA C = oblast A — rozdělení monolitu `db.py` (~2090 ř., 67 metod) na doménová repozitáře** (nejvyšší zbývající priorita P1, největší technický dluh).
+- Plán vln: **STP-039** (Case/File/Audit Repository ~28 metod), **STP-040** (Artifact/Entity Repository ~23 metod), **STP-041** (facade úklid + audit, `db.py` < ~600 ř.). Akceptační kritéria: backward compat API, full suite zelená po každé vlně.
+- Změněno: `STOPA_ROADMAP.md` (root — faktické opravy A/E/H/J/L/P/Q + sekce „ETAPA C — ROZHODNUTÍ O SMĚRU"), `.stopa-dev/ROADMAP.md` (autoritativní — synchronizace D–Q), DEV OS registry.
 
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 15: ZÁVĚREČNÝ AUDIT — ETAPA B dokončena ★)
 
@@ -239,24 +261,68 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 12: cloud-export Microsoft + Amazon)
 
 ### Added (oblast D, P2 — port AXIOM extraktorů, 8 nových parserů / 12 AXIOM typů)
-- **Microsoft Contacts** (`artifacts/ms_contacts.py`) — kontakty z Microsoft Graph/Outlook exportu (displayName/email/phone; tolerantní klíče). Vlastní účet → `relationship=account`. Name-based detekce s MS markerem v cestě. AXIOM `CloudMicrosoftContactsArtifact` + `CloudMicrosoftGraphContactsArtifact`. Artifact type `contact`, `details.engine=ms_contacts`.
-- **Outlook Mail (PST export)** (`artifacts/ms_mail_pst.py`) — e-maily z Outlook/PST cloud exportu (subject/from/to/body/date; tolerantní klíče). Konverzační formát i plošný. AXIOM `CloudOutlookMessagesArtifact` + `CloudMicrosoftGraphMailMessagesArtifact`. Artifact type `email_message`, `details.engine=ms_mail_pst`.
-- **Teams Conversations** (`artifacts/ms_teams_conversations.py`) — Teams konverzace/zprávy (senderDisplayName/body/timestamp; tolerantní klíče from/sender, body/content/text). Konverzační formát participants/messages i plošný. AXIOM `CloudMicrosoftTeamsConversationsArtifact` + `CloudMicrosoftGraphTeamsChatMessagesArtifact`. Artifact type `chat_message`, `details.engine=ms_teams_conversations`.
-- **Teams Teams & Members** (`artifacts/ms_teams_teams.py`) — Teams týmy a členové (displayName/email/role). Člen → `contact` s `mimetype=sns:microsoft:teams`, role owner/member. AXIOM `CloudMicrosoftTeamsArtifact`. Artifact type `contact`, `details.engine=ms_teams_teams`.
-- **Outlook Calendar** (`artifacts/ms_outlook_calendar.py`) — Outlook kalendářové události (subject/organizer/start/end/location; tolerantní klíče). AXIOM `CloudMicrosoftCalendarEventsArtifact` + `CloudOutlookCalendarEventsArtifact`. Artifact type `calendar_event`, `details.engine=ms_outlook_calendar`.
-- **SharePoint Warrant Return** (`artifacts/sharepoint_wr.py`) — SharePoint WR (strany → `web_page`, dokumenty → `document`; tolerantní klíče title/name, url/webUrl/link). Auto-detekce kind podle struktury payloadu. AXIOM `CloudSharePointPagesArtifact` + `CloudSharePointDocumentsArtifact`. Artifact types `web_page`, `document`, `details.engine=sharepoint_wr`.
-- **Amazon CloudTrail** (`artifacts/amazon_cloudtrail.py`) — CloudTrail API akce (eventName/eventTime/userIdentity/sourceIPAddress; explicitní isinstance fallback). AXIOM `CloudAmazonCloudTrailEventsArtifact` + `CloudAmazonWarrantReturnCloudTrailArtifact`. Artifact type `event_log_entry`, `details.engine=amazon_cloudtrail`.
-- **Amazon EC2 & S3** (`artifacts/amazon_ec2_s3.py`) — EC2 instance (instanceId/state/privateIp/publicIp) → `network_connection` + S3 objekty (key/bucket/size/lastModified) → `file_metadata`. Union detekce podle struktury. AXIOM `CloudAmazonEC2InstancesArtifact` + `CloudAmazonS3ObjectsArtifact`. Artifact types `network_connection`, `file_metadata`, `details.engine=amazon_ec2_s3`.
+- **Microsoft Contacts** (`artifacts/ms_contacts.py`) — kontakty z Microsoft Graph/Outlook
+  exportu (displayName/email/phone; tolerantní klíče name/displayName/givenName + surname,
+  emailAddresses/emails, phoneNumbers). Vlastní účet → `relationship=account`. Name-based
+  detekce s MS markerem v cestě. AXIOM `CloudMicrosoftContactsArtifact` +
+  `CloudMicrosoftGraphContactsArtifact`. Artifact type `contact`, `details.engine=ms_contacts`.
+- **Outlook Mail (PST export)** (`artifacts/ms_mail_pst.py`) — e-maily z Outlook/PST cloud
+  exportu (subject/from/to/body/date; tolerantní klíče subject/From/Sender, To/Recipients,
+  Body/TextBody, SentDateTime). Konverzační formát i plošný. AXIOM `CloudOutlookMessagesArtifact`
+  + `CloudMicrosoftGraphMailMessagesArtifact`. Artifact type `email_message`,
+  `details.engine=ms_mail_pst`.
+- **Teams Conversations** (`artifacts/ms_teams_conversations.py`) — Teams konverzace/zprávy
+  (senderDisplayName/body/timestamp; tolerantní klíče from/sender, body/content/text).
+  Konverzační formát participants/messages i plošný. AXIOM `CloudMicrosoftTeamsConversationsArtifact`
+  + `CloudMicrosoftGraphTeamsChatMessagesArtifact`. Artifact type `chat_message`,
+  `details.engine=ms_teams_conversations`.
+- **Teams Teams & Members** (`artifacts/ms_teams_teams.py`) — Teams týmy a členové
+  (displayName/email/role; tolerantní klíče name/displayName, emailAddresses). Člen →
+  `contact` s `mimetype=sns:microsoft:teams`, role owner/member. AXIOM
+  `CloudMicrosoftTeamsArtifact`. Artifact type `contact`, `details.engine=ms_teams_teams`.
+- **Outlook Calendar** (`artifacts/ms_outlook_calendar.py`) — Outlook kalendářové události
+  (subject/organizer/start/end/location; tolerantní klíče subject, Start/StartTime, End/EndTime,
+  Organizer). AXIOM `CloudMicrosoftCalendarEventsArtifact` +
+  `CloudOutlookCalendarEventsArtifact`. Artifact type `calendar_event`,
+  `details.engine=ms_outlook_calendar`.
+- **SharePoint Warrant Return** (`artifacts/sharepoint_wr.py`) — SharePoint WR (strany →
+  `web_page`, dokumenty → `document`; tolerantní klíče title/name, url/webUrl/link, size/fileSize).
+  Auto-detekce kind podle struktury payloadu. AXIOM `CloudSharePointPagesArtifact` +
+  `CloudSharePointDocumentsArtifact`. Artifact types `web_page`, `document`,
+  `details.engine=sharepoint_wr`.
+- **Amazon CloudTrail** (`artifacts/amazon_cloudtrail.py`) — CloudTrail API akce
+  (eventName/eventTime/userIdentity/sourceIPAddress; tolerantní klíče eventSource, userIdentity
+  s explicitním isinstance fallbackem). AXIOM `CloudAmazonCloudTrailEventsArtifact` +
+  `CloudAmazonWarrantReturnCloudTrailArtifact`. Artifact type `event_log_entry`,
+  `details.engine=amazon_cloudtrail`.
+- **Amazon EC2 & S3** (`artifacts/amazon_ec2_s3.py`) — EC2 instance (instanceId/state/privateIp/
+  publicIp; tolerantní klíče InstanceId, launchTime) → `network_connection` + S3 objekty
+  (key/bucket/size/lastModified; tolerantní klíče Key/Name, Size/fileSize) → `file_metadata`.
+  Union detekce podle struktury. AXIOM `CloudAmazonEC2InstancesArtifact` +
+  `CloudAmazonS3ObjectsArtifact`. Artifact types `network_connection`, `file_metadata`,
+  `details.engine=amazon_ec2_s3`.
 
 ### Pipeline dispatch + C3 registry
-- Všech 8 parserů napojeno do `_sns_prepass()` — pre-pass na celé cestě PŘED basename chainem. Pořadí: specifické MS/Amazon detektory PŘED obecnějšími (conversations PŘED teams); bez kolizí s Google contacts ani Twitter/SNS.
-- C3 registry (`validation_registry.py`): 8 nových záznamů `ms_contacts`, `ms_mail_pst`, `ms_teams_conversations`, `ms_teams_teams`, `ms_outlook_calendar`, `sharepoint_wr`, `amazon_cloudtrail`, `amazon_ec2_s3`; limity srovnány s reálnými konstantami parserů (5000). `build_registry()` = **66 parserů** (předtím 58).
+- Všech 8 parserů napojeno do `_sns_prepass()` — pre-pass na celé cestě PŘED basename chainem.
+  Pořadí: specifické MS/Amazon detektory PŘED obecnějšími (conversations PŘED teams, aby
+  „TeamsConversations" nekrálo generic teams); bez kolizí s Google contacts ani Twitter/SNS.
+- C3 registry (`validation_registry.py`): 8 nových záznamů `ms_contacts`, `ms_mail_pst`,
+  `ms_teams_conversations`, `ms_teams_teams`, `ms_outlook_calendar`, `sharepoint_wr`,
+  `amazon_cloudtrail`, `amazon_ec2_s3`; limity srovnány s reálnými konstantami parserů (5000).
+  `build_registry()` = **66 parserů** (předtím 58).
 
 ### Coverage matice
-- Flip 12 AXIOM typů NOT_SUPPORTED → SUPPORTED. Regen `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}` deterministicky (SHA-256 diff ✓). covered **147 → 159 / 232**; cloud-export NOT_SUPPORTED **51 → 39**.
+- Flip 12 AXIOM typů NOT_SUPPORTED → SUPPORTED: Microsoft Contacts/GraphContacts, Outlook
+  Messages/GraphMailMessages, TeamsConversations/GraphTeamsChatMessages, Teams, CalendarEvents/
+  OutlookCalendarEvents, SharePointPages/Documents, AmazonCloudTrail/WarrantReturnCloudTrail,
+  EC2Instances, S3Objects. Regen `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}`
+  deterministicky (SHA-256 diff ✓). covered **147 → 159 / 232**; cloud-export NOT_SUPPORTED
+  **51 → 39**.
 
 ### Testy + verify
-- `tests/test_w12_parsers.py` — **73 syntetických offline testů** (parse/build/detektory/pipeline pre-pass dispatch/C3 registry kontrakt per parser). Full suite **1626 passed, 1 skipped** (baseline 1553 + 73); ruff clean.
+- `tests/test_w12_parsers.py` — **73 syntetických offline testů** (parse/build/detektory/
+  pipeline pre-pass dispatch/C3 registry kontrakt per parser). Full suite **1626 passed,
+  1 skipped** (baseline 1553 + 73); ruff clean.
 
 ## [Unreleased] — 2026-11-04 (ETAPA B vlna 11: cloud SNS exporty — Twitter/X + Facebook warrant return)
 

@@ -1,21 +1,15 @@
 # STOPA — NEXT ACTION
 
 ## Aktuální stav (2026-11-06)
-**STP-049 + STP-050 DOKONČENY ★★** — ETAPA H (AI grounding) a oblast I+O Validation Center UI hotové. Poslední commit `0b761ab` (feat(web): Validation Center UI — C3 registry + C6 report v SPA).
+**STP-049 + STP-050 + STP-051 DOKONČENY ★★★** — ETAPA H (AI grounding), oblast I+O Validation Center UI a oblast G File Preview v UI hotové.
 
 ## Hotové
-- **STP-050:** Validation Center v GUI — endpointy `GET /api/cases/{id}/validation` (C6 `build_validation_report`: total_artifacts, coverage per-parser, validační statusy, per-artifact řádky s parser ID+verze/confidence/provenance) + `GET /api/validation/registry` (C3 registry); SPA modul `mod-validation` (`js/components/validation.js`, statistické karty, coverage bar, tabulky). Full suite **1901 passed, 1 skipped** (+10), ruff clean.
-- **STP-049:** AI grounding — `domain/ai_grounding.py` (čistá logika: `extract_claims()` + `ground_answer()`, kategorie rozporu mismatch_date/mismatch_type/unverified_claim, `.verified_citations`); zapojení do všech 3 AI režimů web endpointu (pole `grounding`), GUI ⚠ štítky citací + findings panel; dokumentace `docs/STOPA_AI_ARCHITECTURE.md` §1.1. Full suite **1891 passed, 1 skipped** (+41), ruff clean. Commit `1c107ba`.
+- **STP-051:** File Preview v UI — `domain/file_preview.py` (čistá logika: `classify_preview()` magic bytes PNG/JPEG/GIF/WebP/BMP/WAV/RIFF-WMA/FLAC/MP3/ID3/MP4 + příponový fallback, `extract_text_preview()` UTF-8+BOM/NUL→binární/truncace 4000, `preview_media_type()`); endpoint `GET /api/files/{fid}/preview` (media inline / text JSON {text,truncated} / 415 neznámý typ / 404 chybějící soubor); SPA sekce PREVIEW v inspectoru (`loadPreview()`, object URL lifecycle, styling). Full suite **1919 passed, 1 skipped** (+18), ruff clean. **Oblast G dokončena ★.**
+- **STP-050:** Validation Center v GUI — endpointy `GET /api/cases/{id}/validation` (C6 report) + `GET /api/validation/registry` (C3 registry); SPA modul `mod-validation`. Full suite 1901 passed, ruff clean. Commit `0b761ab`.
+- **STP-049:** AI grounding — `domain/ai_grounding.py`, zapojení do všech 3 AI režimů (pole `grounding`), GUI ⚠ štítky citací + findings panel; dokumentace `docs/STOPA_AI_ARCHITECTURE.md` §1.1. Commit `1c107ba`.
 - **STP-048:** sandbox E2E testy + corrupt-file regression EVTX/LNK + dokumentace `docs/STOPA_SANDBOX.md` (ETAPA M uzavřena).
 
 ## Další krok — výběr oblasti (pořadí podle priority)
-1. **G File Intelligence** — souborová inteligence (typy, relace, timeline enrichment).
+1. **O Audit Center modul** — UI pro audit trail (doplní oblast O po Validation Centeru; nejbližší logická navázání na STP-050).
 2. **J Case Management 2.0** — rozšíření RBAC.
 3. **K Export Engine** — Plaso formát (volitelné).
-4. **O Audit Center modul** — UI pro audit trail (doplní oblast O po Validation Centeru).
-5. **Q Interoperability** — UCO/STIX rozšíření.
-
-## Potvrzené konvence
-- Jeden úkol → implementace → test → dokumentace → checkpoint → další úkol.
-- Domain = čistá logika bez IO; IO jen v `data/` a entrypointech.
-- Před commitem: full suite + ruff clean + DEV OS synchronizace (TASKS/PROJECT_STATE/NEXT_ACTION/FEATURE_REGISTRY/TEST_REGISTRY/CHANGELOG/checkpoint).

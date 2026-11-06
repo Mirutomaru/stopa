@@ -50,9 +50,8 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Nejbližší úkol:** —
 
 ## G. File Intelligence
-- **Stav:** 🔧 částečně | **Priorita:** P3
-- **Dokončeno:** file_meta (EXIF/PDF/OOXML/ID3/MP4), bad_extension detekce, dedupe, search filters.
-- **Nedokončeno:** file preview v UI.
+- **Stav:** ✅ dokončeno | **Priorita:** P3
+- **Dokončeno:** file_meta (EXIF/PDF/OOXML/ID3/MP4), bad_extension detekce, dedupe, search filters, **file preview v UI** (STP-051 — inline media + text preview v inspectoru).
 
 ## H. AI Copilot
 - **Stav:** ✅ P0 hotovo | **Priorita:** P2 (rozšíření)

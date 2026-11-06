@@ -342,3 +342,9 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 .val-coverage { height: 8px; border-radius: 4px; overflow: hidden; background: rgba(255,255,255,.06); min-width: 120px; }
 .val-coverage-fill { height: 100%; background: linear-gradient(90deg, var(--green), #34c759); border-radius: 4px; transition: width .3s; }
 #val-parsers td.mono { font-size: 12px; }
+
+/* ── STP-051 — File Preview (oblast G) ───────────── */
+.preview-box { border: 1px solid rgba(255,255,255,.08); border-radius: 6px; padding: 8px; margin-top: 4px; background: rgba(0,0,0,.25); }
+.preview-img { max-width: 100%; max-height: 320px; display: block; border-radius: 4px; margin: 4px auto; }
+.preview-media { width: 100%; margin-top: 6px; }
+.preview-text { white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5; max-height: 320px; overflow-y: auto; background: rgba(0,0,0,.3); border-radius: 4px; padding: 8px; margin: 0; }

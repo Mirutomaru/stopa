@@ -37,6 +37,9 @@ async function openInspector(fileId) {
       document.getElementById("insp-meta").textContent = `⚠ ${e.message}`;
     }
 
+    // STP-051 — preview (image/audio/video inline, text jako JSON)
+    void loadPreview(cid, fileId);
+
     // stav tlačítek podle flagů
     const flags = new Set(f.flags || []);
     syncFlagBtn("#btn-mark-evidence", flags.has("evidence"));
@@ -86,6 +89,71 @@ function renderMeta(meta) {
     dd.textContent = meta[k];
     row.append(dt, dd);
     el.appendChild(row);
+  }
+}
+
+/* ── STP-051 — preview (image/audio/video inline, text JSON) ───────── */
+let _previewUrl = null;
+
+function _revokePreview() {
+  if (_previewUrl) { URL.revokeObjectURL(_previewUrl); _previewUrl = null; }
+}
+
+async function loadPreview(cid, fileId) {
+  const box = document.getElementById("insp-preview");
+  if (!box) return;
+  _revokePreview();
+  box.innerHTML = '<span class="muted small">Načítám…</span>';
+  try {
+    // media (image/audio/video) → binární odpověď; text → JSON
+    const r = await fetch(`/api/cases/${cid}/files/${fileId}/preview`);
+    if (!r.ok) {
+      box.innerHTML = '<span class="muted small">(žádné preview pro tento formát)</span>';
+      return;
+    }
+    const ctype = r.headers.get("content-type") || "";
+    if (ctype.startsWith("application/json")) {
+      const body = await r.json();
+      box.innerHTML = "";
+      const pre = document.createElement("pre");
+      pre.className = "preview-text mono small";
+      pre.textContent = body.text || "(prázdný soubor)";
+      if (body.truncated) {
+        const note = document.createElement("div");
+        note.className = "muted small";
+        note.textContent = "… (ukončeno — zobrazena jen první část)";
+        box.append(pre, note);
+      } else {
+        box.appendChild(pre);
+      }
+    } else {
+      const blob = await r.blob();
+      _previewUrl = URL.createObjectURL(blob);
+      box.innerHTML = "";
+      if (ctype.startsWith("image/")) {
+        const img = document.createElement("img");
+        img.className = "preview-img";
+        img.src = _previewUrl;
+        img.alt = "preview";
+        box.appendChild(img);
+      } else if (ctype.startsWith("audio/")) {
+        const a = document.createElement("audio");
+        a.controls = true;
+        a.src = _previewUrl;
+        a.className = "preview-media";
+        box.appendChild(a);
+      } else if (ctype.startsWith("video/")) {
+        const v = document.createElement("video");
+        v.controls = true;
+        v.src = _previewUrl;
+        v.className = "preview-media";
+        box.appendChild(v);
+      } else {
+        box.innerHTML = '<span class="muted small">(neznámý media typ)</span>';
+      }
+    }
+  } catch (e) {
+    box.innerHTML = `<span class="muted small">⚠ ${esc(e.message)}</span>`;
   }
 }
 

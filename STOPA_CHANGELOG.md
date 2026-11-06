@@ -2,6 +2,17 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-06 (STP-051: oblast G File Preview v UI ★ = inline media + text preview)
+
+### Added (oblast G, P3 — STP-051)
+- **File Preview domain** `domain/file_preview.py` (čistá logika bez IO): `classify_preview(data, name)` → image/audio/video/text/None podle magic bytes (PNG/JPEG/GIF/WebP/BMP/WAV/RIFF-WMA/FLAC/MP3/ID3/MP4-ISO-BMFF) s fallbackem na příponu; `extract_text_preview()` — UTF-8 decode + BOM, NUL → 400 znaků nečitelných → binární, truncace na max_chars (default 4000); `preview_media_type()` → MIME.
+- **Preview endpoint** `web/app.py`: `GET /api/files/{fid}/preview` — media → inline Response s Content-Type + Cache-Control no-store; text → JSON {text, truncated}; neznámý typ → 415; chybějící/nesčitatelný soubor → 404.
+- **SPA**: sekce PREVIEW v inspector draweru (index.html), `inspector.js` — `loadPreview()` (fetch + render img/audio/video/text, object URL lifecycle `_revokePreview()`, 415 → „preview není dostupné"), styling `.preview-box`/`.preview-text`.
+- **Testy** `tests/test_stp051.py` (+18): domain klasifikace/extract/MIME + web E2E (PNG inline, text JSON, 415, 404).
+
+### Changed
+- Full suite: **1919 passed, 1 skipped**; ruff clean. Oblast G dokončena ★ — zbývá Audit Center modul.
+
 ## [Unreleased] — 2026-11-06 (STP-050: oblast I+O Validation Center UI ★ = C3 registry + C6 report v SPA)
 
 ### Added (oblast I+O, P2 — STP-050)

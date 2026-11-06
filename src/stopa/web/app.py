@@ -650,6 +650,50 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── STP-051 — File Preview (oblast G) ───────────────────────────────
+    PREVIEW_HEAD_BYTES = 64 * 1024      # hlavička pro klasifikaci
+    PREVIEW_MAX_MEDIA_BYTES = 20 * 1024 * 1024   # strop inline media (RAM peak)
+    PREVIEW_TEXT_SAMPLE_BYTES = 256 * 1024       # vzorka pro textový preview
+
+    @app.get("/api/cases/{case_id}/files/{file_id}/preview")
+    def file_preview(case_id: str, file_id: str):
+        """Preview souboru v UI — inline media (image/audio/video) nebo JSON text.
+
+        Klasifikace přes `domain.file_preview` (čistá logika). Neznámý/nelze
+        zobrazit → 415; příliš velký media → 413.
+        """
+        from fastapi import Response
+
+        from stopa.domain.file_preview import (
+            classify_preview,
+            extract_text_preview,
+            preview_media_type,
+        )
+
+        db = open_db(case_id)
+        try:
+            rec = db.get_file(file_id)
+            if rec is None:
+                raise HTTPException(404, f"soubor {file_id} nenalezen")
+            head = _read_file_bytes(db, rec, offset=0, length=PREVIEW_HEAD_BYTES)
+            kind = classify_preview(head, rec.name or "")
+            if kind is None:
+                raise HTTPException(415, "preview není pro tento formát k dispozici")
+
+            if kind == "text":
+                sample = _read_file_bytes(db, rec, offset=0, length=PREVIEW_TEXT_SAMPLE_BYTES)
+                text, truncated = extract_text_preview(sample)
+                return {"kind": "text", "name": rec.name, "truncated": truncated, "text": text}
+
+            # image / audio / video — inline bytes s MIME
+            if (rec.size_bytes or 0) > PREVIEW_MAX_MEDIA_BYTES:
+                raise HTTPException(413, "soubor je příliš velký pro preview")
+            mime = preview_media_type(rec.signature_type, rec.name or "") or "application/octet-stream"
+            data = _read_file_bytes(db, rec, offset=0, length=None)
+            return Response(content=data, media_type=mime)
+        finally:
+            db.close()
+
     @app.get("/api/cases/{case_id}/files/{file_id}/export")
     def export_file(case_id: str, file_id: str):
         """Stáhnout obsah souboru (Export File)."""
