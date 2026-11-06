@@ -38,6 +38,13 @@ from stopa.domain.ai_assistant import (
     parse_confidence,
     parse_nl_search,
 )
+from stopa.domain.rbac import (
+    DEFAULT_ROLE,
+    RBACDenied,
+    normalize_role,
+    permissions_for,
+    require_permission,
+)
 from stopa.domain.times import to_local_iso
 from stopa.models import Case, EvidenceSource
 from stopa.pipeline import process_source
@@ -175,6 +182,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
 
     @app.post("/api/cases", status_code=201)
     def create_case(body: CaseIn) -> dict:
+        _require("case.create", "create_case")
         # nová DB na nový soubor — case ID je v názvu souboru
         case = Case(name=body.name, examiner=body.examiner, notes=body.notes)
         db = CaseDB(base / f"{case.id}.db")
@@ -211,6 +219,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     # ── sources / ingest ──────────────────────────────────────
     @app.post("/api/cases/{case_id}/sources", status_code=201)
     def add_source(case_id: str, body: SourceIn) -> dict:
+        _require("source.add", "add_source")
         root = Path(body.path).expanduser()
         if not root.exists():
             raise HTTPException(400, f"zdroj neexistuje: {root}")
@@ -447,6 +456,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         Rozpory (souběžná aktivita subjektu) + duplikáty napříč zdroji nad
         materializovanou timeline. Idempotentní, deterministický výsledek.
         """
+        _require("analysis.run", "timeline_intel")
         from stopa.pipeline import run_timeline_intel
 
         db = open_db(case_id)
@@ -466,6 +476,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     @app.post("/api/cases/{case_id}/correlate")
     def correlate(case_id: str) -> dict:
         """Explicitní krok korelace (ROADMAP E4 bod 4) — re-run = clear + insert."""
+        _require("analysis.run", "correlate")
         from stopa.domain.correlation import run_correlation
 
         db = open_db(case_id)
@@ -607,6 +618,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     @app.post("/api/files/{file_id}/flag")
     def set_flag(file_id: str, flag: str = "evidence", on: bool = True) -> dict:
         """Přepne flag souboru — „Mark as Evidence“ / „Add to Report“."""
+        _require("file.flag", "set_flag")
         if flag not in ("evidence", "report"):
             raise HTTPException(400, f"neznámý flag: {flag}")
         # flag je globální (file_id je unikátní napříč case DB) — najdi správnou DB
@@ -848,6 +860,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         """
         if body.mode not in ("nl_search", "summary", "explain"):
             raise HTTPException(400, f"neznámý režim: {body.mode}")
+        _require("analysis.run", "ai_query")
         db = open_db(case_id)
         try:
             case = db.get_case(case_id)
@@ -903,6 +916,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
 
         if not body.question.strip():
             raise HTTPException(400, "chybí otázka")
+        _require("analysis.run", "ai_analyze")
         db = open_db(case_id)
         try:
             case = db.get_case(case_id)
@@ -1019,16 +1033,31 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
+    # ── STP-053 — RBAC enforcement (permission matrix z domain/rbac.py) ──
+    def _current_role() -> str:
+        """Aktuální role; bez uložené hodnoty → default (examiner)."""
+        return _load_settings().get("role") or DEFAULT_ROLE
+
+    def _require(permission: str, context: str = "") -> None:
+        """Validuje oprávnění aktuální role; chybí → HTTP 403."""
+        try:
+            require_permission(_current_role(), permission, context=context)
+        except RBACDenied as exc:
+            raise HTTPException(403, str(exc)) from exc
+
     @app.get("/api/settings")
     def get_settings() -> dict:
         """Uživatelská nastavení (defaulty + uložené přepsání)."""
         s = _load_settings()
+        role = s.get("role") or DEFAULT_ROLE
         return {
             "timezone_name": s.get("timezone_name", "Europe/Prague"),
             "ai_url": s.get("ai_url") or os.environ.get(
                 "STOPA_LMSTUDIO_URL", "http://localhost:1234/v1"
             ),
-            "role": s.get("role", "examiner"),
+            "role": role,
+            # STP-053 — oprávnění aktuální role (permission matrix)
+            "permissions": permissions_for(role),
             "bind_address": s.get("bind_address", "127.0.0.1"),
             # STP-019 — PII redaktor je default ON (fail-safe: maskovat)
             "ai_redact_pii": bool(s.get("ai_redact_pii", True)),
@@ -1037,6 +1066,9 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     @app.put("/api/settings")
     def put_settings(body: SettingsIn) -> dict:
         """Uloží nastavení (jen zadaná pole). Bind address platí po restartu."""
+        _require("settings.write", "put_settings")
+        if body.role is not None and normalize_role(body.role) is None:
+            raise HTTPException(400, f"neznámá role: {body.role!r} (povoleno: analyst/examiner/admin)")
         s = _load_settings()
         if body.timezone_name is not None:
             s["timezone_name"] = body.timezone_name
@@ -1055,6 +1087,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     @app.patch("/api/cases/{case_id}")
     def update_case(case_id: str, body: CaseUpdateIn) -> dict:
         """Aktualizace metadat případu (name/examiner/notes/timezone)."""
+        _require("case.update", "update_case")
         db = open_db(case_id)
         try:
             ok = db.update_case(
@@ -1074,6 +1107,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     @app.delete("/api/cases/{case_id}")
     def delete_case(case_id: str) -> dict:
         """Smaže případ i zdroje (kaskáda na files/artifacts/timeline)."""
+        _require("case.delete", "delete_case")
         validate_case_id(case_id)
         path = base / f"{case_id}.db"
         db = CaseDB(path) if path.exists() else None
