@@ -4,6 +4,13 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-06 (STP-054: oblast K Export Engine ★ = Plaso interop formát l2tcsv)
+
+### Added (oblast K, P2 — STP-054)
+- **Plaso interop export** `domain/export.py::to_l2tcsv()`: serializace záznamů do **l2tcsv** (17 pevných polí log2timeline.pl dle oficiální Plaso dokumentace) — importovatelný do Plaso/Timesketch workflow. `date`/`time` z ISO UTC timestampu (MM/DD/YYYY + HH:MM:SS, neznámý čas → prázdná pole), `timezone=Z`, `source=STOPA`, `sourcetype` = artifact_type/event_type/Correlation, `type` per dataset, `short` = title/rel_path/id (100 znaků), `desc` = deterministický popis záznamu, `notes` = anomaly flags, `format=stopa.<dataset>`, `extra` = JSON všech ne-None polí (sort_keys → plná věrnost dat). Výstup deterministický (C4 manifest hash); CSV escapování přes csv.writer.
+- **CLI** `stopa export <case_id> --what artifacts|timeline|correlations --format l2tcsv [--limit N] [--out SOUBOR]`.
+- **Testy** `tests/test_stp054.py` (+19): header 17 sloupců, date/time konverze (tz-aware + naive → UTC), neznámý čas → prázdná pole, sourcetype/type per dataset, short truncace 100, desc determinismus, extra JSON sort_keys, CSV escapování (česky/uvodovky/newline), determinita výstupu.
+
 ## [Unreleased] — 2026-11-06 (STP-053: oblast J Case Mgmt 2.0 ★ = RBAC permission matrix + enforcement)
 
 ### Added (oblast J, P3 — STP-053)

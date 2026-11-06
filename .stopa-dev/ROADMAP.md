@@ -74,9 +74,9 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Nedokončeno:** — (Case Mgmt 2.0 RBAC hotový; případně UI přepínač role v Settings).
 
 ## K. Export Engine
-- **Stav:** 🔧 částečně | **Priorita:** P2
-- **Dokončeno:** CSV/JSON exporty s manifestem. STP-023: JSONL (streamovací), XML (deterministický ElementTree), STIX 2.1 bundle; CLI `--format csv|json|jsonl|xml|stix`.
-- **Nedokončeno:** Plaso formát (volitelné).
+- **Stav:** ✅ hotovo | **Priorita:** P2
+- **Dokončeno:** CSV/JSON exporty s manifestem. STP-023: JSONL (streamovací), XML (deterministický ElementTree), STIX 2.1 bundle; CLI `--format csv|json|jsonl|xml|stix`. STP-054: **Plaso interop l2tcsv** — 17 pevných polí log2timeline.pl (`to_l2tcsv()`, formát ověřen proti oficiální Plaso dokumentaci), CLI `--format l2tcsv`; export engine kompletní.
+- **Nedokončeno:** — (volitelné: import z cizích timeline).
 
 ## L. Report Engine
 - **Stav:** ✅ hotovo | **Priorita:** P1
@@ -96,7 +96,7 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 ## O. User Interface
 - **Stav:** ✅ hotovo | **Priorita:** P3
 - **Dokončeno:** FastAPI 30+ endpointů + vanilla JS SPA (dark mode), graph.js. STP-021: Processing Monitor (`GET /api/cases/{id}/processing` + async ingest s živým progress). STP-050: Validation Center modul (`mod-validation`, `js/components/validation.js`). STP-051: File Preview v UI (inline media + text preview v inspectoru). **STP-052: Audit Center modul** (`mod-audit`, `js/components/audit.js` — hash chain status, Ed25519 kontrolní body s ověřením podpisů, tabulka audit záznamů; endpoint `GET /api/cases/{id}/audit`).
-- **Nedokončeno:** — | **Nejbližší úkol:** J Case Management 2.0 (rozšíření RBAC) nebo K Export Engine (Plaso).
+- **Nedokončeno:** — | **Nejbližší úkol:** Q Interop / UCO mapping nebo J UI přepínač role v Settings (RBAC enforcement hotový STP-053, K Plaso hotové STP-054).
 
 ## P. Quality Assurance
 - **Stav:** ✅ hotovo (ETAPA D dokončena ★★ — CI benchmark job + E2E testy + dokumentace) | **Priorita:** P1

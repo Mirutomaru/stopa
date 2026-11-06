@@ -505,3 +505,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/domain/rbac.py`, `src/stopa/web/app.py`, `tests/test_stp053.py` (nový, 29 testů)
 - **Testy:** 29 nových testů zelených; full suite **1956 passed, 1 skipped** (baseline 1927 + 29); ruff clean
 - **Dokončeno:** 2026-11-06 | Commit: viz git log — **Oblast J rozšířena ★**
+
+### STP-054 — Oblast K: Export Engine (Plaso interop formát l2tcsv)
+- **Oblast:** K (Export Engine) / Q (Interop) | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** Chybějící položka oblasti K. **(A)** `domain/export.py::to_l2tcsv()` — čisté serializace do 17 pevných polí log2timeline.pl (Plaso/Timesketch standard, formát ověřen proti oficiální Plaso dokumentaci): timestamp (ns epoch), score, datetime UTC ISO, message, source_short, tool_name=stopa, tool_module, event_type, container, path, uid/username/target_uid/target_username/session, offset_in_data; None → prázdné pole, CRLF řádky. **(B)** CLI `stopa export --format l2tcsv` (argparse choices + dispatch).
+- **Závislosti:** STP-053 (RBAC hotový)
+- **Dotčené moduly:** `src/stopa/domain/export.py`, `src/stopa/cli.py`, `tests/test_stp054.py` (nový, 19 testů)
+- **Testy:** 19 nových testů zelených; full suite **1975 passed, 1 skipped** (baseline 1956 + 19); ruff clean
+- **Dokončeno:** 2026-11-06 | Commit: viz git log — **Oblast K hotová ★**
