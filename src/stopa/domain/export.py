@@ -8,6 +8,9 @@
   JSONL s ensure_ascii=False pro česky; XML deterministicky přes ElementTree;
   STIX 2.1 bundle s deterministickými UUIDv5 ID pro reprodukovatelnost C4).
 
+STP-054 (oblast K): ``to_l2tcsv`` — Plaso interop formát l2tcsv (17 pevných
+polí log2timeline.pl), importovatelný do Plaso/Timesketch workflow.
+
 Sloupce jsou součástí veřejného rozhraní exportu — změna = breaking change,
 proto je držíme stabilní a dokumentované.
 """
@@ -19,6 +22,7 @@ import io
 import json
 import re
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 from xml.etree import ElementTree as ET
 
@@ -303,3 +307,135 @@ def to_stix_bundle(records: list[dict[str, Any]], dataset: str = "artifacts") ->
         "objects": objects,
     }
     return json.dumps(bundle, ensure_ascii=False, indent=2)
+
+
+# ── STP-054 — Plaso interop: l2tcsv (17 pevných polí log2timeline.pl) ────
+# Formát dle oficiální Plaso dokumentace (Output-format-l2tcsv): header +
+# řádky s 17 poli. Deterministický výstup (stejný vstup = stejný text →
+# stabilní C4 manifest hash). Neznámé hodnoty zůstávají prázdné — export
+# nevytváří fiktivní časy ani identifikátory.
+
+L2TCSV_COLUMNS: tuple[str, ...] = (
+    "date",
+    "time",
+    "timezone",
+    "MACB",
+    "source",
+    "sourcetype",
+    "type",
+    "user",
+    "host",
+    "short",
+    "desc",
+    "version",
+    "filename",
+    "inode",
+    "notes",
+    "format",
+    "extra",
+)
+
+_L2T_SOURCE = "STOPA"  # krátké source ID (analog LOG/WEBHIST v Plaso)
+_L2T_TYPE: dict[str, str] = {
+    "artifacts": "Artifact Time",
+    "timeline": "Event Time",
+    "correlations": "Created",
+}
+
+
+def _l2t_datetime(ts: Any) -> tuple[str, str]:
+    """ISO UTC timestamp → (date MM/DD/YYYY, time HH:MM:SS).
+
+    Neznámé/nevalidní hodnoty → ("", "") — export nevytváří fiktivní čas.
+    """
+    if not ts or not isinstance(ts, str):
+        return "", ""
+    try:
+        dt = datetime.fromisoformat(ts)
+    except ValueError:
+        return "", ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%m/%d/%Y"), dt.strftime("%H:%M:%S")
+
+
+def _l2t_sourcetype(rec: dict[str, Any], dataset: str) -> str:
+    """Záznam → podrobnější source (artifact_type / event_type / Correlation)."""
+    if dataset == "artifacts":
+        return str(rec.get("artifact_type") or "Artifact")
+    if dataset == "timeline":
+        return str(rec.get("event_type") or "Timeline Event")
+    return "Correlation"
+
+
+def _l2t_desc(rec: dict[str, Any], dataset: str) -> str:
+    """Záznam → plný popis (deterministické pořadí polí; prázdné vynechává)."""
+    parts: list[str] = []
+    title = rec.get("title")
+    if title:
+        parts.append(str(title))
+    rel_path = rec.get("rel_path")
+    if rel_path:
+        parts.append(f"path={rel_path}")
+    if dataset == "artifacts" and rec.get("artifact_type"):
+        parts.append(f"type={rec['artifact_type']}")
+    if dataset == "timeline" and rec.get("event_type"):
+        parts.append(f"type={rec['event_type']}")
+    if dataset == "correlations" and (rec.get("entity_a") or rec.get("entity_b")):
+        parts.append(
+            f"{rec.get('entity_a') or '?'} --{rec.get('relation') or 'rel'}--> "
+            f"{rec.get('entity_b') or '?'}"
+        )
+    conf = rec.get("confidence")
+    if conf is not None:
+        parts.append(f"confidence={conf}")
+    flags = _flags_str(rec.get("anomaly_flags"))
+    if flags:
+        parts.append(f"flags={flags}")
+    return "; ".join(parts)
+
+
+def to_l2tcsv(records: list[dict[str, Any]], dataset: str = "artifacts") -> str:
+    """Záznamy → l2tcsv text (Plaso interop; 17 pevných polí log2timeline.pl).
+
+    - ``date``/``time`` z ISO UTC timestampu (MM/DD/YYYY + HH:MM:SS);
+      neznámý čas → prázdná pole,
+    - ``source`` = STOPA, ``sourcetype`` = artifact_type/event_type/Correlation,
+    - ``short`` = title (nebo rel_path/id), oříznuto na 100 znaků,
+    - ``desc`` = deterministický popis záznamu, ``notes`` = anomaly flags,
+    - ``format`` = stopa.<dataset>, ``extra`` = JSON všech ne-None polí
+      (sort_keys → plná věrnost dat bez ztráty při interop),
+    - CSV escapování přes csv.writer (česky UTF-8, uvozování/escapování).
+
+    Výstup je deterministický — stejný vstup = stejný text (C4 manifest).
+    """
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=list(L2TCSV_COLUMNS))
+    writer.writeheader()
+    for rec in records:
+        date, time_ = _l2t_datetime(rec.get("timestamp_utc") or rec.get("ts_utc"))
+        short_src = (
+            str(rec.get("title") or rec.get("rel_path") or rec.get("id") or "")
+        )[:100]
+        extra = {k: v for k, v in rec.items() if v is not None}
+        writer.writerow({
+            "date": date,
+            "time": time_,
+            "timezone": "Z",
+            "MACB": "",
+            "source": _L2T_SOURCE,
+            "sourcetype": _l2t_sourcetype(rec, dataset),
+            "type": _L2T_TYPE.get(dataset, "Event Time"),
+            "user": "",
+            "host": "",
+            "short": short_src,
+            "desc": _l2t_desc(rec, dataset),
+            "version": "2",
+            "filename": str(rec.get("rel_path") or ""),
+            "inode": "",
+            "notes": _flags_str(rec.get("anomaly_flags")) or "",
+            "format": f"stopa.{dataset}",
+            "extra": json.dumps(extra, ensure_ascii=False, sort_keys=True),
+        })
+    return buf.getvalue()

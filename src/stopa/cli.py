@@ -13,7 +13,7 @@ Použití:
   stopa audit <case_id> [--limit N] [-v]                 # E1 — neměnná stopa operací
   stopa backup <case_id> [--out DIR]                     # E1 — záloha case DB (SQLite .backup + integrity)
   stopa report <case_id> [--format html|pdf] [--out DIR] [--lang cs|en]  # court-ready report + chain of custody
-  stopa export <case_id> --what artifacts|timeline|correlations --format csv|json|jsonl|xml|stix [--limit N] [--out SOUBOR]
+  stopa export <case_id> --what artifacts|timeline|correlations --format csv|json|jsonl|xml|stix|l2tcsv [--limit N] [--out SOUBOR]
   stopa serve [--port 8473]                                 # web GUI (FastAPI)
   stopa profiles
 
@@ -480,6 +480,7 @@ def cmd_export(args: argparse.Namespace) -> int:
         to_csv,
         to_json,
         to_jsonl,
+        to_l2tcsv,
         to_stix_bundle,
         to_xml,
     )
@@ -503,6 +504,8 @@ def cmd_export(args: argparse.Namespace) -> int:
         text = to_xml(records, dataset=args.what)
     elif args.format == "stix":
         text = to_stix_bundle(records, dataset=args.what)
+    elif args.format == "l2tcsv":
+        text = to_l2tcsv(records, dataset=args.what)
     else:  # json (default)
         text = to_json(records)
 
@@ -1194,7 +1197,7 @@ def build_parser() -> argparse.ArgumentParser:
     exp_p.add_argument("--what", choices=["artifacts", "timeline", "correlations"],
                        default="artifacts",
                        help="co exportovat (default: artifacts)")
-    exp_p.add_argument("--format", choices=["csv", "json", "jsonl", "xml", "stix"], default="csv",
+    exp_p.add_argument("--format", choices=["csv", "json", "jsonl", "xml", "stix", "l2tcsv"], default="csv",
                        help="výstupní formát (default: csv; STP-023: jsonl/xml/stix)")
     exp_p.add_argument("--limit", type=int, default=None,
                        help="max. počet záznamů (artifacts/timeline; default: vše)")
