@@ -2,6 +2,19 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-06 (STP-048: ETAPA E vlna 3 ★ = sandbox E2E testy + corrupt-file regression + dokumentace, **ETAPA E DOKONČENA ★★**)
+
+### Added (oblast M, P2 — STP-048)
+- **Sandbox E2E testy** `tests/test_stp048_sandbox_e2e.py` (**4 testy**, reálný subprocess): umělý hangující parser (`sb_stp048_hang.hang`, sleep 5 s) registrovaný pod signaturu `sqlite` → celá `process_source` doběhne za <20 s a v DB je **`parser_error` artifact s kategorií `timeout`** + audit log (bez sandboxu by pipeline visela navěky); corrupt EVTX (validní magic + garbage tělo) a corrupt LNK (validní signatura + garbage tělo) → nepadají ani nevisí pipeline; plný `process_source` E2E na corrupt EVTX+LNK evidenci → rychle, žádný parser_error.
+- **Dokumentace** `docs/STOPA_SANDBOX.md` — kontrakt workeru (stdout=JSON / stderr / exit 0-1 + RLIMIT_CPU backstop), limity (30 s / 16 MiB), kategorie selhání (timeout>truncated>bad_payload>crash + struktura `parser_error`), fallback bez sandboxu (`STOPA_SANDBOX=0`), jak přidat parser do sandboxu.
+
+### Tests
+- Full suite **1850 passed, 1 skipped** (+4 testy); cílený běh `test_stp048_sandbox_e2e.py` = 4 passed in ~1.9 s; ruff clean.
+
+### Changed
+- **DEV OS:** TASKS záznam STP-048, PROJECT_STATE fáze → ETAPA E DOKONČENA ★★ (completed tasks **48**), FEATURE_REGISTRY F-074, TEST_REGISTRY T-095 + total 1850, CHANGELOG/checkpoint/NEXT_ACTION.
+- **Roadmapy:** sekce M — Vlna 3 ✅ hotová; ETAPA E dokončena ★★ (STP-046/047/048); next = oblast H AI Copilot grounding.
+
 ## [Unreleased] — 2026-11-06 (STP-047: ETAPA E vlna 2 ★ = zapojení sandboxu do pipeline + fix reálného hang bugu, **ETAPA E vlna 2 hotová**)
 
 ### Added (oblast M, P2 — STP-047)

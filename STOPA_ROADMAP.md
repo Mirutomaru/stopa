@@ -67,9 +67,9 @@ každá položka je doložitelná v kódu/testech/auditu. Autoritativní detail:
 - **Nejbližší úkol:** —
 
 ## M. Security
-- **Stav:** 🔧 v průběhu (ETAPA E — izolace parserů / sandbox; **vlny 1–2 hotové ★★** STP-046+STP-047, zbývá vlna 3) | **Priorita:** P2
-- **Dokončeno:** Ed25519 podpisy, hash chaining audit logu, prompt injection ochrana RAG. STP-022: SHA-512 v integrity vrstvě (audit chain `algo=`, per-algorithm GENESIS, manifesty opt-in), SHA-512 v pipeline (FORENSIC profil, one-pass hashing, dedupe + hash lookup), report CoC +SHA-512 sloupec, RBAC minimální (`domain/rbac.py` — actor atribuce explicitní > examiner, `strict=`), pip-audit CI job `security`.
-- **Nedokončeno:** izolace parserů (sandbox) — **STP-045 audit prokázal reálný hang**: poškozený SQLite soubor (garbage `db_size_pages` = 1.7 mld. stránek v 920 B souboru) visí >15 s v `sqlite_carver.recover_rows` a zastaví celou pipeline; parsery běží přímo ve worker vláknech bez izolace, nativní extenze (PIL/openpyxl/cryptography/regipy) v hlavním procesu.
+- **Stav:** ✅ hotovo (ETAPA E dokončena ★★ — izolace parserů / sandbox; vlny 1–3 STP-046/047/048) | **Priorita:** P2
+- **Dokončeno:** Ed25519 podpisy, hash chaining audit logu, prompt injection ochrana RAG. STP-022: SHA-512 v integrity vrstvě (audit chain `algo=`, per-algorithm GENESIS, manifesty opt-in), SHA-512 v pipeline (FORENSIC profil, one-pass hashing, dedupe + hash lookup), report CoC +SHA-512 sloupec, RBAC minimální (`domain/rbac.py` — actor atribuce explicitní > examiner, `strict=`), pip-audit CI job `security`. **ETAPA E (STP-046/047/048):** parser sandbox — kontrakt `domain/sandbox.py` + worker modul `sandbox_worker.py`, zapojení do pipeline (`_run_extractor()` → `run_extractor_sandboxed()`, selhání parseru → `parser_error` artifact s kategorií timeout/truncated/bad_payload/crash), fix reálného hang bugu v `sqlite_carver.recover_rows` (validace `db_size_pages` proti velikosti souboru — corrupt header visel >15 s, teď <1 ms), E2E testy přes reálný subprocess (`test_stp047_sandbox_integration.py` 8 + `test_stp048_sandbox_e2e.py` 4) a dokumentace `docs/STOPA_SANDBOX.md`.
+- **Nedokončeno:** — (sandbox hotový; zbývající nativní extenze běží v dceřiném procesu, fallback `STOPA_SANDBOX=0`)
 
 ## N. Performance
 - **Stav:** ✅ hotovo | **Priorita:** P2
@@ -208,8 +208,7 @@ subprocess wrapper + timeout + deterministické testy s umělým hangujícím pa
   (per-parser timeout + catch → `parser_error` artifact místo crashu), fix reálného hang bugu
   v `sqlite_carver.recover_rows` (validace `db_size_pages` proti velikosti souboru). Full suite
   **1846 passed, 1 skipped** (+12 testů — E2E přes reálný subprocess + carver regression).
-- **Vlna 3 (STP-048):** testy + dokumentace — deterministické testy s umělým hangujícím parserem,
-  corrupt-file regression testy (SQLite/EVTX/LNK), `docs/STOPA_SANDBOX.md`.
+- **Vlna 3 (STP-048):** ✅ testy + dokumentace — `tests/test_stp048_sandbox_e2e.py` (**4 E2E testy** přes reálný subprocess: umělý hangující parser → celá `process_source` doběhne a v DB je `parser_error` artifact s kategorií timeout; corrupt EVTX/LNK regression; plný E2E na corrupt evidenci) + **`docs/STOPA_SANDBOX.md`** (kontrakt workeru, limity 30 s / 16 MiB, kategorie selhání, fallback `STOPA_SANDBOX=0`). Full suite **1850 passed, 1 skipped**, ruff clean → **ETAPA E DOKONČENA ★★**.
 
 **Akceptační kritéria ETAPA E:** žádný parser nesmí zastavit pipeline (timeout + catch);
 poškozený soubor → `parser_error` artifact, ne crash; deterministické testy offline;
