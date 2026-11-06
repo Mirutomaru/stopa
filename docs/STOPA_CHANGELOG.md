@@ -4,6 +4,16 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-06 (STP-053: oblast J Case Mgmt 2.0 ★ = RBAC permission matrix + enforcement)
+
+### Added (oblast J, P3 — STP-053)
+- **RBAC domain** `domain/rbac.py`: rozšířený model rolí **analyst / examiner / admin** × oprávnění (`case.read`, `analysis.run`, `file.flag`, `case.create/update/delete`, `source.add`, `settings.write`); `can()` fail-closed (neznámá role → jen čtení, neznámé oprávnění → False), `require_permission()` → `RBACDenied`, `permissions_for()`, `normalize_role()`, `DEFAULT_ROLE = examiner` (backward compatibility).
+- **Web enforcement** `web/app.py`: `_require()` na všechny mutující endpointy — case CRUD, sources, timeline/correlate/AI (`analysis.run`), file flag, PUT settings (+ validace role → 400); GET settings vrací `role` + `permissions` aktuální role pro UI.
+- **Testy** `tests/test_stp053.py` (+29): domain matrix fail-closed (neznámá role/permission) + web E2E — analyst zamčený z lifecycle a settings, examiner plný lifecycle, admin vše, neznámá role → 400.
+
+### Changed
+- `settings.write` mají examiner i admin (bootstrap: default examiner může přepnout na admin); `analyst` je zamčený režim bez delete/settings write.
+
 ## [Unreleased] — 2026-11-06 (STP-052: oblast O Audit Center ★ = neměnná stopa hash chain + Ed25519 kontrolní body)
 
 ### Added (oblast O, P3 — STP-052)

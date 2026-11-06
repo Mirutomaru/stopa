@@ -497,3 +497,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/web/app.py`, `index.html`, `js/components/audit.js` (nový), `modules.js`, `sidebar.js`, `tests/test_stp052.py` (nový, 8 testů)
 - **Testy:** 8 nových testů zelených; full suite **1927 passed, 1 skipped** (baseline 1919 + 8); ruff clean
 - **Dokončeno:** 2026-11-06 | Commit: viz git log — **Oblast O dokončena ★**
+
+### STP-053 — Oblast J: Case Mgmt 2.0 (RBAC permission matrix + enforcement)
+- **Oblast:** J (Case Management) / M (Security) | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** Role se doteď nikde neaplikovaly (STP-022 = jen actor atribuce). **(A)** `domain/rbac.py` rozšířeno o permission matici — role `analyst`/`examiner`/`admin`, oprávnění `case.read`/`analysis.run`/`file.flag`/`case.create`/`case.update`/`case.delete`/`source.add`/`settings.write`; `can()` fail-closed (neznámá role → jen case.read, neznámé oprávnění → False), `require_permission()` → `RBACDenied`, `permissions_for()`, `normalize_role()`; default = examiner. **(B)** `web/app.py` — enforcement `_require()` na mutující endpointy: POST/PATCH/DELETE cases, POST sources, timeline/correlate/AI query+analyze (analysis.run), file flag, PUT settings (settings.write + validace role → 400); GET settings vrací `permissions` aktuální role. Bez auth vrstvy = operační guardrail (localhost-only).
+- **Závislosti:** STP-052 (Audit Center hotový)
+- **Dotčené moduly:** `src/stopa/domain/rbac.py`, `src/stopa/web/app.py`, `tests/test_stp053.py` (nový, 29 testů)
+- **Testy:** 29 nových testů zelených; full suite **1956 passed, 1 skipped** (baseline 1927 + 29); ruff clean
+- **Dokončeno:** 2026-11-06 | Commit: viz git log — **Oblast J rozšířena ★**

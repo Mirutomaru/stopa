@@ -69,9 +69,9 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Nedokončeno:** — | **Nejbližší úkol:** — (Audit Center hotový STP-052).
 
 ## J. Case Management
-- **Stav:** ✅ základ hotov | **Priorita:** P3
-- **Dokončeno:** cases DB (schema v12), chain of custody, audit trail, E3 resume/checkpointing. STP-022: RBAC minimální (`domain/rbac.py`).
-- **Nedokončeno:** Case Mgmt 2.0 (RBAC rozšíření).
+- **Stav:** ✅ RBAC enforcement hotov | **Priorita:** P3
+- **Dokončeno:** cases DB (schema v12), chain of custody, audit trail, E3 resume/checkpointing. STP-022: RBAC minimální (`domain/rbac.py`). STP-053: RBAC permission matrix + enforcement (role analyst/examiner/admin × 8 oprávnění, fail-closed, `_require()` na mutující endpointy).
+- **Nedokončeno:** — (Case Mgmt 2.0 RBAC hotový; případně UI přepínač role v Settings).
 
 ## K. Export Engine
 - **Stav:** 🔧 částečně | **Priorita:** P2
