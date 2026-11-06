@@ -2,6 +2,22 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-06 (STP-047: ETAPA E vlna 2 ★ = zapojení sandboxu do pipeline + fix reálného hang bugu, **ETAPA E vlna 2 hotová**)
+
+### Added (oblast M, P2 — STP-047)
+- **Sandbox izolace aktivní v produkční pipeline** `src/stopa/pipeline.py`: nový dispatch `_run_extractor()` vede všechny tři extrakční cesty `_extract_artifacts_for` (signatura, SNS pre-pass, name-based fallback) přes `run_extractor_sandboxed()` — dceřiný proces s timeoutem 30 s a payload limitem 16 MiB; selhání parseru → **`parser_error` artifact** s kategorií z `SandboxResult` (timeout/truncated/bad_payload/crash), pipeline nepadne. Fallback bez sandboxu = přímé in-process volání (`SANDBOX_ENABLED`, env `STOPA_SANDBOX=0`).
+- **Testy:** nový `tests/test_stp047_sandbox_integration.py` (**8 E2E testů** přes reálný subprocess — úspěch/crash→parser_error/timeout→parser_error s měřením času/fallback/corrupt SQLite přes celou pipeline) + 4 carver regression testy v `tests/test_sqlite_recover.py`.
+
+### Fixed
+- **Reálný hang bug** `src/stopa/domain/sqlite_carver.py`: smyčka `range(1, db_size_pages+1)` bez validace proti velikosti souboru — poškozený SQLite (garbage `db_size_pages` = 1.7 mld. stránek v 920 B) visel >15 s a zastavil celou pipeline; oprava: iterace omezená reálnou velikostí (`max_pages = len(data) // page_size`) → corrupt header **0.000 s** (naměřeno).
+
+### Tests
+- Full suite **1846 passed, 1 skipped** (+12 testů); cílený běh `test_sqlite_recover.py` + `test_stp047_sandbox_integration.py` = 25 passed in 2.11 s; ruff clean.
+
+### Changed
+- **DEV OS:** TASKS záznam STP-047, PROJECT_STATE fáze → ETAPA E vlna 2 hotová ★ (completed tasks **47**), FEATURE_REGISTRY F-073, TEST_REGISTRY T-094 + total 1846, CHANGELOG/checkpoint/NEXT_ACTION.
+- **Roadmapy:** sekce M — Vlna 2 ✅ hotová; next = STP-048 vlna 3 (testy + `docs/STOPA_SANDBOX.md`) → ETAPA E dokončena ★★.
+
 ## [Unreleased] — 2026-11-05 (STP-046: ETAPA E vlna 1 ★ = parser sandbox kontrakt `domain/sandbox.py`, **ETAPA E vlna 1 hotová**)
 
 ### Added (oblast M, P2 — STP-046)

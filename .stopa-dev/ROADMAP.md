@@ -84,7 +84,7 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Nejbližší úkol:** —
 
 ## M. Security
-- **Stav:** 🔧 v průběhu (ETAPA E — izolace parserů / sandbox; **vlna 1 hotová ★** STP-046) | **Priorita:** P2
+- **Stav:** 🔧 v průběhu (ETAPA E — izolace parserů / sandbox; **vlny 1–2 hotové ★★** STP-046+STP-047, zbývá vlna 3) | **Priorita:** P2
 - **Dokončeno:** Ed25519 podpisy, hash chaining audit logu, prompt injection ochrana RAG. STP-022: SHA-512 v integrity + pipeline, RBAC minimální, pip-audit CI job `security`.
 - **Nedokončeno:** izolace parserů (sandbox) — **STP-045 audit prokázal reálný hang**: poškozený SQLite soubor (garbage `db_size_pages` = 1.7 mld. stránek v 920 B souboru) visí >15 s v `sqlite_carver.recover_rows` a zastaví celou pipeline; parsery běží přímo ve worker vláknech bez izolace, nativní extenze (PIL/openpyxl/cryptography/regipy) v hlavním procesu.
 
@@ -209,9 +209,10 @@ subprocess wrapper + timeout + deterministické testy s umělým hangujícím pa
   (parser → subprocess s timeout, JSON marshalling výsledků), detekce dostupnosti backendu
   (subprocess fallback), konfigurace limitů (timeout_s, max_result_bytes). Commit `91854d8`,
   full suite **1834 passed, 1 skipped** (+21 testů).
-- **Vlna 2 (STP-047):** zapojení do pipeline — `_extract_artifacts_for` přes sandbox wrapper
+- **Vlna 2 (STP-047):** ✅ zapojení do pipeline — `_extract_artifacts_for` přes sandbox wrapper
   (per-parser timeout + catch → `parser_error` artifact místo crashu), fix reálného hang bugu
-  v `sqlite_carver.recover_rows` (validace `db_size_pages` proti velikosti souboru).
+  v `sqlite_carver.recover_rows` (validace `db_size_pages` proti velikosti souboru). Full suite
+  **1846 passed, 1 skipped** (+12 testů — E2E přes reálný subprocess + carver regression).
 - **Vlna 3 (STP-048):** testy + dokumentace — deterministické testy s umělým hangujícím parserem,
   corrupt-file regression testy (SQLite/EVTX/LNK), `docs/STOPA_SANDBOX.md`.
 
