@@ -65,8 +65,9 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 ## I. Validation Engine
 - **Stav:** ✅ hotovo | **Priorita:** P2
 - **Dokončeno:** C3 Parser Validation Registry (13 parserů), validační reporty per-artifact
-  (ID+verze, status, confidence, provenance).
-- **Nedokončeno:** UI Validation Center.
+  (ID+verze, status, confidence, provenance). STP-050: UI Validation Center — `GET /api/cases/{id}/validation`
+  (C6 report) + `GET /api/validation/registry` (C3 registry), SPA modul `mod-validation`.
+- **Nedokončeno:** — | **Nejbližší úkol:** Audit Center modul (oblast O).
 
 ## J. Case Management
 - **Stav:** ✅ základ hotov | **Priorita:** P3
@@ -95,8 +96,8 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 
 ## O. User Interface
 - **Stav:** ✅ základ hotov | **Priorita:** P3
-- **Dokončeno:** FastAPI 30+ endpointů + vanilla JS SPA (dark mode), graph.js. STP-021: Processing Monitor (`GET /api/cases/{id}/processing` + async ingest s živým progress).
-- **Nedokončeno:** Validation Center / Audit Center moduly.
+- **Dokončeno:** FastAPI 30+ endpointů + vanilla JS SPA (dark mode), graph.js. STP-021: Processing Monitor (`GET /api/cases/{id}/processing` + async ingest s živým progress). STP-050: Validation Center modul (`mod-validation`, `js/components/validation.js`).
+- **Nedokončeno:** Audit Center modul.
 
 ## P. Quality Assurance
 - **Stav:** ✅ hotovo (ETAPA D dokončena ★★ — CI benchmark job + E2E testy + dokumentace) | **Priorita:** P1

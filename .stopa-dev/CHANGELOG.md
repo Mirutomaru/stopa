@@ -2,6 +2,16 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
+## 2026-11-06 — STP-050 oblast I+O: Validation Center UI (C3 registry + C6 report v SPA) ★ (oblast I+O, P2)
+**Změněné soubory:** `web/app.py` (endpointy `/api/cases/{id}/validation` + `/api/validation/registry`), `index.html` (sekce mod-validation), `js/components/validation.js` (nový), `modules.js`, `sidebar.js`, `style.css`, DEV OS TASKS/PROJECT_STATE/FEATURE_REGISTRY (F-076)/TEST_REGISTRY (T-097)/CHANGELOG/checkpoint/NEXT_ACTION.
+**Přidané funkce:** Validation Center v GUI — coverage parserů × validační statusy artifactů, per-artifact report s parser ID+verze/confidence/provenance; defenzivní obaly endpointů (selhání → 500 s logem).
+**Testy:** full suite **1901 passed, 1 skipped** (+10 — `tests/test_stp050_validation_center.py`); ruff clean. Commit ```0b761ab```.
+
+## 2026-11-06 — STP-049 ETAPA H: AI grounding — detekce rozporů odpovědi LLM vs data citací ★★ (oblast H, P2)
+**Změněné soubory:** `src/stopa/domain/ai_grounding.py` (nový), `web/app.py`, `js/components/ai.js`, `style.css`, `docs/STOPA_AI_ARCHITECTURE.md`, DEV OS TASKS/PROJECT_STATE/FEATURE_REGISTRY (F-075)/TEST_REGISTRY (T-096)/CHANGELOG/checkpoint/NEXT_ACTION.
+**Přidané funkce:** AI odpovědi doložitelné daty citací — `extract_claims()` + `ground_answer()` (deterministický report: mismatch_date/mismatch_type/unverified_claim), pole `grounding` ve všech 3 AI režimech, ⚠ štítky rozporných citací + findings panel v GUI.
+**Testy:** full suite **1891 passed, 1 skipped** (+41 — grounding domain 33 + E2E 8); ruff clean. Commit ```1c107ba```.
+
 ## 2026-11-06 — STP-048 ETAPA E vlna 3: sandbox E2E testy + corrupt-file regression + dokumentace = **ETAPA E DOKONČENA ★★** (oblast M, P2)
 **Změněné soubory:** `tests/test_stp048_sandbox_e2e.py` (nový, 4 E2E testů), `docs/STOPA_SANDBOX.md` (nová dokumentace sandboxu), DEV OS TASKS/PROJECT_STATE/FEATURE_REGISTRY (F-074)/TEST_REGISTRY (T-095)/CHANGELOG/checkpoint/NEXT_ACTION.
 **Nové funkce:** **(1) E2E hangující parser přes celou pipeline** — dočasný modul `sb_stp048_hang.hang` (sleep 5 s) registrovaný pod signaturu `sqlite`, corrupt SQLite header ho spustí; sandbox timeout 1,5 s → v DB je **`parser_error` artifact s kategorií `timeout`** + audit log (`details.parser = sb_stp048_hang.hang`), `process_source` doběhne za <20 s (bez sandboxu by visela navěky). **(2) Corrupt-file regression pro ostatní binární parsery** — corrupt EVTX (validní magic `EVTX` + garbage tělo → 0 artifactů, nepadá) a corrupt LNK (validní signatura cbLinkHeaderSize=76+IShellLink CLSID + garbage tělo → header artifact, nepadá) přes `_extract_artifacts_for`; plný `process_source` E2E na corrupt EVTX+LNK evidenci → rychle (<30 s), artifacty v DB, žádný parser_error. **(3) Dokumentace** `docs/STOPA_SANDBOX.md`: kontrakt workeru (stdout=JSON array / stderr=logy / exit 0-1 + RLIMIT_CPU backstop), limity (`SandboxConfig` timeout 30 s / payload 16 MiB), kategorie selhání (timeout>truncated>bad_payload>crash + struktura `parser_error` artifactu), fallback bez sandboxu (`STOPA_SANDBOX=0`), jak přidat parser do sandboxu.

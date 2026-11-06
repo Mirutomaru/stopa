@@ -4,6 +4,24 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-06 (STP-050: oblast I+O Validation Center UI ★ = C3 registry + C6 report v SPA)
+
+### Added (oblast I+O, P2 — STP-050)
+- **Validation Center endpointy** `web/app.py`: `GET /api/cases/{id}/validation` (C6 `build_validation_report` — total_artifacts, coverage per-parser, validační statusy, per-artifact řádky s parser ID+verze/confidence/provenance) + `GET /api/validation/registry` (C3 `build_registry`/`registry_report`); defenzivní obaly — selhání → 500 s logem.
+- **SPA modul** `mod-validation`: statistické karty, coverage bar, per-parser tabulka, validační statusy, per-artifact report; nový `js/components/validation.js` (`renderValidationCenter()`, badge validated/needs_validation), registrace v modules.js/sidebar.js + styling.
+
+### Tests
+- Full suite **1901 passed, 1 skipped** (+10 — `tests/test_stp050_validation_center.py`); ruff clean.
+
+## [Unreleased] — 2026-11-06 (STP-049: ETAPA H ★★ = AI grounding — detekce rozporů odpovědi LLM vs data citací)
+
+### Added (oblast H, P2 — STP-049)
+- **AI grounding** `src/stopa/domain/ai_grounding.py` (čistá logika bez IO): `extract_claims()` (ISO+česká data, slovník 62 typů artifactů), `ground_answer()` → deterministický report s kategoriemi rozporu (`mismatch_date`, `mismatch_type`, `unverified_claim`) + `.verified_citations`; atribuce tvrdění k nejbližší citaci.
+- **Zapojení do web endpointu** `_ground_answer_safe()`: všechny tři AI režimy (nl_search/summary/explain) vracejí pole `grounding`; interní chyba → log + degradace, odpověď se nedorozbije. GUI ⚠ štítky citací + findings panel; dokumentace `docs/STOPA_AI_ARCHITECTURE.md` §1.1.
+
+### Tests
+- Full suite **1891 passed, 1 skipped** (+41 — grounding domain 33 + E2E 8); ruff clean.
+
 ## [Unreleased] — 2026-11-06 (STP-048: ETAPA E vlna 3 ★ = sandbox E2E testy + corrupt-file regression + dokumentace, **ETAPA E DOKONČENA ★★**)
 
 ### Added (oblast M, P2 — STP-048)
