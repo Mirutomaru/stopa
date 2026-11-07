@@ -40,6 +40,9 @@ from stopa.domain.ai_assistant import (
 )
 from stopa.domain.rbac import (
     DEFAULT_ROLE,
+    PERMISSIONS,
+    ROLE_LABELS,
+    ROLES,
     RBACDenied,
     normalize_role,
     permissions_for,
@@ -1061,6 +1064,24 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             "bind_address": s.get("bind_address", "127.0.0.1"),
             # STP-019 — PII redaktor je default ON (fail-safe: maskovat)
             "ai_redact_pii": bool(s.get("ai_redact_pii", True)),
+        }
+
+    @app.get("/api/roles")
+    def get_roles() -> dict:
+        """STP-056 — matice rolí pro UI přepínač role (Settings + topbar).
+
+        Vrací role v pořadí od nejnižší po nejvyšší privilegie, labely a
+        oprávnění každé role (z permission matrix — jediný zdroj pravdy).
+        Čistě čtení; žádné oprávnění nevyžaduje.
+        """
+        return {
+            "default": DEFAULT_ROLE,
+            "roles": [
+                {"id": r, "label": ROLE_LABELS[r], "permissions": permissions_for(r)}
+                for r in ROLES
+            ],
+            # všechna oprávnění v matici (pro UI legendu) — deterministicky seřazené
+            "all_permissions": sorted(PERMISSIONS),
         }
 
     @app.put("/api/settings")

@@ -16,6 +16,8 @@
     <kbd>⌘K</kbd>
   </button>
   <div id="status-bar"><span class="spinner"></span><span id="status-label">Analyzing…</span></div>
+  <!-- STP-056 — badge aktuální role (Case Mgmt 2.0 UI) -->
+  <span id="role-badge" class="role-badge hidden" title="Aktuální role (přepínání v Nastavení)"></span>
 </header>
 
 <div id="layout">
@@ -344,6 +346,8 @@
             <option value="admin">Admin</option>
           </select>
         </label>
+        <!-- STP-056 — živý preview oprávnění vybrané role -->
+        <div id="role-perms-preview" class="role-perms-preview muted small"></div>
         <label>Bind address (platí po restartu serveru)
           <input id="set-bind" class="mono" autocomplete="off" placeholder="127.0.0.1">
         </label>
@@ -422,6 +426,7 @@
 <script src="/static/js/components/ai.js"></script>
 <script src="/static/js/components/validation.js"></script>
 <script src="/static/js/components/audit.js"></script>
+<script src="/static/js/components/role.js"></script>
 <script src="/static/js/components/modules.js"></script>
 <script src="/static/app.js"></script>
 </body>

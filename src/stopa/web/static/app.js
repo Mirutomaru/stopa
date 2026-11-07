@@ -33,6 +33,7 @@ function wireStatusBar() {
 
 (async function init() {
   wire();
+  initRoles(); // STP-056 — badge role + preview oprávnění (fail-safe, neblokující)
   try {
     await loadCases();
     const first = document.getElementById("case-select").value;

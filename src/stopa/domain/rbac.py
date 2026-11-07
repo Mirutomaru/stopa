@@ -40,6 +40,14 @@ ROLES: tuple[str, ...] = ("analyst", "examiner", "admin")
 #: Defaultní role pro backward compat (stará volání bez explicitní role).
 DEFAULT_ROLE = "examiner"
 
+#: Role → label pro UI (přepínač role v Settings, badge v topbaru).
+#: Jediný zdroj pravdy — web vrstva i testy čtou odtud.
+ROLE_LABELS: dict[str, str] = {
+    "analyst": "Analytik",
+    "examiner": "Examinátor",
+    "admin": "Admin",
+}
+
 #: Oprávnění → role, která je má. Matice je jediný zdroj pravdy —
 #: web vrstva jen volá ``can()`` / ``require_permission()``.
 PERMISSIONS: dict[str, frozenset[str]] = {

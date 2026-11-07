@@ -164,6 +164,8 @@ async function renderSettingsModule() {
       const saved = document.getElementById("settings-saved");
       saved.classList.remove("hidden");
       setTimeout(() => saved.classList.add("hidden"), 2500);
+      // STP-056 — po uložení role obnovit badge v topbaru
+      renderRoleBadge(document.getElementById("set-role").value, Store.get("roleMatrix"));
       toast("✓ Nastavení uloženo");
     } catch (err) { toast(`⚠ ${err.message}`); }
   };
