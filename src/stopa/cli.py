@@ -568,6 +568,36 @@ def _write_export_manifest(db: CaseDB, case_id: str, out_path: Path, content: by
     print(f"Export manifest: {manifest_path}")
 
 
+def cmd_plaso_import(args: argparse.Namespace) -> int:
+    """STP-057 — Plaso import: l2tcsv soubor → case (source + artifacts + timeline)."""
+    from stopa.domain.plaso_import import import_l2tcsv
+
+    path = Path(args.path).expanduser()
+    if not path.is_file():
+        raise SystemExit(f"Soubor nenalezen: {path}")
+    text = path.read_text(encoding="utf-8")
+
+    db = _open_db(args.case_id)
+    try:
+        summary = import_l2tcsv(db, args.case_id, text, source_path=str(path))
+        print(
+            f"Plaso import: {summary['events_total']} událostí → "
+            f"{summary['artifacts_imported']} artifactů, "
+            f"{summary['timeline_events']} timeline eventů "
+            f"(bez času: {summary['skipped_no_time']}) — source {summary['source_id']}"
+        )
+        db.log_operation(
+            "plaso_import",
+            actor=case_examiner(db, args.case_id),
+            details={**summary, "file": str(path)},
+        )
+        # P0 Core C4: kontrolní bod po importu.
+        db.add_integrity_checkpoint("plaso-import")
+    finally:
+        db.close()
+    return 0
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """E1 Evidence Manager: re-hash všech souborů v případu a porovnání s evidencí.
 
@@ -1207,6 +1237,13 @@ def build_parser() -> argparse.ArgumentParser:
     exp_p.add_argument("--out", metavar="SOUBOR",
                        help="výstupní soubor (default: stdout)")
     exp_p.set_defaults(func=cmd_export)
+
+    pli_p = sub.add_parser(
+        "plaso-import", help="STP-057 — Plaso import: l2tcsv soubor → case (source + artifacts + timeline)"
+    )
+    pli_p.add_argument("case_id")
+    pli_p.add_argument("path", help="cesta k l2tcsv souboru (17 polí log2timeline.pl)")
+    pli_p.set_defaults(func=cmd_plaso_import)
 
     srv_p = sub.add_parser("serve", help="web GUI (FastAPI nad analyze())")
     srv_p.add_argument("--host", default=None,  # E12: None → settings.json → 127.0.0.1
