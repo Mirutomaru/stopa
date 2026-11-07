@@ -1,15 +1,14 @@
 # STOPA — Checkpoint (2026-11-07)
 
 ## Hotovo
-**STP-057 — Oblast Q Interop: Plaso import (l2tcsv → case) ★★ = OBLAST Q DOKONČENA**
-- `domain/plaso_import.py` (nový, čistá logika bez IO): `parse_l2tcsv(text)` — 17 pevných polí log2timeline.pl; timestamp reconstruction (date MM/DD/YYYY + time HH:MM:SS + timezone „Z“ → UTC; neplatný/chybějící → `ts_utc=None` bez ztráty řádku); `extra` JSON se obnovuje do details (neplatné JSON → raw zachován); prázdné řádky přeskočeny; cizí sourcetype (ne-STOPA) → fallback event `plaso_event` (title z short, rel_path z filename).
-- `import_l2tcsv(db, case_id, path)` — zdroj `EvidenceSource(kind="file")` s `.l2t.csv`, artifacty (`artifact_type` z sourcetype), timeline events (bez timestampu → jen artifact); audit `log_operation(action="plaso_import", details=souhrn)` + integrity checkpoint `plaso-import`.
-- CLI: `stopa plaso-import <case_id> SOUBOR` (subparser po export; chybějící soubor → SystemExit „nenalezen“).
-- Testy: `tests/test_stp057_plaso_import.py` (14) — parse roundtrip/naive/invalid timestamp, extra JSON restore + invalid raw fallback, empty rows skip, foreign sourcetype fallback; import E2E (source/artifact/timeline); CLI E2E (export timeline → l2tcsv → import, audit akce `plaso_import`, integrity checkpoint, chybějící soubor).
+**STP-058 — Oblast O+Q: Interop Export Center UI ★ = GUI interop exporty hotové**
+- `web/app.py` — nový endpoint `GET /api/cases/{id}/interop-export?what=&format=`: `what ∈ {artifacts, timeline, correlations}` (záznamy přes domain konvertory `artifact_records`/`timeline_records`/`correlation_records`), `format ∈ {csv, json, jsonl, xml, stix, uco, l2tcsv}` — dispatch na `to_csv`/`json.dumps`/`to_jsonl`/`to_xml`/`to_stix_bundle`/`to_uco_json`/`to_l2tcsv`; neplatný parametr → 400; download s `Content-Disposition: attachment` (filename `{case_id}_{what}.{ext}`, RFC 5987 quoting); každý export → audit log `interop_exported` (details what/format/records) + integrity checkpoint.
+- SPA: nový modul `js/components/interop.js` — sekce `mod-interop` v index.html (datasety s živými počty z case detail + correlations, výběr datasetu × formátu, tlačítko Stáhnout → endpoint v novém okně, tabulka posledních 10 exportů z audit logu); registrace do `sidebar.js` (MODULES + ikona ⇩) a dispatch v `modules.js`.
+- Testy: `tests/test_web.py::TestInteropExport` (9) — CSV header + Content-Disposition filename, l2tcsv 17 polí s source=STOPA, UCO JSON-LD (@context), STIX bundle (`type=bundle`), JSONL validní řádky, timeline/correlations datasety, neplatný dataset → 400, neplatný formát → 400, audit E2E `interop_exported`.
 
 ## Stav
-- Full suite: **2019 passed, 1 skipped** (baseline 2005 + 14); ruff clean.
-- HEAD před commitem: viz git log (STP-057 code commit). STP-057 DEV OS commit hash viz git log.
+- Full suite: **2028 passed, 1 skipped** (baseline 2019 + 9); ruff clean.
+- Commit: `01b8a6e` feat(web): STP-058 interop export UI (l2tcsv + UCO mapping).
 
 ## Další
-Oblast Q dokončena ★★ — interop kompletní (export l2tcsv + UCO, import l2tcsv). Další kandidáti dle priority: viz NEXT_ACTION.md / TASKS.md roadmap.
+Oblast O rozšířena ★ — GUI interop exporty hotové; oblast Q zůstává kompletní ★★. Další kandidáti dle priority: viz NEXT_ACTION.md / TASKS.md roadmap (Timesketch push, nebo nová oblast dle priority uživatele).
