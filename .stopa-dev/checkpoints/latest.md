@@ -1,15 +1,15 @@
 # STOPA — Checkpoint (2026-11-07)
 
 ## Hotovo
-**STP-056 — Oblast J Case Mgmt 2.0 UI: přepínač role v Settings ★**
-- `domain/rbac.py` + `ROLE_LABELS` (jediný zdroj labelů pro UI).
-- `web/app.py` — nový endpoint `GET /api/roles`: matice rolí (id/label/permissions) z permission matrix; role se nadále čte server-side ze settings.
-- SPA: topbar badge aktuální role (`#role-badge`, barva dle role), Settings preview panel oprávnění s živým přepínáním při změně `<select id="set-role">` (bez ukládání), nový modul `js/components/role.js` (`initRoles()` fail-safe, neblokující bootstrap; po uložení Settings se badge obnoví), CSS `.role-badge*`/`.perm-preview`.
-- Testy: `tests/test_stp056.py` (8) — ROLE_LABELS pokrytí/unikátnost, GET /api/roles struktura + pořadí, permissions = domain matice, monotónnost admin ⊃ examiner ⊃ analyst, enforcement po fetch matice.
+**STP-057 — Oblast Q Interop: Plaso import (l2tcsv → case) ★★ = OBLAST Q DOKONČENA**
+- `domain/plaso_import.py` (nový, čistá logika bez IO): `parse_l2tcsv(text)` — 17 pevných polí log2timeline.pl; timestamp reconstruction (date MM/DD/YYYY + time HH:MM:SS + timezone „Z“ → UTC; neplatný/chybějící → `ts_utc=None` bez ztráty řádku); `extra` JSON se obnovuje do details (neplatné JSON → raw zachován); prázdné řádky přeskočeny; cizí sourcetype (ne-STOPA) → fallback event `plaso_event` (title z short, rel_path z filename).
+- `import_l2tcsv(db, case_id, path)` — zdroj `EvidenceSource(kind="file")` s `.l2t.csv`, artifacty (`artifact_type` z sourcetype), timeline events (bez timestampu → jen artifact); audit `log_operation(action="plaso_import", details=souhrn)` + integrity checkpoint `plaso-import`.
+- CLI: `stopa plaso-import <case_id> SOUBOR` (subparser po export; chybějící soubor → SystemExit „nenalezen“).
+- Testy: `tests/test_stp057_plaso_import.py` (14) — parse roundtrip/naive/invalid timestamp, extra JSON restore + invalid raw fallback, empty rows skip, foreign sourcetype fallback; import E2E (source/artifact/timeline); CLI E2E (export timeline → l2tcsv → import, audit akce `plaso_import`, integrity checkpoint, chybějící soubor).
 
 ## Stav
-- Full suite: **2005 passed, 1 skipped** (baseline 1997 + 8); ruff clean.
-- HEAD před commitem: viz git log (STP-056 code commit). STP-056 DEV OS commit hash viz git log.
+- Full suite: **2019 passed, 1 skipped** (baseline 2005 + 14); ruff clean.
+- HEAD před commitem: viz git log (STP-057 code commit). STP-057 DEV OS commit hash viz git log.
 
 ## Další
-Q Plaso import — poslední nedokončená položka oblasti Q.
+Oblast Q dokončena ★★ — interop kompletní (export l2tcsv + UCO, import l2tcsv). Další kandidáti dle priority: viz NEXT_ACTION.md / TASKS.md roadmap.

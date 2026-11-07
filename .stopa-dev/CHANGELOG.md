@@ -2,6 +2,12 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
+## 2026-11-07 — STP-057 oblast Q: Plaso import (l2tcsv → case) ★★ = **OBLAST Q DOKONČENA** (oblast Q, P3)
+**Změněné soubory:** `src/stopa/domain/plaso_import.py` (nový — čistá logika bez IO), `src/stopa/cli.py` (`cmd_plaso_import` + subparser `plaso-import <case_id> SOUBOR` po export parseru), `tests/test_stp057_plaso_import.py` (nový, 14 testů), DEV OS TASKS/PROJECT_STATE/NEXT_ACTION/FEATURE_REGISTRY (F-083)/TEST_REGISTRY (T-104)/CHANGELOG/checkpoint.
+**Přidané funkce:** Druhá polovina interop smyčky (STP-054 = export l2tcsv, teď import): `parse_l2tcsv()` — 17 pevných polí log2timeline.pl, timestamp reconstruction (date MM/DD/YYYY + time HH:MM:SS + timezone „Z“ → UTC; neplatný/chybějící → `ts_utc=None` bez ztráty řádku), `extra` JSON se obnovuje do details (neplatné JSON → raw zachován), cizí sourcetype → fallback event `plaso_event`; `import_l2tcsv()` — zdroj kind=file, artifacty + timeline events (bez timestampu jen artifact), audit akce `plaso_import` s detaily souhrnu + integrity checkpoint `plaso-import`. CLI E2E: export timeline → l2tcsv → import do případu.
+**Testy:** full suite **2019 passed, 1 skipped** (+14 — `tests/test_stp057_plaso_import.py`); ruff clean. Commit viz git log.
+**Oblast Q dokončena ★★** — interop kompletní: export l2tcsv (STP-054) + UCO mapping (STP-055) + import l2tcsv (STP-057).
+
 ## 2026-11-07 — STP-056 oblast J: Case Mgmt 2.0 UI (přepínač role v Settings) ★ (oblast J, P3)
 **Změněné soubory:** `domain/rbac.py` (`ROLE_LABELS`), `web/app.py` (endpoint `GET /api/roles`, rozšířené RBAC importy), `index.html` (topbar badge + Settings preview panel + script tag), `js/components/role.js` (nový), `app.js` (bootstrap `initRoles()`), `modules.js` (refresh badge po uložení Settings), `style.css` (`.role-badge*`, `.perm-preview`), DEV OS TASKS/PROJECT_STATE/NEXT_ACTION/CHANGELOG.
 **Přidané funkce:** Vizuální indikátor aktuální role v topbaru + živý preview oprávnění při přepínání role v Settings (bez ukládání); maticí rolí je jediným zdrojem `GET /api/roles` z permission matrix; fail-safe inicializace neblokující SPA bootstrap.

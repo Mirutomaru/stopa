@@ -529,3 +529,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/domain/rbac.py`, `src/stopa/web/app.py`, `src/stopa/web/static/index.html`, `src/stopa/web/static/style.css`, `src/stopa/web/static/js/components/role.js` (nový), `src/stopa/web/static/app.js`, `src/stopa/web/static/js/components/modules.js`, `tests/test_stp056.py` (nový, 8 testů)
 - **Testy:** 8 nových testů zelených; full suite **2005 passed, 1 skipped** (baseline 1997 + 8); ruff clean
 - **Dokončeno:** 2026-11-07 | Commit: viz git log — **Oblast J UI hotová ★**
+
+### STP-057 — Oblast Q: Plaso import (l2tcsv → case)
+- **Oblast:** Q (Interop) | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** Doplněk k STP-054 exportu `to_l2tcsv` — čte 17 pevných polí log2timeline.pl (zpětně i cizí l2tcsv z Plaso/Timesketch) a importuje je do case DB. **(A)** `domain/plaso_import.py` (čistá logika bez IO): `parse_l2tcsv()` — text → `PlasoEvent`y, rekonstrukce UTC času ze sloupců date (MM/DD/YYYY) + time (HH:MM:SS) + timezone („Z“ = UTC; nevalidní/chybějící čas → None, bez fiktivního času), sourcetype → event_type (fallback „plaso_event“), extra JSON → details (plná věrnost dat exportu STOPA), confidence ∈ [0,1], notes → anomaly flags. `import_l2tcsv()` — orchestrace nad CaseDB: evidence source kind="file", idempotentní upsert artifactů, timeline events pro řádky s rekonstruovaným časem (ts_origin="source"), commit na konci + souhrn. **(B)** CLI `stopa plaso-import <case_id> SOUBOR` — audit log (`plaso_import`) + Ed25519 kontrolní bod po importu; chybějící soubor → SystemExit.
+- **Závislosti:** STP-054 (export l2tcsv hotový)
+- **Dotčené moduly:** `src/stopa/domain/plaso_import.py` (nový), `src/stopa/cli.py`, `tests/test_stp057_plaso_import.py` (nový, 14 testů)
+- **Testy:** 14 nových testů zelených; full suite **2019 passed, 1 skipped** (baseline 2005 + 14); ruff clean. Pozn.: `test_stp044_ci_benchmark_e2e` je timing-sensitive — v plné suite pod zátěží jednou flaky, izolovaně stabilně PASS.
+- **Dokončeno:** 2026-11-07 | Commit: viz git log — **Oblast Q hotová ★★** (UCO mapping + Plaso import)
