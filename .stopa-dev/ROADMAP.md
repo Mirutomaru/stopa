@@ -104,8 +104,8 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 
 ## Q. Interoperability
 - **Stav:** 🔧 částečně | **Priorita:** P3
-- **Dokončeno:** TSK/libewf integrace, iMessage cloud CSV/XLSX, mobilní logical exporty. STP-023: STIX 2.1 výstup (`to_stix_bundle`, deterministická UUIDv5 ID).
-- **Nedokončeno:** UCO mapping (nad STIX), Plaso import.
+- **Dokončeno:** TSK/libewf integrace, iMessage cloud CSV/XLSX, mobilní logical exporty. STP-023: STIX 2.1 výstup (`to_stix_bundle`, deterministická UUIDv5 ID). **STP-055: UCO mapping** — `domain/uco.py` kurátorské mapování 66/66 STOPA typů na třídy oficiální UCO ontologie (52 mapped + 14 explicitně unmapped), JSON-LD export `to_uco_json()`, CLI `--format uco`.
+- **Nedokončeno:** Plaso import.
 
 ---
 

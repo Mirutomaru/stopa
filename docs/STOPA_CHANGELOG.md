@@ -4,6 +4,14 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 > **Poznámka (2026-11-03):** autoritativní kořenová kopie je `STOPA_CHANGELOG.md` v kořeni projektu; tento soubor je její zrcadlo — úpravy provádět v kořeni a synchronizovat.
 
+## [Unreleased] — 2026-11-07 (STP-055: oblast Q Interop ★ = UCO mapping)
+
+### Added (oblast Q, P3 — STP-055)
+- **UCO mapping** `domain/uco.py` (čistá logika bez IO): kurátorské mapování STOPA artifact typů na třídy oficiální UCO ontologie (`ucoProject/UCO`, třídy ověřeny z TTL). `UCO_ARTIFACT_MAP` — 52 typů → reálné UCO třídy (observable: URLHistoryEntry, EmailMessage, Document, Image, Video, Audio, Executable, Archive, LogFile, RegistryKey/Value, Process, Service, NetworkConnection, IPAddress, MACAddress, DomainName, Certificate, CloudStorageObject…; configuration: Configuration; location: Location/GPSLocation; identity: Person/Organization); `UCO_UNMAPPED` — 14 typů bez UCO ekvivalentu (explicitní, ne tichá ztráta). Pokrytí **66/66 KNOWN_ARTIFACT_TYPES** (test garantuje, že každý typ je buď mapped nebo explicitně unmapped). `map_artifact_to_uco()` → `(class, module)` | None; `uco_type_label()` → `<module>:<Class>` nebo `stopa:<typ>` (explicitní rozšíření pro nezmapped).
+- **UCO JSON-LD export** `to_uco_json(records, dataset)`: dokument s `@context` UCO + per-záznam objekty — `@type`, `name` (z title/rel_path, podmíněně), `time` (z timestamp_utc, žádný fiktivní čas), `x-stopa-id` (traceability do case DB), `x-stopa` (ostatní pole bez None). Deterministický výstup.
+- **CLI** `stopa export <case_id> --what artifacts|timeline|correlations --format uco [--limit N] [--out SOUBOR]`.
+- **Testy** `tests/test_stp055.py` (+22): map (mapped/unmapped/neznámé/prázdné/ne-string), type label, struktura dokumentu, name fallback, time podmíněnost, x-stopa-id + x-stopa filtrace, nezmapped → stopa: prefix, determinita, prázdný vstup, pokrytí 66/66 bez overlapu; CLI export (soubor/stdout/C4 manifest).
+
 ## [Unreleased] — 2026-11-06 (STP-054: oblast K Export Engine ★ = Plaso interop formát l2tcsv)
 
 ### Added (oblast K, P2 — STP-054)

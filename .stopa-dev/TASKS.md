@@ -513,3 +513,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/domain/export.py`, `src/stopa/cli.py`, `tests/test_stp054.py` (nový, 19 testů)
 - **Testy:** 19 nových testů zelených; full suite **1975 passed, 1 skipped** (baseline 1956 + 19); ruff clean
 - **Dokončeno:** 2026-11-06 | Commit: viz git log — **Oblast K hotová ★**
+
+### STP-055 — Oblast Q: Interop (UCO mapping)
+- **Oblast:** Q (Interop) | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** Kurátorské mapování STOPA artifact typů na třídy oficiální UCO ontologie (`ucoProject/UCO`, třídy ověřeny z TTL). **(A)** `domain/uco.py` (čistá logika bez IO) — `UCO_ARTIFACT_MAP` 52 typů → reálné UCO třídy (observable/configuration/location/identity), `UCO_UNMAPPED` 14 typů bez ekvivalentu (explicitní, ne tichá ztráta); pokrytí 66/66 KNOWN_ARTIFACT_TYPES. `map_artifact_to_uco()` → (class, module) | None; `uco_type_label()` → `<module>:<Class>` nebo `stopa:<typ>`. **(B)** `to_uco_json(records, dataset)` — JSON-LD dokument (@context UCO, per-záznam objekty s @type/name/time/x-stopa-id/x-stopa bez None), deterministický výstup. **(C)** CLI `stopa export --format uco` (argparse choices + dispatch).
+- **Závislosti:** STP-054 (export engine hotový)
+- **Dotčené moduly:** `src/stopa/domain/uco.py` (nový), `src/stopa/cli.py`, `tests/test_stp055.py` (nový, 22 testů)
+- **Testy:** 22 nových testů zelených; full suite **1997 passed, 1 skipped** (baseline 1975 + 22); ruff clean
+- **Dokončeno:** 2026-11-07 | Commit: viz git log — **Oblast Q rozšířena ★**

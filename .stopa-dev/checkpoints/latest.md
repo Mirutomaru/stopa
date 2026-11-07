@@ -1,14 +1,16 @@
-# STOPA — Checkpoint (2026-11-06)
+# STOPA — Checkpoint (2026-11-07)
 
 ## Hotovo
-**STP-054 — Oblast K Export Engine: Plaso interop formát l2tcsv ★**
-- `domain/export.py::to_l2tcsv()` — 17 pevných polí log2timeline.pl (dle oficiální Plaso dokumentace): date/time z ISO UTC, timezone=Z, source=STOPA, sourcetype per dataset, short (100 znaků), desc deterministický popis, notes = anomaly flags, format=stopa.<dataset>, extra = JSON všech ne-None polí (sort_keys).
-- CLI `stopa export <case_id> --what ... --format l2tcsv [--limit N] [--out SOUBOR]`.
-- Testy: `tests/test_stp054.py` (19) — header, časové konverze, neznámý čas → prázdná pole, truncace, escapování, determinita.
+**STP-055 — Oblast Q Interop: UCO mapping ★**
+- `domain/uco.py` (čistá logika bez IO): kurátorské mapování 66/66 KNOWN_ARTIFACT_TYPES na třídy oficiální UCO ontologie (`ucoProject/UCO`, ověřeno z TTL) — 52 mapped (observable/configuration/location/identity) + 14 explicitně unmapped.
+- `map_artifact_to_uco()` → (class, module) | None; `uco_type_label()` → `<module>:<Class>` nebo `stopa:<typ>`.
+- `to_uco_json(records, dataset)` — JSON-LD dokument: @context UCO, per-záznam objekty s @type/name/title|rel_path/time/x-stopa-id (traceability)/x-stopa (bez None); deterministický výstup.
+- CLI `stopa export <case_id> --what ... --format uco [--limit N] [--out SOUBOR]`.
+- Testy: `tests/test_stp055.py` (22) — map, type label, struktura, name fallback, time podmíněnost, x-stopa filtrace, pokrytí 66/66 bez overlapu, determinita, CLI export.
 
 ## Stav
-- Full suite: **1975 passed, 1 skipped** (baseline 1956 + 19); ruff clean.
-- HEAD před commitem: `0f0f9e8` (docs devos STP-053). STP-054 commit hash viz git log.
+- Full suite: **1997 passed, 1 skipped** (baseline 1975 + 22); ruff clean.
+- HEAD před commitem: `9017f58` (docs devos STP-054). STP-055 commit hash viz git log.
 
 ## Další
-Q Interop / UCO mapping nebo J UI přepínač role v Settings (RBAC enforcement hotový STP-053, K Plaso hotové STP-054).
+J Case Mgmt 2.0 UI — přepínač role v Settings (RBAC enforcement hotový STP-053, chybí jen UI ovládání); pak Q Plaso import (poslední nedokončená položka oblasti Q).
