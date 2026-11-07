@@ -12,13 +12,14 @@
 - ✅ **STP-057** (Q Interop / Plaso import) — `domain/plaso_import.py` (parse l2tcsv → events + rekonstrukce UTC času), CLI `stopa plaso-import <case_id> SOUBOR`, 14 testů, suite 2019p/1s
 - ✅ **STP-058** (O+Q Interop Export Center UI) — endpoint `GET /api/cases/{id}/interop-export?what=&format=` (3 datasety × 7 formátů → domain konvertory, audit + kontrolní bod), SPA modul `js/components/interop.js` (živé počty, výběr datasetu × formátu, Stáhnout, tabulka posledních exportů), 9 testů, suite **2028p/1s**
 - ✅ **STP-059** (Q Interop / Timesketch push) — `data/timesketch_client.py` (HTTP klient s injektovatelným transportem: login + CSRF scrape, create_sketch 201, upload_timeline multipart → timeline_id/task_id, health, env override), `domain/timesketch_push.py` (čistá logika, reuse `to_l2tcsv`, souhrn pro audit bez credentials), CLI `stopa timesketch-push <case> --what artifacts|timeline|correlations`, web endpoint `POST /api/cases/{id}/timesketch-push` (RBAC analysis.run, 400/503/502, audit + kontrolní bod); **oprava:** web create_case generuje Ed25519 klíč; 20 testů, suite **2048p/1s**
+- ✅ **STP-060** (O+Q Timesketch push UI) — karta `#ts-push-card` v modulu Interop Exporty (`index.html`: tlačítko + stavový výstup), handler v `js/components/interop.js` (POST `/api/cases/{id}/timesketch-push`, busy state, chybové stavy 400/502/503); DOM testy `tests/js/interop.test.mjs` (5, jsdom), suite **2048p/1s**
 
 ## Další úkoly (priority)
-Oblast Q rozšířena ★★ (Timesketch push = třetí interop smyčka: export l2tcsv → import l2tcsv → push do Timesketch), oblast O rozšířena ★ (GUI interop exporty).
-Další kandidáti dle ROADMAP: nová oblast dle priority uživatele, nebo volitelné rozšíření — např. GUI tlačítko pro Timesketch push v Interop Export Center modulu (`js/components/interop.js`).
+Oblast Q rozšířena ★★ (Timesketch push = třetí interop smyčka: export l2tcsv → import l2tcsv → push do Timesketch), oblast O rozšířena ★★ (GUI interop exporty + Timesketch push UI).
+Další kandidáti dle ROADMAP: nová oblast dle priority uživatele, nebo volitelné rozšíření — např. live status Timesketch tasku po uploadu (polling task_id), nebo GUI pro Plaso import.
 
 ## Stav
-- HEAD: `35e3c77` feat(interop): STP-059 Timesketch push — klient, doména, CLI, web endpoint + testy
+- HEAD: `ddb3aa0` feat(web): STP-060 Timesketch push UI — tlačítko v Interop Export Center + DOM testy
 - Full suite: **2048 passed, 1 skipped**, ruff clean
   (pozn.: `test_stp044_ci_benchmark_e2e` je timing-sensitive — pod zátěží plné suite může být flaky; izolovaně stabilně PASS)
 - Checkpoint: `.stopa-dev/checkpoints/latest.md`

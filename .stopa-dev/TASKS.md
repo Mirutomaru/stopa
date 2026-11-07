@@ -553,3 +553,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/data/timesketch_client.py` (nový), `src/stopa/domain/timesketch_push.py` (nový), `src/stopa/cli.py`, `src/stopa/web/app.py` (+ oprava: web `create_case` generuje Ed25519 integrity klíč — dříve checkpointy ticho propadaly), `tests/test_stp059.py` (nový, 20 testů)
 - **Testy:** 20 nových testů zelených; full suite **2048 passed, 1 skipped** (baseline 2028 + 20); ruff clean
 - **Dokončeno:** 2026-11-07 | Commit: `35e3c77` — **Oblast Q rozšířena ★★** (Timesketch push)
+
+### STP-060 — Oblast O+Q: Timesketch push UI (GUI tlačítko v Interop Export Center)
+- **Oblast:** O (User Interface) + Q (Interop) | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** GUI vrstva nad hotým Timesketch push API (STP-059). **(A)** `index.html` — nová karta `#ts-push-card` v modulu Interop Exporty: popis + tlačítko `#btn-ts-push` („🚀 Push do Timesketch“) + stavový výstup `#ts-status`; reuse existujícího selectu `#ix-what` (dataset). **(B)** `js/components/interop.js` — wiring `btn-ts-push.onclick`: POST `/api/cases/{id}/timesketch-push` s body `{what}`, busy stav (disabled + „Odesílám…“), úspěch → `✓ Push hotovo — sketch N, timeline M, záznamů K` + toast, selhání → `✗ Push selhal: <msg>` + toast, `finally` reaktivace tlačítka. Stejný vzorec jako ostatní POST moduly (ai.js/files.js).
+- **Závislosti:** STP-059 (Timesketch push API), E5 DOM test vzor (`tests/js/graph.test.mjs`)
+- **Dotčené moduly:** `src/stopa/web/static/index.html`, `src/stopa/web/static/js/components/interop.js` (+25 ř.), `tests/js/interop.test.mjs` (nový, 5 DOM testů)
+- **Testy:** JS DOM **5/5 passed** (`node tests/js/interop.test.mjs`: wiring onclick, POST kontrakt, úspěšný stav, selhání + reaktivace, busy disabled); full suite **2048 passed, 1 skipped** bez regresí; ruff clean
+- **Dokončeno:** 2026-11-07 | Commit: `ddb3aa0` — **Oblast O rozšířena ★** (Timesketch push UI)

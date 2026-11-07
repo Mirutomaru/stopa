@@ -94,7 +94,7 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 - **Nedokončeno:** CI běh benchmarku.
 
 ## O. User Interface
-- **Stav:** ✅ hotovo | **Priorita:** P3
+- **Stav:** ✅ hotovo + rozšířeno ★ (STP-060 Timesketch push UI) | **Priorita:** P3
 - **Dokončeno:** FastAPI 30+ endpointů + vanilla JS SPA (dark mode), graph.js. STP-021: Processing Monitor (`GET /api/cases/{id}/processing` + async ingest s živým progress). STP-050: Validation Center modul (`mod-validation`, `js/components/validation.js`). STP-051: File Preview v UI (inline media + text preview v inspectoru). **STP-052: Audit Center modul** (`mod-audit`, `js/components/audit.js` — hash chain status, Ed25519 kontrolní body s ověřením podpisů, tabulka audit záznamů; endpoint `GET /api/cases/{id}/audit`). **STP-058: Interop Export Center UI** (`mod-interop`, `js/components/interop.js` — výběr datového souboru × formát csv/json/jsonl/xml/stix/uco/l2tcsv, download přes `GET /api/cases/{id}/interop-export?what=&format=`; RBAC `analysis.run` + audit `interop_exported`).
 - **Nedokončeno:** — | **Nejbližší úkol:** Q Interop / UCO mapping nebo J UI přepínač role v Settings (RBAC enforcement hotový STP-053, K Plaso hotové STP-054).
 
