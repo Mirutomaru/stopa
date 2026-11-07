@@ -318,6 +318,13 @@
       <button id="btn-interop-export" class="primary small-btn" style="margin-top:10px">⬇ Stáhnout export</button>
     </div>
 
+    <div class="card small" id="ts-push-card" style="margin-top:12px">
+      <h3 style="margin-top:0">Timesketch push (oblast Q ★★)</h3>
+      <p class="muted small">Odešle zvolený dataset do nového Timesketch sketchu (l2tcsv timeline). Stejná domain logika jako CLI ``stopa timesketch-push``; audit + integrity checkpoint. Požaduje běžící Timesketch (<code>STOPA_TIMESKETCH_URL</code>).</p>
+      <button id="btn-ts-push" class="primary small-btn">🚀 Push do Timesketch</button>
+      <div id="ts-status" class="muted small" style="margin-top:8px"></div>
+    </div>
+
     <h2>Přehled datasetů</h2>
     <p class="muted small">Počet záznamů v každém datasetu případu (živě z DB).</p>
     <table id="ix-datasets">

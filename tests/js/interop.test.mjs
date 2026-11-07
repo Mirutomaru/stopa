@@ -1,0 +1,136 @@
+/* ════════════════════════════════════════════════════════════
+   STOPA STP-060 — DOM testy interop.js (jsdom, vanilla Node)
+   Timesketch push flow: wiring tlačítka + POST /timesketch-push
+   + stavový výstup (úspěch i selhání). Spustí: node tests/js/interop.test.mjs
+   ════════════════════════════════════════════════════════════ */
+import { JSDOM } from "jsdom";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const INTEROP_JS = path.join(__dirname, "../../src/stopa/web/static/js/components/interop.js");
+const interopSrc = fs.readFileSync(INTEROP_JS, "utf8");
+
+/* fixture: case detail + correlations + audit (pro renderInteropExports) */
+const CASE_DETAIL = { artifact_stats: { total: 7 } };
+const CORRELATIONS = [
+  { relation: "same_contact", confidence: "verified" },
+];
+const AUDIT = { entries: [{ action: "interop_exported", ts: "2026-11-07T10:00:00Z", details: { what: "artifacts", format: "l2tcsv", records: 7 } }] };
+
+function makeEnv({ pushResponse, pushError } = {}) {
+  const dom = new JSDOM(`<!DOCTYPE html><body>
+    <select id="ix-what"><option value="artifacts">Artifacty</option></select>
+    <select id="ix-format"><option value="l2tcsv">l2tcsv</option></select>
+    <button id="btn-interop-export"></button>
+    <div class="card" id="ts-push-card">
+      <button id="btn-ts-push"></button>
+      <div id="ts-status"></div>
+    </div>
+    <table id="ix-datasets"><tbody></tbody></table>
+    <div id="ix-recent"></div>
+  </body>`);
+  const { window } = dom;
+
+  const calls = []; // zaznamenané api volání (url, opts)
+  let toasts = [];
+  const sandbox = {
+    document: window.document,
+    console,
+    Store: { set() {}, get(k) { return k === "caseId" ? "c1" : null; } },
+    esc: (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
+    fmtDT: (iso) => iso || "—",
+    toast: (msg) => { toasts.push(msg); },
+    api: async (url, opts = {}) => {
+      calls.push({ url: String(url), opts });
+      const u = String(url);
+      if (u.includes("/timesketch-push")) {
+        if (pushError) throw new Error(pushError);
+        return pushResponse ?? { sketch_id: 42, timeline_id: 7, task_id: "t-1", records: 7 };
+      }
+      if (u.endsWith("/correlations")) return CORRELATIONS;
+      if (u.includes("/audit")) return AUDIT;
+      return CASE_DETAIL; // case detail
+    },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(interopSrc, sandbox); // definuje renderInteropExports + IX_DATASETS
+  return { sandbox, window, calls, toasts };
+}
+
+let passed = 0;
+async function test(name, fn) {
+  try { await fn(); console.log(`  ✓ ${name}`); passed++; }
+  catch (e) { console.error(`  ✗ ${name}\n    ${e.message}`); process.exitCode = 1; }
+}
+
+await test("renderInteropExports: po renderu má btn-ts-push navázaný onclick", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-ts-push");
+  assert.ok(btn, "tlačítko btn-ts-push existuje");
+  assert.equal(typeof btn.onclick, "function", "onclick handler je navázaný");
+});
+
+await test("klik na push: POST /timesketch-push s body {what} (zvolený dataset)", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-ts-push");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  // onclick je async — počkej na vyřízení promise
+  await new Promise((r) => setTimeout(r, 0));
+  const pushCall = env.calls.find((c) => c.url.includes("/timesketch-push"));
+  assert.ok(pushCall, "api bylo voláno pro timesketch-push");
+  assert.equal(pushCall.opts.method, "POST", "metoda POST");
+  assert.match(pushCall.url, /\/api\/cases\/c1\/timesketch-push$/, "správný endpoint s caseId");
+  const body = JSON.parse(pushCall.opts.body);
+  assert.deepEqual(body, { what: "artifacts" }, "body {what} z ix-what selectu");
+});
+
+await test("úspěšný push: ts-status ukazuje ✓ + sketch/timeline/records", async () => {
+  const env = makeEnv({ pushResponse: { sketch_id: 42, timeline_id: 7, task_id: "t-1", records: 7 } });
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-ts-push");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const status = env.window.document.getElementById("ts-status").textContent;
+  assert.match(status, /✓ Push hotovo/, "úspěšná zpráva");
+  assert.match(status, /sketch 42/, "obsahuje sketch_id");
+  assert.match(status, /timeline 7/, "obsahuje timeline_id");
+  assert.match(status, /záznamů 7/, "obsahuje počet záznamů");
+});
+
+await test("selhání push (503): ts-status ukazuje ✗ + tlačítko se znovu aktivuje", async () => {
+  const env = makeEnv({ pushError: "Timesketch nedostupná — spusťte ji" });
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-ts-push");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const status = env.window.document.getElementById("ts-status").textContent;
+  assert.match(status, /✗ Push selhal/, "chybová zpráva");
+  assert.equal(btn.disabled, false, "tlačítko po chybě znovu aktivní (finally)");
+});
+
+await test("během pushu je tlačítko disabled (busy stav)", async () => {
+  let resolvePush;
+  const env = makeEnv();
+  // nahraď api tak, aby push visel dokud neresolvujeme
+  const origApi = env.sandbox.api;
+  env.sandbox.api = async (url, opts) => {
+    if (String(url).includes("/timesketch-push")) return new Promise((res) => { resolvePush = res; });
+    return origApi(url, opts);
+  };
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-ts-push");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  // onclick je async — po prvním ticku by měl být disabled nastavený synchronně před await
+  assert.equal(btn.disabled, true, "tlačítko během pushu disabled");
+  resolvePush({ sketch_id: 1, timeline_id: 2, task_id: "x", records: 3 });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(btn.disabled, false, "po dokončení znovu aktivní");
+});
+
+console.log(`\ninterop.js DOM testy (Timesketch push): ${passed}/5 passed`);

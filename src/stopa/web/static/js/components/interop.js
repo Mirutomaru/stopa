@@ -54,4 +54,29 @@ async function renderInteropExports(cid) {
       window.open(`/api/cases/${Store.get("caseId")}/interop-export?what=${encodeURIComponent(what)}&format=${encodeURIComponent(format)}`, "_blank");
     };
   }
+
+  // Timesketch push (STP-060, oblast Q ★★) — POST /api/cases/{id}/timesketch-push
+  const tsBtn = document.getElementById("btn-ts-push");
+  if (tsBtn) {
+    tsBtn.onclick = async () => {
+      const what = document.getElementById("ix-what").value;
+      const status = document.getElementById("ts-status");
+      tsBtn.disabled = true;
+      status.textContent = `Odesílám ${esc(what)} do Timesketch…`;
+      try {
+        const r = await api(`/api/cases/${Store.get("caseId")}/timesketch-push`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ what }),
+        });
+        status.textContent = `✓ Push hotovo — sketch ${r.sketch_id}, timeline ${r.timeline_id}, záznamů ${r.records}`;
+        toast(`Timesketch push: ${what} → sketch ${r.sketch_id}`, 5000);
+      } catch (e) {
+        status.textContent = `✗ Push selhal: ${esc(e.message)}`;
+        toast("Timesketch push selhal", 5000);
+      } finally {
+        tsBtn.disabled = false;
+      }
+    };
+  }
 }
