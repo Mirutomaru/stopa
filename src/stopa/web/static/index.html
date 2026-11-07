@@ -289,6 +289,47 @@
     </table>
   </section>
 
+  <!-- ── STP-058 — INTEROP EXPORTY (oblast Q ★★) ─────────────── -->
+  <section id="mod-interop" class="module">
+    <h2>Interop Exporty</h2>
+    <p class="muted small">Export dat případu do interop formátů — l2tcsv (Plaso), UCO, CSV, JSON, JSONL, XML a STIX 2.1. Stejná domain logika jako CLI ``stopa export``; každý export se zapisuje do audit logu + integrity checkpoint.</p>
+
+    <div class="card small" id="interop-controls">
+      <div class="row">
+        <label>Dataset</label>
+        <select id="ix-what">
+          <option value="artifacts">Artifacty</option>
+          <option value="timeline">Timeline</option>
+          <option value="correlations">Correlations</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label>Formát</label>
+        <select id="ix-format">
+          <option value="l2tcsv">l2tcsv (Plaso)</option>
+          <option value="uco">UCO JSON</option>
+          <option value="csv">CSV</option>
+          <option value="json">JSON</option>
+          <option value="jsonl">JSONL</option>
+          <option value="xml">XML</option>
+          <option value="stix">STIX 2.1</option>
+        </select>
+      </div>
+      <button id="btn-interop-export" class="primary small-btn" style="margin-top:10px">⬇ Stáhnout export</button>
+    </div>
+
+    <h2>Přehled datasetů</h2>
+    <p class="muted small">Počet záznamů v každém datasetu případu (živě z DB).</p>
+    <table id="ix-datasets">
+      <thead><tr><th>Dataset</th><th>Záznamy</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Naposledy exportováno</h2>
+    <p class="muted small">Z audit logu — operace ``interop_exported``.</p>
+    <div id="ix-recent" class="muted small">Načítám…</div>
+  </section>
+
   <!-- ── E12 — CASES (případy, zařízení, workspace) ─────────── -->
   <section id="mod-cases" class="module">
     <h2>Případy</h2>
@@ -426,6 +467,7 @@
 <script src="/static/js/components/ai.js"></script>
 <script src="/static/js/components/validation.js"></script>
 <script src="/static/js/components/audit.js"></script>
+<script src="/static/js/components/interop.js"></script>
 <script src="/static/js/components/role.js"></script>
 <script src="/static/js/components/modules.js"></script>
 <script src="/static/app.js"></script>

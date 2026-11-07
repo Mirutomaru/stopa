@@ -738,6 +738,104 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── STP-058 — interop exporty (l2tcsv / UCO / CSV / JSON / ...) ───────
+    @app.get("/api/cases/{case_id}/interop-export")
+    def interop_export(
+        case_id: str, what: str = "artifacts", format: str = "csv"
+    ):
+        """Export dat případu do interop formátů (GUI — oblast Q ★★).
+
+        Zrcadlí ``stopa export`` CLI (stejná domain funkce), ale vrací
+        soubor jako HTTP Response s Content-Disposition. Formáty:
+        csv / json / jsonl / xml / stix / l2tcsv / uco. Datasety:
+        artifacts / timeline / correlations. Audit + integrity checkpoint.
+        """
+        from fastapi import Response
+
+        from stopa.domain.export import (
+            ARTIFACT_COLUMNS,
+            CORRELATION_COLUMNS,
+            TIMELINE_COLUMNS,
+            artifact_records,
+            correlation_records,
+            timeline_records,
+            to_csv,
+            to_json,
+            to_jsonl,
+            to_l2tcsv,
+            to_stix_bundle,
+            to_xml,
+        )
+
+        _require("analysis.run", "interop_export")
+        if what not in ("artifacts", "timeline", "correlations"):
+            raise HTTPException(400, f"neplatný dataset: {what}")
+        valid_formats = ("csv", "json", "jsonl", "xml", "stix", "l2tcsv", "uco")
+        if format not in valid_formats:
+            raise HTTPException(400, f"neplatný formát: {format}")
+
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            if what == "artifacts":
+                records = artifact_records(db.list_artifacts())
+                columns = ARTIFACT_COLUMNS
+            elif what == "timeline":
+                records = timeline_records(db.list_timeline_events())
+                columns = TIMELINE_COLUMNS
+            else:  # correlations
+                records = correlation_records(db.list_correlations(case_id))
+                columns = CORRELATION_COLUMNS
+
+            if format == "csv":
+                text = to_csv(records, columns)
+            elif format == "jsonl":
+                text = to_jsonl(records)
+            elif format == "xml":
+                text = to_xml(records, dataset=what)
+            elif format == "stix":
+                text = to_stix_bundle(records, dataset=what)
+            elif format == "l2tcsv":
+                text = to_l2tcsv(records, dataset=what)
+            elif format == "uco":
+                from stopa.domain.uco import to_uco_json
+
+                text = to_uco_json(records, dataset=what)
+            else:  # json (default)
+                text = to_json(records)
+
+            media_type = {
+                "csv": "text/csv",
+                "json": "application/json",
+                "uco": "application/json",
+                "stix": "application/json",
+                "jsonl": "application/x-ndjson",
+                "xml": "application/xml",
+                "l2tcsv": "text/plain",
+            }[format]
+
+            # audit P1 — RFC 5987 quoting (stejný vzor jako export_file)
+            ascii_name = f"{case_id}_{what}.{format}"
+            db.log_operation(
+                "interop_exported",
+                actor=case.examiner if case else None,
+                details={"what": what, "format": format, "records": len(records)},
+            )
+            # P0 Core C4: kontrolní bod po exportu.
+            db.add_integrity_checkpoint("export")
+            return Response(
+                content=text.encode("utf-8"),
+                media_type=media_type,
+                headers={
+                    "Content-Disposition": (
+                        f'attachment; filename="{ascii_name}"; '
+                        f"filename*=UTF-8''{quote(ascii_name)}"
+                    )
+                },
+            )
+        finally:
+            db.close()
+
     # ── report (FÁZE 7) ───────────────────────────────────────
     @app.get("/api/cases/{case_id}/report")
     def report(case_id: str, format: str = "html"):

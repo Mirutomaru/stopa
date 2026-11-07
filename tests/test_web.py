@@ -297,3 +297,110 @@ class TestFileInspectorApi:
         assert r.status_code == 200
         assert "Ručně označené soubory" in r.text
         assert "poznamky.txt" in r.text
+
+
+class TestInteropExport:
+    """STP-058 — /api/cases/{id}/interop-export (GUI oblast Q ★★)."""
+
+    def _cid_with_data(self, client, evidence) -> str:
+        cid = _make_case(client)["id"]
+        client.post(f"/api/cases/{cid}/sources", json={"path": str(evidence)})
+        return cid
+
+    def test_csv_export_artifacts(self, client, evidence):
+        cid = self._cid_with_data(client, evidence)
+        r = client.get(
+            f"/api/cases/{cid}/interop-export", params={"what": "artifacts", "format": "csv"}
+        )
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("text/csv")
+        first_line = r.text.splitlines()[0]
+        assert first_line.startswith("id,source_id,file_id,rel_path,artifact_type")
+        assert f"{cid}_artifacts.csv" in r.headers["content-disposition"]
+
+    def test_l2tcsv_export(self, client, evidence):
+        """l2tcsv (Plaso interop) — 17 polí + source STOPA."""
+        cid = self._cid_with_data(client, evidence)
+        r = client.get(
+            f"/api/cases/{cid}/interop-export", params={"what": "artifacts", "format": "l2tcsv"}
+        )
+        assert r.status_code == 200
+        header = r.text.splitlines()[0]
+        for col in ("date", "time", "timezone", "source", "sourcetype", "short", "desc", "extra"):
+            assert col in header, f"chybí sloupec {col}"
+        # každý datový řádek nese source=STOPA + format stopa.artifacts
+        data_lines = [ln for ln in r.text.splitlines()[1:] if ln.strip()]
+        for ln in data_lines:
+            assert "STOPA" in ln
+
+    def test_uco_json_export(self, client, evidence):
+        cid = self._cid_with_data(client, evidence)
+        r = client.get(
+            f"/api/cases/{cid}/interop-export", params={"what": "artifacts", "format": "uco"}
+        )
+        assert r.status_code == 200
+        body = r.json()
+        # UCO JSON — objekt s datovými entitami (ne prázdný)
+        assert isinstance(body, dict)
+
+    def test_stix_bundle_export(self, client, evidence):
+        cid = self._cid_with_data(client, evidence)
+        r = client.get(
+            f"/api/cases/{cid}/interop-export", params={"what": "artifacts", "format": "stix"}
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body.get("type") == "bundle"
+
+    def test_jsonl_export(self, client, evidence):
+        cid = self._cid_with_data(client, evidence)
+        r = client.get(
+            f"/api/cases/{cid}/interop-export", params={"what": "artifacts", "format": "jsonl"}
+        )
+        assert r.status_code == 200
+        lines = [ln for ln in r.text.splitlines() if ln.strip()]
+        import json as _json
+
+        for ln in lines:
+            _json.loads(ln)  # každý řádek = validní JSON objekt
+
+    def test_timeline_and_correlations_datasets(self, client, evidence):
+        """Ostatní datasety — timeline + correlations (prázdný case → header/[])."""
+        cid = self._cid_with_data(client, evidence)
+        r_tl = client.get(
+            f"/api/cases/{cid}/interop-export", params={"what": "timeline", "format": "csv"}
+        )
+        assert r_tl.status_code == 200
+        assert r_tl.text.splitlines()[0].startswith("id,source_id,artifact_id")
+
+        r_corr = client.get(
+            f"/api/cases/{cid}/interop-export", params={"what": "correlations", "format": "json"}
+        )
+        assert r_corr.status_code == 200
+        assert isinstance(r_corr.json(), list)
+
+    def test_invalid_dataset_400(self, client):
+        cid = _make_case(client)["id"]
+        r = client.get(
+            f"/api/cases/{cid}/interop-export", params={"what": "neplatny"}
+        )
+        assert r.status_code == 400
+
+    def test_invalid_format_400(self, client):
+        cid = _make_case(client)["id"]
+        r = client.get(
+            f"/api/cases/{cid}/interop-export", params={"format": "neplatny"}
+        )
+        assert r.status_code == 400
+
+    def test_export_logged_to_audit(self, client, evidence):
+        """Každý export → audit log (operace interop_exported) + integrity CP."""
+        cid = self._cid_with_data(client, evidence)
+        client.get(
+            f"/api/cases/{cid}/interop-export", params={"what": "artifacts", "format": "csv"}
+        )
+        rep = client.get(f"/api/cases/{cid}/audit?limit=200").json()
+        entries = [e for e in rep["entries"] if e["action"] == "interop_exported"]
+        assert len(entries) >= 1
+        det = entries[0]["details"]
+        assert det["what"] == "artifacts" and det["format"] == "csv"
