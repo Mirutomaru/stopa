@@ -521,3 +521,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/domain/uco.py` (nový), `src/stopa/cli.py`, `tests/test_stp055.py` (nový, 22 testů)
 - **Testy:** 22 nových testů zelených; full suite **1997 passed, 1 skipped** (baseline 1975 + 22); ruff clean
 - **Dokončeno:** 2026-11-07 | Commit: viz git log — **Oblast Q rozšířena ★**
+
+### STP-056 — Oblast J: Case Mgmt 2.0 UI (přepínač role v Settings)
+- **Oblast:** J (Case Management) | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** Backend enforcement hotový od STP-053; chyběl vizuální indikátor a ovládání. **(A)** `domain/rbac.py` — `ROLE_LABELS` (jediný zdroj labelů pro UI). **(B)** `web/app.py` — nový endpoint `GET /api/roles` vrací matici rolí (id/label/permissions) z permission matrix; role se nadále čte server-side ze settings. **(C)** SPA: topbar badge aktuální role (`#role-badge`, barva dle role), Settings preview panel oprávnění s živým přepínáním při změně `<select id="set-role">` (bez ukládání), nový modul `js/components/role.js` (`initRoles()` fail-safe, neblokující bootstrap), po uložení Settings se badge obnoví. **(D)** CSS `.role-badge*`, `.perm-preview`.
+- **Závislosti:** STP-053 (RBAC enforcement hotový)
+- **Dotčené moduly:** `src/stopa/domain/rbac.py`, `src/stopa/web/app.py`, `src/stopa/web/static/index.html`, `src/stopa/web/static/style.css`, `src/stopa/web/static/js/components/role.js` (nový), `src/stopa/web/static/app.js`, `src/stopa/web/static/js/components/modules.js`, `tests/test_stp056.py` (nový, 8 testů)
+- **Testy:** 8 nových testů zelených; full suite **2005 passed, 1 skipped** (baseline 1997 + 8); ruff clean
+- **Dokončeno:** 2026-11-07 | Commit: viz git log — **Oblast J UI hotová ★**

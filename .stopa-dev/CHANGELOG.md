@@ -2,6 +2,11 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
+## 2026-11-07 — STP-056 oblast J: Case Mgmt 2.0 UI (přepínač role v Settings) ★ (oblast J, P3)
+**Změněné soubory:** `domain/rbac.py` (`ROLE_LABELS`), `web/app.py` (endpoint `GET /api/roles`, rozšířené RBAC importy), `index.html` (topbar badge + Settings preview panel + script tag), `js/components/role.js` (nový), `app.js` (bootstrap `initRoles()`), `modules.js` (refresh badge po uložení Settings), `style.css` (`.role-badge*`, `.perm-preview`), DEV OS TASKS/PROJECT_STATE/NEXT_ACTION/CHANGELOG.
+**Přidané funkce:** Vizuální indikátor aktuální role v topbaru + živý preview oprávnění při přepínání role v Settings (bez ukládání); maticí rolí je jediným zdrojem `GET /api/roles` z permission matrix; fail-safe inicializace neblokující SPA bootstrap.
+**Testy:** full suite **2005 passed, 1 skipped** (+8 — `tests/test_stp056.py`); ruff clean. Commit viz git log.
+
 ## 2026-11-06 — STP-050 oblast I+O: Validation Center UI (C3 registry + C6 report v SPA) ★ (oblast I+O, P2)
 **Změněné soubory:** `web/app.py` (endpointy `/api/cases/{id}/validation` + `/api/validation/registry`), `index.html` (sekce mod-validation), `js/components/validation.js` (nový), `modules.js`, `sidebar.js`, `style.css`, DEV OS TASKS/PROJECT_STATE/FEATURE_REGISTRY (F-076)/TEST_REGISTRY (T-097)/CHANGELOG/checkpoint/NEXT_ACTION.
 **Přidané funkce:** Validation Center v GUI — coverage parserů × validační statusy artifactů, per-artifact report s parser ID+verze/confidence/provenance; defenzivní obaly endpointů (selhání → 500 s logem).
