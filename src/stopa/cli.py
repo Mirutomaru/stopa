@@ -598,6 +598,54 @@ def cmd_plaso_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_timesketch_push(args: argparse.Namespace) -> int:
+    """STP-059 — Timesketch push: case data → nový sketch + timeline (l2tcsv)."""
+    from stopa.data.timesketch_client import (
+        TimesketchClient,
+        TimesketchError,
+        settings_from_env,
+    )
+    from stopa.domain.export import (
+        artifact_records,
+        correlation_records,
+        timeline_records,
+    )
+    from stopa.domain.timesketch_push import push_to_timesketch
+
+    db = _open_db(args.case_id)
+    try:
+        case = db.get_case(args.case_id)
+        if args.what == "artifacts":
+            records = artifact_records(db.list_artifacts())
+        elif args.what == "timeline":
+            records = timeline_records(db.list_timeline_events())
+        else:  # correlations
+            records = correlation_records(db.list_correlations(args.case_id))
+
+        client = TimesketchClient(settings_from_env())
+        try:
+            summary = push_to_timesketch(client, case.name if case else args.case_id,
+                                         args.what, records)
+        except (TimesketchError, ValueError) as exc:
+            raise SystemExit(f"Timesketch push selhal: {exc}") from exc
+
+        print(
+            f"Timesketch push: {summary['records']} záznamů → "
+            f"sketch {summary['sketch_id']}, timeline {summary['timeline_id']} "
+            f"(task {summary['task_id']})"
+        )
+        db.log_operation(
+            "timesketch_pushed",
+            actor=case_examiner(db, args.case_id),
+            details={**summary, "what": args.what},
+        )
+        # P0 Core C4: kontrolní bod po pushi.
+        db.add_integrity_checkpoint("timesketch-push")
+    finally:
+        db.close()
+    return 0
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """E1 Evidence Manager: re-hash všech souborů v případu a porovnání s evidencí.
 
@@ -1244,6 +1292,15 @@ def build_parser() -> argparse.ArgumentParser:
     pli_p.add_argument("case_id")
     pli_p.add_argument("path", help="cesta k l2tcsv souboru (17 polí log2timeline.pl)")
     pli_p.set_defaults(func=cmd_plaso_import)
+
+    tsk_p = sub.add_parser(
+        "timesketch-push",
+        help="STP-059 — Timesketch push: case data → nový sketch + timeline (l2tcsv)",
+    )
+    tsk_p.add_argument("case_id")
+    tsk_p.add_argument("--what", choices=["artifacts", "timeline", "correlations"],
+                       default="timeline", help="dataset k pushnutí (default: timeline)")
+    tsk_p.set_defaults(func=cmd_timesketch_push)
 
     srv_p = sub.add_parser("serve", help="web GUI (FastAPI nad analyze())")
     srv_p.add_argument("--host", default=None,  # E12: None → settings.json → 127.0.0.1

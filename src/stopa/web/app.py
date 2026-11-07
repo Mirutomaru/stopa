@@ -30,6 +30,11 @@ from pydantic import BaseModel
 from stopa import __version__
 from stopa.data.db import CaseDB
 from stopa.data.lmstudio_client import LmStudioClient, LmStudioUnavailable
+from stopa.data.timesketch_client import (
+    TimesketchClient,
+    TimesketchError,
+    TimesketchUnavailable,
+)
 from stopa.domain.ai_assistant import (
     build_explain_prompt,
     build_nl_search_prompt,
@@ -103,6 +108,12 @@ class AiAnalyzeIn(BaseModel):
 
     question: str
     agent: str | None = None  # case_analyst|timeline_analyst|artifact_analyst|media_analyst|report_analyst
+
+
+class TimesketchPushIn(BaseModel):
+    """STP-059 — push datasetu případu do Timesketch sketchu."""
+
+    what: str = "timeline"  # artifacts | timeline | correlations
 
 
 class SettingsIn(BaseModel):
@@ -191,6 +202,11 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         db = CaseDB(base / f"{case.id}.db")
         try:
             db.add_case(case)
+            # P0 Core C4: Ed25519 klíčový pár případu (graceful degradation bez cryptography).
+            try:
+                db.ensure_integrity_key()
+            except RuntimeError:  # chybí balík cryptography — checkpointy degradují
+                pass
         finally:
             db.close()
         return {"id": case.id, "name": case.name}
@@ -833,6 +849,64 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                     )
                 },
             )
+        finally:
+            db.close()
+
+    # ── STP-059 — Timesketch push (oblast Q, interop) ───────────────
+    @app.post("/api/cases/{case_id}/timesketch-push")
+    def timesketch_push(case_id: str, body: TimesketchPushIn) -> dict:
+        """Push datasetu případu do nového Timesketch sketchu (GUI — oblast Q ★★).
+
+        Zrcadlí ``stopa timesketch-push`` CLI (stejná domain funkce):
+        vytvoří sketch a nahraje l2tcsv timeline. Datasety: artifacts /
+        timeline / correlations. Audit + integrity checkpoint.
+        Timesketch nedostupná → 503; push selhal → 502 srozumitelnou zprávou.
+        """
+        from stopa.domain.export import (
+            artifact_records,
+            correlation_records,
+            timeline_records,
+        )
+        from stopa.domain.timesketch_push import push_to_timesketch
+
+        _require("analysis.run", "timesketch_push")
+        if body.what not in ("artifacts", "timeline", "correlations"):
+            raise HTTPException(400, f"neplatný dataset: {body.what}")
+
+        client = TimesketchClient()
+        health = client.health()
+        if not health["available"]:
+            raise HTTPException(
+                503, "Timesketch nedostupná — spusťte ji (STOPA_TIMESKETCH_URL)"
+            )
+
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            if body.what == "artifacts":
+                records = artifact_records(db.list_artifacts())
+            elif body.what == "timeline":
+                records = timeline_records(db.list_timeline_events())
+            else:  # correlations
+                records = correlation_records(db.list_correlations(case_id))
+
+            try:
+                summary = push_to_timesketch(
+                    client, case.name if case else case_id, body.what, records
+                )
+            except TimesketchUnavailable as exc:
+                raise HTTPException(503, str(exc)) from exc
+            except (TimesketchError, ValueError) as exc:
+                raise HTTPException(502, f"Timesketch push selhal: {exc}") from exc
+
+            db.log_operation(
+                "timesketch_pushed",
+                actor=case.examiner if case else None,
+                details={**summary, "what": body.what},
+            )
+            # P0 Core C4: kontrolní bod po pushi.
+            db.add_integrity_checkpoint("timesketch-push")
+            return summary
         finally:
             db.close()
 
