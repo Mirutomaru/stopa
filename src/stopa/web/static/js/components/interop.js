@@ -34,15 +34,22 @@ async function renderInteropExports(cid) {
     const rep = await api(`/api/cases/${cid}/audit?limit=200`);
     const recent = (rep.entries || []).filter((e) => e.action === "interop_exported").slice(0, 10);
     document.getElementById("ix-recent").innerHTML = recent.length
-      ? `<table><thead><tr><th>Čas (UTC)</th><th>Dataset</th><th>Formát</th><th>Záznamy</th></tr></thead><tbody>` +
+      ? `<table><thead><tr><th>Čas (UTC)</th><th>Dataset</th><th>Formát</th><th>Záznamy</th><th></th></tr></thead><tbody>` +
         recent.map((e) => {
           const det = e.details || {};
           return `<tr><td class="mono small">${fmtDT(e.ts)}</td>
             <td>${esc(det.what ?? "—")}</td>
             <td><span class="flag-badge">${esc(det.format ?? "—")}</span></td>
-            <td class="mono">${det.records ?? 0}</td></tr>`;
+            <td class="mono">${det.records ?? 0}</td>
+            <td><button type="button" class="btn small ix-redl" data-what="${esc(det.what ?? "")}" data-format="${esc(det.format ?? "")}" title="Stáhnout poslední export (cache)">⬇</button></td></tr>`;
         }).join("") + `</tbody></table>`
       : '<p class="muted small">Zatím žádné interop exporty v audit logu.</p>';
+    // STP-067 — re-download posledního exportu z historie (cache, bez nového exportu)
+    document.querySelectorAll("#ix-recent .ix-redl").forEach((b) => {
+      b.onclick = () => {
+        window.open(`/api/cases/${Store.get("caseId")}/last-export?what=${encodeURIComponent(b.dataset.what)}&format=${encodeURIComponent(b.dataset.format)}`, "_blank");
+      };
+    });
   } catch (e) { document.getElementById("ix-recent").textContent = "—"; }
 
   // tlačítko stáhnout — otevře endpoint v novém okně (download)

@@ -21,7 +21,7 @@ const CORRELATIONS = [
 ];
 const AUDIT = { entries: [{ action: "interop_exported", ts: "2026-11-07T10:00:00Z", details: { what: "artifacts", format: "l2tcsv", records: 7 } }] };
 
-function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoResponse, plasoError, previewResponse, previewError, exportPreviewResponse, exportPreviewError } = {}) {
+function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoResponse, plasoError, previewResponse, previewError, exportPreviewResponse, exportPreviewError, auditResponse } = {}) {
   const dom = new JSDOM(`<!DOCTYPE html><body>
     <select id="ix-what"><option value="artifacts">Artifacty</option></select>
     <select id="ix-format"><option value="l2tcsv">l2tcsv</option></select>
@@ -54,6 +54,7 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoRe
 
   const calls = []; // zaznamenané api volání (url, opts)
   let toasts = [];
+  const opened = []; // zaznamenaná window.open() URL (download / re-download)
   const sandbox = {
     document: window.document,
     console,
@@ -65,6 +66,7 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoRe
     setTimeout, clearTimeout, setInterval, clearInterval,
     FormData: window.FormData,
     File: window.File,
+    window: { open(url) { opened.push(String(url)); return null; } },
     api: async (url, opts = {}) => {
       calls.push({ url: String(url), opts });
       const u = String(url);
@@ -89,13 +91,13 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoRe
         return statusResponse ?? { sketch_id: 42, timeline_id: 7, status: "processing", updated_at: "2026-11-08T10:00:00Z" };
       }
       if (u.endsWith("/correlations")) return CORRELATIONS;
-      if (u.includes("/audit")) return AUDIT;
+      if (u.includes("/audit")) return auditResponse ?? AUDIT;
       return CASE_DETAIL; // case detail
     },
   };
   vm.createContext(sandbox);
   vm.runInContext(interopSrc, sandbox); // definuje renderInteropExports + IX_DATASETS
-  return { sandbox, window, calls, toasts };
+  return { sandbox, window, calls, toasts, opened };
 }
 
 let passed = 0;
@@ -455,4 +457,42 @@ await test("export preview selhání: export-preview-status ukazuje ✗ + tlač�
   assert.equal(btn.disabled, false, "tlačítko po chybě znovu aktivní (finally)");
 });
 
-console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import + L2T preview + export náhled): ${passed}/27 passed`);
+/* ── STP-067 — re-download posledního exportu z historie (⬇ v řádcích) ── */
+
+await test("re-download: každý řádek historie má ⬇ tlačítko s data-what/data-format z audit details", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btns = [...env.window.document.querySelectorAll("#ix-recent .ix-redl")];
+  assert.equal(btns.length, 1, "jeden řádek → jedno ⬇ tlačítko");
+  assert.equal(typeof btns[0].onclick, "function", "onclick handler je navázaný");
+  assert.equal(btns[0].dataset.what, "artifacts", "data-what z audit details");
+  assert.equal(btns[0].dataset.format, "l2tcsv", "data-format z audit details");
+});
+
+await test("re-download: klik na ⬇ → window.open /last-export?what=artifacts&format=l2tcsv (nové okno)", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.querySelector("#ix-recent .ix-redl");
+  btn.onclick();
+  assert.equal(env.opened.length, 1, "window.open voláno jednou");
+  assert.match(env.opened[0], /^\/api\/cases\/c1\/last-export\?what=artifacts&format=l2tcsv$/, "správný endpoint s what + format z řádku");
+});
+
+await test("re-download: audit entry bez details → prázdné data-attribute a URL s prázdnými parametry", async () => {
+  const env = makeEnv({ auditResponse: { entries: [{ action: "interop_exported", ts: "2026-11-07T11:00:00Z" }] } });
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.querySelector("#ix-recent .ix-redl");
+  assert.ok(btn, "tlačítko existuje i bez details");
+  assert.equal(btn.dataset.what, "", "data-what prázdné");
+  assert.equal(btn.dataset.format, "", "data-format prázdné");
+  btn.onclick();
+  assert.match(env.opened[0], /^\/api\/cases\/c1\/last-export\?what=&format=$/, "URL s prázdnými parametry");
+});
+
+await test("re-download: prázdný audit (žádné interop_exported) → žádné ⬇ tlačítko", async () => {
+  const env = makeEnv({ auditResponse: { entries: [{ action: "case_created", ts: "2026-11-07T09:00:00Z" }] } });
+  await env.sandbox.renderInteropExports("c1");
+  assert.equal(env.window.document.querySelectorAll("#ix-recent .ix-redl").length, 0, "žádné ⬇ tlačítko bez exportů v auditu");
+});
+
+console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import + L2T preview + export náhled + re-download): ${passed}/31 passed`);

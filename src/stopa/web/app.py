@@ -163,6 +163,37 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             raise HTTPException(404, f"případ {case_id} nenalezen")
         return CaseDB(path)
 
+    # ── STP-067 — cache posledního exportu (re-download z historie) ──
+    def _last_export_path(case_id: str, what: str, format: str) -> Path:
+        """Cesta cache souboru pro dataset+formát případu.
+
+        Layout: ``{db_dir}/exports/{case_id}/{what}.{format}`` — vedle case DB,
+        aby re-download fungoval i po restartu serveru (trvalá cache).
+        """
+        return base / "exports" / case_id / f"{what}.{format}"
+
+    def _save_last_export(case_id: str, what: str, format: str, text: str) -> None:
+        """Atomicky uloží poslední export do cache (tmp → rename).
+
+        Chyba zápisu nepadá export — cache je pohodlí, ne zdroj pravdy.
+        """
+        try:
+            target = _last_export_path(case_id, what, format)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_name(target.name + ".tmp")
+            tmp.write_text(text, encoding="utf-8")
+            tmp.replace(target)  # atomický na POSIX i Windows (same volume)
+        except OSError:
+            logging.getLogger("stopa.web").warning(
+                "cache posledního exportu se nepodařilo uložit (%s/%s %s)",
+                case_id, what, format, exc_info=True,
+            )
+
+    def _load_last_export(case_id: str, what: str, format: str) -> Path | None:
+        """Vrátí existující cache soubor nebo None (ještě neexportováno)."""
+        path = _last_export_path(case_id, what, format)
+        return path if path.is_file() else None
+
     # ── health ────────────────────────────────────────────────
     @app.get("/api/health")
     def health() -> dict:
@@ -833,6 +864,9 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 "l2tcsv": "text/plain",
             }[format]
 
+            # STP-067 — cache posledního exportu pro re-download z historie UI.
+            _save_last_export(case_id, what, format, text)
+
             # audit P1 — RFC 5987 quoting (stejný vzor jako export_file)
             ascii_name = f"{case_id}_{what}.{format}"
             db.log_operation(
@@ -1006,6 +1040,47 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             }
         finally:
             db.close()
+
+    # ── STP-067 — re-download posledního exportu z historie (oblast Q ★★) ──
+    @app.get("/api/cases/{case_id}/last-export")
+    def last_export(case_id: str, what: str = "artifacts", format: str = "csv"):
+        """Re-download posledního exportu datasetu+formátu (GUI — oblast Q ★★).
+
+        Vrací cache soubor uložený při posledním ``interop-export`` pro daný
+        dataset a formát — uživatel si z historie v UI stáhne stejná data,
+        která už jednou vyexportoval, bez nového exportu. Read-only: bez audit
+        záznamu i integrity checkpointu (není nový export).
+
+        404 = pro daný dataset+formát ještě nebylo nic exportováno.
+        """
+        _require("analysis.run", "last_export")
+        if what not in ("artifacts", "timeline", "correlations"):
+            raise HTTPException(400, f"neplatný dataset: {what}")
+        valid_formats = ("csv", "json", "jsonl", "xml", "stix", "l2tcsv", "uco")
+        if format not in valid_formats:
+            raise HTTPException(400, f"neplatný formát: {format}")
+
+        # case musí existovat (open_db → 404), cache nemusí
+        db = open_db(case_id)
+        db.close()
+
+        path = _load_last_export(case_id, what, format)
+        if path is None:
+            raise HTTPException(
+                404, f"pro {what}/{format} ještě nebylo nic exportováno"
+            )
+
+        media_type = {
+            "csv": "text/csv",
+            "json": "application/json",
+            "uco": "application/json",
+            "stix": "application/json",
+            "jsonl": "application/x-ndjson",
+            "xml": "application/xml",
+            "l2tcsv": "text/plain",
+        }[format]
+        # FileResponse s filename= sám nastaví Content-Disposition: attachment.
+        return FileResponse(path, media_type=media_type, filename=f"{case_id}_{what}.{format}")
 
     # ── STP-059 — Timesketch push (oblast Q, interop) ───────────────
     @app.post("/api/cases/{case_id}/timesketch-push")
