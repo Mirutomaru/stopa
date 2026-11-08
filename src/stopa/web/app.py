@@ -907,6 +907,106 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── STP-066 — Export center: náhled CSV/JSON (UCO) před downloadem ──
+    @app.get("/api/cases/{case_id}/export-preview")
+    def export_preview(case_id: str, what: str = "artifacts", format: str = "csv", limit: int = 50) -> dict:
+        """Náhled exportu v zvoleném formátu (GUI — oblast Q ★★).
+
+        Generalizace l2tcsv-preview (STP-064) na všechny exportní formáty:
+        ``l2tcsv`` / ``csv`` / ``uco`` (JSON-LD). Zrcadlí reálný export
+        (stejné domain serializátory) — uživatel si ověří data před
+        downloadem. Read-only: bez audit záznamu i integrity checkpointu.
+
+        - ``l2tcsv`` — 17 sloupců log2timeline.pl (stejně jako l2tcsv-preview),
+        - ``csv``    — nativní STOPA sloupce datasetu,
+        - ``uco``    — první N objektů UCO JSON-LD dokumentu.
+
+        Datasety: artifacts / timeline / correlations. Limit clamp 1..500.
+        """
+        import csv as _csv
+        import io as _io
+        import json as _json
+
+        from stopa.domain.export import (
+            ARTIFACT_COLUMNS,
+            CORRELATION_COLUMNS,
+            L2TCSV_COLUMNS,
+            TIMELINE_COLUMNS,
+            artifact_records,
+            correlation_records,
+            timeline_records,
+            to_l2tcsv,
+        )
+        from stopa.domain.uco import to_uco_json
+
+        _require("analysis.run", "export_preview")
+        if what not in ("artifacts", "timeline", "correlations"):
+            raise HTTPException(400, f"neplatný dataset: {what}")
+        if format not in ("l2tcsv", "csv", "uco"):
+            raise HTTPException(400, f"neplatný formát: {format}")
+        limit = max(1, min(int(limit), 500))
+
+        db = open_db(case_id)
+        try:
+            if what == "artifacts":
+                records = artifact_records(db.list_artifacts())
+            elif what == "timeline":
+                records = timeline_records(db.list_timeline_events())
+            else:  # correlations
+                records = correlation_records(db.list_correlations(case_id))
+
+            total = len(records)
+            if format == "l2tcsv":
+                text = to_l2tcsv(records, dataset=what)
+                rows = list(_csv.reader(_io.StringIO(text)))
+                header = rows[0] if rows else []
+                body = rows[1 : limit + 1]
+                return {
+                    "case_id": case_id,
+                    "dataset": what,
+                    "format": format,
+                    "columns": list(L2TCSV_COLUMNS),
+                    "total_records": total,
+                    "limit": limit,
+                    "rows": [dict(zip(header, r)) for r in body],
+                }
+
+            if format == "csv":
+                columns = {
+                    "artifacts": ARTIFACT_COLUMNS,
+                    "timeline": TIMELINE_COLUMNS,
+                    "correlations": CORRELATION_COLUMNS,
+                }[what]
+                return {
+                    "case_id": case_id,
+                    "dataset": what,
+                    "format": format,
+                    "columns": list(columns),
+                    "total_records": total,
+                    "limit": limit,
+                    "rows": [dict(r) for r in records[:limit]],
+                }
+
+            # uco — JSON-LD dokument; preview = první N objektů
+            doc = _json.loads(to_uco_json(records, dataset=what))
+            objects = doc.get("objects", [])[:limit]
+            cols: list[str] = []
+            for obj in objects:
+                for key in obj:
+                    if key not in cols:
+                        cols.append(key)
+            return {
+                "case_id": case_id,
+                "dataset": what,
+                "format": format,
+                "columns": cols,
+                "total_records": total,
+                "limit": limit,
+                "rows": objects,
+            }
+        finally:
+            db.close()
+
     # ── STP-059 — Timesketch push (oblast Q, interop) ───────────────
     @app.post("/api/cases/{case_id}/timesketch-push")
     def timesketch_push(case_id: str, body: TimesketchPushIn) -> dict:

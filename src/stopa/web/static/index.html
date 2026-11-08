@@ -326,6 +326,22 @@
       <div id="l2t-preview-table" style="overflow-x:auto;margin-top:8px"></div>
     </div>
 
+    <!-- STP-066: Export náhled — generalizace na CSV/JSON (UCO) -->
+    <div class="card small" id="export-preview-card" style="margin-top:12px">
+      <h3 style="margin-top:0">Export náhled — CSV / JSON (oblast Q ★★)</h3>
+      <p class="muted small">Náhled exportu v zvoleném formátu (l2tcsv, nativní CSV nebo UCO JSON-LD) — ověříte data před downloadem. Read-only (bez audit záznamu).</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="export-preview-format" class="small-btn" style="max-width:170px">
+          <option value="l2tcsv">l2tcsv</option>
+          <option value="csv">CSV (nativní)</option>
+          <option value="uco">UCO JSON-LD</option>
+        </select>
+        <button id="btn-export-preview" class="primary small-btn">👁 Náhled exportu</button>
+      </div>
+      <div id="export-preview-status" class="muted small mono" style="margin-top:8px"></div>
+      <div id="export-preview-table" style="overflow-x:auto;margin-top:8px"></div>
+    </div>
+
     <div class="card small" id="ts-push-card" style="margin-top:12px">
       <h3 style="margin-top:0">Timesketch push (oblast Q ★★)</h3>
       <p class="muted small">Odešle zvolený dataset do nového Timesketch sketchu (l2tcsv timeline). Stejná domain logika jako CLI ``stopa timesketch-push``; audit + integrity checkpoint. Požaduje běžící Timesketch (<code>STOPA_TIMESKETCH_URL</code>). Volitelné limit — pushne jen první N záznamů.</p>

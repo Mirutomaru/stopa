@@ -21,7 +21,7 @@ const CORRELATIONS = [
 ];
 const AUDIT = { entries: [{ action: "interop_exported", ts: "2026-11-07T10:00:00Z", details: { what: "artifacts", format: "l2tcsv", records: 7 } }] };
 
-function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoResponse, plasoError, previewResponse, previewError } = {}) {
+function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoResponse, plasoError, previewResponse, previewError, exportPreviewResponse, exportPreviewError } = {}) {
   const dom = new JSDOM(`<!DOCTYPE html><body>
     <select id="ix-what"><option value="artifacts">Artifacty</option></select>
     <select id="ix-format"><option value="l2tcsv">l2tcsv</option></select>
@@ -30,6 +30,12 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoRe
       <button id="btn-l2t-preview"></button>
       <div id="l2t-preview-status"></div>
       <div id="l2t-preview-table"></div>
+    </div>
+    <div class="card" id="export-preview-card">
+      <select id="export-preview-format"><option value="csv">csv</option><option value="uco">uco</option></select>
+      <button id="btn-export-preview"></button>
+      <div id="export-preview-status"></div>
+      <div id="export-preview-table"></div>
     </div>
     <div class="card" id="ts-push-card">
       <button id="btn-ts-push"></button>
@@ -65,6 +71,10 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoRe
       if (u.includes("/plaso-import")) {
         if (plasoError) throw new Error(plasoError);
         return plasoResponse ?? { events_total: 12, artifacts_imported: 3, timeline_events: 9 };
+      }
+      if (u.includes("/export-preview")) {
+        if (exportPreviewError) throw new Error(exportPreviewError);
+        return exportPreviewResponse ?? { case_id: "c1", dataset: "artifacts", format: "csv", columns: ["name", "sha256"], total_records: 7, limit: 50, rows: [{ name: "poznamky.txt", sha256: "ab" }] };
       }
       if (u.includes("/l2tcsv-preview")) {
         if (previewError) throw new Error(previewError);
@@ -395,4 +405,54 @@ await test("l2t preview selhání: l2t-preview-status ukazuje ✗ + tlačítko s
   assert.equal(btn.disabled, false, "tlačítko po chybě znovu aktivní (finally)");
 });
 
-console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import + L2T preview): ${passed}/23 passed`);
+await test("export preview: po renderu má btn-export-preview navázaný onclick", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-export-preview");
+  assert.ok(btn, "tlačítko btn-export-preview existuje");
+  assert.equal(typeof btn.onclick, "function", "onclick handler je navázaný");
+});
+
+await test("export preview: GET /export-preview?what=&format=csv&limit=50 + tabulka se sloupci a řádky", async () => {
+  const env = makeEnv({ exportPreviewResponse: { case_id: "c1", dataset: "artifacts", format: "csv", columns: ["name", "sha256"], total_records: 7, limit: 50, rows: [{ name: "poznamky.txt", sha256: "ab" }] } });
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-export-preview");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const call = env.calls.find((c) => c.url.includes("/export-preview"));
+  assert.ok(call, "api bylo voláno pro export-preview");
+  assert.match(call.url, /\/api\/cases\/c1\/export-preview\?what=artifacts&format=csv&limit=50$/, "správný endpoint s what + format + limit");
+  const status = env.window.document.getElementById("export-preview-status").textContent;
+  assert.match(status, /✓ Náhled hotovo \(csv\)/, "úspěšná zpráva s formátem");
+  assert.match(status, /záznamů celkem 7/, "total_records");
+  const table = env.window.document.getElementById("export-preview-table").innerHTML;
+  assert.match(table, /<th>name<\/th>/, "sloupec name v hlavičce");
+  assert.match(table, /poznamky\.txt/, "hodnota z řádku");
+});
+
+await test("export preview UCO: složené hodnoty se renderují jako JSON", async () => {
+  const env = makeEnv({ exportPreviewResponse: { case_id: "c1", dataset: "artifacts", format: "uco", columns: ["type", "x-stopa"], total_records: 2, limit: 50, rows: [{ type: "file", "x-stopa": { category: "document" } }] } });
+  await env.sandbox.renderInteropExports("c1");
+  const sel = env.window.document.getElementById("export-preview-format");
+  sel.value = "uco";
+  const btn = env.window.document.getElementById("btn-export-preview");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const call = env.calls.find((c) => c.url.includes("/export-preview"));
+  assert.match(call.url, /format=uco/, "formát uco v URL");
+  const table = env.window.document.getElementById("export-preview-table").innerHTML;
+  assert.match(table, /\{"category":"document"\}/, "složená hodnota jako JSON");
+});
+
+await test("export preview selhání: export-preview-status ukazuje ✗ + tlačítko se znovu aktivuje", async () => {
+  const env = makeEnv({ exportPreviewError: "400: neplatný formát" });
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-export-preview");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const status = env.window.document.getElementById("export-preview-status").textContent;
+  assert.match(status, /✗ Náhled selhal/, "chybová zpráva");
+  assert.equal(btn.disabled, false, "tlačítko po chybě znovu aktivní (finally)");
+});
+
+console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import + L2T preview + export náhled): ${passed}/27 passed`);

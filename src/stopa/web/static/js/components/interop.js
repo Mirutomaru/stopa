@@ -84,6 +84,41 @@ async function renderInteropExports(cid) {
     };
   }
 
+  // Export náhled CSV/JSON (STP-066, oblast Q ★★) — GET /api/cases/{id}/export-preview
+  const epBtn = document.getElementById("btn-export-preview");
+  if (epBtn) {
+    epBtn.onclick = async () => {
+      const what = document.getElementById("ix-what").value;
+      const format = document.getElementById("export-preview-format")?.value || "csv";
+      const status = document.getElementById("export-preview-status");
+      const table = document.getElementById("export-preview-table");
+      epBtn.disabled = true;
+      status.textContent = `Načítám náhled ${esc(what)} (${esc(format)})…`;
+      try {
+        const r = await api(`/api/cases/${Store.get("caseId")}/export-preview?what=${encodeURIComponent(what)}&format=${encodeURIComponent(format)}&limit=50`);
+        if (!r.rows || !r.rows.length) {
+          status.textContent = `✓ Náhled hotovo — dataset ${esc(what)} je prázdný (záznamů 0).`;
+          table.innerHTML = "";
+          return;
+        }
+        const cols = r.columns || [];
+        status.textContent = `✓ Náhled hotovo (${esc(format)}) — záznamů celkem ${r.total_records}, zobrazuji první ${r.rows.length}.`;
+        table.innerHTML = `<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>` +
+          r.rows.map((row) => `<tr>${cols.map((c) => {
+            const v = row[c];
+            // UCO objekty mohou nést složené hodnoty — zkrácený JSON
+            const text = typeof v === "object" && v !== null ? JSON.stringify(v) : (v ?? "");
+            return `<td class="mono small">${esc(text)}</td>`;
+          }).join("")}</tr>`).join("") + `</tbody></table>`;
+      } catch (e) {
+        status.textContent = `✗ Náhled selhal: ${esc(e.message)}`;
+        table.innerHTML = "";
+      } finally {
+        epBtn.disabled = false;
+      }
+    };
+  }
+
   // Timesketch push (STP-060/065, oblast Q ★★) — POST /api/cases/{id}/timesketch-push
   const tsBtn = document.getElementById("btn-ts-push");
   if (tsBtn) {
