@@ -21,7 +21,7 @@ const CORRELATIONS = [
 ];
 const AUDIT = { entries: [{ action: "interop_exported", ts: "2026-11-07T10:00:00Z", details: { what: "artifacts", format: "l2tcsv", records: 7 } }] };
 
-function makeEnv({ pushResponse, pushError, statusResponse, statusError } = {}) {
+function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoResponse, plasoError } = {}) {
   const dom = new JSDOM(`<!DOCTYPE html><body>
     <select id="ix-what"><option value="artifacts">Artifacty</option></select>
     <select id="ix-format"><option value="l2tcsv">l2tcsv</option></select>
@@ -29,8 +29,11 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError } = {}) 
     <div class="card" id="ts-push-card">
       <button id="btn-ts-push"></button>
       <button id="btn-ts-status"></button>
+      <input type="file" id="plaso-file">
+      <button id="btn-plaso-import"></button>
       <div id="ts-status"></div>
       <div id="ts-index-status"></div>
+      <div id="plaso-status"></div>
     </div>
     <table id="ix-datasets"><tbody></tbody></table>
     <div id="ix-recent"></div>
@@ -48,9 +51,15 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError } = {}) 
     toast: (msg) => { toasts.push(msg); },
     // host Node timery — polling v interop.js běží ve vm sandboxu
     setTimeout, clearTimeout, setInterval, clearInterval,
+    FormData: window.FormData,
+    File: window.File,
     api: async (url, opts = {}) => {
       calls.push({ url: String(url), opts });
       const u = String(url);
+      if (u.includes("/plaso-import")) {
+        if (plasoError) throw new Error(plasoError);
+        return plasoResponse ?? { events_total: 12, artifacts_imported: 3, timeline_events: 9 };
+      }
       if (u.includes("/timesketch-push")) {
         if (pushError) throw new Error(pushError);
         return pushResponse ?? { sketch_id: 42, timeline_id: 7, task_id: "t-1", records: 7 };
@@ -223,4 +232,56 @@ await test("503 (Timesketch mimo): řádek ✗ Stav nedotázán + polling pokra�
   env.sandbox.stopTsStatusPolling(); // uklidit timer před koncem testu
 });
 
-console.log(`\ninterop.js DOM testy (Timesketch push + live status): ${passed}/11 passed`);
+await test("plaso import: po renderu má btn-plaso-import navázaný onclick", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-plaso-import");
+  assert.ok(btn, "tlačítko btn-plaso-import existuje");
+  assert.equal(typeof btn.onclick, "function", "onclick handler je navázaný");
+});
+
+await test("plaso import bez souboru: plaso-status ukazuje ✗ + žádné api volání", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-plaso-import");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const status = env.window.document.getElementById("plaso-status").textContent;
+  assert.match(status, /✗ Nejprve vyberte l2tcsv soubor/, "chybová zpráva bez souboru");
+  assert.equal(env.calls.filter((c) => c.url.includes("/plaso-import")).length, 0, "api nebylo voláno");
+});
+
+await test("plaso import: POST /plaso-import multipart + stav ✓ s počty", async () => {
+  const env = makeEnv({ plasoResponse: { events_total: 12, artifacts_imported: 3, timeline_events: 9 } });
+  await env.sandbox.renderInteropExports("c1");
+  const input = env.window.document.getElementById("plaso-file");
+  Object.defineProperty(input, "files", { value: [new env.window.File(["a,b,c"], "plaso.l2tcsv")], configurable: true });
+  const btn = env.window.document.getElementById("btn-plaso-import");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const call = env.calls.find((c) => c.url.includes("/plaso-import"));
+  assert.ok(call, "api bylo voláno pro plaso-import");
+  assert.equal(call.opts.method, "POST", "metoda POST");
+  assert.match(call.url, /\/api\/cases\/c1\/plaso-import$/, "správný endpoint s caseId");
+  assert.ok(call.opts.body instanceof env.sandbox.FormData, "body je FormData (multipart)");
+  const status = env.window.document.getElementById("plaso-status").textContent;
+  assert.match(status, /✓ Import hotovo/, "úspěšná zpráva");
+  assert.match(status, /záznamů 12/, "events_total");
+  assert.match(status, /artifactů 3/, "artifacts_imported");
+  assert.match(status, /timeline eventů 9/, "timeline_events");
+});
+
+await test("plaso import selhání: plaso-status ukazuje ✗ + tlačítko se znovu aktivuje", async () => {
+  const env = makeEnv({ plasoError: "400: soubor neobsahuje l2tcsv" });
+  await env.sandbox.renderInteropExports("c1");
+  const input = env.window.document.getElementById("plaso-file");
+  Object.defineProperty(input, "files", { value: [new env.window.File(["x"], "bad.l2tcsv")], configurable: true });
+  const btn = env.window.document.getElementById("btn-plaso-import");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const status = env.window.document.getElementById("plaso-status").textContent;
+  assert.match(status, /✗ Import selhal/, "chybová zpráva");
+  assert.equal(btn.disabled, false, "tlačítko po chybě znovu aktivní (finally)");
+});
+
+console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import): ${passed}/15 passed`);

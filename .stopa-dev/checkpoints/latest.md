@@ -1,12 +1,36 @@
-# STOPA — Checkpoint (2026-11-08)
+# STOPA Checkpoint — 2026-11-08 (STP-063 DOKONČEN ★★)
+
+## Úkol
+**STP-063 — Plaso import GUI** (oblast O+Q, P3): l2tcsv upload endpoint + karta v Interop Export Center.
 
 ## Hotovo
-**STP-061 — Oblast Q ★★: Timesketch timeline status (live polling) = read-only endpoint pro live stav indexace naposledy pushnuté timeline hotový**
-- `data/timesketch_client.py` (+35 ř.) — nová metoda `timeline_status(sketch_id, timeline_id)`: GET `/api/v1/sketches/{sid}/timelines/{tid}/`, **nested** parsing `objects[0].status.status` (kontrakt ověřen ze zdrojů Timesketch serveru: `fields.Nested(status_fields)`), hodnoty `new/processing/ready/fail`; chybějící pole → `None` (ne výjimka) aby UI mohlo pollovat i při částečně vyplněné odpovědi; hází `TimesketchError` (HTTP != 200 / ne-JSON) a `TimesketchUnavailable` (server nedostupný).
-- `web/app.py` (+45 ř.) — nový read-only endpoint `GET /api/cases/{id}/timesketch-status`: RBAC `case.read` (všechny role), bez auditu; najde poslední audit záznam `timesketch_pushed` (sketch_id + timeline_id) a dotáže Timesketch. Chybové cesty: 404 — case neexistuje / žádný push, 503 — Timesketch nedostupná, 502 — dotaz selhal.
-- `tests/test_stp061.py` (nový, 10 testů): klient přes `httpx.MockTransport` (ready/processing/missing→None/HTTP error/connection error) + web E2E přes TestClient s monkeypatchovaným klientem (404 bez pushu, 404 neznámý case, 503 nedostupná, 200 ready, 502 selhání).
-- Ověřeno: cílené **10/10 passed**, full suite **2058p/1s** bez regresí (2048 → +10), ruff clean.
+1. **`src/stopa/web/app.py`** — nový endpoint `POST /api/cases/{case_id}/plaso-import`:
+   - multipart pole `file` (`UploadFile = File(...)`), zrcadlí CLI `stopa plaso-import` (stejná domain `import_l2tcsv`)
+   - RBAC `_require("analysis.run", "plaso_import")`; audit `log_operation("plaso_import", actor=case.examiner, details={**summary, "file": filename})`; integrity checkpoint `add_integrity_checkpoint("plaso-import")`
+   - Chybové cesty: **404** case neexistuje, **415** špatná přípona (povolené `.csv`/`.l2t.csv`), **422** prázdný soubor / nevalidní UTF-8
+   - Odpověď = domain summary: `{source_id, events_total, artifacts_imported, timeline_events, skipped_no_time}`
+   - **Oprava PIE810:** `filename.endswith((".csv", ".l2t.csv"))` (tuple) — ruff clean
+2. **`pyproject.toml`** — web optional dep + `python-multipart>=0.0.9` (multipart upload vyžaduje)
+3. **SPA** — nová karta `#plaso-import-card` v modulu Interop Exporty (`index.html` +8 ř.): file input `#plaso-file` accept `.csv,.l2tcsv,.l2t.csv` + tlačítko `#btn-plaso-import` „📥 Importovat l2tcsv“ + stavový výstup `#plaso-status`; wiring v `js/components/interop.js` (+31 ř.): bez souboru → chyba 0 API volání, multipart POST, busy disabled, úspěch/selhání stav + reaktivace
+4. **Testy:**
+   - `tests/test_stp063.py` (nový, 178 ř.) — **7/7 passed**: 404 case, 415 přípona `x.txt`, 422 prázdný, 422 nevalidní UTF-8, 200 úspěch (summary klíče + počty + audit s detaily file+summary + integrity checkpoint v DB), re-import → nový source (shoda s CLI kontraktem STP-057)
+   - `tests/js/interop.test.mjs` — **+4 DOM testy → 15/15 passed** (onclick binding, bez souboru chyba + 0 API volání, úspěšný multipart POST s počty, selhání + reaktivace); vm sandbox doplněn o FormData/File
+   - Full suite: **2065 passed, 1 skipped** (+7 nad baseline 2058) bez regresí
+   - Ruff `src/stopa tests scripts`: **All checks passed!**
+   - Coverage matice: covered **198 / 237**; C3 registry: **76 položek**
+
+## Kontrakty (ověřeno testy)
+- Re-import = nový evidence source (`new_id("src")`); upsert key obsahuje `source_id`; cross-import dedup NENÍ; within one import bez duplikátů — shoda s CLI STP-057 (`test_reimport_is_idempotent`)
+- RBAC: `analysis.run` dostupné všem rolím / default examiner → není blocker
+
+## DEV OS aktualizace
+TASKS (STP-062+063 sekce), PROJECT_STATE, NEXT_ACTION (HEAD opraveno + kandidáti), FEATURE_REGISTRY (F-088/F-089), TEST_REGISTRY (T-109/T-110, stav 2065), CHANGELOG (STP-062+063 záznamy)
 
 ## Stav
-- HEAD: `8c02098` feat(interop): STP-061 Timesketch timeline status — klient + web endpoint + testy
-- Full suite: **2058 passed, 1 skipped**, ruff clean; JS DOM: graph 5/5 + interop 5/5
+- HEAD: tento commit `feat(web): STP-063 Plaso import GUI` — předtím `2f0fca0` (STP-062 feat), `8c02098` (STP-061)
+- **Interop smyčka kompletní v UI ★★**: export l2tcsv → import l2tcsv → push do Timesketch, vše z Interop Export Center
+
+## Další kandidáti dle ROADMAP
+1. Timesketch timeline detail v UI (oblast O+Q, P3)
+2. L2T CSV preview endpoint `GET /api/cases/{id}/interop-export/preview?what=&format=l2tcsv&limit=N` (oblast O+Q, P3)
+3. GUI polish Interop Export Center — tabulka posledních importů vedle exportů (oblast O, P3)

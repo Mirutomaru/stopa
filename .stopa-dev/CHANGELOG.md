@@ -2,6 +2,20 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
+## 2026-11-08 — STP-063 oblast O+Q ★★: Plaso import GUI (l2tcsv upload) ★★ (oblast O/Q, P3)
+**Commit:** tento commit `feat(web): STP-063 Plaso import GUI` — předtím `2f0fca0` (STP-062), `8c02098` (STP-061)
+**Změněné soubory:** `src/stopa/web/app.py` (nový endpoint `POST /api/cases/{case_id}/plaso-import` — multipart pole `file`, zrcadlí CLI `stopa plaso-import` přes stejnou domain `import_l2tcsv`; RBAC `_require("analysis.run", "plaso_import")`; 415 špatná přípona (povolené `.csv`/`.l2t.csv`), 422 prázdný soubor / nevalidní UTF-8, 404 neznámý case; summary `{source_id, events_total, artifacts_imported, timeline_events, skipped_no_time}` + audit log `plaso_import` (details file+summary) + integrity checkpoint `plaso-import`; **oprava PIE810:** tuple `endswith((".csv", ".l2t.csv"))`), `pyproject.toml` (web optional dep + `python-multipart>=0.0.9` — multipart upload vyžaduje), `src/stopa/web/static/index.html` (+8 ř. — nová karta `#plaso-import-card` v modulu Interop Exporty: file input `#plaso-file` accept `.csv,.l2tcsv,.l2t.csv` + tlačítko `#btn-plaso-import` „📥 Importovat l2tcsv“ + stavový výstup `#plaso-status`), `src/stopa/web/static/js/components/interop.js` (+31 ř. — wiring onclick: bez souboru → chyba 0 API volání, multipart POST, busy disabled, úspěch/selhání stav + reaktivace), `tests/test_stp063.py` (nový, 178 ř., 7 testů), `tests/js/interop.test.mjs` (+4 DOM testy → 15; vm sandbox doplněn o FormData/File, mock `/plaso-import`).
+**Přidané funkce:** GUI vrstva nad hotým Plaso import API (STP-057) — interop smyčka je teď kompletní v UI: export l2tcsv → import l2tcsv → push do Timesketch, vše z Interop Export Center. Re-import = nový evidence source (shoda s CLI kontraktem STP-057; upsert key obsahuje `source_id`, cross-import dedup NENÍ).
+**Opravené chyby:** ruff PIE810 (`endswith` → tuple) — lint clean.
+**Testy:** **7/7 passed** (`tests/test_stp063.py`: 404 case, 415 přípona `x.txt`, 422 prázdný, 422 nevalidní UTF-8, 200 úspěch summary+audit+integrity checkpoint v DB, re-import → nový source); JS DOM **15/15 passed**; full suite **2065 passed, 1 skipped** (+7) bez regresí; ruff clean.
+
+## 2026-11-08 — STP-062 oblast O+Q ★★: Timesketch live status UI (polling tlačítko) ★★ (oblast O/Q, P3)
+**Commit:** `2f0fca0` feat(web): STP-062 UI polling Timesketch status
+**Změněné soubory:** `src/stopa/web/static/index.html` (+8 ř. — tlačítko `#btn-ts-status` „📡 Stav indexace“ v kartě Timesketch push), `src/stopa/web/static/js/components/interop.js` (polling handler: interval 5 s, max 10 min; terminální ready/fail zastaví; 404 = žádný push → stop; 503 pokračuje), `tests/js/interop.test.mjs` (+6 DOM testů — rozšířeno 5→11; vm sandbox doplněn o setInterval/clearInterval).
+**Přidané funkce:** GUI vrstva nad hotým status endpointem (STP-061) — uživatel vidí živý stav indexace timeline v Timesketch bez opouštění UI.
+**Opravené chyby:** žádné (čistá GUI nadstavba).
+**Testy:** JS DOM **11/11 passed**; full suite **2058 passed, 1 skipped** bez regresí; ruff clean.
+
 ## 2026-11-08 — STP-061 oblast Q ★★: Timesketch timeline status (live polling) ★ (oblast Q, P3)
 
 **Commit:** `8c02098` feat(interop): STP-061 Timesketch timeline status — klient + web endpoint + testy

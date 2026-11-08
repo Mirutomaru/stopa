@@ -88,6 +88,37 @@ async function renderInteropExports(cid) {
       else startTsStatusPolling(Store.get("caseId"));
     };
   }
+
+  // Plaso import (STP-063, oblast Q ★★) — POST /api/cases/{id}/plaso-import (multipart)
+  const piBtn = document.getElementById("btn-plaso-import");
+  if (piBtn) {
+    piBtn.onclick = async () => {
+      const fileInput = document.getElementById("plaso-file");
+      const status = document.getElementById("plaso-status");
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) {
+        status.textContent = "✗ Nejprve vyberte l2tcsv soubor.";
+        return;
+      }
+      piBtn.disabled = true;
+      status.textContent = `Importuji ${esc(f.name)}…`;
+      try {
+        const fd = new FormData();
+        fd.append("file", f);
+        const r = await api(`/api/cases/${Store.get("caseId")}/plaso-import`, {
+          method: "POST",
+          body: fd, // bez Content-Type — browser nastaví multipart boundary sám
+        });
+        status.textContent = `✓ Import hotovo — záznamů ${r.events_total ?? 0}, artifactů ${r.artifacts_imported ?? 0}, timeline eventů ${r.timeline_events ?? 0} (source: ${esc(f.name)})`;
+        toast(`Plaso import: ${f.name} → ${r.events_total ?? 0} záznamů`, 5000);
+      } catch (e) {
+        status.textContent = `✗ Import selhal: ${esc(e.message)}`;
+        toast("Plaso import selhal", 5000);
+      } finally {
+        piBtn.disabled = false;
+      }
+    };
+  }
 }
 
 /* ── Timesketch live status polling (STP-062, oblast Q ★★★★) ─────── */

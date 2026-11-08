@@ -22,7 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -965,6 +965,47 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 "status": st["status"],
                 "updated_at": st["updated_at"],
             }
+        finally:
+            db.close()
+
+    # ── STP-063 — Plaso import (l2tcsv upload, oblast Q ★★) ────────────────
+    @app.post("/api/cases/{case_id}/plaso-import")
+    async def plaso_import(case_id: str, file: UploadFile = File(...)) -> dict:
+        """Import l2tcsv souboru do případu (GUI — oblast Q ★★).
+
+        Zrcadlí ``stopa plaso-import`` CLI (stejná domain funkce): evidence
+        source + artifacts (idempotentní upsert) + timeline events. Audit +
+        integrity checkpoint. Chybové cesty: 404 case neexistuje; 415 špatný
+        typ souboru; 422 prázdný soubor / nevalidní UTF-8.
+        """
+        from stopa.domain.plaso_import import import_l2tcsv
+
+        _require("analysis.run", "plaso_import")
+
+        filename = file.filename or ""
+        if not filename.endswith((".csv", ".l2t.csv")):
+            raise HTTPException(415, "očekáván l2tcsv soubor (.csv)")
+
+        raw = await file.read()
+        if not raw.strip():
+            raise HTTPException(422, "soubor je prázdný")
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(422, f"soubor není validní UTF-8: {exc}") from exc
+
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            summary = import_l2tcsv(db, case_id, text, source_path=filename)
+            db.log_operation(
+                "plaso_import",
+                actor=case.examiner if case else None,
+                details={**summary, "file": filename},
+            )
+            # P0 Core C4: kontrolní bod po importu.
+            db.add_integrity_checkpoint("plaso-import")
+            return summary
         finally:
             db.close()
 

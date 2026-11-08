@@ -327,6 +327,14 @@
       <div id="ts-index-status" class="muted small mono" style="margin-top:4px"></div>
     </div>
 
+    <div class="card small" id="plaso-import-card" style="margin-top:12px">
+      <h3 style="margin-top:0">Plaso import (oblast Q ★★)</h3>
+      <p class="muted small">Import l2tcsv souboru do případu — evidence source + artifacts (idempotentní upsert) + timeline events. Stejná domain logika jako CLI ``stopa plaso-import``; audit + integrity checkpoint.</p>
+      <input type="file" id="plaso-file" accept=".csv,.l2t.csv,text/csv" style="margin-top:8px">
+      <button id="btn-plaso-import" class="primary small-btn" style="margin-left:6px">📥 Importovat l2tcsv</button>
+      <div id="plaso-status" class="muted small mono" style="margin-top:8px"></div>
+    </div>
+
     <h2>Přehled datasetů</h2>
     <p class="muted small">Počet záznamů v každém datasetu případu (živě z DB).</p>
     <table id="ix-datasets">
