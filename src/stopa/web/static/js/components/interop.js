@@ -69,7 +69,7 @@ async function renderInteropExports(cid) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ what }),
         });
-        status.textContent = `✓ Push hotovo — sketch ${r.sketch_id}, timeline ${r.timeline_id}, záznamů ${r.records}`;
+        status.textContent = `✓ Push hotovo — sketch ${r.sketch_id}, timeline ${r.timeline_id}, záznamů ${r.records} (live stav: „📡 Stav indexace“)`;
         toast(`Timesketch push: ${what} → sketch ${r.sketch_id}`, 5000);
       } catch (e) {
         status.textContent = `✗ Push selhal: ${esc(e.message)}`;
@@ -79,4 +79,73 @@ async function renderInteropExports(cid) {
       }
     };
   }
+
+  // Timesketch live status (STP-062, oblast Q ★★★★) — toggle polling
+  const stBtn = document.getElementById("btn-ts-status");
+  if (stBtn) {
+    stBtn.onclick = () => {
+      if (_tsPollTimer) stopTsStatusPolling();
+      else startTsStatusPolling(Store.get("caseId"));
+    };
+  }
+}
+
+/* ── Timesketch live status polling (STP-062, oblast Q ★★★★) ─────── */
+const TS_POLL_MS = 5000; // výchozí interval opakování
+let _tsPollTimer = null;
+
+const TS_STATUS_LABELS = {
+  new: "new",
+  processing: "processing…",
+  ready: "ready ✓",
+  fail: "fail ✗",
+};
+
+/* Jeden dotaz GET /api/cases/{id}/timesketch-status + render do řádku.
+   Vrací odpověď; u 404 (žádný push) i jiných chyb vyhodí Error —
+   volající rozhodne, zda polling pokračuje. */
+async function fetchTsStatusOnce(cid) {
+  const row = document.getElementById("ts-index-status");
+  try {
+    const r = await api(`/api/cases/${cid}/timesketch-status`);
+    if (row) {
+      const label = TS_STATUS_LABELS[r.status] ?? esc(r.status);
+      row.textContent = `📡 Indexace: ${label} — sketch ${r.sketch_id}, timeline ${r.timeline_id}`;
+    }
+    return r;
+  } catch (e) {
+    if (row) {
+      row.textContent = /→\s*404/.test(e.message)
+        ? "Zatím žádný Timesketch push."
+        : `✗ Stav nedotázán: ${esc(e.message)}`;
+    }
+    throw e;
+  }
+}
+
+/* Zastaví běžící polling a obnoví label tlačítka. Idempotentní. */
+function stopTsStatusPolling() {
+  if (_tsPollTimer) { clearInterval(_tsPollTimer); _tsPollTimer = null; }
+  const btn = document.getElementById("btn-ts-status");
+  if (btn) btn.textContent = "📡 Stav indexace";
+}
+
+/* Spustí polling: první dotaz ihned, pak každých delayMs. Terminální
+   stavy (ready/fail) i 404 (žádný push) polling zastaví; dočasné chyby
+   (503/502 — Timesketch mimo) se zobrazí a polling pokračuje. */
+function startTsStatusPolling(cid, delayMs = TS_POLL_MS) {
+  stopTsStatusPolling(); // reset předchozího běhu
+  const btn = document.getElementById("btn-ts-status");
+  if (btn) btn.textContent = "⏹ Zastavit stav";
+  const tick = async () => {
+    try {
+      const r = await fetchTsStatusOnce(cid);
+      if (r.status === "ready" || r.status === "fail") stopTsStatusPolling();
+    } catch (e) {
+      if (/→\s*404/.test(e.message)) stopTsStatusPolling();
+      // ostatní chyby: Timesketch může být dočasně mimo → pokračovat
+    }
+  };
+  tick();
+  _tsPollTimer = setInterval(tick, delayMs);
 }

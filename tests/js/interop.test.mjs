@@ -21,14 +21,16 @@ const CORRELATIONS = [
 ];
 const AUDIT = { entries: [{ action: "interop_exported", ts: "2026-11-07T10:00:00Z", details: { what: "artifacts", format: "l2tcsv", records: 7 } }] };
 
-function makeEnv({ pushResponse, pushError } = {}) {
+function makeEnv({ pushResponse, pushError, statusResponse, statusError } = {}) {
   const dom = new JSDOM(`<!DOCTYPE html><body>
     <select id="ix-what"><option value="artifacts">Artifacty</option></select>
     <select id="ix-format"><option value="l2tcsv">l2tcsv</option></select>
     <button id="btn-interop-export"></button>
     <div class="card" id="ts-push-card">
       <button id="btn-ts-push"></button>
+      <button id="btn-ts-status"></button>
       <div id="ts-status"></div>
+      <div id="ts-index-status"></div>
     </div>
     <table id="ix-datasets"><tbody></tbody></table>
     <div id="ix-recent"></div>
@@ -44,12 +46,18 @@ function makeEnv({ pushResponse, pushError } = {}) {
     esc: (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
     fmtDT: (iso) => iso || "—",
     toast: (msg) => { toasts.push(msg); },
+    // host Node timery — polling v interop.js běží ve vm sandboxu
+    setTimeout, clearTimeout, setInterval, clearInterval,
     api: async (url, opts = {}) => {
       calls.push({ url: String(url), opts });
       const u = String(url);
       if (u.includes("/timesketch-push")) {
         if (pushError) throw new Error(pushError);
         return pushResponse ?? { sketch_id: 42, timeline_id: 7, task_id: "t-1", records: 7 };
+      }
+      if (u.includes("/timesketch-status")) {
+        if (statusError) throw new Error(statusError);
+        return statusResponse ?? { sketch_id: 42, timeline_id: 7, status: "processing", updated_at: "2026-11-08T10:00:00Z" };
       }
       if (u.endsWith("/correlations")) return CORRELATIONS;
       if (u.includes("/audit")) return AUDIT;
@@ -133,4 +141,86 @@ await test("během pushu je tlačítko disabled (busy stav)", async () => {
   assert.equal(btn.disabled, false, "po dokončení znovu aktivní");
 });
 
-console.log(`\ninterop.js DOM testy (Timesketch push): ${passed}/5 passed`);
+await test("renderInteropExports: po renderu má btn-ts-status navázaný onclick", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-ts-status");
+  assert.ok(btn, "tlačítko btn-ts-status existuje");
+  assert.equal(typeof btn.onclick, "function", "onclick handler je navázaný");
+});
+
+await test("klik na stav: GET /timesketch-status + řádek ukazuje processing… a sketch/timeline", async () => {
+  const env = makeEnv({ statusResponse: { sketch_id: 42, timeline_id: 7, status: "processing", updated_at: "2026-11-08T10:00:00Z" } });
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-ts-status");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0)); // první tick (async) se vyřídí
+  const call = env.calls.find((c) => c.url.includes("/timesketch-status"));
+  assert.ok(call, "api bylo voláno pro timesketch-status");
+  assert.match(call.url, /\/api\/cases\/c1\/timesketch-status$/, "správný endpoint s caseId");
+  const row = env.window.document.getElementById("ts-index-status").textContent;
+  assert.match(row, /Indexace: processing…/, "stav processing zobrazen");
+  assert.match(row, /sketch 42/, "obsahuje sketch_id");
+  assert.match(row, /timeline 7/, "obsahuje timeline_id");
+  assert.equal(btn.textContent, "⏹ Zastavit stav", "label přepnutý na stop");
+  env.sandbox.stopTsStatusPolling(); // uklidit timer před koncem testu
+});
+
+await test("terminální stav ready: polling se zastaví (label obnoveno, žádné další dotazy)", async () => {
+  const env = makeEnv({ statusResponse: { sketch_id: 1, timeline_id: 2, status: "ready", updated_at: "2026-11-08T10:05:00Z" } });
+  await env.sandbox.renderInteropExports("c1");
+  env.sandbox.startTsStatusPolling("c1", 30); // krátký interval pro test
+  await new Promise((r) => setTimeout(r, 5)); // první tick hotov → ready → stop
+  const btn = env.window.document.getElementById("btn-ts-status");
+  assert.equal(btn.textContent, "📡 Stav indexace", "label obnoveno po terminálním stavu");
+  const row = env.window.document.getElementById("ts-index-status").textContent;
+  assert.match(row, /ready ✓/, "terminální stav zobrazen");
+  const n1 = env.calls.filter((c) => c.url.includes("/timesketch-status")).length;
+  await new Promise((r) => setTimeout(r, 80)); // >2 intervaly — kdyby běžel, přibyly by dotazy
+  const n2 = env.calls.filter((c) => c.url.includes("/timesketch-status")).length;
+  assert.equal(n2, n1, "žádné další dotazy po zastavení");
+});
+
+await test("terminální stav fail: polling se zastaví", async () => {
+  const env = makeEnv({ statusResponse: { sketch_id: 3, timeline_id: 4, status: "fail", updated_at: "2026-11-08T10:06:00Z" } });
+  await env.sandbox.renderInteropExports("c1");
+  env.sandbox.startTsStatusPolling("c1", 30);
+  await new Promise((r) => setTimeout(r, 5));
+  const btn = env.window.document.getElementById("btn-ts-status");
+  assert.equal(btn.textContent, "📡 Stav indexace", "label obnoveno po fail stavu");
+  const row = env.window.document.getElementById("ts-index-status").textContent;
+  assert.match(row, /fail ✗/, "fail stav zobrazen");
+  const n1 = env.calls.filter((c) => c.url.includes("/timesketch-status")).length;
+  await new Promise((r) => setTimeout(r, 80));
+  const n2 = env.calls.filter((c) => c.url.includes("/timesketch-status")).length;
+  assert.equal(n2, n1, "žádné další dotazy po zastavení");
+});
+
+await test("404 (žádný push): řádek „Zatím žádný Timesketch push.“ + polling se zastaví", async () => {
+  const env = makeEnv({ statusError: "/api/cases/c1/timesketch-status → 404: zatím žádný Timesketch push v audit logu" });
+  await env.sandbox.renderInteropExports("c1");
+  env.sandbox.startTsStatusPolling("c1", 30);
+  await new Promise((r) => setTimeout(r, 5));
+  const row = env.window.document.getElementById("ts-index-status").textContent;
+  assert.match(row, /Zatím žádný Timesketch push/, "informativní zpráva místo hlášení chyby");
+  const btn = env.window.document.getElementById("btn-ts-status");
+  assert.equal(btn.textContent, "📡 Stav indexace", "label obnoveno po 404");
+  const n1 = env.calls.filter((c) => c.url.includes("/timesketch-status")).length;
+  await new Promise((r) => setTimeout(r, 80));
+  const n2 = env.calls.filter((c) => c.url.includes("/timesketch-status")).length;
+  assert.equal(n2, n1, "žádné další dotazy po zastavení");
+});
+
+await test("503 (Timesketch mimo): řádek ✗ Stav nedotázán + polling pokračuje", async () => {
+  const env = makeEnv({ statusError: "/api/cases/c1/timesketch-status → 503: Timesketch nedostupná" });
+  await env.sandbox.renderInteropExports("c1");
+  env.sandbox.startTsStatusPolling("c1", 20); // krátký interval — polling má pokračovat
+  await new Promise((r) => setTimeout(r, 70)); // >3 intervaly
+  const row = env.window.document.getElementById("ts-index-status").textContent;
+  assert.match(row, /✗ Stav nedotázán/, "chybová zpráva zobrazena");
+  const n = env.calls.filter((c) => c.url.includes("/timesketch-status")).length;
+  assert.ok(n >= 2, `polling pokračoval přes dočasnou chybu (${n} dotazů)`);
+  env.sandbox.stopTsStatusPolling(); // uklidit timer před koncem testu
+});
+
+console.log(`\ninterop.js DOM testy (Timesketch push + live status): ${passed}/11 passed`);
