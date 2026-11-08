@@ -2,6 +2,15 @@
 
 Každý dokončený úkol: ID, změněné soubory, přidané funkce, opravené chyby, výsledky testů.
 
+## 2026-11-08 — STP-061 oblast Q ★★: Timesketch timeline status (live polling) ★ (oblast Q, P3)
+
+**Commit:** `8c02098` feat(interop): STP-061 Timesketch timeline status — klient + web endpoint + testy
+**Testy:** 10/10 (`tests/test_stp061.py`) · full suite **2058 passed, 1 skipped** (+10) · ruff clean
+
+- `data/timesketch_client.py`: nová metoda `timeline_status(sketch_id, timeline_id)` — GET `/api/v1/sketches/{sid}/timelines/{tid}/`, nested parsing `objects[0].status.status` (kontrakt ověřený z oficiálního Timesketch zdroje), vrací `{status, updated_at}`, hájí `TimesketchError`/`TimesketchUnavailable`.
+- `web/app.py`: read-only endpoint `GET /api/cases/{case_id}/timesketch-status` — RBAC `case.read`, najde poslední audit záznam `timesketch_pushed` → dotáže Timesketch; 404 bez pushu, 503 nedostupná, 502 selhání dotazu.
+- `tests/test_stp061.py`: klient přes `httpx.MockTransport` (ready/processing/chybové cesty) + web E2E (404/503/200/502).
+
 ## 2026-11-07 — STP-060 oblast O+Q: Timesketch push UI (GUI tlačítko) ★ (oblast O/Q, P3)
 **Změněné soubory:** `web/static/index.html` (nová karta `#ts-push-card` v modulu Interop Exporty — popis + tlačítko `#btn-ts-push` + stavový výstup `#ts-status`; reuse selectu `#ix-what`), `js/components/interop.js` (+25 ř. — wiring `btn-ts-push.onclick`: POST `/api/cases/{id}/timesketch-push` s body `{what}`, busy disabled, úspěch/selhání stav + toast, finally reaktivace), `tests/js/interop.test.mjs` (nový, 5 DOM testů přes jsdom po vzoru E5).
 **Přidané funkce:** GUI vrstva nad hotým Timesketch push API (STP-059) — třetí interop smyčka je teď plně dostupná z UI: zvolený dataset (`#ix-what`) → POST → `✓ Push hotovo — sketch N, timeline M, záznamů K` nebo `✗ Push selhal`. Stejný vzorec jako ostatní POST moduly (ai.js/files.js).

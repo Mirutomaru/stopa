@@ -118,9 +118,10 @@ Povinná pole dle DEV OS promptu §3.7:
 | T-105 | tests/test_web.py::TestInteropExport (9) | F-084 oblast O+Q — **Interop Export Center UI**: endpoint `GET /api/cases/{id}/interop-export` — CSV export artifactů (header sloupce + Content-Disposition filename `{case_id}_artifacts.csv`), l2tcsv export (17 polí log2timeline.pl, každý datový řádek nese source=STOPA), UCO JSON-LD export (objekt s @context), STIX 2.1 bundle (`type=bundle`), JSONL (každý řádek validní JSON), timeline + correlations datasety (CSV header / JSON list), neplatný dataset → 400, neplatný formát → 400; audit E2E — export zapsán do audit logu jako `interop_exported` s detaily what/format | PASS | STP-058 |
 | T-106 | tests/test_stp059.py (20) | F-085 oblast Q — **Timesketch push**: klient přes `httpx.MockTransport` (login+CSRF, create_sketch 201, upload multipart), doménová logika, web E2E audit+integrity | STP-059 ★★ |
 | T-107 | tests/js/interop.test.mjs (5) | F-086 oblast O+Q — **Timesketch push UI**: DOM testy jsdom (wiring tlačítka, POST flow, busy state, chybové stavy) | STP-060 ★ |
+| T-108 | tests/test_stp061.py (10) | F-087 oblast Q — **Timesketch live status**: klient `timeline_status()` přes MockTransport (ready/processing/fail, 404→TimesketchError), web E2E `GET /api/cases/{id}/timesketch-status` (RBAC case.read, chybějící parametry → 400, nedostupná → 503) | STP-061 ★ |
 
 ## Celkový stav
-- **2028 testů: 2027 PASS + 1 skipped** (skipped = volitelný backend bez nainstalované závislosti). Poslední změna: STP-058 (+9 — `tests/test_web.py::TestInteropExport`; GUI interop exporty); předtím STP-057 (+14 — Plaso import), STP-056 (+8 — role switch UI), STP-055 (+22 — UCO mapping).
+- **2058 testů: 2057 PASS + 1 skipped** (skipped = volitelný backend bez nainstalované závislosti). Poslední změna: STP-061 (+10 — `tests/test_stp061.py`; Timesketch live status); předtím STP-058 (+9 — `tests/test_web.py::TestInteropExport`; GUI interop exporty), STP-057 (+14 — Plaso import), STP-056 (+8 — role switch UI), STP-055 (+22 — UCO mapping).
 - Ruff: `All checks passed!` pro `src/stopa tests scripts`.
 - Determinismus coverage matice: SHA-256 diff ✓.
 - Benchmark engine v CI: **běží automaticky** (job `benchmark`, baseline `benchmarks/baseline.json`, práh 20 % + guard 0.5 ms).

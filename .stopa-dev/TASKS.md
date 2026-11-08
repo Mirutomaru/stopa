@@ -561,3 +561,11 @@ Formát ID: STP-NNN. Jeden úkol = jedna souvislá funkce. Velké funkce rozděl
 - **Dotčené moduly:** `src/stopa/web/static/index.html`, `src/stopa/web/static/js/components/interop.js` (+25 ř.), `tests/js/interop.test.mjs` (nový, 5 DOM testů)
 - **Testy:** JS DOM **5/5 passed** (`node tests/js/interop.test.mjs`: wiring onclick, POST kontrakt, úspěšný stav, selhání + reaktivace, busy disabled); full suite **2048 passed, 1 skipped** bez regresí; ruff clean
 - **Dokončeno:** 2026-11-07 | Commit: `ddb3aa0` — **Oblast O rozšířena ★** (Timesketch push UI)
+
+### STP-061 — Oblast Q ★★: Timesketch timeline status (live polling)
+- **Oblast:** Q (Interop) | **Priorita:** P3 | **Stav:** DONE
+- **Popis:** Read-only vrstva pro live stav indexace naposledy pushnuté timeline. **(A)** `data/timesketch_client.py` — nová metoda `timeline_status(sketch_id, timeline_id)`: GET `/api/v1/sketches/{sid}/timelines/{tid}/`, nested parsing `objects[0].status.status` (kontrakt ověřený z oficiálního Timesketch zdroje), vrací `{status, updated_at}`, hájí `TimesketchError`/`TimesketchUnavailable`. **(B)** `web/app.py` — read-only endpoint `GET /api/cases/{case_id}/timesketch-status`: RBAC `case.read`, najde poslední audit záznam `timesketch_pushed` → dotáže Timesketch; 404 bez pushu, 503 nedostupná, 502 selhání dotazu.
+- **Závislosti:** STP-059 (Timesketch push + audit záznam), E11 MockTransport vzor
+- **Dotčené moduly:** `src/stopa/data/timesketch_client.py` (+metoda), `src/stopa/web/app.py` (+endpoint), `tests/test_stp061.py` (nový, 10 testů)
+- **Testy:** **10/10 passed** (`tests/test_stp061.py`: klient ready/processing/chybové cesty + web E2E 404/503/200/502); full suite **2058 passed, 1 skipped** (+10) bez regresí; ruff clean
+- **Dokončeno:** 2026-11-08 | Commit: `8c02098` — **Oblast Q rozšířena ★★** (Timesketch live status)
