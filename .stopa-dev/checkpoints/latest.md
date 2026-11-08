@@ -1,27 +1,26 @@
-# STOPA Checkpoint — 2026-11-08 (STP-064 DOKONČEN ★★)
+# STOPA Checkpoint — 2026-11-08 (STP-065 DOKONČEN ★★)
 
 ## Úkol
-**STP-064 — L2T CSV preview endpoint** (oblast O+Q, P3): náhled l2tcsv exportu v UI před downloadem/pushem. ROADMAP kandidát #2 po STP-063.
+**STP-065 — Timesketch push s limit + UI input** (oblast O+Q, P3): parametr `limit` pro push do Timesketch v doméně, web endpointu, CLI a UI. ROADMAP kandidát #1 po STP-064.
 
 ## Hotovo
-1. **`src/stopa/web/app.py`** — nový read-only endpoint `GET /api/cases/{case_id}/l2tcsv-preview?what=&limit=`:
-   - zrcadlí `to_l2tcsv` (stejná domain funkce jako interop-export/CLI) → UI ukazuje reálně vyexportovatelné řádky
-   - datasety `artifacts|timeline|correlations`, neplatný → 400
-   - limit clamp 1..500, default 50
-   - odpověď `{case_id, dataset, columns, total_records, limit, rows}`
-   - **bez auditu i integrity checkpointu** — náhled není export (read-only)
-2. **`src/stopa/web/static/index.html`** — nová karta `#l2tcsv-preview-card` v modulu Interop Exporty (za interop-controls, před Timesketch push): tlačítko `#btn-l2t-preview` „👁 Náhled l2tcsv“ + stavový výstup `#l2t-preview-status` + tabulkový kontejner; reuse selectu `#ix-what`.
-3. **`src/stopa/web/static/js/components/interop.js`** — wiring onclick: GET s `?what=&limit=50`, busy disabled, prázdný dataset → stav „je prázdný (záznamů 0)“ + prázdná tabulka, jinak render `<table>` se sloupci z `columns` a řádky z `rows`, selhání → stav ✗ + reaktivace tlačítka.
+1. **`src/stopa/domain/timesketch_push.py`** — `push_to_timesketch(client, case_name, what, records, limit=None)`:
+   - `limit=None` → celý dataset; `limit < 1` → `ValueError`; pushne jen prvních N záznamů
+   - souhrn rozšířen o klíč `total_records` (celkový počet v datasetu) — UI/audit ukáže „X záznamů (celkem Y)"
+2. **`src/stopa/web/app.py`** — Pydantic model `TimesketchPushIn` dostal pole `limit: int | None = Field(ge=1)` → neplatné hodnoty (0, negativní) = HTTP 422; endpoint `POST /api/cases/{id}/timesketch-push` předává `body.limit` do domény.
+3. **`src/stopa/cli.py`** — nový flag `--limit N` pro `stopa timesketch-push`; výstup ukazuje „X záznamů (celkem Y)".
+4. **`src/stopa/web/static/index.html`** — v kartě Timesketch push nový input `<input type="number" id="ts-push-limit" min="1" step="1" placeholder="vše">`; prázdné = vše.
+5. **`src/stopa/web/static/js/components/interop.js`** — handler `btn-ts-push` čte limit a zařazuje ho do POST body jen když je vyplněný; stavový text obsahuje počet záznamů i celkový count.
 
 ## Testy
-- **10/10 passed** (`tests/test_stp064.py`, 278 ř., E2E TestClient + sqlite seed): rows+columns+total_records, obsah řádků = l2tcsv (date/time/source/sourcetype), limit respektován, timeline dataset, correlations dataset, neplatný dataset → 400, limit clamp high (500) + low (1), prázdný případ → total_records 0 + rows [], read-only → audit log i integrity checkpoints prázdné po preview.
-- **JS DOM 19/19 passed** (`tests/js/interop.test.mjs` rozšířeno 15→19; 4 nové: onclick binding, úspěšná tabulka se sloupci/řádky, prázdný dataset stav, selhání + reaktivace).
-- **Full suite: 2075 passed, 1 skipped** (+10 nad baseline 2065/1s) bez regresí.
-- Ruff: `All checks passed!` (opraveno I001 importy + RUF059 `_tmp`).
-- Coverage matice: total=237 unique=232 (bez změny — preview je UI nadstavba bez nových axiomů). C3 registry: **76** (bez změny — read-only endpoint, žádný nový parser).
+- **10/10 passed** (`tests/test_stp065.py`, 251 ř., doména + web E2E): `limit=None` pushne vše, `limit=N` jen prvních N (payload ověřen po řádcích), limit > dataset → vše, `limit=0`/negativní → `ValueError`, prázdný dataset s limitem → `ValueError`; web E2E: push s `limit=2` z 5 záznamů (summary `records=2, total_records=5` + audit log nese oba počty), backward compat bez limitu, `limit=0`/`-1` → **422**.
+- **JS DOM 23/23 passed** (`tests/js/interop.test.mjs` rozšířeno 19→23; 4 nové: push s limitem → body `{what, limit}`, prázdný input → jen `{what}`, invalidní limit (0) → ✗ + žádné API volání, úspěšný stav „z celkem N").
+- **Full suite: 2085 passed, 1 skipped** (+10 nad baseline 2075/1s) bez regresí.
+- Ruff: `All checks passed!` (opraveno 1 fixable v novém test souboru).
+- Coverage matice: total=237 unique=232 (bez změny — limit je parametr nadstaveby bez nových axiomů). C3 registry: **76** (bez změny — žádný nový parser).
 
 ## Commit
-`24892df` feat(web): STP-064 L2T CSV preview endpoint (5 souborů, +423/−2)
+`65ff065` feat(timesketch): STP-065 push limit — domain/web/CLI/UI + testy (8 souborů, +355/−17)
 
 ## Zbývá / další
-- ROADMAP kandidáti: #1 STP-065 Timesketch push s limit + UI select; #2 STP-066 generalizace preview na ostatní formáty; #3 STP-067 re-download z audit historie.
+- ROADMAP kandidáti: #2 STP-066 generalizace preview na ostatní formáty; #3 STP-067 re-download z audit historie.
