@@ -7,10 +7,10 @@
 - ✅ **STP-060** (O+Q Timesketch push UI) — karta `#ts-push-card` v modulu Interop Exporty, DOM testy 5/5. Commit: `ddb3aa0`. Oblast O rozšířena ★★
 - ✅ **STP-061** (Q Timesketch live status) — `timeline_status()` v klientu + read-only endpoint `GET /api/cases/{id}/timesketch-status`, 10 testů. Commit: `8c02098`. Oblast Q rozšířena ★★★★
 - ✅ **STP-062** (O+Q Timesketch live status UI) — tlačítko 📡 Stav indexace, poll 5 s (max 10 min), terminální ready/fail zastaví; JS DOM testy 11/11. Commit: `2f0fca0`. Oblast O rozšířena ★★
-- ✅ **STP-063** (O+Q Plaso import GUI) — endpoint `POST /api/cases/{id}/plaso-import` (multipart, zrcadlí CLI), karta `#plaso-import-card` v Interop Export Center; 7 web testů + JS DOM 15/15. Commit: tento commit. **Interop smyčka kompletní v UI ★★**
+- ✅ **STP-063** (O+Q Plaso import GUI) — endpoint `POST /api/cases/{id}/plaso-import` (multipart, zrcadlí CLI), karta `#plaso-import-card` v Interop Export Center; 7 web testů + JS DOM 15/15. Commit: `9fc7def`. **Interop smyčka kompletní v UI ★★**
 
 ## Stav
-- HEAD: tento commit (feat(web): STP-063 Plaso import GUI) — předtím `2f0fca0` (STP-062 feat), `8c02098` (STP-061)
+- HEAD: `9fc7def` (feat(web): STP-063 Plaso import GUI) — předtím `2f0fca0` (STP-062 feat), `8c02098` (STP-061)
 - Full suite: **2065 passed, 1 skipped** (+7 nad baseline 2058; skipped = volitelný backend bez nainstalované závislosti)
 - JS DOM: **15/15 passed** (`node tests/js/interop.test.mjs`)
 - Ruff: clean (`All checks passed!`)

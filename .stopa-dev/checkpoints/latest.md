@@ -27,7 +27,7 @@
 TASKS (STP-062+063 sekce), PROJECT_STATE, NEXT_ACTION (HEAD opraveno + kandidáti), FEATURE_REGISTRY (F-088/F-089), TEST_REGISTRY (T-109/T-110, stav 2065), CHANGELOG (STP-062+063 záznamy)
 
 ## Stav
-- HEAD: tento commit `feat(web): STP-063 Plaso import GUI` — předtím `2f0fca0` (STP-062 feat), `8c02098` (STP-061)
+- HEAD: `9fc7def` (feat(web): STP-063 Plaso import GUI) — předtím `2f0fca0` (STP-062 feat), `8c02098` (STP-061)
 - **Interop smyčka kompletní v UI ★★**: export l2tcsv → import l2tcsv → push do Timesketch, vše z Interop Export Center
 
 ## Další kandidáti dle ROADMAP
