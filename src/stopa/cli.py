@@ -625,12 +625,13 @@ def cmd_timesketch_push(args: argparse.Namespace) -> int:
         client = TimesketchClient(settings_from_env())
         try:
             summary = push_to_timesketch(client, case.name if case else args.case_id,
-                                         args.what, records)
+                                         args.what, records, limit=args.limit)
         except (TimesketchError, ValueError) as exc:
             raise SystemExit(f"Timesketch push selhal: {exc}") from exc
 
         print(
-            f"Timesketch push: {summary['records']} záznamů → "
+            f"Timesketch push: {summary['records']} záznamů "
+            f"(celkem {summary['total_records']}) → "
             f"sketch {summary['sketch_id']}, timeline {summary['timeline_id']} "
             f"(task {summary['task_id']})"
         )
@@ -1300,6 +1301,8 @@ def build_parser() -> argparse.ArgumentParser:
     tsk_p.add_argument("case_id")
     tsk_p.add_argument("--what", choices=["artifacts", "timeline", "correlations"],
                        default="timeline", help="dataset k pushnutí (default: timeline)")
+    tsk_p.add_argument("--limit", type=int, default=None, metavar="N",
+                       help="STP-065 — pushne jen první N záznamů datasetu (default: vše)")
     tsk_p.set_defaults(func=cmd_timesketch_push)
 
     srv_p = sub.add_parser("serve", help="web GUI (FastAPI nad analyze())")

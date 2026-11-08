@@ -84,21 +84,32 @@ async function renderInteropExports(cid) {
     };
   }
 
-  // Timesketch push (STP-060, oblast Q ★★) — POST /api/cases/{id}/timesketch-push
+  // Timesketch push (STP-060/065, oblast Q ★★) — POST /api/cases/{id}/timesketch-push
   const tsBtn = document.getElementById("btn-ts-push");
   if (tsBtn) {
     tsBtn.onclick = async () => {
       const what = document.getElementById("ix-what").value;
       const status = document.getElementById("ts-status");
+      // STP-065 — volitelné limit: prázdné/invalidní → vše, jinak celé číslo ≥ 1
+      let limit = null;
+      const limEl = document.getElementById("ts-push-limit");
+      if (limEl && limEl.value.trim() !== "") {
+        const n = Number(limEl.value);
+        if (!Number.isInteger(n) || n < 1) {
+          status.textContent = "✗ Limit musí být celé číslo ≥ 1.";
+          return;
+        }
+        limit = n;
+      }
       tsBtn.disabled = true;
-      status.textContent = `Odesílám ${esc(what)} do Timesketch…`;
+      status.textContent = `Odesílám ${esc(what)} do Timesketch${limit ? ` (prvních ${limit})` : ""}…`;
       try {
         const r = await api(`/api/cases/${Store.get("caseId")}/timesketch-push`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ what }),
+          body: JSON.stringify(limit === null ? { what } : { what, limit }),
         });
-        status.textContent = `✓ Push hotovo — sketch ${r.sketch_id}, timeline ${r.timeline_id}, záznamů ${r.records} (live stav: „📡 Stav indexace“)`;
+        status.textContent = `✓ Push hotovo — sketch ${r.sketch_id}, timeline ${r.timeline_id}, záznamů ${r.records}${limit ? ` (z celkem ${r.total_records})` : ""} (live stav: „📡 Stav indexace“)`;
         toast(`Timesketch push: ${what} → sketch ${r.sketch_id}`, 5000);
       } catch (e) {
         status.textContent = `✗ Push selhal: ${esc(e.message)}`;

@@ -337,6 +337,7 @@ class TestTimesketchPushDomain:
             "timeline_id": 9,
             "task_id": "t-1",
             "records": 1,
+            "total_records": 1,
         }
         assert fake.sketch_name == "STOPA Případ 42 — artifacts"
         assert "1 záznamů" in fake.description

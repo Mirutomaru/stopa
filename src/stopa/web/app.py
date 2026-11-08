@@ -25,7 +25,7 @@ from urllib.parse import quote
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stopa import __version__
 from stopa.data.db import CaseDB
@@ -114,6 +114,9 @@ class TimesketchPushIn(BaseModel):
     """STP-059 — push datasetu případu do Timesketch sketchu."""
 
     what: str = "timeline"  # artifacts | timeline | correlations
+    limit: int | None = Field(  # STP-065 — jen první N záznamů (None = vše)
+        default=None, ge=1
+    )
 
 
 class SettingsIn(BaseModel):
@@ -911,8 +914,10 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
 
         Zrcadlí ``stopa timesketch-push`` CLI (stejná domain funkce):
         vytvoří sketch a nahraje l2tcsv timeline. Datasety: artifacts /
-        timeline / correlations. Audit + integrity checkpoint.
-        Timesketch nedostupná → 503; push selhal → 502 srozumitelnou zprávou.
+        timeline / correlations. STP-065: volitelné ``limit`` — pushne jen
+        první N záznamů datasetu (None = vše; <1 → 422). Audit + integrity
+        checkpoint. Timesketch nedostupná → 503; push selhal → 502 srozumitelnou
+        zprávou.
         """
         from stopa.domain.export import (
             artifact_records,
@@ -944,7 +949,8 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
 
             try:
                 summary = push_to_timesketch(
-                    client, case.name if case else case_id, body.what, records
+                    client, case.name if case else case_id, body.what, records,
+                    limit=body.limit,
                 )
             except TimesketchUnavailable as exc:
                 raise HTTPException(503, str(exc)) from exc

@@ -33,6 +33,7 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoRe
     </div>
     <div class="card" id="ts-push-card">
       <button id="btn-ts-push"></button>
+      <input type="number" id="ts-push-limit" min="1" step="1" placeholder="vše">
       <button id="btn-ts-status"></button>
       <input type="file" id="plaso-file">
       <button id="btn-plaso-import"></button>
@@ -127,6 +128,60 @@ await test("úspěšný push: ts-status ukazuje ✓ + sketch/timeline/records", 
   assert.match(status, /sketch 42/, "obsahuje sketch_id");
   assert.match(status, /timeline 7/, "obsahuje timeline_id");
   assert.match(status, /záznamů 7/, "obsahuje počet záznamů");
+});
+
+await test("klik na push s limit: POST /timesketch-push body {what, limit}", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const lim = env.window.document.getElementById("ts-push-limit");
+  lim.value = "3";
+  const btn = env.window.document.getElementById("btn-ts-push");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const pushCall = env.calls.find((c) => c.url.includes("/timesketch-push"));
+  assert.ok(pushCall, "api bylo voláno pro timesketch-push");
+  const body = JSON.parse(pushCall.opts.body);
+  assert.deepEqual(body, { what: "artifacts", limit: 3 }, "body nese limit z inputu");
+});
+
+await test("klik na push bez limit (prázdný input): POST body jen {what}", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const lim = env.window.document.getElementById("ts-push-limit");
+  lim.value = ""; // prázdné = vše
+  const btn = env.window.document.getElementById("btn-ts-push");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const pushCall = env.calls.find((c) => c.url.includes("/timesketch-push"));
+  assert.ok(pushCall, "api bylo voláno pro timesketch-push");
+  const body = JSON.parse(pushCall.opts.body);
+  assert.deepEqual(body, { what: "artifacts" }, "bez limitu → body jen {what}");
+});
+
+await test("klik na push s invalidním limit (0): ✗ + žádné api volání", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const lim = env.window.document.getElementById("ts-push-limit");
+  lim.value = "0"; // < 1 → invalidní
+  const btn = env.window.document.getElementById("btn-ts-push");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const status = env.window.document.getElementById("ts-status").textContent;
+  assert.match(status, /✗ Limit musí být celé číslo ≥ 1/, "chybová zpráva pro limit < 1");
+  assert.equal(env.calls.filter((c) => c.url.includes("/timesketch-push")).length, 0, "api nebylo voláno");
+});
+
+await test("úspěšný push s limit: ts-status ukazuje „z celkem N“", async () => {
+  const env = makeEnv({ pushResponse: { sketch_id: 42, timeline_id: 7, task_id: "t-1", records: 3, total_records: 9 } });
+  await env.sandbox.renderInteropExports("c1");
+  const lim = env.window.document.getElementById("ts-push-limit");
+  lim.value = "3";
+  const btn = env.window.document.getElementById("btn-ts-push");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const status = env.window.document.getElementById("ts-status").textContent;
+  assert.match(status, /✓ Push hotovo/, "úspěšná zpráva");
+  assert.match(status, /záznamů 3 \(z celkem 9\)/, "počet pushnutých + celkový počet");
 });
 
 await test("selhání push (503): ts-status ukazuje ✗ + tlačítko se znovu aktivuje", async () => {
@@ -340,4 +395,4 @@ await test("l2t preview selhání: l2t-preview-status ukazuje ✗ + tlačítko s
   assert.equal(btn.disabled, false, "tlačítko po chybě znovu aktivní (finally)");
 });
 
-console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import + L2T preview): ${passed}/19 passed`);
+console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import + L2T preview): ${passed}/23 passed`);
