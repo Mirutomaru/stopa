@@ -1,17 +1,16 @@
 # NĚJBLIŽŠÍ AKCE — STOPA (2026-11-08)
 
-## Hotovo právě teď: **STP-065 ★★ = Timesketch push s limit + UI input** (ROADMAP #1)
-Parametr `limit` pro push do Timesketch v doméně (`push_to_timesketch(..., limit=None)` — `None` = vše, `< 1` → ValueError, souhrn rozšířen o `total_records`), web endpointu (`TimesketchPushIn.limit: int | None = Field(ge=1)` → neplatné = 422), CLI (`stopa timesketch-push --limit N`) a UI (input `#ts-push-limit`, prázdné = vše; JS posílá limit v POST body jen když vyplněný). **10 nových testů** (`tests/test_stp065.py`: doména + web E2E) + JS DOM rozšířeno 19→23 (**23/23 passed**). Full suite **2085 passed, 1 skipped**, ruff clean.
+## Hotovo právě teď: **STP-066 ★★ = Export center náhled CSV/L2T/UCO před downloadem** (ROADMAP #1)
+Generalizace STP-064 l2tcsv-preview na náhled exportu pro všechny tři formáty — read-only endpoint `GET /api/cases/{id}/export-preview?what=&format=&limit=` (`l2tcsv` zrcadlí `to_l2tcsv`, `csv` nativní STOPA sloupce, `uco` JSON-LD objekty přes `to_uco_json`; datasety artifacts/timeline/correlations; neplatný dataset/formát → 400; limit clamp 1..500 default 50; **bez auditu i integrity checkpointu** — náhled není export) + karta `#export-preview-card` v Interop Export Center (select formátu + tlačítko 👁 + stav + tabulka; UCO složené hodnoty → JSON). **15 nových testů** (`tests/test_stp066.py`: web E2E přes TestClient s reálnou case DB) + JS DOM rozšířeno 23→27 (**27/27 passed**). Full suite **2100 passed, 1 skipped**, ruff clean. Commit `9a45561`.
 
 ## Co dělat dál (ROADMAP kandidáti)
-1. **STP-066: Export center — náhled CSV/JSON před downloadem** — generalizace STP-064 preview na ostatní formáty (`?what=&format=`), sdílený UI komponent; read-only, bez auditu.
-2. **STP-067: Interop export historie v UI** — tabulka posledních 10 exportů už existuje (audit log); přidat re-download z audit záznamu (cache poslední export na disk pod case dir) + testy.
+1. **STP-067: Interop export historie v UI** — tabulka posledních 10 exportů už existuje (audit log); přidat re-download z audit záznamu (cache poslední export na disk pod case dir) + testy.
 
-## Stav verifikace (2026-11-08, STP-065)
-- Full suite: **2085 passed, 1 skipped** (+10 nad baseline 2075/1s)
-- `tests/test_stp065.py`: **10/10 passed** (doména: limit=None vše / limit=N prvních N po řádcích / limit>dataset vše / limit=0 a negativní ValueError / prázdný dataset s limitem ValueError; web E2E: push s limit=2 z 5 → summary records=2 total_records=5 + audit nese oba počty, backward compat bez limitu, limit=0/-1 → 422)
-- JS DOM: `node tests/js/interop.test.mjs` → **23/23 passed** (4 nové: push s limitem body {what,limit}, prázdný input jen {what}, invalidní limit 0 → ✗ + 0 API volání, stav „z celkem N")
-- Ruff: clean; coverage matice 237 řádků (bez změny — limit je parametr nadstaveby bez nových axiomů); C3 registry **76** (bez změny — žádný nový parser)
+## Stav verifikace (2026-11-08, STP-066)
+- Full suite: **2100 passed, 1 skipped** (+15 nad baseline 2085/1s)
+- `tests/test_stp066.py`: **15/15 passed** (web E2E: l2tcsv formát rows+columns+total, csv formát s nativními sloupci, uco formát — objekty zrcadlí `to_uco_json` (type/x-stopa), obsah řádků, timeline dataset, correlations dataset, neplatný dataset → 400, neplatný formát → 400, limit clamp high/low, prázdný případ → total_records 0 + rows [], read-only → audit log i integrity checkpoints prázdné)
+- JS DOM: `node tests/js/interop.test.mjs` → **27/27 passed** (4 nové: wiring onclick btn-export-preview, GET s what+format=csv+limit=50 + tabulka se sloupci/řádky, UCO složené hodnoty jako JSON render, selhání ✗ + reaktivace)
+- Ruff: clean; coverage matice beze změny (endpoint je nadstavba bez nových axiomů); C3 registry **76** (bez změny — žádný nový parser)
 
 ## Checkpoint
-`.stopa-dev/checkpoints/latest.md` = STP-065; předchozí (STP-064) archivován do `history/20261108-stp064-l2tcsv-preview-done-archived.md`.
+`.stopa-dev/checkpoints/latest.md` = STP-066; předchozí (STP-065) archivován do `history/20261108-stp065-timesketch-push-limit-done-archived.md`.
