@@ -55,6 +55,35 @@ async function renderInteropExports(cid) {
     };
   }
 
+  // L2T CSV náhled (STP-064, oblast Q ★★) — GET /api/cases/{id}/l2tcsv-preview
+  const pvBtn = document.getElementById("btn-l2t-preview");
+  if (pvBtn) {
+    pvBtn.onclick = async () => {
+      const what = document.getElementById("ix-what").value;
+      const status = document.getElementById("l2t-preview-status");
+      const table = document.getElementById("l2t-preview-table");
+      pvBtn.disabled = true;
+      status.textContent = `Načítám náhled ${esc(what)}…`;
+      try {
+        const r = await api(`/api/cases/${Store.get("caseId")}/l2tcsv-preview?what=${encodeURIComponent(what)}&limit=50`);
+        if (!r.rows || !r.rows.length) {
+          status.textContent = `✓ Náhled hotovo — dataset ${esc(what)} je prázdný (záznamů 0).`;
+          table.innerHTML = "";
+          return;
+        }
+        const cols = r.columns || [];
+        status.textContent = `✓ Náhled hotovo — záznamů celkem ${r.total_records}, zobrazuji první ${r.rows.length}.`;
+        table.innerHTML = `<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>` +
+          r.rows.map((row) => `<tr>${cols.map((c) => `<td class="mono small">${esc(row[c] ?? "")}</td>`).join("")}</tr>`).join("") + `</tbody></table>`;
+      } catch (e) {
+        status.textContent = `✗ Náhled selhal: ${esc(e.message)}`;
+        table.innerHTML = "";
+      } finally {
+        pvBtn.disabled = false;
+      }
+    };
+  }
+
   // Timesketch push (STP-060, oblast Q ★★) — POST /api/cases/{id}/timesketch-push
   const tsBtn = document.getElementById("btn-ts-push");
   if (tsBtn) {

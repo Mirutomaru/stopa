@@ -852,6 +852,58 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── STP-064 — L2T CSV preview (oblast Q ★★) ───────────────
+    @app.get("/api/cases/{case_id}/l2tcsv-preview")
+    def l2tcsv_preview(case_id: str, what: str = "artifacts", limit: int = 50) -> dict:
+        """Náhled l2tcsv exportu (GUI — oblast Q ★★).
+
+        Zrcadlí ``stopa export --format l2tcsv`` / interop-export endpoint
+        (stejná domain funkce ``to_l2tcsv``): vrátí první N řádků toho, co se
+        reálně vyexportuje — uživatel si ověří data před downloadem/pushem.
+        Read-only: bez audit záznamu i integrity checkpointu (není export).
+
+        Datasety: artifacts / timeline / correlations. Limit clamp 1..500.
+        """
+        import csv as _csv
+        import io as _io
+
+        from stopa.domain.export import (
+            L2TCSV_COLUMNS,
+            artifact_records,
+            correlation_records,
+            timeline_records,
+            to_l2tcsv,
+        )
+
+        _require("analysis.run", "l2tcsv_preview")
+        if what not in ("artifacts", "timeline", "correlations"):
+            raise HTTPException(400, f"neplatný dataset: {what}")
+        limit = max(1, min(int(limit), 500))
+
+        db = open_db(case_id)
+        try:
+            if what == "artifacts":
+                records = artifact_records(db.list_artifacts())
+            elif what == "timeline":
+                records = timeline_records(db.list_timeline_events())
+            else:  # correlations
+                records = correlation_records(db.list_correlations(case_id))
+
+            text = to_l2tcsv(records, dataset=what)
+            rows = list(_csv.reader(_io.StringIO(text)))
+            header = rows[0] if rows else []
+            body = rows[1 : limit + 1]
+            return {
+                "case_id": case_id,
+                "dataset": what,
+                "columns": list(L2TCSV_COLUMNS),
+                "total_records": len(records),
+                "limit": limit,
+                "rows": [dict(zip(header, r)) for r in body],
+            }
+        finally:
+            db.close()
+
     # ── STP-059 — Timesketch push (oblast Q, interop) ───────────────
     @app.post("/api/cases/{case_id}/timesketch-push")
     def timesketch_push(case_id: str, body: TimesketchPushIn) -> dict:

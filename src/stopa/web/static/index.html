@@ -318,6 +318,14 @@
       <button id="btn-interop-export" class="primary small-btn" style="margin-top:10px">⬇ Stáhnout export</button>
     </div>
 
+    <div class="card small" id="l2tcsv-preview-card" style="margin-top:12px">
+      <h3 style="margin-top:0">L2T CSV náhled (oblast Q ★★)</h3>
+      <p class="muted small">Náhled toho, co vygeneruje l2tcsv export zvoleného datasetu — ověříte data před downloadem/pushem. Read-only (bez audit záznamu).</p>
+      <button id="btn-l2t-preview" class="primary small-btn">👁 Náhled l2tcsv</button>
+      <div id="l2t-preview-status" class="muted small mono" style="margin-top:8px"></div>
+      <div id="l2t-preview-table" style="overflow-x:auto;margin-top:8px"></div>
+    </div>
+
     <div class="card small" id="ts-push-card" style="margin-top:12px">
       <h3 style="margin-top:0">Timesketch push (oblast Q ★★)</h3>
       <p class="muted small">Odešle zvolený dataset do nového Timesketch sketchu (l2tcsv timeline). Stejná domain logika jako CLI ``stopa timesketch-push``; audit + integrity checkpoint. Požaduje běžící Timesketch (<code>STOPA_TIMESKETCH_URL</code>).</p>

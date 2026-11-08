@@ -21,11 +21,16 @@ const CORRELATIONS = [
 ];
 const AUDIT = { entries: [{ action: "interop_exported", ts: "2026-11-07T10:00:00Z", details: { what: "artifacts", format: "l2tcsv", records: 7 } }] };
 
-function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoResponse, plasoError } = {}) {
+function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoResponse, plasoError, previewResponse, previewError } = {}) {
   const dom = new JSDOM(`<!DOCTYPE html><body>
     <select id="ix-what"><option value="artifacts">Artifacty</option></select>
     <select id="ix-format"><option value="l2tcsv">l2tcsv</option></select>
     <button id="btn-interop-export"></button>
+    <div class="card" id="l2tcsv-preview-card">
+      <button id="btn-l2t-preview"></button>
+      <div id="l2t-preview-status"></div>
+      <div id="l2t-preview-table"></div>
+    </div>
     <div class="card" id="ts-push-card">
       <button id="btn-ts-push"></button>
       <button id="btn-ts-status"></button>
@@ -59,6 +64,10 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoRe
       if (u.includes("/plaso-import")) {
         if (plasoError) throw new Error(plasoError);
         return plasoResponse ?? { events_total: 12, artifacts_imported: 3, timeline_events: 9 };
+      }
+      if (u.includes("/l2tcsv-preview")) {
+        if (previewError) throw new Error(previewError);
+        return previewResponse ?? { case_id: "c1", dataset: "artifacts", columns: ["date", "time", "source"], total_records: 7, limit: 50, rows: [{ date: "01/01/2026", time: "03:04:05", source: "STOPA" }] };
       }
       if (u.includes("/timesketch-push")) {
         if (pushError) throw new Error(pushError);
@@ -284,4 +293,51 @@ await test("plaso import selhání: plaso-status ukazuje ✗ + tlačítko se zno
   assert.equal(btn.disabled, false, "tlačítko po chybě znovu aktivní (finally)");
 });
 
-console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import): ${passed}/15 passed`);
+await test("l2t preview: po renderu má btn-l2t-preview navázaný onclick", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-l2t-preview");
+  assert.ok(btn, "tlačítko btn-l2t-preview existuje");
+  assert.equal(typeof btn.onclick, "function", "onclick handler je navázaný");
+});
+
+await test("l2t preview: GET /l2tcsv-preview?what=&limit=50 + tabulka se sloupci a řádky", async () => {
+  const env = makeEnv({ previewResponse: { case_id: "c1", dataset: "artifacts", columns: ["date", "time", "source"], total_records: 7, limit: 50, rows: [{ date: "01/01/2026", time: "03:04:05", source: "STOPA" }] } });
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-l2t-preview");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const call = env.calls.find((c) => c.url.includes("/l2tcsv-preview"));
+  assert.ok(call, "api bylo voláno pro l2tcsv-preview");
+  assert.match(call.url, /\/api\/cases\/c1\/l2tcsv-preview\?what=artifacts&limit=50$/, "správný endpoint s what + limit");
+  const status = env.window.document.getElementById("l2t-preview-status").textContent;
+  assert.match(status, /✓ Náhled hotovo/, "úspěšná zpráva");
+  assert.match(status, /záznamů celkem 7/, "total_records");
+  const table = env.window.document.getElementById("l2t-preview-table").innerHTML;
+  assert.match(table, /<th>date<\/th>/, "sloupec date v hlavičce");
+  assert.match(table, /01\/01\/2026/, "hodnota z řádku");
+});
+
+await test("l2t preview prázdný dataset: ✓ + „je prázdný (záznamů 0)“ + tabulka bez obsahu", async () => {
+  const env = makeEnv({ previewResponse: { case_id: "c1", dataset: "timeline", columns: ["date"], total_records: 0, limit: 50, rows: [] } });
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-l2t-preview");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const status = env.window.document.getElementById("l2t-preview-status").textContent;
+  assert.match(status, /je prázdný \(záznamů 0\)/, "informativní zpráva pro prázdný dataset");
+  assert.equal(env.window.document.getElementById("l2t-preview-table").innerHTML, "", "tabulka bez obsahu");
+});
+
+await test("l2t preview selhání: l2t-preview-status ukazuje ✗ + tlačítko se znovu aktivuje", async () => {
+  const env = makeEnv({ previewError: "400: neplatný dataset" });
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-l2t-preview");
+  btn.dispatchEvent(new env.window.MouseEvent("click", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  const status = env.window.document.getElementById("l2t-preview-status").textContent;
+  assert.match(status, /✗ Náhled selhal/, "chybová zpráva");
+  assert.equal(btn.disabled, false, "tlačítko po chybě znovu aktivní (finally)");
+});
+
+console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import + L2T preview): ${passed}/19 passed`);
