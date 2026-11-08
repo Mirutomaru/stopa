@@ -251,3 +251,55 @@ class TimesketchClient:
             str(meta["task_id"]) if isinstance(meta, dict) and meta.get("task_id") else None
         )
         return {"timeline_id": timeline_id, "task_id": task_id}
+
+    # ── STP-061 — status timeline (live polling po uploadu) ───────────────
+    def timeline_status(self, sketch_id: int, timeline_id: int) -> dict[str, object]:
+        """Dotáže stav indexace timeline → ``{"status", "updated_at"}``.
+
+        ``GET {api_root}/sketches/{sketch_id}/timelines/{timeline_id}/`` —
+        odpověď 200 nese timeline objekt; stav je **nested** pod
+        ``objects[0].status.status`` (kontrakt ověřen ze zdrojů serveru:
+        ``fields.Nested(status_fields)``). Hodnoty: ``new`` / ``processing`` /
+        ``ready`` / ``fail``. Chybějící pole → ``None`` (ne výjimka), aby UI
+        mohlo pollovat i při částečně vyplněné odpovědi.
+
+        Hází ``TimesketchError`` (HTTP != 200, ne-JSON) a
+        ``TimesketchUnavailable`` (server nedostupný / login selhal).
+        """
+        s = self.settings
+        try:
+            with httpx.Client(timeout=s.api_timeout_s, follow_redirects=True) as client:
+                csrf = self._login(client)
+                r = client.get(
+                    f"{s.api_root}/sketches/{int(sketch_id)}"
+                    f"/timelines/{int(timeline_id)}/",
+                    headers=self._api_headers(csrf),
+                )
+        except httpx.HTTPError as exc:
+            raise TimesketchUnavailable(
+                f"Timesketch nedostupný ({exc.__class__.__name__})"
+            ) from exc
+
+        if r.status_code != 200:
+            raise TimesketchError(f"timeline status HTTP {r.status_code}: {r.text[:200]}")
+        try:
+            payload = r.json()
+        except ValueError as exc:
+            raise TimesketchError(
+                f"nečekaná odpověď timeline status (ne-JSON): {r.text[:200]}"
+            ) from exc
+
+        obj = payload.get("objects") or [{}]
+        first = obj[0] if isinstance(obj, list) and obj else {}
+        status_obj = first.get("status") if isinstance(first, dict) else None
+        status: str | None = (
+            str(status_obj["status"])
+            if isinstance(status_obj, dict) and status_obj.get("status")
+            else None
+        )
+        updated_at: str | None = (
+            str(status_obj["updated_at"])
+            if isinstance(status_obj, dict) and status_obj.get("updated_at")
+            else None
+        )
+        return {"status": status, "updated_at": updated_at}

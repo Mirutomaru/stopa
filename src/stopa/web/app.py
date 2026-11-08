@@ -910,6 +910,64 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── STP-061 — Timesketch timeline status (live polling, oblast Q ★★) ───
+    @app.get("/api/cases/{case_id}/timesketch-status")
+    def timesketch_status(case_id: str):
+        """Live stav indexace naposledy pushnuté timeline (oblast Q ★★).
+
+        Read-only endpoint pro UI polling: najde poslední audit záznam
+        ``timesketch_pushed`` (sketch_id + timeline_id) a dotáže Timesketch
+        ``GET /api/v1/sketches/{sid}/timelines/{tid}/`` → stav indexace
+        (``new``/``processing``/``ready``/``fail``).
+
+        Chybové cesty: 404 — case neexistuje nebo ještě žádný push;
+        503 — Timesketch nedostupná; 502 — dotaz selhal (HTTP != 200 /
+        ne-JSON). Read-only → RBAC ``case.read`` (všechny role), bez auditu.
+        """
+        _require("case.read", "timesketch_status")
+
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            if case is None:
+                raise HTTPException(404, f"case neexistuje: {case_id}")
+
+            # poslední push — audit log je nejnovější první
+            last_push: dict | None = None
+            for entry in db.list_audit_log(limit=200):
+                if entry.get("action") == "timesketch_pushed":
+                    last_push = entry
+                    break
+            details = (last_push or {}).get("details") or {}
+            sketch_id = details.get("sketch_id")
+            timeline_id = details.get("timeline_id")
+            if not isinstance(sketch_id, int) or not isinstance(timeline_id, int):
+                raise HTTPException(
+                    404, "zatím žádný Timesketch push v audit logu"
+                )
+
+            client = TimesketchClient()
+            health = client.health()
+            if not health["available"]:
+                raise HTTPException(
+                    503, "Timesketch nedostupná — spusťte ji (STOPA_TIMESKETCH_URL)"
+                )
+            try:
+                st = client.timeline_status(sketch_id, timeline_id)
+            except TimesketchUnavailable as exc:
+                raise HTTPException(503, str(exc)) from exc
+            except TimesketchError as exc:
+                raise HTTPException(502, f"Timesketch status selhal: {exc}") from exc
+
+            return {
+                "sketch_id": sketch_id,
+                "timeline_id": timeline_id,
+                "status": st["status"],
+                "updated_at": st["updated_at"],
+            }
+        finally:
+            db.close()
+
     # ── report (FÁZE 7) ───────────────────────────────────────
     @app.get("/api/cases/{case_id}/report")
     def report(case_id: str, format: str = "html"):
