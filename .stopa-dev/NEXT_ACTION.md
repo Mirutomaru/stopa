@@ -1,17 +1,17 @@
-# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-08)
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-09)
 
-## Hotovo právě teď: **STP-067 ★★ = Interop export historie v UI — re-download posledního exportu z cache** (ROADMAP #1)
-Cache posledního exportu `{db_dir}/exports/{case_id}/{what}.{format}` atomicky zapisovaná při každém úspěšném `interop-export` + read-only endpoint `GET /api/cases/{id}/last-export?what=&format=` (neplatný dataset/formát → 400, absence cache → 404; **bez auditu** — re-download není akcí) + tlačítko ⬇ v každém řádku historie exportů (`window.open` na last-export URL). **11 nových testů** (`tests/test_stp067.py`: web E2E přes TestClient s reálnou case DB, binární porovnání cache vs odpověď — CSV CRLF) + JS DOM rozšířeno 27→31 (**31/31 passed**, harness +`opened`/`auditResponse`). Full suite **2111 passed, 1 skipped**, ruff clean. Commit `1d5988c`.
+## Hotovo právě teď: **STP-068 ★★ = Interop Export Center — ZIP bundle všech datasetů** (ROADMAP #2 po STP-067)
+Doména `to_zip_bundle(datasets, case_id, generated_at_utc)` — deterministický ZIP `{case_id}_{dataset}.csv` × 3 + `manifest.json` (format=stopa.interop-bundle v1, files[] name/dataset/records/sha256), fixní zip timestamps z `generated_at_utc` (tz povinný — fail-fast), ZIP_DEFLATED; stejný vstup = stejné bajty pro C4. Endpoint `GET /api/cases/{id}/interop-export-bundle?limit=` (RBAC, limit `< 1` → 422, neznámý case → 404, timestamp z `case.created_at`) + binární cache `_save_last_export_bytes(case_id, "bundle", "zip")` → re-download přes hotý `last-export?what=bundle&format=zip`; audit `interop_bundle_exported` + integrity checkpoint. CLI `stopa export <case> --bundle [--limit N] [--out SOUBOR]`. UI: input `#ix-bundle-limit` (prázdné = vše, jinak celé číslo ≥ 1) + tlačítko 📦 → `window.open(.../interop-export-bundle?limit=N)`; **opraven bug** query string `&limit=` → `?limit=`. **12 nových testů** (`tests/test_stp068.py`) + JS DOM rozšířeno 31→36 (**36/36 passed**). Full suite **2123 passed, 1 skipped**, ruff clean.
 
 ## Co dělat dál (ROADMAP kandidáti)
-1. **J UI přepínač role v Settings** — RBAC enforcement je hotový (STP-053), chybí jen UI pro přepnutí aktivní role bez restartu.
-2. **Další rozšíření Interop Export Center** — např. export více datasetů najednou nebo plánované/periodické exporty.
+1. **UI přepínač role v Settings** — RBAC enforcement hotový (STP-053), chybí UI pro přepnutí aktivní role bez restartu.
+2. **Plánované/periodické exporty** — např. automatický bundle export po dokončení analýzy.
 
-## Stav verifikace (2026-11-08, STP-067)
-- Full suite: **2111 passed, 1 skipped** (+11 nad baseline 2100/1s)
-- `tests/test_stp067.py`: **11/11 passed** (web E2E: cache soubor po exportu, obsah = odpověď endpointu binárně, jiný dataset/formát → vlastní cache, absence cache → 404, neplatný dataset → 400, neplatný formát → 400, neexistující case → 404, read-only → audit log prázdný, Content-Disposition attachment s filename)
-- JS DOM: `node tests/js/interop.test.mjs` → **31/31 passed** (4 nové: ⬇ tlačítko v řádcích historie, re-download GET last-export přes `window.open`, absence cache → alert „Není k dispozici“, wiring bez cache)
-- Ruff: clean; coverage matice beze změny (endpoint je nadstavba bez nových axiomů); C3 registry **76** (bez změny — žádný nový parser)
+## Stav verifikace (2026-11-09, STP-068)
+- Full suite: **2123 passed, 1 skipped** (+12 nad baseline 2111/1s)
+- `tests/test_stp068.py`: **12/12 passed** (doména: ZIP obsah + manifest klíče, SHA-256 v manifestu = reálný hash CSV, determinismus stejný vstup → stejné bajty, fixní zip timestamps, chybějící dataset → prázdný CSV jen hlavička, `generated_at_utc` bez tz → ValueError; web E2E: 200 + application/zip + Content-Disposition attachment, limit respektován (první N z každého datasetu), limit=0/-1 → 422, neznámý case → 404, audit `interop_bundle_exported` s detaily datasets/limit/bytes + integrity checkpoint, cache `{db_dir}/exports/{case_id}/bundle.zip` = odpověď endpointu binárně)
+- JS DOM: `node tests/js/interop.test.mjs` → **36/36 passed** (5 nových: wiring onclick 📦, klik bez limitu → window.open /interop-export-bundle, klik s limitem → ?limit=N, invalidní „0“ → toast + žádné window.open, necelé „1.5“ → toast)
+- Ruff: clean; coverage matice beze změny (bundle je nadstavba na existujících serializátorech); C3 registry **76** (bez změny — žádný nový parser)
 
 ## Checkpoint
-`.stopa-dev/checkpoints/latest.md` = STP-067; předchozí (STP-066) archivován do `history/20261108-stp066-export-preview-done-archived.md`.
+`.stopa-dev/checkpoints/latest.md` = STP-068; předchozí (STP-067) archivován do `history/20261108-stp067-last-export-redownload-done-archived.md`.

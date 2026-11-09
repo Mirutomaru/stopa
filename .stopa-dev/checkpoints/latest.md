@@ -1,32 +1,38 @@
-# STOPA Checkpoint — 2026-11-08 (STP-067 DOKONČEN ★★)
+# STOPA Checkpoint — 2026-11-09 (STP-068 DOKONČEN ★★)
 
 ## Úkol
-**STP-067 — Interop export historie v UI: re-download posledního exportu z cache** (oblast Q, P3): cache posledního exportu pod case dir + read-only endpoint `GET /api/cases/{id}/last-export` + tlačítko ⬇ v řádcích historie exportů. ROADMAP kandidát #1 po STP-066.
+**STP-068 — Interop Export Center: ZIP bundle všech datasetů** (oblast Q, P3): export artifacts + timeline + correlations do jednoho deterministického ZIP balíčku s manifestem a SHA-256 kontrolami. ROADMAP kandidát #2 po STP-067 („export více datasetů najednou“).
 
 ## Hotovo
-1. **`src/stopa/web/app.py`** — cache posledního exportu:
-   - `_last_export_path(case_id, what, format)` → `{db_dir}/exports/{case_id}/{what}.{format}` (vedle case DB)
-   - `_save_last_export(...)` — atomický zápis přes `.tmp` + `os.replace`; voláno v `interop_export` po úspěšném exportu; selhání cache nepadne export (warning log)
-   - nový read-only endpoint `GET /api/cases/{case_id}/last-export?what=&format=`: validace dataset/formát (neplatný → 400), existence case (→ 404), absence cache (→ 404); `FileResponse` s `filename={case_id}_{what}.{format}` = automatický Content-Disposition attachment; **bez auditu** — re-download není akcí
-2. **`src/stopa/web/static/js/components/interop.js`** — v tabulce historie exportů nový sloupec + tlačítko ⬇ na každém řádku → `window.open('/api/cases/{id}/last-export?what=&format=')`; bez cache (404) → alert „Není k dispozici“.
-3. **`tests/test_stp067.py`** (nový, 267 ř., 11 testů) — web E2E přes TestClient s reálnou case DB: cache soubor po exportu, obsah = odpověď endpointu (**binární porovnání** — CSV CRLF), jiný dataset/formát → vlastní cache, absence cache → 404, neplatný dataset → 400, neplatný formát → 400, neexistující case → 404, read-only → audit log prázdný, Content-Disposition attachment s filename.
-4. **`tests/js/interop.test.mjs`** — +4 DOM testy (27→31): ⬇ tlačítko v řádcích historie, re-download GET last-export přes `window.open`, absence cache → alert „Není k dispozici“, wiring bez cache; harness rozšířen o `opened` (capture URL z `window.open()`) + parametr `auditResponse`.
+1. **`src/stopa/domain/export.py`** — `to_zip_bundle(datasets, case_id, generated_at_utc) -> bytes`:
+   - `BUNDLE_DATASETS = ("artifacts", "timeline", "correlations")`, `_BUNDLE_COLUMNS` (stabilní sloupcová schémata z ARTIFACT/TIMELINE/CORRELATION_COLUMNS)
+   - obsah: `{case_id}_{dataset}.csv` pro každý dataset (stejné serializátory jako `stopa export --format csv`) + `manifest.json` (`format=stopa.interop-bundle`, version 1, case_id, generated_at_utc, files[] s name/dataset/records/sha256)
+   - determinismus pro C4: pevné pořadí položek, fixní `date_time` z `generated_at_utc` (tz povinný — `_bundle_zip_time` fail-fast), ZIP_DEFLATED; stejný vstup = stejné bajty
+   - chybějící dataset → prázdný CSV (jen hlavička), ne chyba
+2. **`src/stopa/web/app.py`** — nový endpoint `GET /api/cases/{case_id}/interop-export-bundle?limit=`:
+   - RBAC `_require("analysis.run", "interop_export_bundle")`; `limit < 1` → 422; neznámý case → 404
+   - limit = první N záznamů každého datasetu (None = vše); timestamp deterministicky z `case.created_at.isoformat()`
+   - `_save_last_export_bytes(case_id, "bundle", "zip", data)` — nový binární cache helper (tmp→rename; selhání nepadne export) → re-download přes hotový `last-export?what=bundle&format=zip`
+   - audit `interop_bundle_exported` (details datasets/limit/bytes) + integrity checkpoint `export`; `Response(application/zip)` s Content-Disposition attachment `{case_id}_interop-bundle.zip`
+3. **`src/stopa/cli.py`** — `stopa export <case> --bundle [--limit N] [--out SOUBOR]`: stejná domain funkce, výstup do souboru nebo stdout (binárně), audit `data_exported {what: bundle}` + checkpoint; help text rozšířen
+4. **UI** — `index.html` (input `#ix-bundle-limit` min=1 placeholder „limit (vol.)“ + tlačítko 📦 `#btn-interop-export-bundle`) a `js/components/interop.js` (handler: prázdné = vše, jinak celé číslo ≥ 1 — jinak toast „Limit bundle musí být celé číslo ≥ 1.“; `window.open(.../interop-export-bundle?limit=N)`). **Opraven bug:** query string se stavěl jako `&limit=` místo `?limit=` (odhaleno novým DOM testem).
+5. **Testy** — `tests/test_stp068.py` (nový, 365 ř., 12 testů) + `tests/js/interop.test.mjs` (+5 DOM testů → 36; fixture bundle prvky, makeEnv parametr `bundleOpened`).
 
 ## Verifikace
-- `.venv/bin/python -m pytest tests/test_stp067.py -q` → **11 passed**
-- `.venv/bin/python -m pytest tests -q` → **2111 passed, 1 skipped** (+11 nad baseline 2100/1s)
-- `node tests/js/interop.test.mjs` → **31/31 passed** (4 nové)
+- `.venv/bin/python -m pytest tests/test_stp068.py -q` → **12 passed**
+- `.venv/bin/python -m pytest tests/ -q` → **2123 passed, 1 skipped** (+12 nad baseline 2111/1s)
+- `node tests/js/interop.test.mjs` → **36/36 passed** (5 nových bundle testů)
 - `.venv/bin/ruff check src/stopa tests scripts` → All checks passed!
 
 ## Commit
-`1d5988c` feat(web): STP-067 re-download posledního exportu — cache {db_dir}/exports + GET /last-export + ⬇ v historii (11 E2E testů, JS DOM 27→31)
+`4607d84` feat(export): STP-068 ZIP bundle všech datasetů — to_zip_bundle + GET /interop-export-bundle + CLI --bundle + UI 📦 (12 E2E testů, JS DOM 31→36) — předtím `76cf6f9` (docs STP-067), `1d5988c` (STP-067)
 
 ## Registry & dokumentace
-- FEATURE_REGISTRY: **F-093** (Re-download posledního exportu z historie)
-- TEST_REGISTRY: **T-114**; celkový stav **2111 testů: 2110 PASS + 1 skipped**
-- TASKS.md: STP-067 DONE; CHANGELOG položka s commit `1d5988c`
-- Předchozí checkpoint (STP-066) archivován do `history/20261108-stp066-export-preview-done-archived.md`
+- FEATURE_REGISTRY: **F-094** (ZIP bundle všech datasetů)
+- TEST_REGISTRY: **T-115**; celkový stav **2123 testů: 2122 PASS + 1 skipped**
+- TASKS.md: STP-068 DONE; CHANGELOG položka
+- Předchozí checkpoint (STP-067) archivován do `history/20261108-stp067-last-export-redownload-done-archived.md`
 
 ## Další (ROADMAP kandidáti)
-1. **J UI přepínač role v Settings** — RBAC enforcement je hotový (STP-053), chybí jen UI pro přepnutí aktivní role bez restartu.
-2. **Další rozšíření Interop Export Center** — např. export více datasetů najednou nebo plánované/periodické exporty.
+1. **UI přepínač role v Settings** — RBAC enforcement hotový (STP-053), chybí UI pro přepnutí aktivní role bez restartu.
+2. **Plánované/periodické exporty** — např. automatický bundle export po dokončení analýzy.
