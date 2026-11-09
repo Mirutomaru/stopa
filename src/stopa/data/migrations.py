@@ -57,6 +57,8 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     apply_entity_resolution_migration(conn)
     # STP-018 Timeline Intelligence 2.0 — provenience + analytické sloupce timeline_events.
     apply_timeline_intel_migration(conn)
+    # STP-069: Plánované/periodické exporty — opt-in přepínač + cesta posledního auto-exportu.
+    apply_auto_export_migration(conn)
     # P0 Core C5: Reproducibility Engine — stará DB bez sloupce params_json.
     ops_cols = {r["name"] for r in conn.execute("PRAGMA table_info(analysis_operations)").fetchall()}
     if "params_json" not in ops_cols:
@@ -266,3 +268,22 @@ def apply_timeline_intel_migration(conn: sqlite3.Connection) -> None:
         if col not in tl_cols:
             conn.execute(f"ALTER TABLE timeline_events ADD COLUMN {col} {decl}")
             conn.commit()
+
+
+def apply_auto_export_migration(conn: sqlite3.Connection) -> None:
+    """STP-069 Plánované/periodické exporty — stará case DB (schéma ≤ v12).
+
+    Idempotentní, bez ztráty dat: přidá sloupce ``auto_export_enabled``
+    (opt-in přepínač, default 0 = vypnuto) a ``last_auto_export_path``
+    (cesta k poslednímu automaticky vygenerovanému ZIP bundle). Nové DB
+    mají oba sloupce přímo ze SCHEMA — migrace je no-op.
+    """
+    case_cols = {r["name"] for r in conn.execute("PRAGMA table_info(cases)").fetchall()}
+    if "auto_export_enabled" not in case_cols:
+        conn.execute(
+            "ALTER TABLE cases ADD COLUMN auto_export_enabled INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    if "last_auto_export_path" not in case_cols:
+        conn.execute("ALTER TABLE cases ADD COLUMN last_auto_export_path TEXT")
+        conn.commit()

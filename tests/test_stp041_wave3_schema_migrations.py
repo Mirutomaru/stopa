@@ -66,8 +66,8 @@ def _trigger_names(conn: sqlite3.Connection) -> set[str]:
 
 
 class TestSchemaModule:
-    def test_schema_version_is_12(self):
-        assert SCHEMA_VERSION == 12
+    def test_schema_version_is_13(self):
+        assert SCHEMA_VERSION == 13
 
     def test_schema_version_fallback_on_empty_db(self, tmp_path: Path):
         """Bez meta řádku vrací 1 (staré DB bez verze)."""

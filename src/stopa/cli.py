@@ -89,6 +89,27 @@ def cmd_case_new(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_case_auto_export(args: argparse.Namespace) -> int:
+    """STP-069 — zapnout/vypnut automatický ZIP bundle po dokončení analýzy."""
+    db = _open_db(args.case_id)
+    try:
+        enabled = args.state == "on"
+        ok = db.update_case(args.case_id, auto_export_enabled=enabled)
+        if not ok:
+            raise SystemExit(f"Případ '{args.case_id}' neexistuje")
+        case = db.get_case(args.case_id)
+        db.log_operation(
+            "auto_export_toggled",
+            actor=case.examiner if case else None,
+            details={"case_id": args.case_id, "enabled": enabled},
+        )
+    finally:
+        db.close()
+    state = "ZAPNUTO" if enabled else "VYPNUTO"
+    print(f"Automatický export (STP-069): {state} pro případ {args.case_id}")
+    return 0
+
+
 def cmd_add(args: argparse.Namespace) -> int:
     db = _open_db(args.case_id)
     profile = get_profile(args.profile)  # early validace jména profilu
@@ -1140,6 +1161,14 @@ def build_parser() -> argparse.ArgumentParser:
     new_p.add_argument("--examiner", help="jméno znalce")
     new_p.add_argument("--notes", help="poznámky k případu")
     new_p.set_defaults(func=cmd_case_new)
+
+    # STP-069 — opt-in automatický ZIP bundle po dokončení analýzy.
+    autoexp_p = case_sub.add_parser(
+        "auto-export", help="zapnout/vypnut automatický export (STP-069)"
+    )
+    autoexp_p.add_argument("case_id", help="ID případu")
+    autoexp_p.add_argument("state", choices=["on", "off"], help="on = zapnout, off = vypnout")
+    autoexp_p.set_defaults(func=cmd_case_auto_export)
 
     add_p = sub.add_parser("add", help="přidat zdroj důkazů a zpracovat")
     add_p.add_argument("case_id", help="ID případu (z 'stopa case new')")

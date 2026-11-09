@@ -136,6 +136,7 @@ class CaseUpdateIn(BaseModel):
     examiner: str | None = None
     notes: str | None = None
     timezone_name: str | None = None
+    auto_export_enabled: bool | None = None  # STP-069 — opt-in automatický export
 
 
 def create_app(db_dir: Path | None = None) -> FastAPI:
@@ -242,6 +243,8 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                         "bad_ext": stats["bad_ext"],
                         "dups": stats["dups"],
                         "artifacts": art.get("total", 0),
+                        # STP-069 — stav auto-exportu pro UI checkbox
+                        "auto_export_enabled": bool(case.auto_export_enabled),
                     }
                 )
             finally:
@@ -278,6 +281,9 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 "examiner": case.examiner,
                 "notes": case.notes,
                 "created_at": case.created_at.isoformat(),
+                # STP-069 — opt-in automatický export + cesta k poslednímu bundle.
+                "auto_export_enabled": bool(case.auto_export_enabled),
+                "last_auto_export_path": case.last_auto_export_path,
                 "sources": [
                     {"id": s.id, "kind": s.kind, "path": s.path,
                      "added_at": s.added_at.isoformat()}
@@ -1180,6 +1186,40 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         # FileResponse s filename= sám nastaví Content-Disposition: attachment.
         return FileResponse(path, media_type=media_type, filename=f"{case_id}_{what}.{format}")
 
+    # ── STP-069 — download posledního automatického ZIP bundle (opt-in) ──
+    @app.get("/api/cases/{case_id}/auto-export")
+    def auto_export_download(case_id: str):
+        """Re-download posledního automatického ZIP bundle (STP-069).
+
+        Auto-bundle generuje pipeline hook po dokončení processingu, pokud je u
+        případu zapnutý ``auto_export_enabled``. Cesta je persistovaná v case DB
+        (``last_auto_export_path``); fallback = trvalá cache layout
+        ``{db_dir}/exports/{case_id}/auto-bundle.zip``. Read-only: bez auditu.
+
+        404 = auto-export ještě nikdy nebyl vygenerován.
+        """
+        _require("analysis.run", "auto_export_download")
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            if case is None:
+                raise HTTPException(404, f"Případ '{case_id}' nenalezen")
+        finally:
+            db.close()
+
+        path: Path | None = None
+        persisted = getattr(case, "last_auto_export_path", None)
+        if persisted and Path(persisted).is_file():
+            path = Path(persisted)
+        else:
+            path = _load_last_export(case_id, "auto-bundle", "zip")
+        if path is None:
+            raise HTTPException(404, "automatický export ještě nebyl vygenerován")
+
+        return FileResponse(
+            path, media_type="application/zip", filename=f"{case_id}_auto-bundle.zip"
+        )
+
     # ── STP-059 — Timesketch push (oblast Q, interop) ───────────────
     @app.post("/api/cases/{case_id}/timesketch-push")
     def timesketch_push(case_id: str, body: TimesketchPushIn) -> dict:
@@ -1709,7 +1749,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     # ── E12 — Cases CRUD (update/delete nad existujícím GET/POST) ──
     @app.patch("/api/cases/{case_id}")
     def update_case(case_id: str, body: CaseUpdateIn) -> dict:
-        """Aktualizace metadat případu (name/examiner/notes/timezone)."""
+        """Aktualizace metadat případu (name/examiner/notes/timezone/auto-export)."""
         _require("case.update", "update_case")
         db = open_db(case_id)
         try:
@@ -1719,6 +1759,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 examiner=body.examiner,
                 notes=body.notes,
                 timezone_name=body.timezone_name,
+                auto_export_enabled=body.auto_export_enabled,  # STP-069
             )
             if not ok:
                 raise HTTPException(404, "případ neexistuje")

@@ -51,18 +51,20 @@ async function renderCasesModule() {
   const cases = await api("/api/cases");
   document.querySelector("#cases-table tbody").innerHTML = cases.length
     ? cases.map((c) => `
-      <tr class="${c.id === Store.get("caseId") ? "active-case" : ""}">
+      <tr data-cid="${esc(c.id)}" class="${c.id === Store.get("caseId") ? "active-case" : ""}">
         <td><b>${esc(c.name)}</b></td>
         <td>${esc(c.examiner || "—")}</td>
         <td>${fmtDT(c.created_at)}</td>
         <td class="mono">${c.files}</td>
         <td class="mono">${c.artifacts}</td>
+        <!-- STP-069 — opt-in automatický ZIP bundle po dokončení analýzy -->
+        <td><input type="checkbox" class="case-auto-export" ${c.auto_export_enabled ? "checked" : ""} title="Automaticky exportovat ZIP bundle po dokončení analýzy"></td>
         <td class="row-actions">
           <button data-act="open" title="Otevřít případ">↗</button>
           <button data-act="del" title="Smazat případ">✕</button>
         </td>
       </tr>`).join("")
-    : '<tr><td colspan="6" class="muted">Žádné případy — vytvořte nový vlevo (sidebar).</td></tr>';
+    : '<tr><td colspan="7" class="muted">Žádné případy — vytvořte nový vlevo (sidebar).</td></tr>';
 
   // workspace info
   const diag = await api("/api/diagnostics");
@@ -72,15 +74,16 @@ async function renderCasesModule() {
   document.getElementById("env-last-activity").textContent =
     lastTs ? `poslední vytvořen: ${fmtDT(lastTs)}` : "—";
 
-  // akce na řádcích
+  // akce na řádcích (STP-069: identifikátor z data-cid, jméno jen pro potvrzení)
   for (const btn of document.querySelectorAll("#cases-table button[data-act]")) {
     btn.addEventListener("click", async () => {
       const tr = btn.closest("tr");
-      const id = tr.querySelector("td b")?.textContent;
+      const id = tr?.dataset.cid;
+      if (!id) return;
+      const name = tr.querySelector("td b")?.textContent || "";
       if (btn.dataset.act === "open") {
         await openCase(id);
       } else if (btn.dataset.act === "del") {
-        const name = id || "";
         if (!confirm(`Smazat případ „${name}“ i se všemi zdroji?`)) return;
         try {
           await api(`/api/cases/${id}`, { method: "DELETE" });
@@ -89,6 +92,25 @@ async function renderCasesModule() {
           await loadCases();
           renderCasesModule();
         } catch (e) { toast(`⚠ ${e.message}`); }
+      }
+    });
+  }
+
+  // STP-069 — toggle auto-exportu (opt-in per case, default off)
+  for (const cb of document.querySelectorAll("#cases-table .case-auto-export")) {
+    cb.addEventListener("change", async () => {
+      const id = cb.closest("tr")?.dataset.cid;
+      if (!id) return;
+      try {
+        await api(`/api/cases/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ auto_export_enabled: cb.checked }),
+        });
+        toast(cb.checked ? `✓ Auto export zapnut pro „${id}“` : `Auto export vypnut pro „${id}“`);
+      } catch (e) {
+        cb.checked = !cb.checked; // rollback UI při selhání
+        toast(`⚠ ${e.message}`);
       }
     });
   }

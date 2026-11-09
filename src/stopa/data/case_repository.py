@@ -22,8 +22,9 @@ class CaseRepository:
     # ── cases ────────────────────────────────────────────────
     def add_case(self, case: Case) -> None:
         self.conn.execute(
-            "INSERT INTO cases (id, name, created_at, examiner, notes, timezone_name)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO cases (id, name, created_at, examiner, notes, timezone_name,"
+            " auto_export_enabled)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 case.id,
                 case.name,
@@ -31,6 +32,7 @@ class CaseRepository:
                 case.examiner,
                 case.notes,
                 case.timezone_name,
+                1 if case.auto_export_enabled else 0,
             ),
         )
         self.conn.commit()
@@ -46,6 +48,11 @@ class CaseRepository:
             cols = r.keys()  # E2: staré DB bez sloupce → default
             if "timezone_name" in cols:
                 c.timezone_name = r["timezone_name"] or "Europe/Prague"
+            # STP-069: stará DB (schéma ≤ v12) bez sloupců auto-exportu → default off.
+            if "auto_export_enabled" in cols:
+                c.auto_export_enabled = bool(r["auto_export_enabled"])
+            if "last_auto_export_path" in cols:
+                c.last_auto_export_path = r["last_auto_export_path"]
             if r["created_at"]:
                 try:
                     c.created_at = datetime.fromisoformat(r["created_at"])
@@ -58,6 +65,7 @@ class CaseRepository:
         row = self.conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
         if row is None:
             return None
+        cols = set(row.keys())  # STP-069: stará DB bez sloupců → defaulty
         return Case(
             id=row["id"],
             name=row["name"],
@@ -66,6 +74,13 @@ class CaseRepository:
             notes=row["notes"],
             # E2: staré DB bez sloupce / NULL → default Europe/Prague
             timezone_name=row["timezone_name"] or "Europe/Prague",
+            # STP-069: stará DB (schéma ≤ v12) bez sloupců auto-exportu → default off.
+            auto_export_enabled=(
+                bool(row["auto_export_enabled"]) if "auto_export_enabled" in cols else False
+            ),
+            last_auto_export_path=(
+                row["last_auto_export_path"] if "last_auto_export_path" in cols else None
+            ),
         )
 
     def update_case(
@@ -75,10 +90,11 @@ class CaseRepository:
         examiner: str | None = None,
         notes: str | None = None,
         timezone_name: str | None = None,
+        auto_export_enabled: bool | None = None,
     ) -> bool:
         """E12 — aktualizace metadat případu (jen zadaná pole). True pokud existoval."""
         sets: list[str] = []
-        vals: list[str] = []
+        vals: list[object] = []
         for col, val in (
             ("name", name),
             ("examiner", examiner),
@@ -88,6 +104,10 @@ class CaseRepository:
             if val is not None:
                 sets.append(f"{col} = ?")
                 vals.append(val)
+        # STP-069: bool se liší od str — explicitní větev (False je platná hodnota).
+        if auto_export_enabled is not None:
+            sets.append("auto_export_enabled = ?")
+            vals.append(1 if auto_export_enabled else 0)
         if not sets:
             return self.get_case(case_id) is not None
         vals.append(case_id)
@@ -96,6 +116,13 @@ class CaseRepository:
         )
         self.conn.commit()
         return cur.rowcount > 0
+
+    def set_last_auto_export(self, case_id: str, path: str) -> None:
+        """STP-069 — zapíše cestu k poslednímu automatickému ZIP bundle."""
+        self.conn.execute(
+            "UPDATE cases SET last_auto_export_path = ? WHERE id = ?", (path, case_id)
+        )
+        self.conn.commit()
 
     def delete_case(self, case_id: str) -> bool:
         """E12 — smaže případ i všechny jeho zdroje (kaskáda na files/artifacts/timeline).

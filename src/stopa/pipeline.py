@@ -11,6 +11,7 @@ Jeden kódový průchod pro CLI i web — jedna cesta k debugování.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import tempfile
@@ -1223,7 +1224,50 @@ def process_source(
         outputs=summarize_outputs(result),
         duration_ms=int((time.monotonic() - _t0) * 1000),
     )
+    # STP-069 — Plánované/periodické exporty: opt-in automatický ZIP bundle po
+    # úspěšném dokončení processingu. Fail-safe: chyba auto-exportu nikdy nepadne
+    # hlavní flow (log + pokračování). Deterministický výstup (C4) přes to_zip_bundle.
+    _maybe_auto_export(db, source_id)
     return result
+
+
+def _maybe_auto_export(db: CaseDB, source_id: str) -> None:
+    """STP-069 — vygeneruje auto-bundle, pokud je u případu zapnutý (opt-in).
+
+    Volá se na konci ``process_source()`` po úspěšném dokončení. Celé tělo je
+    obalené v try/except — selhání auto-exportu se pouze zloguje a nikdy nepadne
+    hlavní ingest/analysis flow (fail-safe, default off).
+    """
+    case_id = _case_id_for_source(db, source_id)
+    if not case_id:
+        return
+    try:
+        case = db.get_case(case_id)
+        if case is None or not case.auto_export_enabled:
+            return
+        from stopa.domain.export import build_auto_bundle
+
+        data, out_path = build_auto_bundle(db, case_id)
+        # atomický zápis (tmp → rename), aby UI nikdy nevidělo poloviční soubor
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = out_path.with_suffix(".zip.tmp")
+        tmp_path.write_bytes(data)
+        tmp_path.replace(out_path)
+        db.set_last_auto_export(case_id, str(out_path))
+        db.log_operation(
+            "auto_bundle_exported",
+            actor=case.examiner,
+            details={
+                "source_id": source_id,
+                "path": str(out_path),
+                "bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 — fail-safe, nikdy nepadne flow
+        logging.getLogger(__name__).warning(
+            "STP-069 auto-export selhal (case=%s): %s", case_id, exc
+        )
 
 
 def run_timeline_intel(

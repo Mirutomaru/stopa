@@ -44,6 +44,9 @@ class Case(BaseModel):
     notes: str | None = None
     # E2 Timeline Engine: lokální časové pásmo pro zobrazení timeline (default Praha).
     timezone_name: str = "Europe/Prague"
+    # STP-069 Plánované exporty: opt-in automatický ZIP bundle po dokončení analýzy.
+    auto_export_enabled: bool = False
+    last_auto_export_path: str | None = None
 
 
 class EvidenceSource(BaseModel):

@@ -25,6 +25,7 @@ import re
 import uuid
 import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
@@ -520,3 +521,50 @@ def to_zip_bundle(
             zi.external_attr = 0o644 << 16
             zf.writestr(zi, data)
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# STP-069 — Plánované/periodické exporty (automatický ZIP bundle po analýze)
+# ---------------------------------------------------------------------------
+
+def _auto_bundle_path(db_dir: Path | str, case_id: str) -> Path:
+    """Deterministická cesta auto-bundle: {db_dir}/exports/{case_id}/auto-bundle.zip."""
+    return Path(db_dir) / "exports" / case_id / "auto-bundle.zip"
+
+
+def build_auto_bundle(
+    db: Any,
+    case_id: str,
+    generated_at_utc: str | None = None,
+) -> tuple[bytes, Path]:
+    """STP-069 — vygeneruje deterministický ZIP bundle všech datasetů případu.
+
+    Re-use STP-068 ``to_zip_bundle()`` (stejná serializace → stejný vstup =
+    stejné bajty). Deterministický timestamp: explicitní ``generated_at_utc``,
+    jinak ``case.created_at`` (C4 — ne wall-clock, aby byl výsledek reprodukovatelný).
+
+    Args:
+        db: CaseDB (list_artifacts/list_timeline_events/list_correlations).
+        case_id: ID případu.
+        generated_at_utc: ISO-8601 s offsetem; None → case.created_at.
+
+    Returns:
+        (zip_bytes, out_path) — cesta {db_dir}/exports/{case_id}/auto-bundle.zip
+        (soubor se NEZAPÍŠE; volající ho ukládá a persistuje).
+
+    Raises:
+        ValueError: neexistující případ / neplatný timestamp.
+    """
+    case = db.get_case(case_id)
+    if case is None:
+        raise ValueError(f"Případ {case_id} neexistuje")
+    ts = generated_at_utc or case.created_at.isoformat()
+    # Klíče musí odpovídat BUNDLE_DATASETS ("timeline", ne "timeline_events"),
+    # jinak by to_zip_bundle() dataset považoval za chybějící → prázdný CSV.
+    datasets = {
+        "artifacts": artifact_records(db.list_artifacts(limit=None)),
+        "timeline": timeline_records(db.list_timeline_events(limit=None)),
+        "correlations": correlation_records(db.list_correlations(case_id)),
+    }
+    data = to_zip_bundle(datasets, case_id, ts)
+    return data, _auto_bundle_path(Path(db.path).parent, case_id)

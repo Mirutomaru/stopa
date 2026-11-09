@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS cases (
     created_at TEXT NOT NULL,
     examiner TEXT,
     notes TEXT,
-    timezone_name TEXT DEFAULT 'Europe/Prague'  -- E2: lokální TZ pro zobrazení timeline
+    timezone_name TEXT DEFAULT 'Europe/Prague',  -- E2: lokální TZ pro zobrazení timeline
+    auto_export_enabled INTEGER NOT NULL DEFAULT 0,  -- STP-069: opt-in automatický export (default off)
+    last_auto_export_path TEXT  -- STP-069: cesta k poslednímu automatickému ZIP bundle
 );
 CREATE TABLE IF NOT EXISTS sources (
     id TEXT PRIMARY KEY,

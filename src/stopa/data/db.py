@@ -103,11 +103,21 @@ class CaseDB:
         examiner: str | None = None,
         notes: str | None = None,
         timezone_name: str | None = None,
+        auto_export_enabled: bool | None = None,
     ) -> bool:
         """E12 — aktualizace metadat případu (jen zadaná pole). True pokud existoval."""
         return self.case_repo.update_case(
-            case_id, name=name, examiner=examiner, notes=notes, timezone_name=timezone_name
+            case_id,
+            name=name,
+            examiner=examiner,
+            notes=notes,
+            timezone_name=timezone_name,
+            auto_export_enabled=auto_export_enabled,
         )
+
+    def set_last_auto_export(self, case_id: str, path: str) -> None:
+        """STP-069 — zapíše cestu k poslednímu automatickému ZIP bundle."""
+        self.case_repo.set_last_auto_export(case_id, path)
 
     def delete_case(self, case_id: str) -> bool:
         """E12 — smaže případ i všechny jeho zdroje (kaskáda na files/artifacts/timeline)."""
