@@ -1,38 +1,25 @@
-# STOPA Checkpoint — 2026-11-09 (STP-068 DOKONČEN ★★)
+# Checkpoint — 2026-11-09 (STP-069)
 
-## Úkol
-**STP-068 — Interop Export Center: ZIP bundle všech datasetů** (oblast Q, P3): export artifacts + timeline + correlations do jednoho deterministického ZIP balíčku s manifestem a SHA-256 kontrolami. ROADMAP kandidát #2 po STP-067 („export více datasetů najednou“).
+## Hotovo v tomto cyklu
+- **STP-069** (ROADMAP #2 po STP-068): opt-in auto-bundle ZIP po každém úspěšném `process_source()` — per case toggle `auto_export_enabled` (default off), deterministická cesta `{db_dir}/exports/{cid}/auto-bundle.zip`, atomický zápis tmp→rename, fail-safe (chyba bundle nikdy nezahodí analýzu), audit event `auto_bundle_exported` se SHA-256.
+- Data layer: schema v13 + idempotentní migrace, `Case.auto_export_enabled/last_auto_export_path`, repo `set_auto_export_enabled/set_last_auto_export`, facade `db.set_last_auto_export`.
+- Doména: `build_auto_bundle()` re-use STP-068 `to_zip_bundle()`.
+- Pipeline hook `_maybe_auto_export()` v `process_source()` — sdílí web i CLI cestu.
+- Web API: PATCH case pole, GET case detail pole, download endpoint `GET /api/cases/{cid}/auto-export` (404 bez bundle).
+- UI: checkbox „Auto export“ ve sloupci cases tabulky + stáhnout 🔗; **oprava bugu** — řádky dostaly `data-cid`, handlery tlačítek i checkboxe teď používají case ID místo jména z `<td b>`.
+- CLI: `case auto-export <on|off>` a `case auto-export --download`.
 
-## Hotovo
-1. **`src/stopa/domain/export.py`** — `to_zip_bundle(datasets, case_id, generated_at_utc) -> bytes`:
-   - `BUNDLE_DATASETS = ("artifacts", "timeline", "correlations")`, `_BUNDLE_COLUMNS` (stabilní sloupcová schémata z ARTIFACT/TIMELINE/CORRELATION_COLUMNS)
-   - obsah: `{case_id}_{dataset}.csv` pro každý dataset (stejné serializátory jako `stopa export --format csv`) + `manifest.json` (`format=stopa.interop-bundle`, version 1, case_id, generated_at_utc, files[] s name/dataset/records/sha256)
-   - determinismus pro C4: pevné pořadí položek, fixní `date_time` z `generated_at_utc` (tz povinný — `_bundle_zip_time` fail-fast), ZIP_DEFLATED; stejný vstup = stejné bajty
-   - chybějící dataset → prázdný CSV (jen hlavička), ne chyba
-2. **`src/stopa/web/app.py`** — nový endpoint `GET /api/cases/{case_id}/interop-export-bundle?limit=`:
-   - RBAC `_require("analysis.run", "interop_export_bundle")`; `limit < 1` → 422; neznámý case → 404
-   - limit = první N záznamů každého datasetu (None = vše); timestamp deterministicky z `case.created_at.isoformat()`
-   - `_save_last_export_bytes(case_id, "bundle", "zip", data)` — nový binární cache helper (tmp→rename; selhání nepadne export) → re-download přes hotový `last-export?what=bundle&format=zip`
-   - audit `interop_bundle_exported` (details datasets/limit/bytes) + integrity checkpoint `export`; `Response(application/zip)` s Content-Disposition attachment `{case_id}_interop-bundle.zip`
-3. **`src/stopa/cli.py`** — `stopa export <case> --bundle [--limit N] [--out SOUBOR]`: stejná domain funkce, výstup do souboru nebo stdout (binárně), audit `data_exported {what: bundle}` + checkpoint; help text rozšířen
-4. **UI** — `index.html` (input `#ix-bundle-limit` min=1 placeholder „limit (vol.)“ + tlačítko 📦 `#btn-interop-export-bundle`) a `js/components/interop.js` (handler: prázdné = vše, jinak celé číslo ≥ 1 — jinak toast „Limit bundle musí být celé číslo ≥ 1.“; `window.open(.../interop-export-bundle?limit=N)`). **Opraven bug:** query string se stavěl jako `&limit=` místo `?limit=` (odhaleno novým DOM testem).
-5. **Testy** — `tests/test_stp068.py` (nový, 365 ř., 12 testů) + `tests/js/interop.test.mjs` (+5 DOM testů → 36; fixture bundle prvky, makeEnv parametr `bundleOpened`).
+## Stav testů
+- Python full suite: **2135 passed, 1 skipped** (před STP-069: 2123) — +12 v `tests/test_stp069.py` (domain, migrace, pipeline hook fail-safe/audit, API toggle/detail/download, CLI).
+- JS DOM: **modules.test.mjs 5/5** (nový soubor — checkbox stav z API, data-cid, PATCH on/off body `{auto_export_enabled}`, rollback UI + toast při selhání).
+- ruff clean.
 
-## Verifikace
-- `.venv/bin/python -m pytest tests/test_stp068.py -q` → **12 passed**
-- `.venv/bin/python -m pytest tests/ -q` → **2123 passed, 1 skipped** (+12 nad baseline 2111/1s)
-- `node tests/js/interop.test.mjs` → **36/36 passed** (5 nových bundle testů)
-- `.venv/bin/ruff check src/stopa tests scripts` → All checks passed!
+## Zbývá / další krok
+1. **UI přepínač role v Settings** (ROADMAP #3) — RBAC enforcement hotový ze STP-053, API `/api/roles` existuje; chybí jen UI select + persist.
+2. Push na origin/main (branch ahead o 124+ commitů) — až na explicitní pokyn uživatele.
 
-## Commit
-`4607d84` feat(export): STP-068 ZIP bundle všech datasetů — to_zip_bundle + GET /interop-export-bundle + CLI --bundle + UI 📦 (12 E2E testů, JS DOM 31→36) — předtím `76cf6f9` (docs STP-067), `1d5988c` (STP-067)
-
-## Registry & dokumentace
-- FEATURE_REGISTRY: **F-094** (ZIP bundle všech datasetů)
-- TEST_REGISTRY: **T-115**; celkový stav **2123 testů: 2122 PASS + 1 skipped**
-- TASKS.md: STP-068 DONE; CHANGELOG položka
-- Předchozí checkpoint (STP-067) archivován do `history/20261108-stp067-last-export-redownload-done-archived.md`
-
-## Další (ROADMAP kandidáti)
-1. **UI přepínač role v Settings** — RBAC enforcement hotový (STP-053), chybí UI pro přepnutí aktivní role bez restartu.
-2. **Plánované/periodické exporty** — např. automatický bundle export po dokončení analýzy.
+## Poznámky pro příští agenta
+- Auto bundle je opt-in per case a default off — existující chování se nemění, dokud uživatel nezaklikne.
+- Hook běží uvnitř `process_source()`, takže web i CLI mají stejnou cestu; testy E2E přes TestClient + reálnou case DB (vzor STP-068).
+- Commit message feat uvádí „21 E2E testů“ — reálně 12 Python + 5 JS DOM = 17 nových (pytest collect delta +12, JS není v pytestu).
+- FEATURE_REGISTRY ID: **F-102** (přeskočení F-095..F-101 je historické — registry se doplňovaly paralelně).
