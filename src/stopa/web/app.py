@@ -189,6 +189,26 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 case_id, what, format, exc_info=True,
             )
 
+    def _save_last_export_bytes(
+        case_id: str, what: str, format: str, data: bytes
+    ) -> None:
+        """Atomicky uloží binární export (ZIP bundle) do cache (STP-068).
+
+        Stejná sémantika jako :func:`_save_last_export`, ale pro bajty —
+        ZIP bundle nelze bezpečně přes text/utf-8. Chyba zápisu nepadá export.
+        """
+        try:
+            target = _last_export_path(case_id, what, format)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_name(target.name + ".tmp")
+            tmp.write_bytes(data)
+            tmp.replace(target)  # atomický na POSIX i Windows (same volume)
+        except OSError:
+            logging.getLogger("stopa.web").warning(
+                "cache posledního exportu se nepodařilo uložit (%s/%s %s)",
+                case_id, what, format, exc_info=True,
+            )
+
     def _load_last_export(case_id: str, what: str, format: str) -> Path | None:
         """Vrátí existující cache soubor nebo None (ještě neexportováno)."""
         path = _last_export_path(case_id, what, format)
@@ -889,6 +909,75 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── STP-068 — ZIP bundle všech datasetů (oblast Q ★★) ───────────────
+    @app.get("/api/cases/{case_id}/interop-export-bundle")
+    def interop_export_bundle(case_id: str, limit: int | None = Query(default=None)):
+        """Export všech 3 datasetů případu do jednoho deterministického ZIP (GUI — oblast Q ★★).
+
+        Zrcadlí ``stopa export --bundle`` CLI (stejná domain funkce
+        ``to_zip_bundle``): artifacts + timeline + correlations jako CSV
+        soubory + manifest.json se SHA-256 kontrolními součty. Deterministický
+        výstup pro C4: fixní pořadí souborů, fixní timestamps v ZIP, stabilní
+        manifest. Volitelné ``limit`` — exportuje jen první N záznamů každého
+        datasetu (None = vše; <1 → 422). Audit + integrity checkpoint.
+        """
+        from fastapi import Response
+
+        from stopa.domain.export import (
+            artifact_records,
+            correlation_records,
+            timeline_records,
+            to_zip_bundle,
+        )
+
+        _require("analysis.run", "interop_export_bundle")
+        if limit is not None and limit < 1:
+            raise HTTPException(422, f"limit musí být ≥ 1 (dostalo se {limit})")
+
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)
+            if case is None:
+                raise HTTPException(404, f"Případ '{case_id}' nenalezen")
+            datasets = {
+                "artifacts": artifact_records(db.list_artifacts()),
+                "timeline": timeline_records(db.list_timeline_events()),
+                "correlations": correlation_records(db.list_correlations(case_id)),
+            }
+            if limit is not None:
+                datasets = {k: v[:limit] for k, v in datasets.items()}
+
+            # STP-068 — deterministický timestamp z case.created_at (C4).
+            data = to_zip_bundle(datasets, case_id, case.created_at.isoformat())
+
+            # STP-068 — cache binárního bundle pro re-download z historie UI.
+            _save_last_export_bytes(case_id, "bundle", "zip", data)
+
+            ascii_name = f"{case_id}_interop-bundle.zip"
+            db.log_operation(
+                "interop_bundle_exported",
+                actor=case.examiner if case else None,
+                details={
+                    "datasets": {k: len(v) for k, v in datasets.items()},
+                    "limit": limit,
+                    "bytes": len(data),
+                },
+            )
+            # P0 Core C4: kontrolní bod po exportu.
+            db.add_integrity_checkpoint("export")
+            return Response(
+                content=data,
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": (
+                        f'attachment; filename="{ascii_name}"; '
+                        f"filename*=UTF-8''{quote(ascii_name)}"
+                    )
+                },
+            )
+        finally:
+            db.close()
+
     # ── STP-064 — L2T CSV preview (oblast Q ★★) ───────────────
     @app.get("/api/cases/{case_id}/l2tcsv-preview")
     def l2tcsv_preview(case_id: str, what: str = "artifacts", limit: int = 50) -> dict:
@@ -1051,12 +1140,20 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         která už jednou vyexportoval, bez nového exportu. Read-only: bez audit
         záznamu i integrity checkpointu (není nový export).
 
+        STP-068: ``what=bundle&format=zip`` re-downloaduje poslední ZIP bundle
+        všech datasetů (cache uložená při ``interop-export-bundle``).
+
         404 = pro daný dataset+formát ještě nebylo nic exportováno.
         """
         _require("analysis.run", "last_export")
-        if what not in ("artifacts", "timeline", "correlations"):
+        if what not in ("artifacts", "timeline", "correlations", "bundle"):
             raise HTTPException(400, f"neplatný dataset: {what}")
-        valid_formats = ("csv", "json", "jsonl", "xml", "stix", "l2tcsv", "uco")
+        # STP-068 — bundle se re-downloaduje jen jako zip; ostatní datasety
+        # zip neznají (cache layout {what}.{format} je sdílený).
+        if what == "bundle":
+            valid_formats = ("zip",)
+        else:
+            valid_formats = ("csv", "json", "jsonl", "xml", "stix", "l2tcsv", "uco")
         if format not in valid_formats:
             raise HTTPException(400, f"neplatný formát: {format}")
 
@@ -1078,6 +1175,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             "jsonl": "application/x-ndjson",
             "xml": "application/xml",
             "l2tcsv": "text/plain",
+            "zip": "application/zip",  # STP-068 — ZIP bundle
         }[format]
         # FileResponse s filename= sám nastaví Content-Disposition: attachment.
         return FileResponse(path, media_type=media_type, filename=f"{case_id}_{what}.{format}")

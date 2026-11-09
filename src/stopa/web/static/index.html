@@ -316,6 +316,11 @@
         </select>
       </div>
       <button id="btn-interop-export" class="primary small-btn" style="margin-top:10px">⬇ Stáhnout export</button>
+      <!-- STP-068 — ZIP bundle všech datasetů (manifest + SHA-256, deterministický) -->
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <input id="ix-bundle-limit" type="number" min="1" placeholder="limit (vol.)" class="small-btn" style="max-width:130px" title="Volitelný limit záznamů na dataset — prázdné = vše">
+        <button id="btn-interop-export-bundle" class="primary small-btn">📦 Stáhnout ZIP bundle</button>
+      </div>
     </div>
 
     <div class="card small" id="l2tcsv-preview-card" style="margin-top:12px">

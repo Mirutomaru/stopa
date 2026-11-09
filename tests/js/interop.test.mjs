@@ -26,6 +26,9 @@ function makeEnv({ pushResponse, pushError, statusResponse, statusError, plasoRe
     <select id="ix-what"><option value="artifacts">Artifacty</option></select>
     <select id="ix-format"><option value="l2tcsv">l2tcsv</option></select>
     <button id="btn-interop-export"></button>
+    <!-- STP-068 — ZIP bundle všech datasetů -->
+    <input type="number" id="ix-bundle-limit" min="1" placeholder="limit (vol.)">
+    <button id="btn-interop-export-bundle"></button>
     <div class="card" id="l2tcsv-preview-card">
       <button id="btn-l2t-preview"></button>
       <div id="l2t-preview-status"></div>
@@ -495,4 +498,56 @@ await test("re-download: prázdný audit (žádné interop_exported) → žádn�
   assert.equal(env.window.document.querySelectorAll("#ix-recent .ix-redl").length, 0, "žádné ⬇ tlačítko bez exportů v auditu");
 });
 
-console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import + L2T preview + export náhled + re-download): ${passed}/31 passed`);
+/* ── STP-068 — ZIP bundle všech datasetů (📦 tlačítko + limit validace) ── */
+
+await test("bundle: po renderu má btn-interop-export-bundle navázaný onclick", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-interop-export-bundle");
+  assert.ok(btn, "tlačítko btn-interop-export-bundle existuje");
+  assert.equal(typeof btn.onclick, "function", "onclick handler je navázaný");
+});
+
+await test("bundle: klik bez limitu → window.open /interop-export-bundle (bez parametru)", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const btn = env.window.document.getElementById("btn-interop-export-bundle");
+  btn.onclick();
+  assert.equal(env.opened.length, 1, "window.open voláno jednou");
+  assert.match(env.opened[0], /^\/api\/cases\/c1\/interop-export-bundle$/, "endpoint bez limitu (prázdný input = vše)");
+});
+
+await test("bundle: klik s limit=3 → window.open /interop-export-bundle?limit=3", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const lim = env.window.document.getElementById("ix-bundle-limit");
+  lim.value = "3";
+  const btn = env.window.document.getElementById("btn-interop-export-bundle");
+  btn.onclick();
+  assert.equal(env.opened.length, 1, "window.open voláno jednou");
+  assert.match(env.opened[0], /^\/api\/cases\/c1\/interop-export-bundle\?limit=3$/, "endpoint s limit z inputu");
+});
+
+await test("bundle: invalidní limit (0) → toast + žádné window.open", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const lim = env.window.document.getElementById("ix-bundle-limit");
+  lim.value = "0"; // < 1 → invalidní
+  const btn = env.window.document.getElementById("btn-interop-export-bundle");
+  btn.onclick();
+  assert.equal(env.opened.length, 0, "window.open nebylo voláno");
+  assert.ok(env.toasts.some((t) => /Limit bundle musí být celé číslo ≥ 1/.test(t)), "toast s chybovou zprávou");
+});
+
+await test("bundle: invalidní limit (1.5 — necelé) → toast + žádné window.open", async () => {
+  const env = makeEnv();
+  await env.sandbox.renderInteropExports("c1");
+  const lim = env.window.document.getElementById("ix-bundle-limit");
+  lim.value = "1.5"; // necelé číslo → invalidní
+  const btn = env.window.document.getElementById("btn-interop-export-bundle");
+  btn.onclick();
+  assert.equal(env.opened.length, 0, "window.open nebylo voláno");
+  assert.ok(env.toasts.some((t) => /Limit bundle musí být celé číslo ≥ 1/.test(t)), "toast s chybovou zprávou");
+});
+
+console.log(`\ninterop.js DOM testy (Timesketch push + live status + Plaso import + L2T preview + export náhled + re-download + ZIP bundle): ${passed}/36 passed`);

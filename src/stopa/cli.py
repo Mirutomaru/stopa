@@ -13,7 +13,7 @@ Použití:
   stopa audit <case_id> [--limit N] [-v]                 # E1 — neměnná stopa operací
   stopa backup <case_id> [--out DIR]                     # E1 — záloha case DB (SQLite .backup + integrity)
   stopa report <case_id> [--format html|pdf] [--out DIR] [--lang cs|en]  # court-ready report + chain of custody
-  stopa export <case_id> --what artifacts|timeline|correlations --format csv|json|jsonl|xml|stix|l2tcsv|uco [--limit N] [--out SOUBOR]
+  stopa export <case_id> --what artifacts|timeline|correlations --format csv|json|jsonl|xml|stix|l2tcsv|uco [--limit N] [--out SOUBOR] [--bundle]
   stopa serve [--port 8473]                                 # web GUI (FastAPI)
   stopa profiles
 
@@ -487,6 +487,37 @@ def cmd_export(args: argparse.Namespace) -> int:
     from stopa.domain.uco import to_uco_json
 
     db = _open_db(args.case_id)
+
+    # STP-068 — ZIP bundle všech datasetů (deterministický, s manifestem + SHA-256).
+    if getattr(args, "bundle", False):
+        from stopa.domain.export import to_zip_bundle
+
+        case = db.get_case(args.case_id)
+        if case is None:
+            raise SystemExit(f"Případ '{args.case_id}' nenalezen v DB")
+        generated_at_utc = case.created_at.isoformat()
+        datasets = {
+            "artifacts": artifact_records(db.list_artifacts(limit=args.limit)),
+            "timeline": timeline_records(db.list_timeline_events(limit=args.limit)),
+            "correlations": correlation_records(db.list_correlations(args.case_id)),
+        }
+        data = to_zip_bundle(datasets, args.case_id, generated_at_utc)
+        out_path = Path(args.out).expanduser() if args.out else None
+        if out_path is not None:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_bytes(data)
+            print(f"ZIP bundle (3 datasety): {out_path}")
+        else:
+            sys.stdout.buffer.write(data)
+        db.log_operation(
+            "data_exported",
+            actor=case_examiner(db, args.case_id),
+            details={"what": "bundle", "format": "zip"},
+        )
+        db.add_integrity_checkpoint("export")
+        db.close()
+        return 0
+
     if args.what == "artifacts":
         records = artifact_records(db.list_artifacts(limit=args.limit))
         columns = ARTIFACT_COLUMNS
@@ -1285,6 +1316,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="max. počet záznamů (artifacts/timeline; default: vše)")
     exp_p.add_argument("--out", metavar="SOUBOR",
                        help="výstupní soubor (default: stdout)")
+    exp_p.add_argument("--bundle", action="store_true",
+                       help="STP-068 — ZIP bundle všech datasetů (manifest + SHA-256, deterministický)")
     exp_p.set_defaults(func=cmd_export)
 
     pli_p = sub.add_parser(

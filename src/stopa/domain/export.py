@@ -18,10 +18,12 @@ proto je držíme stabilní a dokumentované.
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import re
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -438,4 +440,83 @@ def to_l2tcsv(records: list[dict[str, Any]], dataset: str = "artifacts") -> str:
             "format": f"stopa.{dataset}",
             "extra": json.dumps(extra, ensure_ascii=False, sort_keys=True),
         })
+    return buf.getvalue()
+
+
+# ── STP-068 — ZIP bundle všech datasetů (oblast Q ★★) ────────────────
+
+#: Datasety v bundlu a jejich sloupcová schémata (stabilní pořadí).
+BUNDLE_DATASETS: tuple[str, ...] = ("artifacts", "timeline", "correlations")
+
+_BUNDLE_COLUMNS: dict[str, tuple[str, ...]] = {
+    "artifacts": ARTIFACT_COLUMNS,
+    "timeline": TIMELINE_COLUMNS,
+    "correlations": CORRELATION_COLUMNS,
+}
+
+
+def _bundle_zip_time(generated_at_utc: str) -> tuple[int, int, int, int, int, int]:
+    """ISO UTC čas → date_time tuple pro ZipInfo (deterministní zip).
+
+    Neplatný formát → ``ValueError`` (endpoint vždy předá platné ISO).
+    """
+    dt = datetime.fromisoformat(generated_at_utc.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        raise ValueError(f"generated_at_utc musí nést timezone offset: {generated_at_utc}")
+    return (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+
+
+def to_zip_bundle(
+    datasets: dict[str, list[dict[str, Any]]],
+    case_id: str,
+    generated_at_utc: str,
+) -> bytes:
+    """Sestaví deterministický ZIP bundle všech datasetů případu (STP-068).
+
+    Obsah: ``{case_id}_{dataset}.csv`` pro každý z :data:`BUNDLE_DATASETS`
+    (stejné serializátory/sloupce jako ``stopa export --format csv``) +
+    ``manifest.json`` s formátem, verzí, case ID, časem a SHA-256 každého
+    souboru. Determinismus: pevné pořadí položek, fixní date_time z
+    ``generated_at_utc``, ZIP_DEFLATED — stejný vstup = stejné bajty
+    (reprodukovatelnost C4).
+
+    Chybějící dataset v ``datasets`` → prázdný CSV (jen hlavička), ne chyba.
+    """
+    zip_time = _bundle_zip_time(generated_at_utc)  # fail-fast na neplatný čas
+
+    entries: list[tuple[str, bytes]] = []
+    manifest_files: list[dict[str, Any]] = []
+    for ds in BUNDLE_DATASETS:
+        records = datasets.get(ds) or []
+        text = to_csv(records, _BUNDLE_COLUMNS[ds])
+        data = text.encode("utf-8")
+        name = f"{case_id}_{ds}.csv"
+        entries.append((name, data))
+        manifest_files.append({
+            "name": name,
+            "dataset": ds,
+            "records": len(records),
+            "sha256": hashlib.sha256(data).hexdigest(),
+        })
+
+    manifest = json.dumps(
+        {
+            "format": "stopa.interop-bundle",
+            "version": 1,
+            "case_id": case_id,
+            "generated_at_utc": generated_at_utc,
+            "files": manifest_files,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    ).encode("utf-8")
+    entries.append(("manifest.json", manifest))
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for name, data in entries:
+            zi = zipfile.ZipInfo(filename=name, date_time=zip_time)
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            zi.external_attr = 0o644 << 16
+            zf.writestr(zi, data)
     return buf.getvalue()

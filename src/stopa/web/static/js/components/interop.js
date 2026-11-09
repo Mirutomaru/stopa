@@ -62,6 +62,25 @@ async function renderInteropExports(cid) {
     };
   }
 
+  // STP-068 — ZIP bundle všech datasetů (manifest + SHA-256, deterministický)
+  const bBtn = document.getElementById("btn-interop-export-bundle");
+  if (bBtn) {
+    bBtn.onclick = () => {
+      // limit: prázdné = vše; jinak celé číslo ≥ 1 (limit sémantika STP-065+)
+      let qs = "";
+      const limEl = document.getElementById("ix-bundle-limit");
+      if (limEl && limEl.value.trim() !== "") {
+        const n = Number(limEl.value);
+        if (!Number.isInteger(n) || n < 1) {
+          toast("Limit bundle musí být celé číslo ≥ 1.", 4000);
+          return;
+        }
+        qs = `?limit=${n}`;
+      }
+      window.open(`/api/cases/${Store.get("caseId")}/interop-export-bundle${qs}`, "_blank");
+    };
+  }
+
   // L2T CSV náhled (STP-064, oblast Q ★★) — GET /api/cases/{id}/l2tcsv-preview
   const pvBtn = document.getElementById("btn-l2t-preview");
   if (pvBtn) {
