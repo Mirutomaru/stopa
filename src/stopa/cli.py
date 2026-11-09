@@ -98,15 +98,64 @@ def cmd_case_auto_export(args: argparse.Namespace) -> int:
         if not ok:
             raise SystemExit(f"Případ '{args.case_id}' neexistuje")
         case = db.get_case(args.case_id)
+        # STP-070 — volitelný interval periodického auto-bundle (minuty).
+        minutes: int | None = None
+        if args.interval is not None:
+            from stopa.domain.export_schedule import parse_interval_minutes
+
+            try:
+                minutes = parse_interval_minutes(args.interval)
+            except ValueError as exc:
+                raise SystemExit(str(exc))
+            ok_int = db.set_auto_export_interval(args.case_id, minutes)
+            if not ok_int:
+                raise SystemExit(f"Případ '{args.case_id}' neexistuje")
         db.log_operation(
             "auto_export_toggled",
             actor=case.examiner if case else None,
-            details={"case_id": args.case_id, "enabled": enabled},
+            details={
+                "case_id": args.case_id,
+                "enabled": enabled,
+                "interval_minutes": minutes,  # STP-070 (None = bez změny)
+            },
         )
     finally:
         db.close()
     state = "ZAPNUTO" if enabled else "VYPNUTO"
     print(f"Automatický export (STP-069): {state} pro případ {args.case_id}")
+    if minutes is not None:
+        print(f"Interval periodického auto-bundle (STP-070): {minutes} min")
+    return 0
+
+
+def cmd_case_auto_interval(args: argparse.Namespace) -> int:
+    """STP-070 — nastavit/vymazat interval periodického auto-bundle."""
+    db = _open_db(args.case_id)
+    try:
+        if args.minutes == "off":
+            minutes: int | None = None
+        else:
+            from stopa.domain.export_schedule import parse_interval_minutes
+
+            try:
+                minutes = parse_interval_minutes(args.minutes)
+            except ValueError as exc:
+                raise SystemExit(str(exc))
+        ok = db.set_auto_export_interval(args.case_id, minutes)
+        if not ok:
+            raise SystemExit(f"Případ '{args.case_id}' neexistuje")
+        case = db.get_case(args.case_id)
+        db.log_operation(
+            "auto_export_interval_set",
+            actor=case.examiner if case else None,
+            details={"case_id": args.case_id, "interval_minutes": minutes},
+        )
+    finally:
+        db.close()
+    if minutes is None:
+        print(f"Interval periodického auto-bundle (STP-070): VYMÁZÁN pro případ {args.case_id}")
+    else:
+        print(f"Interval periodického auto-bundle (STP-070): {minutes} min pro případ {args.case_id}")
     return 0
 
 
@@ -1168,7 +1217,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     autoexp_p.add_argument("case_id", help="ID případu")
     autoexp_p.add_argument("state", choices=["on", "off"], help="on = zapnout, off = vypnout")
+    # STP-070 — volitelný interval periodického auto-bundle (minuty).
+    autoexp_p.add_argument(
+        "--interval",
+        type=int,
+        default=None,
+        metavar="MINUTY",
+        help="STP-070: interval periodického auto-bundle v minutách (5–43200)",
+    )
     autoexp_p.set_defaults(func=cmd_case_auto_export)
+
+    # STP-070 — nastavení/vymazání intervalu periodického auto-bundle.
+    autoint_p = case_sub.add_parser(
+        "auto-interval", help="nastavit interval periodického auto-bundle (STP-070)"
+    )
+    autoint_p.add_argument("case_id", help="ID případu")
+    autoint_p.add_argument(
+        "minutes",
+        help="interval v minutách (5–43200) nebo 'off' pro vymazání",
+    )
+    autoint_p.set_defaults(func=cmd_case_auto_interval)
 
     add_p = sub.add_parser("add", help="přidat zdroj důkazů a zpracovat")
     add_p.add_argument("case_id", help="ID případu (z 'stopa case new')")

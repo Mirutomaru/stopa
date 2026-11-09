@@ -17,8 +17,9 @@ import logging
 import os
 import re
 import threading
+import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -137,6 +138,73 @@ class CaseUpdateIn(BaseModel):
     notes: str | None = None
     timezone_name: str | None = None
     auto_export_enabled: bool | None = None  # STP-069 — opt-in automatický export
+    # STP-070 — interval periodického auto-bundle v minutách (5–43200).
+    # str|None: UI posílá i prázdný string („vymazat“); None = pole nezadáno.
+    auto_export_interval_minutes: int | str | None = None
+
+
+# ── STP-070 — periodický plánovač auto-bundle (scheduler) ───────────────
+_AUTO_EXPORT_TICK_SECONDS = 60  # tick každou minutu; minimální interval je 5 min
+
+
+def run_auto_export_tick(db_dir: Path, now_utc: datetime | None = None) -> list[dict]:
+    """STP-070 — jeden průchod plánovače: auto-bundle pro všechny „due“ případy.
+
+    Procházejí se všechny case DB v ``db_dir``; u každého případu se
+    ``auto_export_enabled=1`` a nastaveným intervalem se ověří doménová
+    podmínka :func:`stopa.domain.export_schedule.is_due` (explicitní
+    ``now_utc`` → deterministicky testovatelné). Due případy dostanou
+    deterministický ZIP bundle (STP-069 ``build_auto_bundle``), atomicky
+    uložený do trvalé cache, a persistovaný čas spuštění.
+
+    Chyba u jednoho případu nepadá celý tick — zaloguje se a pokračuje.
+
+    Returns:
+        Seznam ``{"case_id", "path"}`` pro každé vygenerované bundle.
+    """
+    from stopa.domain.export import build_auto_bundle
+    from stopa.domain.export_schedule import is_due
+
+    now = now_utc or datetime.now(timezone.utc)
+    results: list[dict] = []
+    for path in sorted(db_dir.glob("case-*.db")):
+        case_id = path.stem
+        if not _CASE_ID_RE.match(case_id):
+            continue
+        db = CaseDB(path)
+        try:
+            due_cases = [
+                c
+                for c in db.list_scheduled_cases()
+                if is_due(c.last_auto_export_at, now, c.auto_export_interval_minutes or 0)
+            ]
+            for case in due_cases:
+                try:
+                    data, out_path = build_auto_bundle(db, case_id)
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
+                    tmp = out_path.with_name(out_path.name + ".tmp")
+                    tmp.write_bytes(data)
+                    tmp.replace(out_path)  # atomický (same volume)
+                    db.set_last_auto_export(case_id, str(out_path))
+                    db.mark_auto_export_ran(case_id, now.isoformat())
+                    results.append({"case_id": case_id, "path": str(out_path)})
+                except Exception:  # jeden případ nepadá tick
+                    log.warning(
+                        "STP-070 auto-bundle selhal pro %s", case_id, exc_info=True
+                    )
+        finally:
+            db.close()
+    return results
+
+
+def _auto_export_scheduler_loop(db_dir: Path) -> None:
+    """STP-070 — smyčka daemon threadu (sleep-first → testy nevidí tick)."""
+    while True:
+        time.sleep(_AUTO_EXPORT_TICK_SECONDS)
+        try:
+            run_auto_export_tick(db_dir)
+        except Exception:  # scheduler nikdy nesmí zemřít
+            log.warning("STP-070 scheduler tick selhal", exc_info=True)
 
 
 def create_app(db_dir: Path | None = None) -> FastAPI:
@@ -245,6 +313,8 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                         "artifacts": art.get("total", 0),
                         # STP-069 — stav auto-exportu pro UI checkbox
                         "auto_export_enabled": bool(case.auto_export_enabled),
+                        # STP-070 — interval plánovače pro UI input (None = nenastaveno)
+                        "auto_export_interval_minutes": case.auto_export_interval_minutes,
                     }
                 )
             finally:
@@ -284,6 +354,11 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                 # STP-069 — opt-in automatický export + cesta k poslednímu bundle.
                 "auto_export_enabled": bool(case.auto_export_enabled),
                 "last_auto_export_path": case.last_auto_export_path,
+                # STP-070 — periodický plánovač auto-bundle (interval + čas spuštění).
+                "auto_export_interval_minutes": case.auto_export_interval_minutes,
+                "last_auto_export_at": (
+                    case.last_auto_export_at.isoformat() if case.last_auto_export_at else None
+                ),
                 "sources": [
                     {"id": s.id, "kind": s.kind, "path": s.path,
                      "added_at": s.added_at.isoformat()}
@@ -1763,6 +1838,18 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             )
             if not ok:
                 raise HTTPException(404, "případ neexistuje")
+            # STP-070 — interval periodického auto-bundle. Pole chybí v requestu =
+            # bez změny; explicitní null / prázdný string = vymazat; číslo = nastavit.
+            if "auto_export_interval_minutes" in body.model_fields_set:
+                from stopa.domain.export_schedule import parse_interval_minutes
+
+                try:
+                    minutes = parse_interval_minutes(body.auto_export_interval_minutes)
+                except ValueError as exc:
+                    raise HTTPException(422, str(exc)) from exc
+                ok_int = db.set_auto_export_interval(case_id, minutes)
+                if not ok_int:
+                    raise HTTPException(404, "případ neexistuje")
             db.log_operation("case_updated", details={"case_id": case_id})
             return get_case(case_id)
         finally:
@@ -1791,6 +1878,13 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     @app.get("/")
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")
+
+    # ── STP-070 — periodický plánovač auto-bundle (daemon thread) ──
+    # Spouští se vždy s app factory; tick každou minutu, sleep-first.
+    # Daemon → umírá s procesem, explicitní stop není potřeba.
+    threading.Thread(
+        target=_auto_export_scheduler_loop, args=(base,), name="stopa-auto-export", daemon=True
+    ).start()
 
     return app
 

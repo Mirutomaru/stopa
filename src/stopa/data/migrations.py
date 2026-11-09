@@ -59,6 +59,8 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     apply_timeline_intel_migration(conn)
     # STP-069: Plánované/periodické exporty — opt-in přepínač + cesta posledního auto-exportu.
     apply_auto_export_migration(conn)
+    # STP-070: Periodický plánovač auto-bundle — interval v minutách + čas posledního spuštění.
+    apply_auto_export_schedule_migration(conn)
     # P0 Core C5: Reproducibility Engine — stará DB bez sloupce params_json.
     ops_cols = {r["name"] for r in conn.execute("PRAGMA table_info(analysis_operations)").fetchall()}
     if "params_json" not in ops_cols:
@@ -286,4 +288,24 @@ def apply_auto_export_migration(conn: sqlite3.Connection) -> None:
         conn.commit()
     if "last_auto_export_path" not in case_cols:
         conn.execute("ALTER TABLE cases ADD COLUMN last_auto_export_path TEXT")
+        conn.commit()
+
+
+def apply_auto_export_schedule_migration(conn: sqlite3.Connection) -> None:
+    """STP-070 Periodický plánovač auto-bundle — stará case DB (schéma ≤ v13).
+
+    Idempotentní, bez ztráty dat: přidá sloupce ``auto_export_interval_minutes``
+    (interval periodického auto-exportu v minutách; NULL = nenastaveno →
+    scheduler případ přeskočí) a ``last_auto_export_at`` (UTC ISO čas
+    posledního spuštění periodického auto-exportu). Nové DB mají oba sloupce
+    přímo ze SCHEMA — migrace je no-op.
+    """
+    case_cols = {r["name"] for r in conn.execute("PRAGMA table_info(cases)").fetchall()}
+    if "auto_export_interval_minutes" not in case_cols:
+        conn.execute(
+            "ALTER TABLE cases ADD COLUMN auto_export_interval_minutes INTEGER"
+        )
+        conn.commit()
+    if "last_auto_export_at" not in case_cols:
+        conn.execute("ALTER TABLE cases ADD COLUMN last_auto_export_at TEXT")
         conn.commit()

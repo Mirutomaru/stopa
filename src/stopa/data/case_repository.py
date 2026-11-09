@@ -23,8 +23,8 @@ class CaseRepository:
     def add_case(self, case: Case) -> None:
         self.conn.execute(
             "INSERT INTO cases (id, name, created_at, examiner, notes, timezone_name,"
-            " auto_export_enabled)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            " auto_export_enabled, auto_export_interval_minutes)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 case.id,
                 case.name,
@@ -33,6 +33,7 @@ class CaseRepository:
                 case.notes,
                 case.timezone_name,
                 1 if case.auto_export_enabled else 0,
+                case.auto_export_interval_minutes,
             ),
         )
         self.conn.commit()
@@ -53,6 +54,16 @@ class CaseRepository:
                 c.auto_export_enabled = bool(r["auto_export_enabled"])
             if "last_auto_export_path" in cols:
                 c.last_auto_export_path = r["last_auto_export_path"]
+            # STP-070: stará DB (schéma ≤ v13) bez sloupců plánovače → defaulty.
+            if "auto_export_interval_minutes" in cols:
+                c.auto_export_interval_minutes = r["auto_export_interval_minutes"]
+            if "last_auto_export_at" in cols and r["last_auto_export_at"]:
+                try:
+                    c.last_auto_export_at = datetime.fromisoformat(
+                        r["last_auto_export_at"]
+                    )
+                except ValueError:
+                    pass  # poškozený timestamp → None (scheduler spustí znovu)
             if r["created_at"]:
                 try:
                     c.created_at = datetime.fromisoformat(r["created_at"])
@@ -62,26 +73,13 @@ class CaseRepository:
         return out
 
     def get_case(self, case_id: str) -> Case | None:
-        row = self.conn.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
+        """E12 — načte případ podle ID."""
+        row = self.conn.execute(
+            "SELECT * FROM cases WHERE id = ?", (case_id,)
+        ).fetchone()
         if row is None:
             return None
-        cols = set(row.keys())  # STP-069: stará DB bez sloupců → defaulty
-        return Case(
-            id=row["id"],
-            name=row["name"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-            examiner=row["examiner"],
-            notes=row["notes"],
-            # E2: staré DB bez sloupce / NULL → default Europe/Prague
-            timezone_name=row["timezone_name"] or "Europe/Prague",
-            # STP-069: stará DB (schéma ≤ v12) bez sloupců auto-exportu → default off.
-            auto_export_enabled=(
-                bool(row["auto_export_enabled"]) if "auto_export_enabled" in cols else False
-            ),
-            last_auto_export_path=(
-                row["last_auto_export_path"] if "last_auto_export_path" in cols else None
-            ),
-        )
+        return self._row_to_case(row)
 
     def update_case(
         self,
@@ -123,6 +121,64 @@ class CaseRepository:
             "UPDATE cases SET last_auto_export_path = ? WHERE id = ?", (path, case_id)
         )
         self.conn.commit()
+
+    def set_auto_export_interval(self, case_id: str, minutes: int | None) -> bool:
+        """STP-070 — nastaví interval periodického auto-bundle (None = vypnuto).
+
+        Liší se od ``update_case`` tím, že explicitně umí i *vymazat* interval
+        (None), což by v update_case kolizovalo s „pole nezadáno“. Vrací True
+        pokud případ existoval.
+        """
+        cur = self.conn.execute(
+            "UPDATE cases SET auto_export_interval_minutes = ? WHERE id = ?",
+            (minutes, case_id),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def mark_auto_export_ran(self, case_id: str, ts_iso: str) -> None:
+        """STP-070 — zapíše UTC čas posledního spuštění periodického auto-exportu."""
+        self.conn.execute(
+            "UPDATE cases SET last_auto_export_at = ? WHERE id = ?", (ts_iso, case_id)
+        )
+        self.conn.commit()
+
+    def list_scheduled_cases(self) -> list[Case]:
+        """STP-070 — případy se zapnutým auto-expor­tem a nastaveným intervalem.
+
+        Scheduler prochází jen tyto případy (interval NULL = nenastaveno → přeskočí).
+        """
+        rows = self.conn.execute(
+            "SELECT * FROM cases WHERE auto_export_enabled = 1"
+            " AND auto_export_interval_minutes IS NOT NULL ORDER BY id"
+        ).fetchall()
+        return [self._row_to_case(r) for r in rows]
+
+    def _row_to_case(self, row: sqlite3.Row) -> Case:
+        """STP-070 — sdílený mapping řádku → Case (get_case + list_scheduled_cases)."""
+        cols = set(row.keys())  # staré DB bez sloupců → defaulty
+        return Case(
+            id=row["id"],
+            name=row["name"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+            examiner=row["examiner"],
+            notes=row["notes"],
+            timezone_name=row["timezone_name"] or "Europe/Prague",
+            auto_export_enabled=(
+                bool(row["auto_export_enabled"]) if "auto_export_enabled" in cols else False
+            ),
+            last_auto_export_path=(
+                row["last_auto_export_path"] if "last_auto_export_path" in cols else None
+            ),
+            auto_export_interval_minutes=(
+                row["auto_export_interval_minutes"]
+                if "auto_export_interval_minutes" in cols
+                else None
+            ),
+            last_auto_export_at=_parse_ts(
+                row["last_auto_export_at"] if "last_auto_export_at" in cols else None
+            ),
+        )
 
     def delete_case(self, case_id: str) -> bool:
         """E12 — smaže případ i všechny jeho zdroje (kaskáda na files/artifacts/timeline).
@@ -243,3 +299,16 @@ class CaseRepository:
             }
             for r in rows
         ]
+
+
+def _parse_ts(value: str | None) -> datetime | None:
+    """Parse an ISO-8601 timestamp from SQLite (naive UTC assumed)."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)

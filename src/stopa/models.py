@@ -47,6 +47,10 @@ class Case(BaseModel):
     # STP-069 Plánované exporty: opt-in automatický ZIP bundle po dokončení analýzy.
     auto_export_enabled: bool = False
     last_auto_export_path: str | None = None
+    # STP-070 Periodický plánovač: interval v minutách (None = nenastaveno) +
+    # UTC čas posledního spuštění periodického auto-exportu.
+    auto_export_interval_minutes: int | None = None
+    last_auto_export_at: datetime | None = None
 
 
 class EvidenceSource(BaseModel):

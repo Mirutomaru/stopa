@@ -119,6 +119,19 @@ class CaseDB:
         """STP-069 — zapíše cestu k poslednímu automatickému ZIP bundle."""
         self.case_repo.set_last_auto_export(case_id, path)
 
+    # ── STP-070 — periodický plánovač auto-bundle ────────────
+    def set_auto_export_interval(self, case_id: str, minutes: int | None) -> bool:
+        """STP-070 — nastaví interval (minuty); None = vypnuto. True pokud existoval."""
+        return self.case_repo.set_auto_export_interval(case_id, minutes)
+
+    def mark_auto_export_ran(self, case_id: str, ts_iso: str) -> None:
+        """STP-070 — zapíše UTC čas posledního spuštění periodického auto-exportu."""
+        self.case_repo.mark_auto_export_ran(case_id, ts_iso)
+
+    def list_scheduled_cases(self) -> list[Case]:
+        """STP-070 — případy se zapnutým auto-exporem a nastaveným intervalem."""
+        return self.case_repo.list_scheduled_cases()
+
     def delete_case(self, case_id: str) -> bool:
         """E12 — smaže případ i všechny jeho zdroje (kaskáda na files/artifacts/timeline)."""
         return self.case_repo.delete_case(case_id)

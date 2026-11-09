@@ -59,12 +59,14 @@ async function renderCasesModule() {
         <td class="mono">${c.artifacts}</td>
         <!-- STP-069 — opt-in automatický ZIP bundle po dokončení analýzy -->
         <td><input type="checkbox" class="case-auto-export" ${c.auto_export_enabled ? "checked" : ""} title="Automaticky exportovat ZIP bundle po dokončení analýzy"></td>
+        <!-- STP-070 — interval periodického auto-bundle v minutách (5–43200) -->
+        <td><input type="number" class="case-auto-interval" min="5" max="43200" step="1" placeholder="—" value="${c.auto_export_interval_minutes ?? ""}" title="Interval periodického auto-bundle v minutách (5–43200, prázdné = nenastaveno)"></td>
         <td class="row-actions">
           <button data-act="open" title="Otevřít případ">↗</button>
           <button data-act="del" title="Smazat případ">✕</button>
         </td>
       </tr>`).join("")
-    : '<tr><td colspan="7" class="muted">Žádné případy — vytvořte nový vlevo (sidebar).</td></tr>';
+    : '<tr><td colspan="8" class="muted">Žádné případy — vytvořte nový vlevo (sidebar).</td></tr>';
 
   // workspace info
   const diag = await api("/api/diagnostics");
@@ -113,6 +115,28 @@ async function renderCasesModule() {
         toast(`⚠ ${e.message}`);
       }
     });
+  }
+
+  // STP-070 — interval periodického auto-bundle (blur/change → PATCH, prázdné = vymazat)
+  for (const inp of document.querySelectorAll("#cases-table .case-auto-interval")) {
+    const saveInterval = async () => {
+      const id = inp.closest("tr")?.dataset.cid;
+      if (!id) return;
+      const raw = inp.value.trim();
+      try {
+        await api(`/api/cases/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ auto_export_interval_minutes: raw === "" ? null : Number(raw) }),
+        });
+        toast(raw === "" ? `Interval vymazán pro „${id}“` : `✓ Interval ${raw} min pro „${id}“`);
+      } catch (e) {
+        inp.value = inp.defaultValue; // rollback UI při selhání
+        toast(`⚠ ${e.message}`);
+      }
+    };
+    inp.addEventListener("change", saveInterval);
+    inp.addEventListener("blur", () => { if (inp.value !== inp.defaultValue) saveInterval(); });
   }
 }
 
