@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 _log = logging.getLogger("stopa.cli")
@@ -1004,6 +1005,211 @@ def cmd_memory_analyze(args: argparse.Namespace) -> int:
         db.close()
 
 
+def cmd_pcap_analyze(args: argparse.Namespace) -> int:
+    """F1.3 — Síťová forenzika přes Scapy (ROADMAP V2 Fáze 1).
+
+    Přečte .pcap/.pcapng, reasambloví TCP streamy, extrahuje soubory z
+    HTTP/FTP/SMB a detekuje IoC (DNS tunneling, C2 beaconing, …). Artefakty
+    do case DB (idempotentní replace per file), surové body do
+    <root>/extracted/<case_id>/network/. PII zásada: v DB jen fingerprint.
+
+    Exit codes: 0 = OK · 1 = parse chyba · 2 = špatné argumenty · 3 = scapy chybí
+    """
+    import hashlib
+
+    from stopa.data import pcap_io
+    from stopa.domain.net_forensics import (
+        PARSER_VERSION,
+        detect_ftp,
+        detect_smb,
+        extract_http,
+        reassemble_flows,
+        run_ioc_rules,
+    )
+    from stopa.domain.net_forensics import (
+        fingerprint_value as fingerprint_net_value,
+    )
+    from stopa.domain.net_forensics import (
+        summarize as net_summarize,
+    )
+    from stopa.models import Artifact, EvidenceSource, FileRecord
+
+    json_mode = getattr(args, "json", False)
+    pcap_path = Path(args.pcap).expanduser()
+    if not pcap_path.is_file():
+        print(f"PCAP soubor neexistuje: {pcap_path}", file=sys.stderr)
+        return 2
+
+    if not pcap_io.scapy_available():
+        msg = ("Scapy není nainstalovaná — `pip install scapy` do STOPA venv "
+               "(volitelná runtime závislost pro F1.3)")
+        if json_mode:
+            _print_json({"error": msg})
+        else:
+            print(msg, file=sys.stderr)
+        return 3
+
+    db = _open_db(args.case_id)
+    try:
+        # provenance + idempotentní re-analyza (stejný pattern jako F1.2)
+        existing = next(
+            (s for s in db.list_sources(args.case_id) if s.path == str(pcap_path)), None
+        )
+        source = existing or EvidenceSource(case_id=args.case_id, kind="file", path=str(pcap_path))
+        if existing is None:
+            db.add_source(source)
+        sha256 = hashlib.sha256()
+        with open(pcap_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                sha256.update(chunk)
+        rec = FileRecord(
+            source_id=source.id,
+            rel_path=pcap_path.name,
+            name=pcap_path.name,
+            size_bytes=pcap_path.stat().st_size,
+            sha256=sha256.hexdigest(),
+            signature_type="network_capture",
+        )
+        file_id = db.upsert_file(rec)
+
+        bar = None if json_mode else _rich_progress()
+        state: dict[str, object] = {"task": None}
+
+        def _progress(done: int, total: int, label: str = "") -> None:
+            if bar is not None and state["task"] is None and total:
+                state["task"] = bar.add(label or "pcap", total)
+
+        try:
+            records = pcap_io.read_pcap(pcap_path, max_packets=args.max_packets)
+        except pcap_io.PcapParseError as e:
+            if json_mode:
+                _print_json({"error": str(e)})
+            else:
+                print(f"PCAP parse chyba: {e}", file=sys.stderr)
+            return 1
+
+        _progress(1, 3, "TCP reassembly")
+        streams = reassemble_flows(records)
+
+        arts: list[Artifact] = []
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        def _mk(atype: str, title: str, details: dict, flags: list[str] | None = None) -> Artifact:
+            return Artifact(
+                source_id=source.id, file_id=file_id, rel_path=pcap_path.name,
+                artifact_type=atype, title=title, details=details,
+                confidence=0.7 if flags else 0.9,
+                parser_version=PARSER_VERSION, extracted_at=datetime.fromisoformat(now_iso),
+                anomaly_flags=list(flags or []),
+            )
+
+        # 1) flow artefakty (reassembly výsledek — jen metadata + fingerprint)
+        for key, st in streams.items():
+            arts.append(_mk(
+                "network_flow", f"TCP {key.label()}",
+                {
+                    "bytes": len(st.data),
+                    "sha256_prefix": hashlib.sha256(st.data).hexdigest()[:16],
+                    "packet_count": st.packet_count,
+                    "first_time": st.first_time,
+                    "last_time": st.last_time,
+                },
+            ))
+
+        # 2) HTTP extrakce + FTP/SMB detekce → soubory do <case>/extracted/network/
+        out_dir = db.path.parent / "extracted" / args.case_id / "network"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        written: list[str] = []
+        for key, st in streams.items():
+            http_files = extract_http(st.data[:1 << 20], key.label())
+            for i, f_ in enumerate(http_files):
+                safe_name = Path(f_.filename).name or f"body_{i}.bin"
+                dest = out_dir / safe_name
+                n = 1
+                while dest.exists():
+                    stem, suf = os.path.splitext(safe_name)
+                    dest = out_dir / f"{stem}_{n}{suf}"
+                    n += 1
+                dest.write_bytes(f_.raw)
+                written.append(str(dest))
+                arts.append(_mk(
+                    "file_extract_candidate", safe_name,
+                    {
+                        "size_bytes": f_.size_bytes,
+                        "sha256_prefix": f_.sha256_prefix,
+                        "content_type": f_.content_type,
+                        "extracted_to": str(dest),
+                        "flow": key.label(),
+                    },
+                ))
+            ftp_cmds = detect_ftp(st.data[:1 << 20])
+            if ftp_cmds:
+                arts.append(_mk("ftp_command", f"FTP {key.label()}",
+                                {"commands": ftp_cmds}, ["ftp_activity"]))
+            smb_hits = detect_smb(st.data[:1 << 20])
+            if smb_hits:
+                arts.append(_mk("smb_session", f"SMB {key.label()}",
+                                {"headers": smb_hits}, ["smb_activity"]))
+
+        # 3) DNS query artefakty (unikátní QNAME + fingerprint)
+        seen_qnames: set[str] = set()
+        for r in records:
+            if r.dns_qname and r.dns_qname not in seen_qnames:
+                seen_qnames.add(r.dns_qname)
+                arts.append(_mk("dns_query", r.dns_qname, {
+                    "fingerprint": fingerprint_net_value(r.dns_qname),
+                    "src_ip": r.src_ip,
+                }))
+
+        # 4) IoC pravidla → artefakty ioc_<pattern>
+        _progress(2, 3, "IoC detekce")
+        iocs = run_ioc_rules(records, streams)
+        for hit in iocs["dns_tunneling"]:
+            arts.append(_mk("ioc_dns_tunneling", str(hit.get("qname")),
+                            dict(hit), ["dns_tunneling"]))
+        for hit in iocs["c2_beaconing"]:
+            arts.append(_mk("ioc_c2_beaconing",
+                            f"{hit.get('dst_ip')}:{hit.get('dst_port')}",
+                            dict(hit), ["c2_beaconing"]))
+        for hit in iocs["http_ioc"]:
+            arts.append(_mk(
+                "ioc_http", str(hit.get("url") or hit.get("flow")),
+                {"flow": hit.get("flow"), "flags": hit.get("flags")},
+                list(hit.get("flags") or []),
+            ))
+        if iocs["unusual_high_port_tcp"]:
+            arts.append(_mk("ioc_unusual_high_port", f"{len(iocs['unusual_high_port_tcp'])} flowů",
+                            {"flows": iocs["unusual_high_port_tcp"]}, ["unusual_high_port"]))
+
+        db.replace_artifacts_for_file(file_id, arts)
+
+        stats = net_summarize(records)
+        if not json_mode:
+            print()
+            print(f"  {len(arts)} artefaktů z {stats['total_packets']} paketů "
+                  f"(tcp={stats.get('tcp', 0)}, udp={stats.get('udp', 0)}, dns={stats['dns_queries']})")
+            if written:
+                print(f"  extrahováno souborů: {len(written)} → {out_dir}")
+        if json_mode:
+            _print_json({
+                "pcap": str(pcap_path),
+                "case_id": args.case_id,
+                "file_id": file_id,
+                **stats,
+                "artifacts": len(arts),
+                "extracted_files": written,
+                "ioc_counts": {
+                    "dns_tunneling": len(iocs["dns_tunneling"]),
+                    "c2_beaconing": len(iocs["c2_beaconing"]),
+                    "http_ioc": len(iocs["http_ioc"]),
+                    "unusual_high_port_tcp": len(iocs["unusual_high_port_tcp"]),
+                },
+            })
+        return 0
+    finally:
+        db.close()
+
+
 def cmd_profiles(args: argparse.Namespace) -> int:
     if getattr(args, "json", False):
         _print_json({
@@ -1872,6 +2078,7 @@ _SUBCOMMAND_EXAMPLES = {
     "image": "stopa image case-abc /path/disk.img --no-carve",
     "mobile": "stopa mobile case-abc /path/phone.img --password HESLO",
     "memory-analyze": "stopa memory-analyze case-abc /evidence/mem.raw --plugin windows.pslist",
+    "pcap-analyze": "stopa pcap-analyze case-abc /evidence/capture.pcapng",
     "profiles": "stopa profiles",
     "report": "stopa report case-abc --format pdf --lang cs",
     "export": "stopa export case-abc --what timeline --format stix --bundle",
@@ -2129,6 +2336,14 @@ def build_parser() -> argparse.ArgumentParser:
                        help="deadline jednoho pluginu v sekundách (default: 600)")
     _add_json_flag(mem_p)
     mem_p.set_defaults(func=cmd_memory_analyze)
+
+    pcap_p = _ex_sub(sub, "pcap-analyze", help="F1.3 — Síťová forenzika: PCAP parser + TCP reassembly + IoC (Scapy)")
+    pcap_p.add_argument("case_id", help="ID případu")
+    pcap_p.add_argument("pcap", help="cesta k capture (.pcap/.pcapng)")
+    pcap_p.add_argument("--max-packets", type=int, default=50_000, metavar="N",
+                        help="strop počtu paketů (guard proti OOM; default: 50000)")
+    _add_json_flag(pcap_p)
+    pcap_p.set_defaults(func=cmd_pcap_analyze)
 
     prof_p = _ex_sub(sub, "profiles", help="seznam processing profilů")
     _add_json_flag(prof_p)
