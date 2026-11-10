@@ -1,0 +1,17 @@
+# R0.2 — Docker build context: jen to, co image potřebuje
+.git
+.github
+.pytest_cache
+.ruff_cache
+__pycache__/
+**/__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+reports/
+cases/
+benchmarks/*.json.tmp
+tests/js/node_modules/

@@ -28,6 +28,11 @@ stopa = "stopa.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# R0.2 — web GUI (static SPA) musí být v wheelu, jinak po instalaci z balíčku
+# chybí static files a `stopa serve` servíruje prázdné UI.
+[tool.setuptools.package-data]
+"stopa.web" = ["static/**/*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

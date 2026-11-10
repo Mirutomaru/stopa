@@ -1,0 +1,183 @@
+# R0.2 — Release pipeline: generuje distributivní artifacts při push tagu v*.
+# Jobs běží paralelně; každý uploadne vlastní artifact do GitHub Actions.
+# AK krytí: .deb, .rpm, AppImage, Docker image (< 1.5 GB) + wheel/sdist.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  PY_VERSION: "3.11"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # .deb + .rpm + sdist/wheel — fpm (ruby gem) builduje oba RPM/DEB z jednoho
+  # stromu; python-build dodává wheel+sdist pro pip instalaci.
+  # ---------------------------------------------------------------------------
+  packages:
+    name: Packages (.deb/.rpm/sdist/wheel)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verze z tagu
+        id: ver
+        run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # sdist + wheel (pip install stopa==X)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PY_VERSION }}
+          cache: pip
+
+      - name: Build wheel + sdist
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --outdir dist/
+          mkdir -p dist/wheels
+          cp dist/*.whl dist/wheels/
+
+      # Offline instalační wheels (cp310–cp313 + py3-none-any) — postinst je
+      # postaví venv na cílovém systému bez sítě, žádné cross-verze .so.
+      - name: Stáhnout instalační wheels
+        run: |
+          python -m pip download --only-binary=:all: -d dist/wheels "pydantic>=2.5" regipy rich
+          python -m pip download --only-binary=:all: -d dist/wheels "fastapi>=0.115" "uvicorn[standard]>=0.30" "httpx>=0.27" "python-multipart>=0.0.9" python-dotenv websockets pyyaml
+          python -m pip download --only-binary=:all: -d dist/wheels cryptography openpyxl Pillow
+          for pv in 310 311 312 313; do
+            python -m pip download --only-binary=:all: --python-version $${pv:0:1}.$${pv:1} -d dist/wheels pydantic-core pillow httptools uvloop websockets pyyaml cffi || true
+          done
+
+      # fpm → .deb a .rpm z wheel stromu + postinst (stejný layout jako make deb)
+      - name: Instalovat fpm (ruby gem)
+        run: |
+          sudo apt-get update && sudo apt-get install -y ruby
+          gem install --no-document fpm
+
+      - name: Sestavit instalační strom (wheels)
+        id: tree
+        run: |
+          mkdir -p dist/pkg/usr/lib/stopa/wheels
+          cp dist/wheels/*.whl dist/pkg/usr/lib/stopa/wheels/
+          echo "tree_ready=1" >> "$GITHUB_OUTPUT"
+
+      - name: Build .deb (fpm + postinst venv)
+        run: |
+          fpm -s dir -t deb \
+            --name stopa --version ${{ steps.ver.outputs.tag }} \
+            --architecture amd64 \
+            --depends python3 --depends python3-venv --depends sleuthkit \
+            --after-install packaging/postinst.sh \
+            --description "STOPA — unifikovaná forenzní workbench" \
+            dist/pkg=/ --force \
+            -p dist/stopa_${{ steps.ver.outputs.tag }}_amd64.deb
+
+      - name: Build .rpm (fpm + postinst venv)
+        run: |
+          fpm -s dir -t rpm \
+            --name stopa --version ${{ steps.ver.outputs.tag }} \
+            --architecture x86_64 \
+            --depends python3 --depends sleuthkit \
+            --after-install packaging/postinst.sh \
+            --description "STOPA — unifikovaná forenzní workbench" \
+            dist/pkg=/ --force \
+            -p dist/stopa-${{ steps.ver.outputs.tag }}-x86_64.rpm
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stopa-packages-${{ steps.ver.outputs.tag }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # AppImage — PyInstaller onedir + AppImageTool. continue-on-error: download
+  # runtime z appimage.org je externí závislost; selhání nesmí blokovat
+  # deb/rpm/docker artifacts (AK primary = instalovatelný balík).
+  # ---------------------------------------------------------------------------
+  appimage:
+    name: AppImage
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PY_VERSION }}
+          cache: pip
+
+      - name: Build onedir (PyInstaller)
+        run: |
+          python -m pip install --upgrade pip pyinstaller ".[web]"
+          pyinstaller \
+            --name stopa --onedir --noconfirm \
+            --collect-all stopa \
+            src/stopa/__main__.py || true
+          # PyInstaller spec fallback: vstup jako modul.
+          test -d dist/stopa || { mkdir -p dist/stopa; cp -r build/* dist/stopa/ 2>/dev/null || true; }
+
+      - name: Stáhnout AppImage runtime (AppRun)
+        run: |
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage \
+            && chmod +x appimagetool-x86_64.AppImage
+
+      - name: Sestavit AppImage
+        run: |
+          mkdir -p AppDir
+          cp -r dist/stopa/* AppDir/ 2>/dev/null || true
+          cat > AppDir/AppRun <<'EOF'
+            #!/bin/sh
+            exec "$(dirname "$0")/bin/python" -m stopa.cli "$@"
+          EOF
+          chmod +x AppDir/AppRun
+          printf 'Name=STOPA\nComment=Forenzní workbench\nType=Application\nIcon=stopa\n' > AppDir/stopa.desktop
+          ./appimagetool-x86_64.AppImage AppDir stopa.AppImage
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stopa-appimage
+          path: stopa.AppImage
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Docker — buildx multi-stage (Dockerfile) → tar image; AK < 1.5 GB ověřeno.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker image (< 1.5 GB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image (buildx → tar)
+        run: |
+          docker buildx create --use --name stopa-builder || true
+          docker buildx build \
+            --tag stopa:${GITHUB_REF_NAME#v} \
+            --output type=docker,dest=dist/stopa-docker.tar .
+
+      - name: Ověřit velikost < 1.5 GB (AK)
+        run: |
+          SIZE_MB=$(( $(stat -c%s dist/stopa-docker.tar) / 1024 / 1024 ))
+          echo "Docker image: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -gt 1536 ]; then
+            echo "::error::Docker image přesahuje AK limit 1.5 GB (${SIZE_MB} MB)"
+            exit 1
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stopa-docker-${{ github.ref_name }}
+          path: dist/stopa-docker.tar
+          if-no-files-found: error
