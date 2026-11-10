@@ -31,6 +31,18 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
   automaticky indexovány FTS (`artifacts_fts`); surové body do `<root>/extracted/<case_id>/network/`.
 - Safety: v DB jen SHA-256 fingerprint payloadů — nikdy plný obsah.
 
+#### F1.4 Anti-Forensics detekce
+- CLI `stopa antiforensics-scan <case> [--image PATH]`: standalone command nad
+  čistým doménovým modulem (stdlib; PIL jen lazy pro steganografii, volitelná).
+- 8 detekcí: timestomping (future mtime / nemožný pořad M<C / bulk-touch ≥5),
+  log clearing (EVTX event 1102 + mezery v record numbers), USN journal truncation
+  (hustota záznamů + delete podíl >50 %), MBR/partition table, LSB steganografie
+  PNG/JPG (bitová vyváženost + Shannon entropie), tool signatures, image integrity.
+- Orchestrátor `detect_anti_forensics` vrací report s risk score (`1−0.9^acc`).
+- Artefakty `antiforensics/<check>` pod syntetickým scan zdrojem + timeline alerty;
+  idempotentní re-run (timeline se mažou PŘED výměnou artefaktů — FK bez ON DELETE).
+- 34 testů (`tests/test_f14_anti_forensics.py`); suite 2355 passed.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad
