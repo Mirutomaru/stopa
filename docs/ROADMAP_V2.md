@@ -25,9 +25,9 @@ Stavový model: `[ ]` nezačato · `[~]` v práci · `[?]` blokované (lidský v
 ---
 
 ## 🚀 FÁZE 0 — RELEASE 1.0 ZÁKLAD (Quick Wins) · Odhad 2–3 týdny
-### R0.1 — Oprava EVTX BinXML edge-case (ElfFile varianta) `[~]`
+### R0.1 — Oprava EVTX BinXML edge-case (ElfFile varianta) `[x]`
 Opravit parser, aby numerická pole (event_id, timestamp) nebyla `None` u BinXML varianty. Použít content-scan s fallbackem na BinXML strukturu.
-**AK:** 100 % EVTX fixture souborů parsuje bez `None` v klíčových polích; nový test case v `tests/artifacts/test_evtx.py`.
+**AK:** 100 % EVTX fixture souborů parsuje bez `None` v klíčových polích; nový test case v `tests/artifacts/test_evtx.py`. ✅ Splněno — ElfR walk (varianta A) + deflate dekomprese BinXML + content-scan fallback; 7 nových testů, 2161 passed.
 **P0 | M | závislosti: —**
 
 ### R0.2 — Distributivní balíčky `[ ]`
@@ -240,6 +240,7 @@ API pro třetí strany: vlastní extractory, triage profily, AI tools; plugin ma
 Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alternativy.
 
 - **[2026-11-10] R0.1]** — Začato. Strategie: (1) autoritativní record-header walk přes `ElfR` signatury (EventID @+24, FILETIME timestamp @+16), (2) BinXML fallback parser pro soubory bez headerů. Detail po implementaci.
+- **[2026-11-10] R0.1]** — **Dokončeno `[x]`.** Implementace: `_binxml_decompress` (raw deflate, magic `0x1B243D5A`) + `_binxml_extract_fields` na reálných datech; `_find_elf_record_offsets` (ElfR @offset % 0x18 == 0, validace total_size + FILETIME) + `_elf_walk`; pořadí strategií ElfR walk → content-scan → header-scan. `tests/artifacts/test_evtx.py` (7 testů): standard deflate, ElfFile B timestamp, ElfR A walk, mixed records bez None, corrupt deflate resilience, uncompressed regression. Suite 2161 passed / 1 skipped; ruff clean.
 
 ---
 
@@ -256,8 +257,8 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 1. po Fázi 0: Release 1.0 venku, UX vyladěno · 2. po Fázi 1: coverage kompletní (BitLocker/memory/PCAP) · 3. po Fázi 2: výkonové metriky splněny, Rust core stabilní · 4. po Fázi 3: AI agent demo-ready · 5. po Fázi 4: enterprise beta s 3 testery · 6. po Fázi 5: compliance audit externí firmou · 7. po Fázi 6: Release 2.0
 
 ## 🎯 OKAMŽITÉ AKCE (First 5)
-1. R0.1 EVTX BinXML edge-case (rychlý win, P0) ← **AKTIVNÍ**
-2. R0.4 CLI UX audit (paralelní s R0.1)
+1. ~~R0.1 EVTX BinXML edge-case~~ — **hotovo `[x]`** ✅
+2. R0.4 CLI UX audit (paralelní s R0.1) ← **AKTIVNÍ**
 3. R0.2 Distributivní balíčky (blokuje release)
 4. R0.3 Version bump (závisí R0.1+R0.2)
 5. F1.1 BitLocker support (začátek Fáze 1, nejkritičtější feature)
