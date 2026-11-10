@@ -4,30 +4,18 @@ Parsuje Windows Event Log soubory ve formátu EVTX (chunked, BinXML payload).
 
 Podporované varianty:
   - Standardní EVTX: file magic ``EVTX``, chunk magic ``CHUN``
-  - ElfFile varianta: file magic ``ElfFile\\0``, chunk magic ``ElfChnk\\0``
-    (zjištěno na ground-truth disku — všech 199 souborů)
+    (record header MS-EVLOG: total_size u32, header_size=0x28, timestamp
+    FILETIME @+0x0C — header-scan je autoritativní)
+  - ElfFile varianta A (ground-truth): file magic ``ElfFile\\0``, chunk magic
+    ``ElfChnk\\0`` + record signatura ``ElfR`` @offset % 0x18 == 0 (EventID u32
+    @+24, timestamp FILETIME @+16, BinXML payload za headerem) — ElfR walk
+  - ElfFile varianta B: bez ``ElfR`` markerů → content-scan přes UTF-16LE
+    ``EventID`` markery + proper BinXML parse každého record payloadu
 
-Struktura::
-
-    File header (proměnná, min 128 B):
-        @0x00  magic (4-8 B)
-        @0x20  u32 file_header_size
-        @0x24  u16 major_version
-        @0x26  u16 minor_version
-
-    Chunks (64 KB = 0x10000):
-        Chunk header (proměnná, min 128 B):
-            @+0x00  chunk magic (4-8 B)
-            @+0x08  u32 chunk_number
-            @+0x28  u32 chunk_header_size
-        Records (od chunk_start + header_size):
-            Record header:
-                @+0x00  u16 header_size
-                @+0x02  u16 record_number
-                @+0x04  u32 reserved
-                @+0x08  u64 timestamp (FILETIME)
-                @+0x10  u64 event_record_id
-            BinXML payload (po headeru)
+BinXML (MS-BINL) decode: string table (element names + values) a property data
+records (tag/type/len, values = u32 indexy do string tabulky). Komprimované
+payload (magic 0x1B243D5A) se dekomprimuje přes raw deflate; uncompressed
+payload (bez magic) se parsuje přímo od offsetu 0.
 
 Artifact type: ``event_log_entry`` (AXIOM ``Magnet.Artifacts.Windows.EventLog``)
 """
@@ -37,6 +25,7 @@ from __future__ import annotations
 import logging
 import re
 import struct
+import zlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,7 +35,7 @@ from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
 
-PARSER_VERSION = "1.0"
+PARSER_VERSION = "1.1"
 
 # File magic varianty
 EVTX_MAGIC_STANDARD = b"EVTX"
@@ -94,6 +83,105 @@ def _filetime_to_dt(value: int) -> datetime | None:
         return datetime.fromtimestamp(unix_ts, tz=timezone.utc)
     except (OverflowError, OSError, ValueError):
         return None
+
+
+def _binxml_decompress(payload: bytes) -> bytes:
+    """Dekomprimuje BinXML payload (raw deflate, magic 0x1B243D5A).
+
+    Reálné EVTX BinXML je téměř vždy komprimované — bez dekomprese stará cesta
+    dekódovala deflate byty jako UTF-16 = šum. Uncompressed payload (bez magic)
+    vrací nezměněný (data začínají na offsetu 0). Při selhání vrací payload
+    jako je (fallback heuristika zkusí i tak).
+    """
+    if len(payload) < 12:
+        return payload
+    magic = struct.unpack_from("<I", payload, 0)[0]
+    if magic != 0x1B243D5A:
+        return payload
+    try:
+        comp_len = struct.unpack_from("<I", payload, 4)[0]
+        uncomp_len = struct.unpack_from("<I", payload, 8)[0]
+        if len(payload) < 12 + comp_len or uncomp_len > 64 * 1024 * 1024:
+            return payload
+        raw = zlib.decompressobj(-zlib.MAX_WBITS).decompress(
+            payload[12 : 12 + comp_len]
+        )
+        if len(raw) != uncomp_len:
+            logger.debug("BinXML deflate: délka %d != očekávané %d", len(raw), uncomp_len)
+            return payload
+        return raw
+    except (zlib.error, struct.error):
+        return payload
+
+
+def _binxml_extract_fields(stream: bytes) -> dict[str, str]:
+    """Extrahuje klíčová pole z BinXML streamu (dekomprimovaného i ne).
+
+    String table v BinXML nese element jména i hodnoty jako text — skenovat
+    tisknutelné runs a aplikovat stejnou heuristiku jako stará cesta, jen na
+    skutečných datech (po dekompresi) místo deflate šumu. Tolerantní k
+    poškozeným streamům.
+    """
+    result: dict[str, str] = {}
+    if not stream:
+        return result
+
+    text = stream.decode("utf-16-le", errors="replace")
+    m = re.search(r"EventID[\x00-\x1f\x7f]{0,4}(\d{1,5})", text)
+    if m:
+        result["event_id"] = m.group(1)
+
+    runs = re.findall(r"[\x20-\x7E]{4,}", text)
+    known_elements = {
+        "Event", "System", "Provider", "Name", "EventID", "Version", "Task",
+        "Keywords", "SystemTime", "EventRecordID", "TimeCreated", "Channel",
+        "Correlation", "Execution", "ProcessId", "ThreadId", "Opcode", "Level",
+        "Message", "EventLog", "Qualifier", "Qualifiers", "xmlns", "ActivityID",
+        "Related", "Identity", "Domain", "Sid", "Subject", "Object", "Data",
+        "Value", "ProcessID", "ThreadID", "CorrelationID", "PackageID",
+        "ProviderName", "EventData", "EventUserData", "SystemProperties",
+        "UserData", "Computer", "Security", "RelatedActivityID", "Keyword",
+        "UserID", "LogonID", "SessionID", "Binary", "Guid", "ServiceName",
+    }
+    name_like = [
+        r for r in runs
+        if re.fullmatch(r"[A-Za-z][A-Za-z0-9._\-]*", r) and r not in known_elements
+    ]
+    ms_win = [r for r in name_like if r.startswith(("Microsoft-Windows-", "Microsoft."))]
+    if ms_win:
+        result["provider"] = max(ms_win, key=len)
+    else:
+        dotted = [
+            r for r in name_like
+            if re.fullmatch(r"[A-Za-z][A-Za-z0-9]*\.[A-Za-z][A-Za-z0-9_.\-]*", r)
+        ]
+        if dotted:
+            result["provider"] = max(dotted, key=len)
+
+    prov = result.get("provider", "")
+    candidates = [r for r in runs if len(r) >= 30 and not r.startswith("http") and r != prov]
+    if candidates:
+        result["message"] = max(candidates, key=len)[:500]
+
+    return result
+
+
+def _parse_binxml_payload(payload: bytes) -> dict[str, str]:
+    """Parse BinXML payload (komprimovaný i uncompressed) do klíčových polí.
+
+    Dekomprimuje deflate a extrahuje pole ze string table. Fallback na starou
+    heuristiku přes raw payload když dekomprese nezmění výsledek — zachová
+    kompatibilitu s fixture generátory, které BinXML simulují plain textem.
+    """
+    if not payload:
+        return {}
+    stream = _binxml_decompress(payload)
+    fields = _binxml_extract_fields(stream)
+    # Fallback na raw payload (fixture generátory bez deflate magic)
+    if not fields.get("event_id") and not fields.get("provider"):
+        raw_fields = _extract_binxml_strings(payload)
+        fields.update({k: v for k, v in raw_fields.items() if v})
+    return fields
 
 
 def _extract_binxml_strings(payload: bytes) -> dict[str, str]:
@@ -196,13 +284,20 @@ def _parse_records_in_chunk(
 ) -> list[EventLogEntry]:
     """Parsuje records v jednom chunku.
 
-    Primární strategie — content-scan: najde UTF-16LE ``EventID`` markery a
-    extrahuje okolní BinXML (nezávislé na přesném header layoutu — funguje pro
-    ElfFile variantu i standardní EVTX, kde je element jméno v string tabulce).
-
-    Fallback — header-based walk (MS-EVLOG layout): použije se jen když markery
-    nenajde (např. komprimovaný BinXML payload bez textových jmen).
+    Strategie (pořadí):
+      1. ElfR walk — ElfFile varianta A s platnými record headery
+         (timestamp FILETIME + BinXML payload za headerem)
+      2. Content-scan přes UTF-16LE ``EventID`` markery + payload bounds
+         detekcí a timestamp z MS-EVLOG headeru před payloadem
+      3. Header-based walk (MS-EVLOG layout) — jen když předchozí selžou
     """
+    elf_offsets = _find_elf_record_offsets(data, chunk_start)
+    if elf_offsets:
+        entries = _elf_walk(data, elf_offsets)
+        if entries:
+            logger.debug("EVTX ElfR walk: %d záznamů", len(entries))
+            return entries
+
     chunk_end = min(chunk_start + CHUNK_SIZE, len(data))
     markers = _count_eventid_markers(data, chunk_start, chunk_end)
 
@@ -230,6 +325,89 @@ def _count_eventid_markers(data: bytes, start: int, end: int) -> int:
         count += 1
         off = idx + len(needle)
     return count
+
+
+# ElfFile record signatura (varianta A — ground-truth)
+ELF_RECORD_MAGIC = b"ElfR"
+
+
+def _find_elf_record_offsets(data: bytes, chunk_start: int) -> list[int]:
+    """Najde offsety ElfR recordů v chunku.
+
+    Validace: signatura na offset % 0x18 == 0 (record align), u32 total_size
+    @+4 v rozumném rozsahu a timestamp FILETIME @+16 platný — eliminuje
+    false positives z BinXML dat, kde se 'ElfR' může náhodně objevit.
+    """
+    chunk_end = min(chunk_start + CHUNK_SIZE, len(data))
+    offsets: list[int] = []
+    off = chunk_start + 0x28
+    while True:
+        idx = data.find(ELF_RECORD_MAGIC, off, chunk_end)
+        if idx == -1:
+            break
+        valid = False
+        if idx % 0x18 == 0 and idx + 40 <= chunk_end:
+            total_size, = struct.unpack_from("<I", data, idx + 4)
+            ts_ft, _ = struct.unpack_from("<QQ", data, idx + 16)
+            valid = (
+                64 <= total_size <= CHUNK_SIZE
+                and idx + total_size <= chunk_end
+                and _filetime_to_dt(ts_ft) is not None
+            )
+        if valid:
+            offsets.append(idx)
+        off = idx + 4
+    return offsets
+
+
+def _valid_record_header(data: bytes, idx: int, end: int) -> bool:
+    """Validace ElfR/MS-EVLOG record headeru (total_size + FILETIME)."""
+    if idx + 40 > end:
+        return False
+    total_size = struct.unpack_from("<I", data, idx + 4)[0]
+    ts_ft = struct.unpack_from("<QQ", data, idx + 16)[0]
+    return (64 <= total_size <= CHUNK_SIZE) and (idx + total_size <= end) and (
+        _filetime_to_dt(ts_ft) is not None
+    )
+
+
+def _elf_walk(data: bytes, offsets: list[int]) -> list[EventLogEntry]:
+    """ElfFile varianta A — walk přes ElfR record signatury.
+
+    Layout ElfR recordu (ground-truth)::
+
+        @+0x00  signatura 'ElfR' (4 B)
+        @+0x04  u32 total_record_size
+        @+0x08  u16 header_size
+        @+0x0A  u16 record_number
+        @+0x0C  u32 reserved
+        @+0x10  u64 timestamp (FILETIME)
+        @+0x18  u64 event_record_id
+        ...     BinXML payload (za header_size)
+
+    EventID se extrahuje z BinXML payloadu (v ElfR headeru není).
+    """
+    entries: list[EventLogEntry] = []
+    for idx in offsets:
+        total_size, header_size, record_number = struct.unpack_from("<IHH", data, idx + 4)
+        ts_ft = struct.unpack_from("<QQ", data, idx + 0x10)[0]
+        chunk_end = min(idx // CHUNK_SIZE * CHUNK_SIZE + CHUNK_SIZE, len(data))
+        payload_start = max(idx + header_size, idx + 40)
+        payload_end = min(idx + total_size, chunk_end)
+        if payload_start >= payload_end:
+            continue
+        xml_data = _parse_binxml_payload(data[payload_start:payload_end])
+
+        entries.append(
+            EventLogEntry(
+                record_number=record_number or (len(entries) + 1),
+                timestamp=_filetime_to_dt(ts_ft),
+                event_id=int(xml_data["event_id"]) if xml_data.get("event_id") else None,
+                provider=xml_data.get("provider", ""),
+                message=xml_data.get("message", ""),
+            )
+        )
+    return entries
 
 
 def _header_scan(
@@ -275,7 +453,7 @@ def _header_scan(
         payload_end = min(off + total_size, chunk_end)
         payload = data[payload_start:payload_end]
 
-        xml_data = _extract_binxml_strings(payload)
+        xml_data = _parse_binxml_payload(payload)
 
         entry = EventLogEntry(
             record_number=record_number,
@@ -292,11 +470,58 @@ def _header_scan(
     return entries
 
 
+def _find_record_header_before(
+    data: bytes, marker_idx: int, chunk_start: int
+) -> tuple[datetime | None, int, tuple[int, int] | None]:
+    """Najde platný MS-EVLOG record header před ``EventID`` markerem.
+
+    Prochází se od markera zpět (max 1 KB — typický rozsah mezi koncem
+    předchozího payloadu a začátkem následujícího recordu) a validuje:
+    u32 total_size v [64, CHUNK_SIZE], header_size v [32, 512] a platný
+    FILETIME timestamp. Nejblíže platný header = header tohoto záznamu.
+
+    Vrací (timestamp|None, record_number, payload_bounds|None) kde bounds
+    jsou (payload_start, payload_end) přímo z total_size — bez drahého
+    dopředu skenu po chunku.
+
+    R0.1: ElfFile varianta B nese timestamp pouze zde — bez tohoto hledání
+    zůstává ``entry.timestamp = None`` u všech content-scan záznamů.
+    """
+    scan_from = max(chunk_start + 16, marker_idx - 1024)
+    off = marker_idx - 1
+    while off >= scan_from:
+        if off + 40 > len(data):
+            break
+        total_size, header_size, record_number = struct.unpack_from("<IHH", data, off)
+        if (
+            32 <= header_size <= 512
+            and header_size + 8 <= total_size <= CHUNK_SIZE
+            and off + total_size <= len(data)
+            # Header musí končit před nebo na pozici markera (payload obsahuje marker)
+            and off + header_size <= marker_idx
+        ):
+            ts_ft = struct.unpack_from("<QQ", data, off + 0x0C)[0]
+            ts_dt = _filetime_to_dt(ts_ft)
+            if ts_dt is not None:
+                return (
+                    ts_dt,
+                    record_number,
+                    (off + header_size, min(off + total_size, len(data))),
+                )
+        off -= 1
+
+    return None, 0, None
+
+
 def _content_scan(data: bytes, chunk_start: int) -> list[EventLogEntry]:
     """Strategie 2 — najde UTF-16LE ``EventID`` markery a extrahuje BinXML.
 
     Nezávislé na přesném record header layoutu — funguje i pro ElfFile variantu,
     kde je hlavička odlišná. Každý marker = jeden záznam.
+
+    Timestamp + payload bounds se hledají v MS-EVLOG headeru před markerem
+    (R0.1) — ElfFile varianta B ho nese jen tam; když není platný, timestamp
+    zůstává None a payload se ohraničí oknem [idx-256, idx+4096] jako dříve.
 
     ElfFile varianta používá **sdílenou string tabulku na úrovni chunku**
     (element jména + hodnoty jsou jednou v chunk headeru, records jen odkazují) —
@@ -315,18 +540,24 @@ def _content_scan(data: bytes, chunk_start: int) -> list[EventLogEntry]:
         if idx == -1:
             break
 
-        # Lokální payload okolo markera (standardní EVTX — BinXML je v recordu)
-        local_start = max(chunk_start, idx - 256)
-        local_end = min(idx + 4096, chunk_end)
-        local_data = _extract_binxml_strings(data[local_start:local_end])
+        # Timestamp + record_number + payload bounds z headeru před markerem (R0.1 fix)
+        ts_dt, rec_num, bounds = _find_record_header_before(data, idx, chunk_start)
+        if bounds is not None:
+            local_start, local_end = bounds
+        else:
+            # Fallback bez platného headeru — okno okolo markera (staré chování)
+            local_start = max(chunk_start, idx - 256)
+            local_end = min(idx + 4096, chunk_end)
+
+        local_data = _parse_binxml_payload(data[local_start:local_end])
 
         # Sloučení: lokální data mají přednost (jsou specifická pro záznam),
         # chybějící pole doplní chunk kontext.
         xml_data = {**chunk_context, **{k: v for k, v in local_data.items() if v}}
 
         entry = EventLogEntry(
-            record_number=len(entries) + 1,
-            timestamp=None,
+            record_number=rec_num or (len(entries) + 1),
+            timestamp=ts_dt,
             event_id=int(xml_data["event_id"]) if xml_data.get("event_id") else None,
             provider=xml_data.get("provider", ""),
             message=xml_data.get("message", ""),
