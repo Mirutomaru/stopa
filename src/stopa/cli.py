@@ -24,9 +24,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
+
+_log = logging.getLogger("stopa.cli")
 
 from stopa.data.db import CaseDB
 from stopa.domain.profiles import PROFILES, get_profile
@@ -65,6 +68,64 @@ def case_examiner(db: CaseDB, case_id: str) -> str | None:
     return case.examiner if case else None
 
 
+# ---------------------------------------------------------------------------
+# R0.4 — CLI UX: --json výstup + progress bary (Rich, volitelná závislost)
+# ---------------------------------------------------------------------------
+
+def _add_json_flag(p: argparse.ArgumentParser) -> None:
+    """Přidá standardní `--json` flag (R0.4 — strojově čitelný výstup)."""
+    p.add_argument(
+        "--json", action="store_true", help="strojově čitelný výstup (validní JSON na stdout)"
+    )
+
+
+def _print_json(payload: object) -> None:
+    """Vypíše validní JSON na stdout (ensure_ascii=False; datetime/Path → str)."""
+    print(json.dumps(payload, ensure_ascii=False, default=str))
+
+
+def _rich_progress():
+    """Rich Progress pro dlouhé operace (R0.4) — None pokud Rich chybí nebo není TTY."""
+    if not sys.stdout.isatty():
+        return None  # testy / pipeline — zachovat plain output
+    try:
+        from rich.console import Console
+        from rich.progress import BarColumn, Progress, TaskID, TimeElapsedColumn
+
+        console = Console()
+
+        class _Bar:
+            def __init__(self) -> None:
+                self._progress = Progress(
+                    "[progress.description]{task.description}",
+                    BarColumn(),
+                    "[progress.percentage]{task.percentage:>3.0f}%",
+                    TimeElapsedColumn(),
+                    console=console,
+                    transient=True,
+                )
+                self._progress.start()
+
+            def add(self, description: str, total: int) -> TaskID:
+                return self._progress.add_task(description, total=total or 100)
+
+            def update(self, task_id: TaskID, completed: float) -> None:
+                try:
+                    self._progress.update(task_id, completed=completed)
+                except Exception as exc:  # noqa: BLE001 — progress je kosmetický, nikdy nepádí
+                    _log.debug("Rich progress update selhalo: %s", exc)
+
+            def stop(self) -> None:
+                try:
+                    self._progress.stop()
+                except Exception as exc:  # noqa: BLE001 — viz výše
+                    _log.debug("Rich progress stop selhala: %s", exc)
+
+        return _Bar()
+    except ImportError:
+        return None
+
+
 def cmd_case_new(args: argparse.Namespace) -> int:
     case = Case(name=args.name, examiner=args.examiner, notes=args.notes)
     db = CaseDB(_db_dir() / f"{case.id}.db")
@@ -81,6 +142,16 @@ def cmd_case_new(args: argparse.Namespace) -> int:
         details={"case_id": case.id, "name": case.name},
     )
     db.close()
+    if getattr(args, "json", False):
+        _print_json(
+            {
+                "case_id": case.id,
+                "name": case.name,
+                "examiner": case.examiner,
+                "db_path": str(_db_dir() / f"{case.id}.db"),
+            }
+        )
+        return 0
     print(f"Případ vytvořen: {case.id}")
     print(f"  název:   {case.name}")
     if case.examiner:
@@ -121,6 +192,15 @@ def cmd_case_auto_export(args: argparse.Namespace) -> int:
         )
     finally:
         db.close()
+    if getattr(args, "json", False):
+        _print_json(
+            {
+                "case_id": args.case_id,
+                "auto_export_enabled": enabled,
+                "interval_minutes": minutes,
+            }
+        )
+        return 0
     state = "ZAPNUTO" if enabled else "VYPNUTO"
     print(f"Automatický export (STP-069): {state} pro případ {args.case_id}")
     if minutes is not None:
@@ -152,6 +232,9 @@ def cmd_case_auto_interval(args: argparse.Namespace) -> int:
         )
     finally:
         db.close()
+    if getattr(args, "json", False):
+        _print_json({"case_id": args.case_id, "interval_minutes": minutes})
+        return 0
     if minutes is None:
         print(f"Interval periodického auto-bundle (STP-070): VYMÁZÁN pro případ {args.case_id}")
     else:
@@ -162,6 +245,7 @@ def cmd_case_auto_interval(args: argparse.Namespace) -> int:
 def cmd_add(args: argparse.Namespace) -> int:
     db = _open_db(args.case_id)
     profile = get_profile(args.profile)  # early validace jména profilu
+    json_mode = getattr(args, "json", False)
 
     hash_sets: dict[str, set[str]] | None = None
     if args.hash_set:
@@ -173,12 +257,18 @@ def cmd_add(args: argparse.Namespace) -> int:
         hash_sets = load_hash_sets(paths)
 
     rc = 0
-    print(f"Zpracovávám {len(args.paths)} zdrojů (profil: {profile.name})")
+    bar = None if json_mode else _rich_progress()
+    source_summaries: list[dict] = []
+    # R0.4 — stav Rich progress tasku; musí být venku ze smyčky (B023), ať se neresetuje per zdroj
+    _bar_state: dict[str, object] = {"task": None}
+    if not json_mode:
+        print(f"Zpracovávám {len(args.paths)} zdrojů (profil: {profile.name})")
     for path_str in args.paths:
         root = Path(path_str).expanduser()
         if not root.exists():
             print(f"Zdroj neexistuje: {root}", file=sys.stderr)
             rc = 2
+            source_summaries.append({"path": str(root), "error": "zdroj neexistuje"})
             continue
         source = EvidenceSource(case_id=args.case_id, kind="folder" if root.is_dir() else "file", path=str(root))
         db.add_source(source)
@@ -199,40 +289,91 @@ def cmd_add(args: argparse.Namespace) -> int:
                 "method": getattr(args, "method", None),
             },
         )
+        _bar_state["task"] = None  # nový Rich task per zdroj (label/total se liší)
 
         def _progress(done: int, total: int, label: str = source.path) -> None:
-            pct = (done / total * 100) if total else 100.0
-            print(f"\r  {label}: {done}/{total} souborů ({pct:.0f}%)", end="", flush=True)
+            if bar is not None:
+                # R0.4 — Rich progress (lazy task: total je známé až po walku)
+                if _bar_state["task"] is None and total:
+                    _bar_state["task"] = bar.add(label, total)
+                elif _bar_state["task"] is not None:
+                    bar.update(_bar_state["task"], done)  # type: ignore[arg-type]
+            elif not json_mode:
+                pct = (done / total * 100) if total else 100.0
+                print(f"\r  {label}: {done}/{total} souborů ({pct:.0f}%)", end="", flush=True)
 
         result = process_source(
             db, source.id, root, args.profile, hash_sets, _progress,
             resume=getattr(args, "resume", False),
         )
-        if result.files_total:
-            print()
-        print(f"  [{result.profile}] {result.files_total} souborů, {result.bytes_total / 1e6:.2f} MB")
-        print(
-            f"    signatury: {result.signatures_detected}, "
-            f"bad ext: {result.bad_extensions}, duplikáty: {result.duplicates}, "
-            f"hash-set trefy: {result.hash_set_hits}"
+        if bar is not None and _bar_state["task"] is not None:
+            # dokončit task (100 %) — Rich transient bar
+            try:
+                bar.update(_bar_state["task"], max(result.files_total, 1))  # type: ignore[arg-type]
+            except Exception as exc:  # noqa: BLE001 — progress je kosmetický
+                _log.debug("Rich progress dokončení selhalo: %s", exc)
+        if not json_mode:
+            if result.files_total:
+                print()
+            print(f"  [{result.profile}] {result.files_total} souborů, {result.bytes_total / 1e6:.2f} MB")
+            print(
+                f"    signatury: {result.signatures_detected}, "
+                f"bad ext: {result.bad_extensions}, duplikáty: {result.duplicates}, "
+                f"hash-set trefy: {result.hash_set_hits}"
+            )
+            if result.artifacts_extracted:
+                print(f"    artifacty extrahovány: {result.artifacts_extracted}")
+            for err in result.errors[:5]:
+                print(f"    ! {err}", file=sys.stderr)
+        source_summaries.append(
+            {
+                "source_id": source.id,
+                "path": str(root),
+                "kind": source.kind,
+                "profile": result.profile,
+                "files_total": result.files_total,
+                "bytes_total": result.bytes_total,
+                "signatures_detected": result.signatures_detected,
+                "bad_extensions": result.bad_extensions,
+                "duplicates": result.duplicates,
+                "hash_set_hits": result.hash_set_hits,
+                "artifacts_extracted": result.artifacts_extracted,
+                "errors": list(result.errors),
+            }
         )
-        if result.artifacts_extracted:
-            print(f"    artifacty extrahovány: {result.artifacts_extracted}")
-        for err in result.errors[:5]:
-            print(f"    ! {err}", file=sys.stderr)
+    if bar is not None:
+        bar.stop()
+
     # STP-018 Timeline Intelligence 2.0 — post-pass nad celou case DB (rozpory + duplikáty).
+    intel_summary: dict | None = None
     try:
         intel = run_timeline_intel(db)
         if intel["events"]:
-            print(
-                f"    timeline intel: {intel['contradiction_groups']} rozporových skupin, "
-                f"{intel['dup_groups']} dup. skupin ({intel['events']} událostí)"
-            )
+            intel_summary = {
+                "contradiction_groups": intel["contradiction_groups"],
+                "dup_groups": intel["dup_groups"],
+                "events": intel["events"],
+            }
+            if not json_mode:
+                print(
+                    f"    timeline intel: {intel['contradiction_groups']} rozporových skupin, "
+                    f"{intel['dup_groups']} dup. skupin ({intel['events']} událostí)"
+                )
     except Exception as exc:  # noqa: BLE001 — analytický bonus, ne pád ingestu
-        print(f"    ! timeline intel: {exc}", file=sys.stderr)
+        if not json_mode:
+            print(f"    ! timeline intel: {exc}", file=sys.stderr)
     # P0 Core C4: kontrolní bod po ingestu (podpis hashu posledního audit řádku).
     db.add_integrity_checkpoint("ingest")
     db.close()
+    if json_mode:
+        _print_json(
+            {
+                "case_id": args.case_id,
+                "profile": profile.name,
+                "sources": source_summaries,
+                "timeline_intel": intel_summary,
+            }
+        )
     return rc
 
 
@@ -244,9 +385,15 @@ def cmd_files(args: argparse.Namespace) -> int:
         signature_family=args.family,
         limit=args.limit,
     )
+    if not records and getattr(args, "json", False):
+        _print_json({"case_id": args.case_id, "files": [], "total": 0})
+        db.close()
+        return 0
     if not records:
         print("(žádné záznamy)")
+        db.close()
         return 0
+    file_rows = []
     for r in records:
         flags = []
         if r.bad_extension:
@@ -257,7 +404,20 @@ def cmd_files(args: argparse.Namespace) -> int:
             flags.append(f"HASHSET:{r.hash_set_hit}")
         flag_str = f"  [{' '.join(flags)}]" if flags else ""
         sig = r.signature_type or "?"
-        print(f"{r.rel_path}  [{sig}] {r.size_bytes:,} B{flag_str}")
+        file_rows.append(
+            {
+                "rel_path": r.rel_path,
+                "signature": sig,
+                "size_bytes": r.size_bytes,
+                "bad_extension": bool(r.bad_extension),
+                "duplicate_of": r.is_duplicate_of,
+                "hash_set_hit": r.hash_set_hit,
+            }
+        )
+        if not getattr(args, "json", False):
+            print(f"{r.rel_path}  [{sig}] {r.size_bytes:,} B{flag_str}")
+    if getattr(args, "json", False):
+        _print_json({"case_id": args.case_id, "files": file_rows, "total": len(file_rows)})
     db.close()
     return 0
 
@@ -267,6 +427,25 @@ def cmd_stats(args: argparse.Namespace) -> int:
     case = db.get_case(args.case_id)
     sources = db.list_sources(args.case_id)
     s = db.stats()
+    if getattr(args, "json", False):
+        payload = {
+            "case_id": args.case_id,
+            "name": case.name if case else None,
+            "examiner": case.examiner if case else None,
+            "sources": [
+                {
+                    "id": src.id,
+                    "kind": src.kind,
+                    "path": src.path,
+                    **{k: db.stats(src.id)[k] for k in ("files", "bytes", "bad_ext", "dups")},
+                }
+                for src in sources
+            ],
+            "totals": s,
+        }
+        _print_json(payload)
+        db.close()
+        return 0
     print(f"Případ: {case.name if case else args.case_id} ({args.case_id})")
     if case and case.examiner:
         print(f"Znalec: {case.examiner}")
@@ -289,9 +468,15 @@ def cmd_search(args: argparse.Namespace) -> int:
     """Full-text search (FTS5) — AXIOM-style vyhledávání napříč případem."""
     db = _open_db(args.case_id)
     records = db.search(args.query, source_id=args.source, limit=args.limit)
+    json_mode = getattr(args, "json", False)
     if not records:
-        print(f"(žádné soubory neodpovídají dotazu: {args.query!r})")
+        if json_mode:
+            _print_json({"case_id": args.case_id, "query": args.query, "results": [], "total": 0})
+        else:
+            print(f"(žádné soubory neodpovídají dotazu: {args.query!r})")
+        db.close()
         return 0
+    results = []
     for r in records:
         flags = []
         if r.bad_extension:
@@ -302,8 +487,20 @@ def cmd_search(args: argparse.Namespace) -> int:
             flags.append(f"HASHSET:{r.hash_set_hit}")
         flag_str = f"  [{' '.join(flags)}]" if flags else ""
         sig = r.signature_type or "?"
-        print(f"{r.rel_path}  [{sig}] {r.size_bytes:,} B{flag_str}")
-    print(f"\nCELKEM: {len(records)} souborů (dotaz: {args.query!r})")
+        results.append(
+            {
+                "rel_path": r.rel_path,
+                "signature": sig,
+                "size_bytes": r.size_bytes,
+                "flags": [f for f in (r.bad_extension and "BAD-EXT", bool(r.is_duplicate_of) and f"DUP→{r.is_duplicate_of}", r.hash_set_hit and f"HASHSET:{r.hash_set_hit}") if f],
+            }
+        )
+        if not json_mode:
+            print(f"{r.rel_path}  [{sig}] {r.size_bytes:,} B{flag_str}")
+    if json_mode:
+        _print_json({"case_id": args.case_id, "query": args.query, "results": results, "total": len(results)})
+    else:
+        print(f"\nCELKEM: {len(records)} souborů (dotaz: {args.query!r})")
     db.close()
     return 0
 
@@ -315,6 +512,7 @@ def cmd_timeline(args: argparse.Namespace) -> int:
     duplikáty napříč zdroji) a vypíše analytické skupiny nad materializovanou timeline.
     """
     db = _open_db(args.case_id)
+    json_mode = getattr(args, "json", False)
 
     if getattr(args, "intel", False):
         from stopa.domain.timeline_intel import (
@@ -323,6 +521,20 @@ def cmd_timeline(args: argparse.Namespace) -> int:
         )
 
         summary = run_timeline_intel(db, window_seconds=getattr(args, "window", 60.0))
+        events = db.list_timeline_events(limit=10_000)
+        contra = [e for e in events if FLAG_CONCURRENT_ACTIVITY in (e.get("anomaly_flags") or [])]
+        dups = [e for e in events if FLAG_CROSS_SOURCE_DUP in (e.get("anomaly_flags") or [])]
+        if json_mode:
+            _print_json(
+                {
+                    "case_id": args.case_id,
+                    "intel": summary,
+                    "contradictions": contra,
+                    "cross_source_dups": dups,
+                }
+            )
+            db.close()
+            return 0
         print(
             f"Timeline Intelligence 2.0: {summary['events']} událostí → "
             f"{summary['contradiction_groups']} rozporových skupin, "
@@ -365,17 +577,36 @@ def cmd_timeline(args: argparse.Namespace) -> int:
         limit=args.limit,
     )
     if not arts:
-        print("(žádné artifacty — použij profil s extract_artifacts)")
+        if json_mode:
+            _print_json({"case_id": args.case_id, "artifacts": [], "total": 0})
+        else:
+            print("(žádné artifacty — použij profil s extract_artifacts)")
+        db.close()
         return 0
+    rows = []
     for a in arts:
-        ts = a.timestamp.strftime("%Y-%m-%d %H:%M") if a.timestamp else "—" * 16
+        ts = a.timestamp.strftime("%Y-%m-%d %H:%M") if a.timestamp else None
         title = (a.title or "")[:80]
-        print(f"{ts}  [{a.artifact_type}] {title}")
-        if args.verbose and a.rel_path:
-            print(f"          └─ {a.rel_path}")
+        rows.append(
+            {
+                "timestamp": ts,
+                "artifact_type": a.artifact_type,
+                "title": title,
+                "rel_path": a.rel_path if args.verbose or json_mode else None,
+            }
+        )
+        if not json_mode:
+            print(f"{ts or '—' * 16}  [{a.artifact_type}] {title}")
+            if args.verbose and a.rel_path:
+                print(f"          └─ {a.rel_path}")
     stats = db.artifact_stats(args.source)
     by_type = ", ".join(f"{k}: {v}" for k, v in sorted(stats.items()) if k != "total")
-    print(f"\nCELKEM: {stats['total']} artifactů ({by_type})")
+    if json_mode:
+        _print_json(
+            {"case_id": args.case_id, "artifacts": rows, "total": len(rows), "by_type": stats}
+        )
+    else:
+        print(f"\nCELKEM: {stats['total']} artifactů ({by_type})")
     db.close()
     return 0
 
@@ -398,30 +629,42 @@ def cmd_correlate(args: argparse.Namespace) -> int:
         },
     )
 
-    print(f"Entit: {summary['entities']}")
-    total = summary["correlations_total"]
-    if not total:
-        print("Propojení: 0 (žádné entity napříč artifacty/soubory)")
+    if getattr(args, "json", False):
+        payload: dict = {
+            "case_id": args.case_id,
+            "entities": summary["entities"],
+            "correlations_total": summary["correlations_total"],
+            "by_relation": summary["by_relation"],
+            "merge_candidates": summary.get("merge_candidates", []),
+        }
+        if getattr(args, "verbose", False):
+            payload["correlations"] = db.list_correlations(args.case_id)
+        _print_json(payload)
     else:
-        by_rel = ", ".join(
-            f"{k}: {v}" for k, v in sorted(summary["by_relation"].items())
-        )
-        print(f"Propojení: {total} ({by_rel})")
-        if args.verbose:
-            for c in db.list_correlations(args.case_id):
-                a = c["entity_a"]
-                b = c["entity_b"]
-                label = a if a == b else f"{a} ↔ {b}"
-                print(f"  [{c['relation']}/{c['confidence']}] {label}")
-                for ev in c["evidence"][:5]:
-                    path = ev.get("rel_path") or ""
-                    print(f"      └─ {ev.get('detail', '')} {path}".rstrip())
-    # P0 I3: detekce duplicitních entit (merge candidates) — heuristické páry.
-    mc = summary.get("merge_candidates", [])
-    if mc:
-        print(f"Možné duplikity entit: {len(mc)}")
-        for m in mc[:10]:
-            print(f"  [{m['kind']}] {m['value_a']} ≈ {m['value_b']} — {m['reason']}")
+        print(f"Entit: {summary['entities']}")
+        total = summary["correlations_total"]
+        if not total:
+            print("Propojení: 0 (žádné entity napříč artifacty/soubory)")
+        else:
+            by_rel = ", ".join(
+                f"{k}: {v}" for k, v in sorted(summary["by_relation"].items())
+            )
+            print(f"Propojení: {total} ({by_rel})")
+            if args.verbose:
+                for c in db.list_correlations(args.case_id):
+                    a = c["entity_a"]
+                    b = c["entity_b"]
+                    label = a if a == b else f"{a} ↔ {b}"
+                    print(f"  [{c['relation']}/{c['confidence']}] {label}")
+                    for ev in c["evidence"][:5]:
+                        path = ev.get("rel_path") or ""
+                        print(f"      └─ {ev.get('detail', '')} {path}".rstrip())
+        # P0 I3: detekce duplicitních entit (merge candidates) — heuristické páry.
+        mc = summary.get("merge_candidates", [])
+        if mc:
+            print(f"Možné duplikity entit: {len(mc)}")
+            for m in mc[:10]:
+                print(f"  [{m['kind']}] {m['value_a']} ≈ {m['value_b']} — {m['reason']}")
     # P0 Core C4: kontrolní bod po korelaci.
     db.add_integrity_checkpoint("correlate")
     db.close()
@@ -445,17 +688,36 @@ def cmd_image(args: argparse.Namespace) -> int:
     summary = process_disk_image(
         db, source.id, img_path, profile, carve_free=not args.no_carve
     )
-    print(f"Disk image: {summary.image_type or 'neznámý'} — {summary.description or '?'}")
-    for p in summary.partitions:
-        print(f"  partice #{p.index}: {p.fstype} @ sektor {p.offset_sectors}")
-    print(
-        f"  soubory: {summary.files_total}, bajty: {summary.bytes_total / 1e6:.2f} MB, "
-        f"signatury: {summary.signatures_detected}"
-    )
-    if summary.carved_candidates:
-        print(f"  carving kandidáti (nealokovaný prostor): {summary.carved_candidates}")
-    for err in summary.errors[:5]:
-        print(f"  ! {err}", file=sys.stderr)
+    if getattr(args, "json", False):
+        _print_json(
+            {
+                "case_id": args.case_id,
+                "source_id": source.id,
+                "image_type": summary.image_type,
+                "description": summary.description,
+                "partitions": [
+                    {"index": p.index, "fstype": p.fstype, "offset_sectors": p.offset_sectors}
+                    for p in summary.partitions
+                ],
+                "files_total": summary.files_total,
+                "bytes_total": summary.bytes_total,
+                "signatures_detected": summary.signatures_detected,
+                "carved_candidates": summary.carved_candidates,
+                "errors": list(summary.errors),
+            }
+        )
+    else:
+        print(f"Disk image: {summary.image_type or 'neznámý'} — {summary.description or '?'}")
+        for p in summary.partitions:
+            print(f"  partice #{p.index}: {p.fstype} @ sektor {p.offset_sectors}")
+        print(
+            f"  soubory: {summary.files_total}, bajty: {summary.bytes_total / 1e6:.2f} MB, "
+            f"signatury: {summary.signatures_detected}"
+        )
+        if summary.carved_candidates:
+            print(f"  carving kandidáti (nealokovaný prostor): {summary.carved_candidates}")
+        for err in summary.errors[:5]:
+            print(f"  ! {err}", file=sys.stderr)
     db.close()
     return 0
 
@@ -479,25 +741,58 @@ def cmd_mobile(args: argparse.Namespace) -> int:
         password=args.password, keyfile=getattr(args, "keyfile", None),
         carve_free=not args.no_carve,
     )
-    if summary.fde_unlocked:
-        print(f"Mobilní FDE obraz: {summary.description}")
+    if getattr(args, "json", False):
+        _print_json(
+            {
+                "case_id": args.case_id,
+                "source_id": source.id,
+                "fde_unlocked": summary.fde_unlocked,
+                "image_type": summary.image_type,
+                "description": summary.description,
+                "partitions": [
+                    {"index": p.index, "fstype": p.fstype, "offset_sectors": p.offset_sectors}
+                    for p in summary.partitions
+                ],
+                "files_total": summary.files_total,
+                "bytes_total": summary.bytes_total,
+                "signatures_detected": summary.signatures_detected,
+                "carved_candidates": summary.carved_candidates,
+                "errors": list(summary.errors),
+            }
+        )
     else:
-        print(f"Mobilní obraz: {summary.image_type or 'neznámý'} — {summary.description or '?'}")
-    for p in summary.partitions:
-        print(f"  partice #{p.index}: {p.fstype} @ sektor {p.offset_sectors}")
-    print(
-        f"  soubory: {summary.files_total}, bajty: {summary.bytes_total / 1e6:.2f} MB, "
-        f"signatury: {summary.signatures_detected}"
-    )
-    if summary.carved_candidates:
-        print(f"  carving kandidáti (nealokovaný prostor): {summary.carved_candidates}")
-    for err in summary.errors[:5]:
-        print(f"  ! {err}", file=sys.stderr)
+        if summary.fde_unlocked:
+            print(f"Mobilní FDE obraz: {summary.description}")
+        else:
+            print(f"Mobilní obraz: {summary.image_type or 'neznámý'} — {summary.description or '?'}")
+        for p in summary.partitions:
+            print(f"  partice #{p.index}: {p.fstype} @ sektor {p.offset_sectors}")
+        print(
+            f"  soubory: {summary.files_total}, bajty: {summary.bytes_total / 1e6:.2f} MB, "
+            f"signatury: {summary.signatures_detected}"
+        )
+        if summary.carved_candidates:
+            print(f"  carving kandidáti (nealokovaný prostor): {summary.carved_candidates}")
+        for err in summary.errors[:5]:
+            print(f"  ! {err}", file=sys.stderr)
     db.close()
     return 0
 
 
-def cmd_profiles(_args: argparse.Namespace) -> int:
+def cmd_profiles(args: argparse.Namespace) -> int:
+    if getattr(args, "json", False):
+        _print_json({
+            name: {
+                "compute_md5": p.compute_md5,
+                "compute_sha1": p.compute_sha1,
+                "compute_sha256": p.compute_sha256,
+                "signature_analysis": bool(p.signature_analysis),
+                "flag_bad_extensions": bool(p.flag_bad_extensions),
+                "deduplicate": bool(p.deduplicate),
+            }
+            for name, p in sorted(PROFILES.items())
+        })
+        return 0
     print("Dostupné processing profily:")
     for name, p in sorted(PROFILES.items()):
         algs = "+".join(
@@ -530,10 +825,16 @@ def cmd_report(args: argparse.Namespace) -> int:
                 db, args.case_id, out_dir / default_report_name(args.case_id, "html"), lang=lang
             )
     except RuntimeError as e:
-        print(f"Report selhal: {e}", file=sys.stderr)
+        if getattr(args, "json", False):
+            _print_json({"error": str(e), "case_id": args.case_id})
+        else:
+            print(f"Report selhal: {e}", file=sys.stderr)
         db.close()
         return 2
     db.close()
+    if getattr(args, "json", False):
+        _print_json({"path": str(path), "format": fmt, "case_id": args.case_id})
+        return 0
     print(f"Report vygenerován ({fmt.upper()}): {path}")
     return 0
 
@@ -681,12 +982,13 @@ def cmd_plaso_import(args: argparse.Namespace) -> int:
     db = _open_db(args.case_id)
     try:
         summary = import_l2tcsv(db, args.case_id, text, source_path=str(path))
-        print(
-            f"Plaso import: {summary['events_total']} událostí → "
-            f"{summary['artifacts_imported']} artifactů, "
-            f"{summary['timeline_events']} timeline eventů "
-            f"(bez času: {summary['skipped_no_time']}) — source {summary['source_id']}"
-        )
+        if not getattr(args, "json", False):
+            print(
+                f"Plaso import: {summary['events_total']} událostí → "
+                f"{summary['artifacts_imported']} artifactů, "
+                f"{summary['timeline_events']} timeline eventů "
+                f"(bez času: {summary['skipped_no_time']}) — source {summary['source_id']}"
+            )
         db.log_operation(
             "plaso_import",
             actor=case_examiner(db, args.case_id),
@@ -696,6 +998,8 @@ def cmd_plaso_import(args: argparse.Namespace) -> int:
         db.add_integrity_checkpoint("plaso-import")
     finally:
         db.close()
+    if getattr(args, "json", False):
+        _print_json({**summary, "file": str(path)})
     return 0
 
 
@@ -730,12 +1034,13 @@ def cmd_timesketch_push(args: argparse.Namespace) -> int:
         except (TimesketchError, ValueError) as exc:
             raise SystemExit(f"Timesketch push selhal: {exc}") from exc
 
-        print(
-            f"Timesketch push: {summary['records']} záznamů "
-            f"(celkem {summary['total_records']}) → "
-            f"sketch {summary['sketch_id']}, timeline {summary['timeline_id']} "
-            f"(task {summary['task_id']})"
-        )
+        if not getattr(args, "json", False):
+            print(
+                f"Timesketch push: {summary['records']} záznamů "
+                f"(celkem {summary['total_records']}) → "
+                f"sketch {summary['sketch_id']}, timeline {summary['timeline_id']} "
+                f"(task {summary['task_id']})"
+            )
         db.log_operation(
             "timesketch_pushed",
             actor=case_examiner(db, args.case_id),
@@ -745,6 +1050,8 @@ def cmd_timesketch_push(args: argparse.Namespace) -> int:
         db.add_integrity_checkpoint("timesketch-push")
     finally:
         db.close()
+    if getattr(args, "json", False):
+        _print_json({**summary, "what": args.what})
     return 0
 
 
@@ -756,10 +1063,15 @@ def cmd_verify(args: argparse.Namespace) -> int:
     """
     from stopa.domain.hashing import hash_file
 
+    json_mode = getattr(args, "json", False)
     db = _open_db(args.case_id)
     sources = db.list_sources(args.case_id)
     if not sources:
-        print("(žádné evidence sources)")
+        if json_mode:
+            _print_json({"ok": 0, "mismatched": 0, "missing": 0, "skipped": 0,
+                         "problems": [], "sources": 0})
+        else:
+            print("(žádné evidence sources)")
         db.close()
         return 0
 
@@ -807,68 +1119,93 @@ def cmd_verify(args: argparse.Namespace) -> int:
             "skipped": skipped,
         },
     )
-    print(f"Integrita: {ok} OK, {mismatched} rozdílů, {missing} chybí, {skipped} nečitelných")
-    for p in problems[: args.limit]:
-        print(f"  ! {p}")
-    if len(problems) > args.limit:
-        print(f"  … a dalších {len(problems) - args.limit}")
+    if json_mode:
+        _print_json({
+            "ok": ok, "mismatched": mismatched, "missing": missing,
+            "skipped": skipped, "problems": problems[: args.limit],
+            "sources": len(sources),
+        })
+    else:
+        print(f"Integrita: {ok} OK, {mismatched} rozdílů, {missing} chybí, {skipped} nečitelných")
+        for p in problems[: args.limit]:
+            print(f"  ! {p}")
+        if len(problems) > args.limit:
+            print(f"  … a dalších {len(problems) - args.limit}")
     db.close()
     return 1 if (mismatched or missing) else 0
 
 
 def cmd_integrity(args: argparse.Namespace) -> int:
     """P0 Core C4 — Evidence Integrity 2.0: hash chaining + Ed25519 kontrolní body."""
+    json_mode = getattr(args, "json", False)
     db = _open_db(args.case_id)
 
     # 1) Hash chaining audit logu (ověřitelné bez klíče).
     report = db.verify_audit_chain()
-    if report.ok:
-        print(f"Hash řetězec audit logu: OK ({report.rows_checked} řádků)")
-    else:
-        print(
-            f"Hash řetězec audit logu: ROZBITÝ na řádku {report.broken_at_id}"
-            f" — {report.reason}",
-            file=sys.stderr,
-        )
+    if not json_mode:
+        if report.ok:
+            print(f"Hash řetězec audit logu: OK ({report.rows_checked} řádků)")
+        else:
+            print(
+                f"Hash řetězec audit logu: ROZBITÝ na řádku {report.broken_at_id}"
+                f" — {report.reason}",
+                file=sys.stderr,
+            )
 
     # 2) Ed25519 klíč + kontrolní body.
     pub = db.integrity_public_key()
     if args.init_key and pub is None:
         _, new_pub = db.ensure_integrity_key()
-        print(f"Ed25519 klíč vygenerován: {new_pub[:16]}…")
+        if not json_mode:
+            print(f"Ed25519 klíč vygenerován: {new_pub[:16]}…")
         pub = new_pub
-    elif pub is not None:
+    elif pub is not None and not json_mode:
         print(f"Ed25519 veřejný klíč: {pub[:16]}… ({len(pub)} b64 znaků)")
-    else:
+    elif pub is None and not args.init_key and not json_mode:
         print("Ed25519 klíč: nevygenerován (použij --init-key)")
 
     cps = db.list_integrity_checkpoints()
-    if not cps:
+    results: list[dict] = []
+    if not cps and not json_mode:
         print("Kontrolní body: 0")
-    else:
+    elif cps:
         results = db.verify_integrity_checkpoints()
         ok_count = sum(1 for r in results if r.get("ok"))
-        print(f"Kontrolní body: {len(cps)} ({ok_count} platných podpisů)")
-        for cp, res in zip(cps, results):
-            mark = "✓" if res.get("ok") else "✗"
-            print(
-                f"  [{mark}] #{cp['id']} audit_row={cp['audit_row_id']} "
-                f"{cp['reason'] or '—'} {cp['ts']}"
-            )
+        if not json_mode:
+            print(f"Kontrolní body: {len(cps)} ({ok_count} platných podpisů)")
+            for cp, res in zip(cps, results):
+                mark = "✓" if res.get("ok") else "✗"
+                print(
+                    f"  [{mark}] #{cp['id']} audit_row={cp['audit_row_id']} "
+                    f"{cp['reason'] or '—'} {cp['ts']}"
+                )
 
     # 3) Nový kontrolní bod na požádání.
+    new_cp_id = None
     if args.checkpoint:
         if db.integrity_public_key() is None:
             print("Klíč nevygenerován — použij --init-key", file=sys.stderr)
             db.close()
             return 2
-        cp_id = db.add_integrity_checkpoint(args.checkpoint)
-        if cp_id is None:
+        new_cp_id = db.add_integrity_checkpoint(args.checkpoint)
+        if new_cp_id is None:
             print("Kontrolní bod neuložen (chybí klíč)", file=sys.stderr)
             db.close()
             return 2
-        print(f"Nový kontrolní bod #{cp_id} ({args.checkpoint})")
+        if not json_mode:
+            print(f"Nový kontrolní bod #{new_cp_id} ({args.checkpoint})")
 
+    if json_mode:
+        _print_json({
+            "audit_chain_ok": report.ok,
+            "rows_checked": report.rows_checked,
+            "broken_at_id": report.broken_at_id,
+            "reason": None if report.ok else report.reason,
+            "public_key": pub,
+            "checkpoints_total": len(cps),
+            "checkpoints_valid": sum(1 for r in results if r.get("ok")),
+            "new_checkpoint_id": new_cp_id,
+        })
     db.close()
     # exit code: 0 = řetězec OK, 1 = rozbitý řetězec
     return 0 if report.ok else 1
@@ -878,46 +1215,61 @@ def cmd_replay(args: argparse.Namespace) -> int:
     """P0 Core C5 — Reproducibility Engine: opakovat zaznamenanou operaci + porovnání."""
     from stopa.pipeline import replay_extract
 
+    json_mode = getattr(args, "json", False)
     db = _open_db(args.case_id)
     ops = db.list_operations(case_id=args.case_id, op_type="extract")
     if not ops:
-        print("Žádné zaznamenané extract operace (předtím `stopa add`)", file=sys.stderr)
+        if json_mode:
+            _print_json({"error": "no_extract_operations"})
+        else:
+            print("Žádné zaznamenané extract operace (předtím `stopa add`)", file=sys.stderr)
         db.close()
         return 2
 
     target = db.get_operation(args.op) if args.op else ops[-1]
     if target is None:
-        print(f"Operace nenalezena: {args.op}", file=sys.stderr)
+        if json_mode:
+            _print_json({"error": "operation_not_found", "op_id": args.op})
+        else:
+            print(f"Operace nenalezena: {args.op}", file=sys.stderr)
         db.close()
         return 2
 
     src = db.get_source(target.source_id or "")
     if src is None:
-        print(f"Zdroj operace neexistuje: {target.source_id}", file=sys.stderr)
+        if json_mode:
+            _print_json({"error": "source_not_found", "source_id": target.source_id})
+        else:
+            print(f"Zdroj operace neexistuje: {target.source_id}", file=sys.stderr)
         db.close()
         return 2
     root = Path(src.path).expanduser()
     if not root.exists():
-        print(f"Zdroj už není na disku: {root}", file=sys.stderr)
+        if json_mode:
+            _print_json({"error": "source_path_missing", "path": str(root)})
+        else:
+            print(f"Zdroj už není na disku: {root}", file=sys.stderr)
         db.close()
         return 2
 
-    print(f"Replay operace {target.id} (zdroj: {src.path})")
+    if not json_mode:
+        print(f"Replay operace {target.id} (zdroj: {src.path})")
     res = replay_extract(target, root)
 
-    if res.inputs_identical:
-        print("Vstupní soubory: OK (SHA-256 shodné se záznamem)")
-    else:
-        print(f"Vstupní soubory: ZMĚNĚNY ({len(res.input_diffs)} rozdílů)", file=sys.stderr)
-        for d in res.input_diffs[:10]:
-            print(f"  ! {d}", file=sys.stderr)
+    if not json_mode:
+        if res.inputs_identical:
+            print("Vstupní soubory: OK (SHA-256 shodné se záznamem)")
+        else:
+            print(f"Vstupní soubory: ZMĚNĚNY ({len(res.input_diffs)} rozdílů)", file=sys.stderr)
+            for d in res.input_diffs[:10]:
+                print(f"  ! {d}", file=sys.stderr)
 
-    if res.outputs_identical:
-        print("Výstupní souhrn: IDENTICKÝ (operace je reprodukovatelná)")
-    else:
-        print(f"Výstupní souhrn: LIŠÍ ({len(res.output_diffs)} rozdílů)", file=sys.stderr)
-        for d in res.output_diffs[:10]:
-            print(f"  ! {d}", file=sys.stderr)
+        if res.outputs_identical:
+            print("Výstupní souhrn: IDENTICKÝ (operace je reprodukovatelná)")
+        else:
+            print(f"Výstupní souhrn: LIŠÍ ({len(res.output_diffs)} rozdílů)", file=sys.stderr)
+            for d in res.output_diffs[:10]:
+                print(f"  ! {d}", file=sys.stderr)
 
     db.log_operation(
         "operation_replayed",
@@ -929,6 +1281,15 @@ def cmd_replay(args: argparse.Namespace) -> int:
         },
     )
     db.close()
+    if json_mode:
+        _print_json({
+            "op_id": target.id,
+            "source_path": src.path,
+            "inputs_identical": res.inputs_identical,
+            "outputs_identical": res.outputs_identical,
+            "input_diffs": res.input_diffs[:10],
+            "output_diffs": res.output_diffs[:10],
+        })
     return 0 if (res.inputs_identical and res.outputs_identical) else 1
 
 
@@ -940,19 +1301,26 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         save_history,
     )
 
-    print(f"Benchmark suite: {args.suite}")
+    json_mode = getattr(args, "json", False)
+    if not json_mode:
+        print(f"Benchmark suite: {args.suite}")
     results = run_benchmark(suite=args.suite)
     if not results:
-        print("Žádné výsledky (selhaly všechny workloads)", file=sys.stderr)
+        if json_mode:
+            _print_json({"suite": args.suite, "results": [], "error": "all_workloads_failed"})
+        else:
+            print("Žádné výsledky (selhaly všechny workloads)", file=sys.stderr)
         return 2
 
-    for r in results:
-        print(
-            f"  {r.name:<24} {r.duration_ms:>10.3f} ms | "
-            f"RAM peak {r.ram_peak_bytes / 1e6:>8.2f} MB | artefakty {r.artifacts}"
-        )
+    if not json_mode:
+        for r in results:
+            print(
+                f"  {r.name:<24} {r.duration_ms:>10.3f} ms | "
+                f"RAM peak {r.ram_peak_bytes / 1e6:>8.2f} MB | artefakty {r.artifacts}"
+            )
 
     # historie + regresní detekce (jen s případem — meta benchmark_history)
+    warnings: list = []
     if args.case_id:
         db = _open_db(args.case_id)
         warnings = check_regressions(db, results)
@@ -963,16 +1331,31 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
             details={"suite": args.suite, "results": len(results)},
         )
         db.close()
-        if warnings:
-            print(f"\n⚠ Regrese výkonu (>20% proti baseline): {len(warnings)}")
-            for w in warnings:
-                print(
-                    f"  ! {w.name}: {w.baseline_ms:.3f} → {w.current_ms:.3f} ms "
-                    f"(+{w.delta_pct}%)"
-                )
-        else:
-            print("\nRegrese výkonu: žádná (baseline OK)")
+        if not json_mode:
+            if warnings:
+                print(f"\n⚠ Regrese výkonu (>20% proti baseline): {len(warnings)}")
+                for w in warnings:
+                    print(
+                        f"  ! {w.name}: {w.baseline_ms:.3f} → {w.current_ms:.3f} ms "
+                        f"(+{w.delta_pct}%)"
+                    )
+            else:
+                print("\nRegrese výkonu: žádná (baseline OK)")
 
+    if json_mode:
+        _print_json({
+            "suite": args.suite,
+            "results": [
+                {"name": r.name, "duration_ms": r.duration_ms,
+                 "ram_peak_bytes": r.ram_peak_bytes, "artifacts": r.artifacts}
+                for r in results
+            ],
+            "regressions": [
+                {"name": w.name, "baseline_ms": w.baseline_ms,
+                 "current_ms": w.current_ms, "delta_pct": w.delta_pct}
+                for w in warnings
+            ],
+        })
     return 0
 
 
@@ -984,15 +1367,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
     rep = build_validation_report(db, args.case_id)
     cov = rep["coverage"]
 
-    print(f"Validační report: {args.case_id} ({rep['total_artifacts']} artefaktů)")
-    for status, n in sorted(rep["by_status"].items()):
-        print(f"  {status}: {n}")
-    print(
-        f"Coverage validace: {cov['covered_artifacts']}/{cov['total_artifacts']} "
-        f"({cov['coverage_pct']}%)"
-    )
-    if cov["uncovered_parsers"]:
-        print("Nepokrivené parsery: " + ", ".join(cov["uncovered_parsers"]))
+    if not getattr(args, "json", False):
+        print(f"Validační report: {args.case_id} ({rep['total_artifacts']} artefaktů)")
+        for status, n in sorted(rep["by_status"].items()):
+            print(f"  {status}: {n}")
+        print(
+            f"Coverage validace: {cov['covered_artifacts']}/{cov['total_artifacts']} "
+            f"({cov['coverage_pct']}%)"
+        )
+        if cov["uncovered_parsers"]:
+            print("Nepokrivené parsery: " + ", ".join(cov["uncovered_parsers"]))
 
     if args.json:
         print(report_to_json(rep))
@@ -1103,16 +1487,27 @@ def cmd_audit(args: argparse.Namespace) -> int:
     """E1 Evidence Manager: neměnná stopa operací (audit trail)."""
     db = _open_db(args.case_id)
     entries = db.list_audit_log(limit=args.limit, offset=args.offset)
-    if not entries:
+    if getattr(args, "json", False):
+        # chronologicky — nejstarší první (stopa čtená od začátku)
+        _print_json([
+            {
+                "ts": e["ts"],
+                "action": e["action"],
+                "actor": e.get("actor"),
+                "details": e["details"] if args.verbose else None,
+            }
+            for e in reversed(entries)
+        ])
+    elif not entries:
         print("(prázdný audit log)")
-        return 0
-    # chronologicky — nejstarší první (stopa čtená od začátku)
-    for e in reversed(entries):
-        ts = e["ts"][:19].replace("T", " ")
-        actor = f" [{e['actor']}]" if e.get("actor") else ""
-        details = {k: v for k, v in e["details"].items() if not str(k).endswith("_total")}
-        det = f"  {json.dumps(details, ensure_ascii=False)}" if details and args.verbose else ""
-        print(f"{ts}  {e['action']}{actor}{det}")
+    else:
+        # chronologicky — nejstarší první (stopa čtená od začátku)
+        for e in reversed(entries):
+            ts = e["ts"][:19].replace("T", " ")
+            actor = f" [{e['actor']}]" if e.get("actor") else ""
+            details = {k: v for k, v in e["details"].items() if not str(k).endswith("_total")}
+            det = f"  {json.dumps(details, ensure_ascii=False)}" if details and args.verbose else ""
+            print(f"{ts}  {e['action']}{actor}{det}")
     db.close()
     return 0
 
@@ -1157,8 +1552,19 @@ def cmd_backup(args: argparse.Namespace) -> int:
     )
     db.close()
     if not ok:
-        print(f"Záloha selhala integritní kontrolou: {out_path}", file=sys.stderr)
+        if getattr(args, "json", False):
+            _print_json({"error": "integrity_check_failed", "path": str(out_path)})
+        else:
+            print(f"Záloha selhala integritní kontrolou: {out_path}", file=sys.stderr)
         return 1
+    if getattr(args, "json", False):
+        _print_json({
+            "path": str(out_path),
+            "size_mb": round(out_path.stat().st_size / 1e6, 2),
+            "files_in_backup": n_files,
+            "integrity_ok": ok,
+        })
+        return 0
     size = out_path.stat().st_size / 1e6
     print(f"Záloha vytvořena: {out_path} ({size:.2f} MB, {n_files} souborů, integrity OK)")
     return 0
@@ -1209,6 +1615,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_p.add_argument("name", help="název případu")
     new_p.add_argument("--examiner", help="jméno znalce")
     new_p.add_argument("--notes", help="poznámky k případu")
+    _add_json_flag(new_p)
     new_p.set_defaults(func=cmd_case_new)
 
     # STP-069 — opt-in automatický ZIP bundle po dokončení analýzy.
@@ -1225,6 +1632,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="MINUTY",
         help="STP-070: interval periodického auto-bundle v minutách (5–43200)",
     )
+    _add_json_flag(autoexp_p)
     autoexp_p.set_defaults(func=cmd_case_auto_export)
 
     # STP-070 — nastavení/vymazání intervalu periodického auto-bundle.
@@ -1236,6 +1644,7 @@ def build_parser() -> argparse.ArgumentParser:
         "minutes",
         help="interval v minutách (5–43200) nebo 'off' pro vymazání",
     )
+    _add_json_flag(autoint_p)
     autoint_p.set_defaults(func=cmd_case_auto_interval)
 
     add_p = sub.add_parser("add", help="přidat zdroj důkazů a zpracovat")
@@ -1252,6 +1661,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_p.add_argument("--resume", action="store_true",
                        help="E3 checkpointing — přeskočit soubory už v DB "
                             "(pokračovat po přerušeném běhu)")
+    _add_json_flag(add_p)
     add_p.set_defaults(func=cmd_add)
 
     files_p = sub.add_parser("files", help="seznam souborů v případu")
@@ -1262,6 +1672,7 @@ def build_parser() -> argparse.ArgumentParser:
                                               "archive", "executable", "database", "compound"],
                          help="filtr podle rodiny signatury")
     files_p.add_argument("--limit", type=int, default=100)
+    _add_json_flag(files_p)
     files_p.set_defaults(func=cmd_files)
 
     search_p = sub.add_parser("search", help="full-text search (FTS5) napříč případem")
@@ -1272,16 +1683,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_p.add_argument("--source", help="filtr podle evidence source ID")
     search_p.add_argument("--limit", type=int, default=100)
+    _add_json_flag(search_p)
     search_p.set_defaults(func=cmd_search)
 
     stats_p = sub.add_parser("stats", help="shrnutí případu")
     stats_p.add_argument("case_id")
+    _add_json_flag(stats_p)
     stats_p.set_defaults(func=cmd_stats)
 
     ver_p = sub.add_parser("verify", help="E1 — re-hash všech souborů a kontrola integrity (SHA-256/MD5)")
     ver_p.add_argument("case_id")
     ver_p.add_argument("--limit", type=int, default=20,
                        help="max. počet zobrazených problémů (default: 20)")
+    _add_json_flag(ver_p)
     ver_p.set_defaults(func=cmd_verify)
 
     int_p = sub.add_parser(
@@ -1292,6 +1706,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help="vygenerovat Ed25519 klíčový pár případu (idempotentní)")
     int_p.add_argument("--checkpoint", metavar="DUVOD", default=None,
                        help="uložit nový kontrolní bod s uvedeným důvodem")
+    _add_json_flag(int_p)
     int_p.set_defaults(func=cmd_integrity)
 
     rep_p = sub.add_parser(
@@ -1300,6 +1715,7 @@ def build_parser() -> argparse.ArgumentParser:
     rep_p.add_argument("case_id")
     rep_p.add_argument("op", nargs="?", default=None,
                        help="ID operace (default: poslední extract)")
+    _add_json_flag(rep_p)
     rep_p.set_defaults(func=cmd_replay)
 
     bm_p = sub.add_parser(
@@ -1308,13 +1724,14 @@ def build_parser() -> argparse.ArgumentParser:
     bm_p.add_argument("case_id", nargs="?", default=None,
                       help="případ pro historii/regrese (volitelné)")
     bm_p.add_argument("--suite", choices=["core", "parsers", "all"], default="core")
+    _add_json_flag(bm_p)
     bm_p.set_defaults(func=cmd_benchmark)
 
     val_p = sub.add_parser(
         "validate", help="P0 C6 — Evidence Validation Report (parser × validace)"
     )
     val_p.add_argument("case_id")
-    val_p.add_argument("--json", action="store_true", help="kompletní report jako JSON")
+    _add_json_flag(val_p)
     val_p.set_defaults(func=cmd_validate)
 
     ana_p = sub.add_parser(
@@ -1328,7 +1745,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="explicitní agent (default: auto-routing podle dotazu)",
     )
-    ana_p.add_argument("--json", action="store_true", help="výsledek jako JSON")
+    _add_json_flag(ana_p)
     ana_p.set_defaults(func=cmd_analyze)
 
     aud_p = sub.add_parser("audit", help="E1 — neměnná stopa operací (audit trail)")
@@ -1339,12 +1756,14 @@ def build_parser() -> argparse.ArgumentParser:
                        help="posun od nejnovějšího záznamu")
     aud_p.add_argument("-v", "--verbose", action="store_true",
                        help="zobrazit i detaily operací (JSON)")
+    _add_json_flag(aud_p)
     aud_p.set_defaults(func=cmd_audit)
 
     bak_p = sub.add_parser("backup", help="E1 — záloha case DB (SQLite .backup, integrity check)")
     bak_p.add_argument("case_id")
     bak_p.add_argument("--out", metavar="DIR",
                        help="výstupní složka (default: backups/ vedle case DB)")
+    _add_json_flag(bak_p)
     bak_p.set_defaults(func=cmd_backup)
 
     tl_p = sub.add_parser("timeline", help="AXIOM-style timeline extrahovaných artifactů")
@@ -1359,12 +1778,14 @@ def build_parser() -> argparse.ArgumentParser:
                       help="spustit Timeline Intelligence 2.0 (rozpory + duplikáty) a vypsat analytické skupiny")
     tl_p.add_argument("--window", type=float, default=60.0, metavar="SEC",
                       help="časové okno pro detekci rozporů v sekundách (default 60)")
+    _add_json_flag(tl_p)
     tl_p.set_defaults(func=cmd_timeline)
 
     cor_p = sub.add_parser("correlate", help="E4 — Entity + Correlation Engine (explicitní krok)")
     cor_p.add_argument("case_id")
     cor_p.add_argument("-v", "--verbose", action="store_true",
                        help="zobrazit detail propojení s evidence listy")
+    _add_json_flag(cor_p)
     cor_p.set_defaults(func=cmd_correlate)
 
     img_p = sub.add_parser("image", help="disk image (RAW/E01) — TSK file systems + carving")
@@ -1374,6 +1795,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help="processing profil (default: forensic)")
     img_p.add_argument("--no-carve", action="store_true",
                        help="přeskočit carving nealokovaného prostoru")
+    _add_json_flag(img_p)
     img_p.set_defaults(func=cmd_image)
 
     mob_p = sub.add_parser("mobile", help="mobilní physical obraz — FDE/FBE unlock + TSK")
@@ -1387,9 +1809,11 @@ def build_parser() -> argparse.ArgumentParser:
                        help="processing profil (default: forensic)")
     mob_p.add_argument("--no-carve", action="store_true",
                        help="přeskočit carving nealokovaného prostoru")
+    _add_json_flag(mob_p)
     mob_p.set_defaults(func=cmd_mobile)
 
     prof_p = sub.add_parser("profiles", help="seznam processing profilů")
+    _add_json_flag(prof_p)
     prof_p.set_defaults(func=cmd_profiles)
 
     rep_p = sub.add_parser("report", help="forenzní report (HTML/PDF) + chain of custody")
@@ -1400,6 +1824,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help="výstupní složka (default: reports/ vedle case DB)")
     rep_p.add_argument("--lang", choices=["cs", "en"], default=None,
                        help="jazyk reportu (E10 i18n; default: cs)")
+    _add_json_flag(rep_p)
     rep_p.set_defaults(func=cmd_report)
 
     exp_p = sub.add_parser("export", help="E10/STP-023 — export dat případu do CSV/JSON/JSONL/XML/STIX")
@@ -1422,6 +1847,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pli_p.add_argument("case_id")
     pli_p.add_argument("path", help="cesta k l2tcsv souboru (17 polí log2timeline.pl)")
+    _add_json_flag(pli_p)
     pli_p.set_defaults(func=cmd_plaso_import)
 
     tsk_p = sub.add_parser(
@@ -1433,6 +1859,7 @@ def build_parser() -> argparse.ArgumentParser:
                        default="timeline", help="dataset k pushnutí (default: timeline)")
     tsk_p.add_argument("--limit", type=int, default=None, metavar="N",
                        help="STP-065 — pushne jen první N záznamů datasetu (default: vše)")
+    _add_json_flag(tsk_p)
     tsk_p.set_defaults(func=cmd_timesketch_push)
 
     srv_p = sub.add_parser("serve", help="web GUI (FastAPI nad analyze())")
