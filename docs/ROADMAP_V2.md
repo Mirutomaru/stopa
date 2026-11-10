@@ -215,6 +215,15 @@ API pro třetí strany: vlastní extractory, triage profily, AI tools; plugin ma
 
 ---
 
+## 🪙 K-LINKA — CRYPTO FORENSICS (nezávislá, po F1.2 + release 2.0)
+Navrženo jako samostatná specializovaná jednotka (Crypto Forensics Unit). Detail: `docs/CRYPTO_FORENSICS_PROPOSAL.md`.
+- [ ] **K1** — Základní detekce: BIP39 seed detector, private key detector (WIF/ETH hex/PEM), address validator (BTC/ETH/XMR) + test suite (P0)
+- [ ] **K2** — Wallet & Exchange: Electrum JSON parser, MetaMask vault decryptor, Exchange CSV parsers (Binance/Coinbase/Kraken); Bitcoin Core BDB odloženo (C-dependency) (P1)
+- [ ] **K3** — On-chain offline-first: risk scoring z bundlovaných OFAC/EU list, address clustering heuristiky; live API (Blockchair/Etherscan) jen opt-in s klíčem (P2)
+- [ ] **K4** — Dark Web & Reporting: ransom note detector, fund flow diagram, SWGDE crypto report (P2)
+- [ ] **K5** — Advanced po release 2.0: DeFi/NFT/cross-chain/privacy coins off-chain evidence, AI copilot (stretch)
+> Bezpečnostní zásada K-linky: surové seed/klíče se do case DB neukládají — jen typ + fingerprint/hash tajnosti.
+
 ## 📊 METRIKY A KPI
 ### Kvalitativní
 | Metrika | Baseline (v0.1.0) | Cíl (v2.0) |
