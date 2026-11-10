@@ -32,6 +32,7 @@ from pathlib import Path
 _log = logging.getLogger("stopa.cli")
 
 from stopa.data.db import CaseDB
+from stopa.domain.mem_forensics import DEFAULT_PLUGINS as _VOL_DEFAULT_PLUGINS
 from stopa.domain.profiles import PROFILES, get_profile
 from stopa.models import Case, EvidenceSource
 from stopa.pipeline import load_hash_sets, process_source, run_timeline_intel
@@ -864,6 +865,143 @@ def cmd_decrypt(args: argparse.Namespace) -> int:
         print(desc)
         print(f"Plaintext: {out_path}")
     return 0
+
+
+def cmd_memory_analyze(args: argparse.Namespace) -> int:
+    """F1.2 — Memory Forensics přes Volatility 3 (ROADMAP V2 Fáze 1).
+
+    Spustí vybrané vol pluginy na memory dumpu, mapuje JSON výstup na
+    STOPA artefakty + cross-plugin anomaly rules a ukládá do case DB
+    (idempotentní replace per file). PII zásada: surové credential material
+    se neukládá — jen typ + fingerprint.
+
+    Exit codes: 0 = OK · 1 = vol chyba · 2 = špatné argumenty · 3 = vol chybí
+    """
+    import hashlib
+
+    from stopa.data import volatility as vol_mod
+    from stopa.domain.mem_forensics import (
+        DEFAULT_PLUGINS,
+        MemForensicsError,
+        apply_cross_plugin_rules,
+        parse_plugin_output,
+        summarize,
+        validate_plugins,
+    )
+    from stopa.models import EvidenceSource, FileRecord
+
+    json_mode = getattr(args, "json", False)
+    dump_path = Path(args.dump).expanduser()
+    if not dump_path.is_file():
+        print(f"Memory dump neexistuje: {dump_path}", file=sys.stderr)
+        return 2
+
+    # explicitní --plugin má prioritu; jinak výchozí sada (pslist/netscan/ldrmodules/malfind)
+    try:
+        chosen = list(args.plugin or [])
+        if args.with_defaults:
+            chosen = list(DEFAULT_PLUGINS) + [p for p in chosen if p not in DEFAULT_PLUGINS]
+        plugins = validate_plugins(chosen) if chosen else list(DEFAULT_PLUGINS)
+    except MemForensicsError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+
+    if not vol_mod.vol_available():
+        msg = (
+            "Volatility 3 není nainstalovaná — `pip install volatility3` do STOPA venv, "
+            "nebo STOPA_VOL_BIN=/cesta/k/vol"
+        )
+        if json_mode:
+            _print_json({"error": msg})
+        else:
+            print(msg, file=sys.stderr)
+        return 3
+
+    db = _open_db(args.case_id)
+    try:
+        # provenance: zdroj + soubor v DB (FK stability artefaktů).
+        # Re-analyza stejného dumpu drží původní source → upsert_file konflikt
+        # (source_id, rel_path) → replace_artifacts_for_file = idempotentní.
+        existing = next(
+            (s for s in db.list_sources(args.case_id) if s.path == str(dump_path)), None
+        )
+        source = existing or EvidenceSource(case_id=args.case_id, kind="file", path=str(dump_path))
+        if existing is None:
+            db.add_source(source)
+        sha256 = hashlib.sha256()
+        with open(dump_path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                sha256.update(chunk)
+        rec = FileRecord(
+            source_id=source.id,
+            rel_path=dump_path.name,
+            name=dump_path.name,
+            size_bytes=dump_path.stat().st_size,
+            sha256=sha256.hexdigest(),
+            signature_type="memory_dump",
+        )
+        file_id = db.upsert_file(rec)
+
+        bar = None if json_mode else _rich_progress()
+        state: dict[str, object] = {"task": None}
+
+        def _progress(done: int, total: int, label: str = "") -> None:
+            if bar is not None:
+                if state["task"] is None and total:
+                    state["task"] = bar.add(label or f"vol {done}/{total}", total)
+                elif state["task"] is not None:
+                    bar.update(state["task"], done)  # type: ignore[arg-type]
+
+        results = vol_mod.run_vol_plugins(
+            str(dump_path), plugins, timeout_s=args.timeout, progress=_progress
+        )
+
+        all_arts: list = []
+        plugin_errors: dict[str, str] = {}
+        for plugin in plugins:  # deterministické pořadí (pořadí validace)
+            res = results.get(plugin)
+            if res is None:
+                continue
+            try:
+                arts = parse_plugin_output(plugin, res.rows)
+            except MemForensicsError as e:
+                plugin_errors[plugin] = str(e)[:500]
+                continue
+            for a in arts:
+                a.source_id = source.id
+                a.file_id = file_id
+                a.rel_path = dump_path.name
+            all_arts.extend(arts)
+
+        added_flags = apply_cross_plugin_rules(all_arts)
+        db.replace_artifacts_for_file(file_id, all_arts)
+
+        summary = summarize(all_arts)
+        if not json_mode:
+            print()
+            print(f"  {summary['total']} artefaktů z {len(plugins)} pluginů "
+                  f"(+{added_flags} anomaly flags)")
+            for t, n in summary["by_type"].items():
+                print(f"    {t}: {n}")
+            if summary["anomaly_flags"]:
+                print("  Anomalie: " + ", ".join(
+                    f"{k}={v}" for k, v in summary["anomaly_flags"].items()
+                ))
+            for p_name, err in plugin_errors.items():
+                print(f"  ! {p_name}: {err}", file=sys.stderr)
+
+        if json_mode:
+            _print_json({
+                "dump": str(dump_path),
+                "case_id": args.case_id,
+                "file_id": file_id,
+                "plugins_run": plugins,
+                "plugin_errors": plugin_errors,
+                **summary,
+            })
+        return 0 if not plugin_errors or all_arts else (1 if not all_arts else 0)
+    finally:
+        db.close()
 
 
 def cmd_profiles(args: argparse.Namespace) -> int:
@@ -1733,6 +1871,7 @@ _SUBCOMMAND_EXAMPLES = {
     "correlate": "stopa correlate case-abc -v",
     "image": "stopa image case-abc /path/disk.img --no-carve",
     "mobile": "stopa mobile case-abc /path/phone.img --password HESLO",
+    "memory-analyze": "stopa memory-analyze case-abc /evidence/mem.raw --plugin windows.pslist",
     "profiles": "stopa profiles",
     "report": "stopa report case-abc --format pdf --lang cs",
     "export": "stopa export case-abc --what timeline --format stix --bundle",
@@ -1978,6 +2117,18 @@ def build_parser() -> argparse.ArgumentParser:
                        help="výstupní plaintext (default: <obraz>.decrypted.img)")
     _add_json_flag(dec_p)
     dec_p.set_defaults(func=cmd_decrypt)
+
+    mem_p = _ex_sub(sub, "memory-analyze", help="F1.2 — Memory Forensics přes Volatility 3 (volitelná runtime závislost)")
+    mem_p.add_argument("case_id", help="ID případu")
+    mem_p.add_argument("dump", help="cesta k memory dumpu (raw/LZMA/pcap)")
+    mem_p.add_argument("--plugin", action="append", metavar="PLUGIN", default=None,
+                       help=f"vol plugin (lze opakovat; bez = výchozí {', '.join(_VOL_DEFAULT_PLUGINS)})")
+    mem_p.add_argument("--with-defaults", action="store_true",
+                       help="přidá výchozí sadu k explicitním --plugin volbám")
+    mem_p.add_argument("--timeout", type=int, default=600, metavar="S",
+                       help="deadline jednoho pluginu v sekundách (default: 600)")
+    _add_json_flag(mem_p)
+    mem_p.set_defaults(func=cmd_memory_analyze)
 
     prof_p = _ex_sub(sub, "profiles", help="seznam processing profilů")
     _add_json_flag(prof_p)
