@@ -7,6 +7,19 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+### Přidáno (Added)
+
+#### F1.2 Memory Forensics — Volatility 3 integrace
+- CLI `stopa memory-analyze <case> <dump>`: spuštění Volatility 3 jako subprocess
+  (`.venv/bin/vol -q -r json -f <dump> <plugin>`), výchozí sada pluginů
+  pslist/netscan/ldrmodules/malfind, opakovaný `--plugin` + `--with-defaults`,
+  idempotentní re-analýza (reuse EvidenceSource + výměna artefaktů).
+- Výstup = kanonické Artifacty s typy `memory_v3_process/connection/module/injected/sid`
+  v CASE DB, cross-plugin anomaly flags (C2 candidate, RWX injected code…).
+- Volitelná runtime závislost `volatility3` (bez ní graceful „není nainstalovaná",
+  statický scanner zůstává).
+- Safety: surové credential data se do DB neukládají — jen typ + SHA-256 fingerprint.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad
