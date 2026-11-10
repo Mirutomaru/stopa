@@ -30,14 +30,14 @@ Opravit parser, aby numerická pole (event_id, timestamp) nebyla `None` u BinXML
 **AK:** 100 % EVTX fixture souborů parsuje bez `None` v klíčových polích; nový test case v `tests/artifacts/test_evtx.py`. ✅ Splněno — ElfR walk (varianta A) + deflate dekomprese BinXML + content-scan fallback; 7 nových testů, 2161 passed.
 **P0 | M | závislosti: —**
 
-### R0.2 — Distributivní balíčky `[ ]`
-Build pipeline pro .deb, .rpm, AppImage, Docker image. Nativní závislosti (libewf, libafflib, pytsk3, libbde) bundlované.
-**AK:** `stopa install` na čistém Ubuntu 22.04 / Fedora 39 / Alpine 3.19; Docker image < 1.5 GB; CI job generuje artifacts při tagu `v*`.
+### R0.2 — Distributivní balíčky `[x]` ✅ 2026-11-10 (`bbc32c1`)
+Build pipeline pro .deb, .rpm, AppImage, Docker image. Nativní závislosti (libewf, libafflib, pytsk3) bundlované — **wheel-based offline layout** (čistý wheel + vendored wheels cp310–cp313; postinst postaví venv bez sítě).
+**AK:** `stopa install` na čistém Ubuntu 22.04 / Fedora 39 / Alpine 3.19; Docker image < 1.5 GB; CI job generuje artifacts při tagu `v*`. — **ověřeno**: `.deb` E2E (offline instalace na čerstvém py3.13 → import all OK + case new/stats); release.yml wheel layout + postinst; suite 2193 passed / 1 skipped, ruff clean.
 **P0 | L | závislosti: —**
 
-### R0.3 — Version bump na 1.0.0 + changelog `[ ]`
+### R0.3 — Version bump na 1.0.0 + changelog `[x]` ✅ 2026-11-10
 Aktualizovat pyproject.toml, __init__.py, vytvořit CHANGELOG.md dle Keep a Changelog spec.
-**AK:** `stopa --version` vrací 1.0.0; changelog obsahuje všechny breaking changes od 0.1.0.
+**AK:** `stopa --version` vrací 1.0.0; changelog obsahuje všechny breaking changes od 0.1.0. — **ověřeno**: `stopa --version` → `stopa 1.0.0`, verze z jednoho zdroje (importlib metadata, fallback 1.0.0 v 4 místech), CHANGELOG.md Keep-a-Changelog (žádné breaking changes — nadstavba API/CLI/schéma; DB migrace automatické).
 **P1 | S | závislosti: R0.1, R0.2**
 
 ### R0.4 — Základní CLI UX audit `[x]` ✅ 2026-11-10 (commits `03d489f`, `921eae1`)
@@ -242,6 +242,9 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 - **[2026-11-10] R0.1]** — Začato. Strategie: (1) autoritativní record-header walk přes `ElfR` signatury (EventID @+24, FILETIME timestamp @+16), (2) BinXML fallback parser pro soubory bez headerů. Detail po implementaci.
 - **[2026-11-10] R0.1]** — **Dokončeno `[x]`.** Implementace: `_binxml_decompress` (raw deflate, magic `0x1B243D5A`) + `_binxml_extract_fields` na reálných datech; `_find_elf_record_offsets` (ElfR @offset % 0x18 == 0, validace total_size + FILETIME) + `_elf_walk`; pořadí strategií ElfR walk → content-scan → header-scan. `tests/artifacts/test_evtx.py` (7 testů): standard deflate, ElfFile B timestamp, ElfR A walk, mixed records bez None, corrupt deflate resilience, uncompressed regression. Suite 2161 passed / 1 skipped; ruff clean.
 - **[2026-11-10] R0.4]** — **Dokončeno `[x]`.** Commits `03d489f` + `921eae1`: (1) ruff fixy S110×3 (`_log.debug(..., exc_info=e)` místo pass) a B023×4 (`_bar_state` ven ze smyčky + reset per zdroj), (2) `--json` sjednoceno na helper `_add_json_flag()` — 23/23 příkazů čtoucích `args.json` má parser flag (záchycen bug: 11 cmd_* mělo JSON body bez flagu → "unrecognized arguments"), (3) strojově čitelné error cesty (`cmd_replay`: no_extract_operations / operation_not_found / source_not_found / source_path_missing; `cmd_validate`: plain text gateován), (4) `_ex_sub()` + `_SUBCOMMAND_EXAMPLES` — 25/25 subpříkazů s "Příklad:" epilogem, (5) Rich progress u `cmd_add` + `cmd_analyze` (lazy import + TTY detekce; degradace na plain text), (6) `rich>=13` do pyproject deps. E2E smoke 16 příkazů živě ověřeno; suite 2161 passed / 1 skipped; ruff clean.
+- **[2026-11-10] R0.4]** — Regresní testy + bug-fixe [x]. Commit `5c22b27`: tests/test_r04_cli_ux.py (12 testů) validuje obě AK (validní JSON na stdout + Příklad epilog). Testy odhalily 2 skutečné bugy: argparse crash v timeline --path --help (neescape %text% → printf; fix %%text%%) a chybějící epilog u serve. + JSON error cesty v cmd_analyze. 12/12 passed, ruff clean.
+- **[2026-11-10] R0.2]** — **Dokončeno `[x]`.** Commit `bbc32c1`: wheel-based offline instalace (.deb/.rpm/AppImage/Docker + Makefile). Klíčové rozhodnutí: bundlovaná dev site-packages s cp311 C extenzemi nefungují cross-verze → .deb obsahuje čistý Python wheel + vendored wheels (cp310–cp313) a packaging/postinst.sh postaví /opt/stopa/venv OFFLINE. Minimální závislosti python3+sleuthkit; EWF volitelné přes STOPA_EWF_LIB. Ověřeno E2E: offline instalace na čerstvém py3.13 → import all OK + case new/stats; suite 2193 passed / 1 skipped.
+- **[2026-11-10] R0.3]** — **Dokončeno `[x]`.** Version bump 0.1.0→1.0.0 (pyproject + fallback v __init__.py/case_report.py/correlation.py/cli.py, verze z jednoho zdroje přes importlib metadata). Nový top-level flag `stopa --version` → stopa 1.0.0. CHANGELOG.md dle Keep-a-Changelog; žádné breaking changes (nadstavba API/CLI/schéma, DB migrace automatické v8→v14). Suite 2193 passed / 1 skipped; ruff clean.
 
 ---
 
@@ -258,10 +261,10 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 1. po Fázi 0: Release 1.0 venku, UX vyladěno · 2. po Fázi 1: coverage kompletní (BitLocker/memory/PCAP) · 3. po Fázi 2: výkonové metriky splněny, Rust core stabilní · 4. po Fázi 3: AI agent demo-ready · 5. po Fázi 4: enterprise beta s 3 testery · 6. po Fázi 5: compliance audit externí firmou · 7. po Fázi 6: Release 2.0
 
 ## 🎯 OKAMŽITÉ AKCE (First 5)
-1. ~~R0.1 EVTX BinXML edge-case~~ — **hotovo `[x]`** ✅
-2. ~~R0.4 CLI UX audit~~ — **hotovo `[x]`** ✅ (commits `03d489f`, `921eae1`)
-3. R0.2 Distributivní balíčky (blokuje release) ← **AKTIVNÍ**
-4. R0.3 Version bump (závisí R0.1+R0.2)
-5. F1.1 BitLocker support (začátek Fáze 1, nejkritičtější feature)
+1. ~~R0.1 EVTX BinXML edge-case~~ — **hotovo `[x]`** ✅ (`4eac4f5`, `64dc3a9`)
+2. ~~R0.4 CLI UX audit~~ — **hotovo `[x]`** ✅ (commits `03d489f`, `921eae1`, `5c22b27`)
+3. ~~R0.2 Distributivní balíčky~~ — **hotovo `[x]`** ✅ (`bbc32c1`)
+4. ~~R0.3 Version bump 1.0.0 + CHANGELOG~~ — **hotovo `[x]`** ✅ (commit viz níže)
+5. F1.1 BitLocker support (začátek Fáze 1, nejkritičtější feature) ← **AKTIVNÍ**
 
 **Konec plánu.**

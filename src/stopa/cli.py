@@ -945,7 +945,7 @@ def _write_export_manifest(db: CaseDB, case_id: str, out_path: Path, content: by
     try:
         tool_version = version("stopa")
     except PackageNotFoundError:  # dev run bez instalace / chybějící metadata
-        tool_version = "0.1.0"
+        tool_version = "1.0.0"
     from stopa.domain.integrity import build_manifest, manifest_hash, sign_manifest
 
     name = out_path.name
@@ -1668,6 +1668,14 @@ def _ex_sub(subparsers, name: str, *args, **kwargs) -> argparse.ArgumentParser:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stopa", description=__doc__.splitlines()[0])
+    # R0.3 — `stopa --version` vrací verzi balíčku (importlib metadata, dev fallback).
+    try:
+        from importlib.metadata import version as _pkg_version
+
+        _ver = _pkg_version("stopa")
+    except Exception:  # noqa: BLE001 — dev run bez instalace / chybějící metadata
+        from stopa import __version__ as _ver
+    parser.add_argument("--version", action="version", version=f"stopa {_ver}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     case_p = _ex_sub(sub, "case", help="správa případů")

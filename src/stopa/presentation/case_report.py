@@ -261,7 +261,7 @@ def _stopa_version() -> str:
 
         return version("stopa")
     except Exception:  # noqa: BLE001 — dev run bez instalace / chybějící metadata
-        return "0.1.0"
+        return "1.0.0"
 
 
 def default_report_name(case: str | None, fmt: str = "html") -> str:

@@ -41,7 +41,7 @@ def _stopa_version() -> str:
 
         return version("stopa")
     except Exception:  # noqa: BLE001 — dev run bez instalace / chybějící metadata
-        return "0.1.0"
+        return "1.0.0"
 
 # výchozí tolerance překryvu časových oken (aktivita na zařízeních se neshoduje v sekundu)
 DEFAULT_OVERLAP_TOLERANCE = timedelta(minutes=30)
