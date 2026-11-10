@@ -23,6 +23,9 @@ from stopa.artifacts.win_amcache import (
     build_amcache_artifacts,
 )
 from stopa.artifacts.win_eventlog import (
+    PARSER_VERSION as EVTX_PARSER_VERSION,
+)
+from stopa.artifacts.win_eventlog import (
     _extract_binxml_strings,
     build_evtx_artifacts,
     extract_evtx_artifacts,
@@ -250,7 +253,7 @@ def test_evtx_artifacts_title_and_details():
     assert "ID" in art.title
     assert art.details["engine"] == "evtx"
     assert art.details["variant"] == "standard"
-    assert art.parser_version == "1.0"
+    assert art.parser_version == EVTX_PARSER_VERSION
 
 
 def test_evtx_signature_detection():
