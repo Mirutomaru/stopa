@@ -1210,6 +1210,192 @@ def cmd_pcap_analyze(args: argparse.Namespace) -> int:
         db.close()
 
 
+def cmd_antiforensics(args: argparse.Namespace) -> int:
+    """F1.4 — Anti-Forensics detekce (ROADMAP V2 Fáze 1).
+
+    Prohledá artefakty případu po stopech maskování důkazů: timestomping,
+    log clearing (EVTX 1102 + mezery v záznamech), USN journal truncation,
+    hidden partitions (MBR), LSB steganografie v PNG/JPG a signatury
+    anti-forenzních nástrojů. Nálezy uloží jako artefakty ``antiforensics/<type>``
+    s confidence + timeline alerty (idempotentní replace per scan).
+
+    Exit codes: 0 = OK · 1 = analytická chyba · 2 = špatné argumenty
+    """
+    import re as _re
+
+    from stopa.domain import anti_forensics as af
+    from stopa.models import Artifact, EvidenceSource, FileRecord
+
+    json_mode = getattr(args, "json", False)
+    db = _open_db(args.case_id)
+    try:
+        # ── sběr vstupů — normalizace DB → dicty pro čistou doménovou vrstvu ──
+        files_norm = [
+            {
+                "path": f.rel_path,
+                "name": f.name,
+                "mtime": f.mtime.isoformat() if f.mtime else None,
+                "ctime": f.ctime.isoformat() if f.ctime else None,
+                "atime": f.atime.isoformat() if f.atime else None,
+            }
+            for f in db.list_files()
+        ]
+
+        events_norm = []
+        for a in db.list_artifacts(artifact_type="event_log_entry"):
+            d = a.details or {}
+            events_norm.append({
+                "event_id": d.get("event_id"),
+                "record_id": d.get("record_number"),
+                "timestamp": a.timestamp.isoformat() if a.timestamp else None,
+            })
+
+        usn_norm = []
+        for a in db.list_artifacts(artifact_type="usn_record"):
+            m = _re.match(r"^USN (\d+):", a.title or "")
+            if not m:
+                continue
+            usn_norm.append({
+                "usn": int(m.group(1)),
+                "reason": (a.details or {}).get("reason") or "",
+            })
+
+        # stego kandidáti — PNG/JPG v případu, vyřešené přes cesty zdrojů
+        sources = {s.id: s for s in db.list_sources(args.case_id)}
+        stego_paths: list[str] = []
+        for f in db.list_files():
+            ext = (f.extension or "").lower().lstrip(".")
+            if ext not in ("png", "jpg", "jpeg"):
+                continue
+            src = sources.get(f.source_id)
+            if src is None:
+                continue
+            cand = Path(src.path).expanduser() / f.rel_path
+            if cand.is_file():
+                stego_paths.append(str(cand))
+
+        # volitelný diskový obraz --image (MBR/partition table + integrity)
+        img_p: Path | None = None
+        header512: bytes | None = None
+        image_size = 0
+        image_ext = ""
+        img_arg = getattr(args, "image", None)
+        if img_arg:
+            img_p = Path(img_arg).expanduser()
+            if not img_p.is_file():
+                msg = f"Diskový obraz neexistuje: {img_p}"
+                print(msg, file=sys.stderr)
+                return 2
+            with open(img_p, "rb") as fh:
+                header512 = fh.read(512)
+            image_size = img_p.stat().st_size
+            image_ext = img_p.suffix.lstrip(".").lower()
+
+        # ── detekce (čistá doménová vrstva, bez I/O mimo stego/obraz) ──
+        report = af.detect_anti_forensics(
+            files=files_norm, events=events_norm, usn_records=usn_norm,
+            image_path=str(img_p) if img_p else None,
+            image_size_bytes=image_size, image_ext=image_ext,
+            header512=header512, stego_paths=stego_paths,
+        )
+
+        # ── ukládání: idempotentní replace pod syntetickým scan zdrojem (pattern F1.2/F1.3) ──
+        marker = f"{args.case_id}/antiforensics-scan"
+        existing_src = next(
+            (s for s in db.list_sources(args.case_id) if s.path == marker), None
+        )
+        scan_source = existing_src or EvidenceSource(
+            case_id=args.case_id, kind="file", path=marker
+        )
+        if existing_src is None:
+            db.add_source(scan_source)
+        rec = FileRecord(
+            source_id=scan_source.id, rel_path="antiforensics-scan.bin",
+            name="antiforensics-scan.bin", size_bytes=0, signature_type="analysis",
+        )
+        scan_file_id = db.upsert_file(rec)
+
+        sev_conf = {"high": 0.9, "medium": 0.7, "low": 0.5}
+        now_dt = datetime.now(timezone.utc)
+        arts: list[Artifact] = []
+        for check in sorted(report["by_check"]):
+            items = report["by_check"][check]
+            for i, item in enumerate(items):
+                ev = item.get("evidence") or {}
+                ts_dt = now_dt
+                ts_origin = "derived"
+                raw_ts = ev.get("timestamp")
+                if raw_ts:
+                    try:
+                        parsed = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                        if parsed.tzinfo is None:
+                            parsed = parsed.replace(tzinfo=timezone.utc)
+                        ts_dt, ts_origin = parsed, "source"
+                    except ValueError:
+                        pass
+                arts.append(Artifact(
+                    source_id=scan_source.id, file_id=scan_file_id,
+                    rel_path="antiforensics-scan.bin",
+                    artifact_type=f"antiforensics/{check}",
+                    title=item["description"][:160],
+                    details={
+                        "severity": item["severity"],
+                        "risk_score": report["risk_score"],
+                        **ev,
+                    },
+                    confidence=sev_conf.get(item["severity"], 0.5),
+                    parser_version=af.PARSER_VERSION,
+                    extracted_at=now_dt, timestamp=ts_dt, ts_origin=ts_origin,
+                    anomaly_flags=[f"antiforensics:{check}"],
+                ))
+        # timeline alerty — idempotentní: scan zdroj je dedikovaný. Staré alerty
+        # smažeme PŘED výměnou artifactů — odkazují na artefakty, které replace
+        # maží, a FK timeline_events.artifact_id nemá ON DELETE (jinak porušení).
+        db.clear_timeline_events(source_id=scan_source.id)
+        db.replace_artifacts_for_file(scan_file_id, arts)
+        for a in arts:
+            check_name = a.artifact_type.split("/", 1)[1]
+            db.add_timeline_event(
+                source_id=scan_source.id, artifact_id=a.id, file_id=scan_file_id,
+                rel_path="antiforensics-scan.bin",
+                event_type=f"antiforensics_{check_name}",
+                ts_utc=a.timestamp or now_dt, title=a.title, confidence=a.confidence,
+                parser_version=af.PARSER_VERSION, extracted_at=now_dt,
+                anomaly_flags=tuple(a.anomaly_flags), ts_origin=a.ts_origin,
+            )
+        db.commit()  # add_timeline_event nekonektuje commit — explicitně upevnit
+
+        by_check_summary = {c: len(v) for c, v in report["by_check"].items()}
+        if not json_mode:
+            total = report["findings_count"]
+            print()
+            print(f"  Anti-forensics scan: {total} nálezů "
+                  f"(risk score {report['risk_score']})")
+            for check, n in sorted(by_check_summary.items()):
+                print(f"    antiforensics/{check}: {n}")
+            if not total:
+                print("  — žádné stopy maskování důkazů nenalezeny ✓")
+        if json_mode:
+            _print_json({
+                "case_id": args.case_id,
+                **report,
+                "artifacts_saved": len(arts),
+                "files_scanned": len(files_norm),
+                "events_scanned": len(events_norm),
+                "usn_records_scanned": len(usn_norm),
+                "stego_candidates": len(stego_paths),
+            })
+        return 0
+    except Exception as e:  # noqa: BLE001 — analytická chyba ≠ pád CLI
+        if json_mode:
+            _print_json({"error": str(e)})
+        else:
+            print(f"Anti-forensics analýza selhala: {e}", file=sys.stderr)
+        return 1
+    finally:
+        db.close()
+
+
 def cmd_profiles(args: argparse.Namespace) -> int:
     if getattr(args, "json", False):
         _print_json({
@@ -2079,6 +2265,7 @@ _SUBCOMMAND_EXAMPLES = {
     "mobile": "stopa mobile case-abc /path/phone.img --password HESLO",
     "memory-analyze": "stopa memory-analyze case-abc /evidence/mem.raw --plugin windows.pslist",
     "pcap-analyze": "stopa pcap-analyze case-abc /evidence/capture.pcapng",
+    "antiforensics-scan": "stopa antiforensics-scan case-abc [--image /evidence/disk.img]",
     "profiles": "stopa profiles",
     "report": "stopa report case-abc --format pdf --lang cs",
     "export": "stopa export case-abc --what timeline --format stix --bundle",
@@ -2344,6 +2531,13 @@ def build_parser() -> argparse.ArgumentParser:
                         help="strop počtu paketů (guard proti OOM; default: 50000)")
     _add_json_flag(pcap_p)
     pcap_p.set_defaults(func=cmd_pcap_analyze)
+
+    af_p = _ex_sub(sub, "antiforensics-scan", help="F1.4 — Anti-Forensics detekce: timestomping, log clearing, USN truncation, hidden partitions, LSB steganografie")
+    af_p.add_argument("case_id", help="ID případu")
+    af_p.add_argument("--image", metavar="PATH", default=None,
+                      help="volitelný diskový obraz pro MBR/partition table + integrity kontrolu")
+    _add_json_flag(af_p)
+    af_p.set_defaults(func=cmd_antiforensics)
 
     prof_p = _ex_sub(sub, "profiles", help="seznam processing profilů")
     _add_json_flag(prof_p)
