@@ -1,0 +1,265 @@
+# 📋 STOPA Digital Forensics — Master Roadmap & Execution Plan (V2)
+**Verze plánu:** 1.0.0 · **Datum sestavení:** 2026-11-10
+**Cíl:** Převést STOPA z v0.1.0 na produkční enterprise-grade forenzní platformu konkurenceschopnou s Magnet AXIOM, Cellebrite UFED, X-Ways a FTK.
+**Vlastník plánu:** AI Agent (executor) · **Lidský schvalovatel:** Senior Forensic Developer
+
+## 🧭 METAINSTRUKCE PRO AI AGENTA
+1. Načti tento dokument jako primární kontext při každém sezení.
+2. Aktualizuj stav úkolů `[ ]` → `[~]` → `[x]` v reálném čase (commit spolu s úkolem).
+3. Před začátkem ověř závislosti (`depends_on`). Po dokončení zapiš do Decision Logu.
+4. Každých 5 dokončených úkolů = Checkpoint Review (progress, odhady, rizika).
+5. Fáze jsou sekvenční; úkoly uvnitř fáze lze paralelizovat. Priorita: P0=blokující, P1=kritické pro release, P2=nice-to-have.
+
+Stavový model: `[ ]` nezačato · `[~]` v práci · `[?]` blokované (lidský vstup) · `[x]` hotovo+ověřeno · `[!]` zrušeno/odloženo (důvod v Decision Logu).
+
+## 🎯 DEFINICE HOTOWA (Definition of Done)
+- ✅ Všechny P0 a P1 úkoly `[x]`
+- ✅ Test suite: ≥ 3500 testů, 100 % offline, coverage ≥ 85 %
+- ✅ Benchmark: žádná regrese > 5 % proti baseline
+- ✅ Distribuovatelný balíček (.deb, .rpm, AppImage, Docker)
+- ✅ SWGDE/ISO 27037 compliance report se generuje automaticky
+- ✅ SPA frontend funkční v prohlížeči bez backendu (mock mode)
+- ✅ AI Copilot grounding engine s 100 % validací citací
+- ✅ Dokumentace: architektura, API, deployment, user guide
+
+---
+
+## 🚀 FÁZE 0 — RELEASE 1.0 ZÁKLAD (Quick Wins) · Odhad 2–3 týdny
+### R0.1 — Oprava EVTX BinXML edge-case (ElfFile varianta) `[~]`
+Opravit parser, aby numerická pole (event_id, timestamp) nebyla `None` u BinXML varianty. Použít content-scan s fallbackem na BinXML strukturu.
+**AK:** 100 % EVTX fixture souborů parsuje bez `None` v klíčových polích; nový test case v `tests/artifacts/test_evtx.py`.
+**P0 | M | závislosti: —**
+
+### R0.2 — Distributivní balíčky `[ ]`
+Build pipeline pro .deb, .rpm, AppImage, Docker image. Nativní závislosti (libewf, libafflib, pytsk3, libbde) bundlované.
+**AK:** `stopa install` na čistém Ubuntu 22.04 / Fedora 39 / Alpine 3.19; Docker image < 1.5 GB; CI job generuje artifacts při tagu `v*`.
+**P0 | L | závislosti: —**
+
+### R0.3 — Version bump na 1.0.0 + changelog `[ ]`
+Aktualizovat pyproject.toml, __init__.py, vytvořit CHANGELOG.md dle Keep a Changelog spec.
+**AK:** `stopa --version` vrací 1.0.0; changelog obsahuje všechny breaking changes od 0.1.0.
+**P1 | S | závislosti: R0.1, R0.2**
+
+### R0.4 — Základní CLI UX audit `[ ]`
+Projít všech ~30 CLI příkazů, sjednotit help texty, přidat `--json` output flag všude, progress bary (Rich).
+**AK:** Každý příkaz má --help s příklady; --json vrací validní JSON; progress bar u ingest/analyze.
+**P1 | M | závislosti: —**
+
+---
+
+## 🔬 FÁZE 1 — FORENZNÍ COVERAGE · Odhad 4–6 týdnů
+### F1.1 — BitLocker / FileVault FDE support `[ ]`
+Integrovat libbde (BitLocker) a libfvde (FileVault) přes ctypes. Podpora: password, recovery key, TPM scraping z memory dumpu (stretch).
+**AK:** `stopa decrypt --type bitlocker <image> --recovery-key <key>`; test na syntetickém BitLocker obrazu (AES-XTS 128/256); stream 1 MiB chunks, RAM peak < 512 MB.
+**P0 | XL | závislosti: —**
+
+### F1.2 — Memory Forensics (Volatility 3 integrace) `[ ]`
+Wrapper kolem Volatility 3 Python API. Extrakce: procesy, spojení, moduly, handles, malfind (injected code), hashe z LSASS.
+**AK:** `stopa memory-analyze <dump> --profile <isf>`; výstup jako artifacty v DB (memory/process, memory/network); 10 testů na syntetických dumpech.
+**P0 | XL | závislosti: —**
+
+### F1.3 — Síťová forenzika (PCAP / Zeek) `[ ]`
+Parser .pcap/.pcapng (pyshark/scapy). Reasemblokace TCP streamů, extrakce souborů z HTTP/SMB/FTP, detekce IoC (DNS tunneling, C2 beaconing).
+**AK:** `stopa pcap-analyze <file>`; soubory do case/extracted/network/; min. 5 IoC patternů (YARA + regex); FTS index nad payloady.
+**P1 | L | závislosti: —**
+
+### F1.4 — Anti-Forensics detekce `[ ]
+Moduly detekující: timestomping (NTFS $FN vs $SI), log clearing (EVTX gaps), USN journal truncation, hidden partitions, steganografie (LSB PNG/JPG).
+**AK:** Každá detekce jako artifact `antiforensics/<type>` s confidence; alert v timeline; test na 10 syntetických upravených vzorcích.
+**P0 | L | závislosti: F1.2**
+
+### F1.5 — Fyzická extrakce mobilů — integrace `[ ]`
+Import .ufd (Cellebrite), .zip (MSAB), Android logical dump (ADB). Dekódovací pipeline WhatsApp/Signal/Telegram z fyzických dumpů.
+**AK:** `stopa import-mobile <dump> --source cellebrite|msab|adb`; min. WhatsApp + Signal dekódovány; entity korelovány s existujícími kontakty.
+**P1 | XL | závislosti: —**
+
+### F1.6 — Rozšíření coverage matice na 220/232 AXIOM typů `[ ]`
+Doplnit ~22 typů (APFS snapshots, Safari history rozšířená, iCloud keychain, OneDrive cache, Teams chat history, Zoom local recordings).
+**AK:** Coverage matrix ≥ 220/232; každý nový parser má verzi, test, řádek v registry.
+**P2 | L | závislosti: —**
+
+---
+
+## ⚡ FÁZE 2 — VÝKON A ŠKÁLOVATELNOST · Odhad 6–8 týdnů
+### F2.1 — Rust/C++ carving engine (PyO3) `[ ]`
+Přepsat nejdražší operace do Rustu: SHA-256/MD5 streaming, regex carving, SQLite WAL parsing, BinXML parser. Build přes maturin.
+**AK:** Python API backward compatible; hash 10 GB obrazu < 30 s (vs ~180 s); carving 1 GB < 10 s.
+**P0 | XXL | závislosti: —**
+
+### F2.2 — DuckDB pro Timeline & Analytics `[ ]`
+SQLite pro OLTP (cases, files, audit_log). Pro timeline_events/entities/correlations nasadit DuckDB (embedded OLAP) + materializované views.
+**AK:** "10M eventů v rozmezí 1 h" < 2 s; agregace < 5 s; FTS zůstává v SQLite.
+**P0 | XL | závislosti: F2.1**
+
+### F2.3 — Block-level deduplikace `[ ]`
+Chunking (4 KB bloky), content-defined chunking (CDC), rolling hash (Buzhash). Dedup tabulka v DuckDB.
+**AK:** Úspora místa ≥ 30 %; overhead < 10 % na ingest time.
+**P1 | L | závislosti: F2.2**
+
+### F2.4 — Paralelní ingest s backpressure `[ ]`
+ProcessPoolExecutor + asyncio worker pool; backpressure queue mezi producers (walk) a consumers (parse); graceful shutdown s checkpointem.
+**AK:** Ingest 1 TB na 16-core: lineární speedup do 12 vláken; RAM peak < 8 GB; resume po kill bez ztráty dat.
+**P1 | L | závislosti: F2.1**
+
+### F2.5 — Cache vrstva (Redis/SQLite cache) `[ ]`
+Cache pro opakované operace: FTS queries, entity resolution, graph traversal. LRU eviction, TTL per query type.
+**AK:** Opakovaná FTS query < 50 ms; hit ratio ≥ 70 %.
+**P2 | M | závislosti: F2.2**
+
+---
+
+## 🤖 FÁZE 3 — AI COPILOT UPGRADE · Odhad 4–5 týdnů
+### F3.1 — AI Agent framework (LangGraph / vlastní) `[ ]`
+Agent s tool-use: search_fts, get_timeline, resolve_entity, run_yara, generate_hypothesis. Plánování akcí (ReAct).
+**AK:** Agent vyřeší 10/10 testovacích případů; každá akce v audit logu; grounding validuje 100 % citací.
+**P0 | XL | závislosti: —**
+
+### F3.2 — Triage profily (Ransomware, Insider Threat, CSAM, Exfiltrace) `[ ]`
+Předpřipravené agendy: YARA rules, timeline queries, entity filters, hypothesis templates.
+**AK:** 4 profily; každý detekuje min. 8/10 syntetických příkladů; FPR < 5 %.
+**P0 | L | závislosti: F3.1**
+
+### F3.3 — Natural Language Query → SQL/FTS `[ ]`
+NL → validní dotaz. Sandbox execution (read-only), result validation proti schema.
+**AK:** 50 testovacích NL queries → 90 % úspěšnost; žádný SQL injection (parameterized); timeout 5 s.
+**P1 | L | závislosti: F3.1**
+
+### F3.4 — Generování právních dokumentů `[ ]`
+Šablony: Forensic Methodology Report, Chain of Custody Affidavit, Expert Witness Summary (Daubert/SWGDE). AI vyplní z artifactů.
+**AK:** 3 šablony; generování < 30 s; právní review (lidský); Ed25519 podpis dokumentu.
+**P1 | M | závislosti: F3.1**
+
+### F3.5 — Hypothesis graph `[ ]`
+AI generuje graf hypotéz (pro → proti, confidence). Manuální potvrzení/vyvrácení.
+**AK:** Graf v UI; lineage k artifactům; export PDF/JSON.
+**P2 | L | závislosti: F3.1**
+
+---
+
+## 🏢 FÁZE 4 — ENTERPRISE & MULTI-USER · Odhad 8–10 týdnů
+### F4.1 — SPA Frontend (SvelteKit / React) `[ ]`
+Dashboard, case explorer, timeline (zoom/lanes), entity graph (Maltego-like), artifact detail, AI chat panel.
+**AK:** Lighthouse ≥ 90; accessibility AA; i18n cs/en; offline-first (Service Worker read-only).
+**P0 | XXL | závislosti: —**
+
+### F4.2 — WebSockets pro real-time updates `[ ]`
+Live progress ingestu, live timeline events, live AI agent actions. Reconnection, heartbeat.
+**AK:** Latence < 200 ms; graceful degradation; test na 100 concurrent clients.
+**P0 | L | závislosti: F4.1**
+
+### F4.3 — Peer-Review Workflow `[ ]`
+Stavy artifactů: draft → reviewed → approved → court-ready. Dva examinátoři schválí kritické nálezy; audit log změny.
+**AK:** Nelze obejít; report generuje jen court-ready artifacty; test 3-examinator scénáře.
+**P0 | L | závislosti: F4.1**
+
+### F4.4 — Multi-tenant RBAC rozšíření `[ ]`
+Organizace → týmy → uživatelé; per-case permissions; SSO (OIDC/SAML); audit log per user.
+**AK:** Keycloak/Okta funkční; permission matrix na 50 scénářích; fail-closed default.
+**P1 | L | závislosti: F4.3**
+
+### F4.5 — Case sharing & collaboration `[ ]`
+Sdílení případů (read/write), comments na artifactech, @mentions.
+**AK:** Real-time comments; notifikace email+in-app; conflict resolution při souběžných editacích.
+**P2 | L | závislosti: F4.3, F4.4**
+
+---
+
+## ⚖️ FÁZE 5 — COMPLIANCE & COURT-READINESS · Odhad 3–4 týdny
+### F5.1 — Merkle Tree Case Sealing `[ ]`
+Každý artifact/timeline event/DB změna → leaf v Merkle tree; root hash podepsán Ed25519; verifikace jedním příkazem.
+**AK:** `stopa verify <case>` OK/FAIL; změna 1 bitu detekována; seal 1M artifactů < 60 s.
+**P0 | L | závislosti: —**
+
+### F5.2 — SWGDE / ISO 27037 automatizovaný report `[ ]`
+Tlačítko "Generate Compliance Report": nástroje+verze, validační status algoritmů, write-blocker logy, AI grounding report, CoC.
+**AK:** Validován externím auditorem; PDF + JSON; Ed25519 podpis.
+**P0 | M | závislosti: F5.1**
+
+### F5.3 — Parser versioning & reproducibility `[ ]`
+Artifact nese verzi parseru; re-run případu se starou verzí (snapshot storage); diff report mezi verzemi.
+**AK:** `stopa reparse <case> --parser-version <v>`; 100 % reprodukovatelný výsledek.
+**P1 | L | závislosti: —**
+
+### F5.4 — Write-blocker integration API `[ ]`
+Detekce write-blockerů (Tableau, WiebeTech); log stavu do audit logu; varování při chybějícím WB.
+**AK:** Auto-detekce 3 vendorů; varování UI+CLI; ingest bez WB potvrzení nelze (configurable).
+**P1 | M | závislosti: —**
+
+### F5.5 — Daubert challenge preparedness pack `[ ]`
+1-click balík: peer-reviewed papers k algoritmům, validační testy, error rates.
+**AK:** Min. 20 referencí; právně validováno.
+**P2 | M | závislosti: F5.2**
+
+---
+
+## 🌐 FÁZE 6 — ECOSYSTEM & INTEGRATIONS · Odhad 2–3 týdny
+### F6.1 — Timesketch export & push `[ ]`
+Export timeline do Timesketch (JSONL); auto-push po analýze (opt-in); import z Timesketch (round-trip).
+**AK:** `stopa export --format timesketch`; round-trip test identický; dokumentace.
+**P1 | M | závislosti: —**
+
+### F6.2 — STIX 2.1 / UCO plná implementace `[ ]`
+Kompletní mapping artifactů na STIX 2.1 objekty a UCO JSON-LD; validace proti oficiálním schematům.
+**AK:** 100 % mapováno; stix2-validator; round-trip test.
+**P1 | L | závislosti: —**
+
+### F6.3 — MITRE ATT&CK mapping `[ ]`
+Auto-mapování IoC a artifactů na tactics/techniques; heat-mapa vizualizace.
+**AK:** 80 % IoC mapováno; heat-mapa v UI; export do STIX (intrusion-set).
+**P2 | M | závislosti: F1.3, F6.2**
+
+### F6.4 — Plugin ecosystem `[ ]`
+API pro třetí strany: vlastní extractory, triage profily, AI tools; plugin marketplace (stretch).
+**AK:** 3 ukázkové plugins; dokumentace API; sandbox execution neověřených plugins.
+**P2 | XL | závislosti: F4.1**
+
+---
+
+## 📊 METRIKY A KPI
+### Kvalitativní
+| Metrika | Baseline (v0.1.0) | Cíl (v2.0) |
+|---|---|---|
+| AXIOM coverage | 198/232 | 225/232 |
+| Test suite size | 2154 | 4000+ |
+| Benchmark items | 77 | 150 |
+| Parser versions | 76 | 120+ |
+| AI grounding accuracy | ~95 % | 100 % |
+
+### Výkonové
+| Metrika | Baseline | Cíl |
+|---|---|---|
+| Hash 10 GB obrazu | ~180 s | < 30 s |
+| Timeline query (10M events) | ~30 s | < 2 s |
+| Ingest 1 TB (16-core) | n/a | < 4 hodiny |
+| FTS query latency | ~500 ms | < 50 ms (cached) |
+| RAM peak (ingest) | ~4 GB | < 8 GB |
+
+---
+
+## 📝 DECISION LOG
+Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alternativy.
+
+- **[2026-11-10] R0.1]** — Začato. Strategie: (1) autoritativní record-header walk přes `ElfR` signatury (EventID @+24, FILETIME timestamp @+16), (2) BinXML fallback parser pro soubory bez headerů. Detail po implementaci.
+
+---
+
+## ⚠️ RIZIKA A MITIGACE
+| Riziko | Pravděpodobnost | Dopad | Mitigace |
+|---|---|---|---|
+| Rust/PyO3 integrace selže na Windows | Střední | Vysoký | Začít s Linux CI, Windows secondary target |
+| DuckDB migrace rozbije existující queries | Nízká | Vysoký | Feature flag, dual-run, rollback plán |
+| AI hallucinace navzdory grounding | Střední | Kritický | 100 % citation validation + unit tests edge-cases |
+| BitLocker TPM scraping nefunguje na novém HW | Vysoká | Střední | "best-effort"; recovery key jako primary path |
+| SPA frontend příliš složitý | Střední | Střední | SvelteKit (menší bundle), iterativně |
+
+## 🏁 CHECKPOINT SCHEDULE
+1. po Fázi 0: Release 1.0 venku, UX vyladěno · 2. po Fázi 1: coverage kompletní (BitLocker/memory/PCAP) · 3. po Fázi 2: výkonové metriky splněny, Rust core stabilní · 4. po Fázi 3: AI agent demo-ready · 5. po Fázi 4: enterprise beta s 3 testery · 6. po Fázi 5: compliance audit externí firmou · 7. po Fázi 6: Release 2.0
+
+## 🎯 OKAMŽITÉ AKCE (First 5)
+1. R0.1 EVTX BinXML edge-case (rychlý win, P0) ← **AKTIVNÍ**
+2. R0.4 CLI UX audit (paralelní s R0.1)
+3. R0.2 Distributivní balíčky (blokuje release)
+4. R0.3 Version bump (závisí R0.1+R0.2)
+5. F1.1 BitLocker support (začátek Fáze 1, nejkritičtější feature)
+
+**Konec plánu.**
