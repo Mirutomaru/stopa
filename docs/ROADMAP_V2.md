@@ -40,9 +40,9 @@ Aktualizovat pyproject.toml, __init__.py, vytvořit CHANGELOG.md dle Keep a Chan
 **AK:** `stopa --version` vrací 1.0.0; changelog obsahuje všechny breaking changes od 0.1.0.
 **P1 | S | závislosti: R0.1, R0.2**
 
-### R0.4 — Základní CLI UX audit `[ ]`
+### R0.4 — Základní CLI UX audit `[x]` ✅ 2026-11-10 (commits `03d489f`, `921eae1`)
 Projít všech ~30 CLI příkazů, sjednotit help texty, přidat `--json` output flag všude, progress bary (Rich).
-**AK:** Každý příkaz má --help s příklady; --json vrací validní JSON; progress bar u ingest/analyze.
+**AK:** Každý příkaz má --help s příklady; --json vrací validní JSON; progress bar u ingest/analyze. — **ověřeno**: 25/25 subpříkazů `_ex_sub()` s Příklad epilogem, `--json` 23/23 (helper `_add_json_flag`, strojově čitelné error cesty), Rich bary u `cmd_add` + `cmd_analyze` (lazy import + TTY detekce), ruff clean, suite 2161 passed.
 **P1 | M | závislosti: —**
 
 ---
@@ -241,6 +241,7 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 
 - **[2026-11-10] R0.1]** — Začato. Strategie: (1) autoritativní record-header walk přes `ElfR` signatury (EventID @+24, FILETIME timestamp @+16), (2) BinXML fallback parser pro soubory bez headerů. Detail po implementaci.
 - **[2026-11-10] R0.1]** — **Dokončeno `[x]`.** Implementace: `_binxml_decompress` (raw deflate, magic `0x1B243D5A`) + `_binxml_extract_fields` na reálných datech; `_find_elf_record_offsets` (ElfR @offset % 0x18 == 0, validace total_size + FILETIME) + `_elf_walk`; pořadí strategií ElfR walk → content-scan → header-scan. `tests/artifacts/test_evtx.py` (7 testů): standard deflate, ElfFile B timestamp, ElfR A walk, mixed records bez None, corrupt deflate resilience, uncompressed regression. Suite 2161 passed / 1 skipped; ruff clean.
+- **[2026-11-10] R0.4]** — **Dokončeno `[x]`.** Commits `03d489f` + `921eae1`: (1) ruff fixy S110×3 (`_log.debug(..., exc_info=e)` místo pass) a B023×4 (`_bar_state` ven ze smyčky + reset per zdroj), (2) `--json` sjednoceno na helper `_add_json_flag()` — 23/23 příkazů čtoucích `args.json` má parser flag (záchycen bug: 11 cmd_* mělo JSON body bez flagu → "unrecognized arguments"), (3) strojově čitelné error cesty (`cmd_replay`: no_extract_operations / operation_not_found / source_not_found / source_path_missing; `cmd_validate`: plain text gateován), (4) `_ex_sub()` + `_SUBCOMMAND_EXAMPLES` — 25/25 subpříkazů s "Příklad:" epilogem, (5) Rich progress u `cmd_add` + `cmd_analyze` (lazy import + TTY detekce; degradace na plain text), (6) `rich>=13` do pyproject deps. E2E smoke 16 příkazů živě ověřeno; suite 2161 passed / 1 skipped; ruff clean.
 
 ---
 
@@ -258,8 +259,8 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 
 ## 🎯 OKAMŽITÉ AKCE (First 5)
 1. ~~R0.1 EVTX BinXML edge-case~~ — **hotovo `[x]`** ✅
-2. R0.4 CLI UX audit (paralelní s R0.1) ← **AKTIVNÍ**
-3. R0.2 Distributivní balíčky (blokuje release)
+2. ~~R0.4 CLI UX audit~~ — **hotovo `[x]`** ✅ (commits `03d489f`, `921eae1`)
+3. R0.2 Distributivní balíčky (blokuje release) ← **AKTIVNÍ**
 4. R0.3 Version bump (závisí R0.1+R0.2)
 5. F1.1 BitLocker support (začátek Fáze 1, nejkritičtější feature)
 
