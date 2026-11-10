@@ -1403,7 +1403,10 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         client = LmStudioClient()
         health = client.health()
         if not health["available"]:
-            print("AI nedostupná — spusťte LM Studio (localhost:1234)")
+            if getattr(args, "json", False):
+                _print_json({"error": "lmstudio_unavailable"})
+            else:
+                print("AI nedostupná — spusťte LM Studio (localhost:1234)")
             return 1
 
         context = build_case_context(db, args.case_id)
@@ -1411,8 +1414,9 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         rag = retrieve(args.question, db=db, case_id=args.case_id)
         # STP-019 — PII redaktor (settings.json toggle, default ON)
         redact_pii = _load_ai_redact_pii()
+        json_mode = getattr(args, "json", False)
         # R0.4 — progress bar u analyze (LLM volání trvá řádově desítky sekund)
-        bar = None if args.json else _rich_progress()
+        bar = None if json_mode else _rich_progress()
         task_id = bar.add("AI orchestrace…", 100) if bar is not None else None
         try:
             result = orchestrate(
@@ -1424,10 +1428,16 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                 redact_pii=redact_pii,
             )
         except LmStudioUnavailable as exc:
-            print(f"AI nedostupná: {exc}")
+            if json_mode:
+                _print_json({"error": "lmstudio_unavailable", "detail": str(exc)})
+            else:
+                print(f"AI nedostupná: {exc}")
             return 1
         except OrchestrationError as exc:
-            print(f"AI orchestrace selhala: {exc}")
+            if json_mode:
+                _print_json({"error": "orchestration_failed", "detail": str(exc)})
+            else:
+                print(f"AI orchestrace selhala: {exc}")
             return 1
         finally:
             if bar is not None and task_id is not None:
@@ -1642,6 +1652,7 @@ _SUBCOMMAND_EXAMPLES = {
     "plaso-import": "stopa plaso-import case-abc /path/l2tcsv.txt",
     "timesketch-push": "stopa timesketch-push case-abc --what timeline --limit 1000",
     "serve": "stopa serve --port 8473",
+    "install": "stopa install --dry-run   # nebo: stopa install (bez --dry-run)",
 }
 
 
@@ -1813,7 +1824,7 @@ def build_parser() -> argparse.ArgumentParser:
     tl_p.add_argument("case_id")
     tl_p.add_argument("--source", help="filtr podle evidence source ID")
     tl_p.add_argument("--type", dest="type", help="filtr podle typu artifactu (např. browser_history)")
-    tl_p.add_argument("--path", help="filtr — cesta obsahuje text (LIKE %text%)")
+    tl_p.add_argument("--path", help="filtr — cesta obsahuje text (LIKE %%text%%)")
     tl_p.add_argument("--limit", type=int, default=100)
     tl_p.add_argument("-v", "--verbose", action="store_true", help="zobrazit i zdrojové cesty")
     # STP-018 Timeline Intelligence 2.0 — post-pass: rozpory + duplikáty napříč zdroji
@@ -1903,13 +1914,48 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(tsk_p)
     tsk_p.set_defaults(func=cmd_timesketch_push)
 
-    srv_p = sub.add_parser("serve", help="web GUI (FastAPI nad analyze())")
+    srv_p = _ex_sub(sub, "serve", help="web GUI (FastAPI nad analyze())")
     srv_p.add_argument("--host", default=None,  # E12: None → settings.json → 127.0.0.1
                        help="bind address (default z Settings / 127.0.0.1)")
     srv_p.add_argument("--port", type=int, default=8473)
     srv_p.set_defaults(func=cmd_serve)
 
+    # R0.2 — bootstrap installer: systémové závislosti + venv (detekce OS).
+    ins_p = _ex_sub(sub, "install", help="R0.2 — nainstalovat systémové závislosti + venv (Ubuntu/Fedora/Alpine/macOS)")
+    ins_p.add_argument("--dry-run", action="store_true",
+                       help="jen vytisknout plán instalace, nic neinstalovat")
+    ins_p.add_argument("--skip-system", action="store_true",
+                       help="přeskočit systémové balíčky (jen venv + pip; bez sudo)")
+    _add_json_flag(ins_p)
+    ins_p.set_defaults(func=cmd_install)
+
     return parser
+
+
+def cmd_install(args: argparse.Namespace) -> int:
+    """R0.2 — ``stopa install``: detekce OS → plán → provedení (best-effort)."""
+    from stopa import installer  # lazy — installer není v hot pathu CLI
+
+    plan = installer.plan_install(skip_system=args.skip_system)
+    if not getattr(args, "json", False):
+        print(f"Detekováno: {plan.os_info.id} {plan.os_info.version}")
+        for step in plan.steps:
+            print(f"  - {step}")
+        if args.dry_run:
+            print("(dry-run — nic neinstalováno)")
+            return 0
+    rc = installer.run_plan(plan, dry_run=args.dry_run)
+    _print_json({
+        "ok": rc == 0,
+        "os": plan.os_info.id,
+        "version": plan.os_info.version,
+        "package_manager": plan.package_manager,
+        "system_packages": list(plan.system_packages),
+        "needs_sudo": plan.needs_sudo,
+        "venv_dir": str(plan.venv_dir),
+        "dry_run": args.dry_run,
+    })
+    return rc
 
 
 def main(argv: list[str] | None = None) -> int:
