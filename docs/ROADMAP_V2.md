@@ -58,10 +58,10 @@ Wrapper kolem Volatility 3 Python API. Extrakce: procesy, spojení, moduly, hand
 **AK:** `stopa memory-analyze <dump> --profile <isf>`; výstup jako artifacty v DB (memory/process, memory/network); 10 testů na syntetických dumpech. ✅ — **ověřeno**: Volatility 3 volitelná runtime závislost (`[vol]` extra), integrace přes subprocess `.venv/bin/vol --json` (V3 interní API je ve 2.28.x nestabilní) — místo ISF profilu automatická detekce profilu, pluginy volitelné `--plugins processes,netconn,...`; výstup jako artifacty memory/process|network|module|handle|malfind|hashes (+statický scan); credential data jen typ + SHA-256 fingerprint (surové hodnoty se do case DB neukládají); 53 testů (`tests/test_f12_memory.py`), suite 2282 passed.
 **P0 | XL | závislosti: —** · implementace: `data/volatility3.py` (subprocess JSON adapter, lazy check) + `domain/memory_analysis.py` (MemoryArtifact model, plugin→artifact mapping, credential fingerprinting) + CLI `memory-analyze`.
 
-### F1.3 — Síťová forenzika (PCAP / Zeek) `[ ]`
-Parser .pcap/.pcapng (pyshark/scapy). Reasemblokace TCP streamů, extrakce souborů z HTTP/SMB/FTP, detekce IoC (DNS tunneling, C2 beaconing).
-**AK:** `stopa pcap-analyze <file>`; soubory do case/extracted/network/; min. 5 IoC patternů (YARA + regex); FTS index nad payloady.
-**P1 | L | závislosti: —**
+### F1.3 — Síťová forenzika (PCAP / Zeek) `[x]` ✅ 2026-11-10
+Parser .pcap/.pcapng (scapy). Reasemblování TCP streamů, extrakce souborů z HTTP/SMB/FTP, detekce IoC (DNS tunneling, C2 beaconing).
+**AK:** `stopa pcap-analyze <file>`; soubory do case/extracted/network/; min. 5 IoC patternů (YARA + regex); FTS index nad payloady. ✅ — **ověřeno**: scapy volitelná runtime závislost (`[net]` extra, lazy import + fallback bez scapy), parser `data/pcap_io.py` (TCP/UDP/DNS normalizace), TCP stream reassembly per-flow (seq sort, de-duplicita), extrakce HTTP GET/POST s filename z Content-Disposition + FTP STOR/RETR + SMB2 detekce; 5 IoC pravidel (dns_tunneling, c2_beaconing, suspicious_url_path, base64_blob_payload, unusual_high_port_tcp) — regex heuristiky, YARA odloženo (F1.4 antiforensics); artefakty `network/traffic|flow|http|ftp|smb|dns|ioc` do case DB idempotentně a automaticky indexovány FTS (`artifacts_fts`), surové body do `<root>/extracted/<case_id>/network/`; PII — v DB jen SHA-256 fingerprint, nikdy plný payload.
+**P1 | L | závislosti: —** · implementace: `data/pcap_io.py` (scapy adapter) + `domain/net_forensics.py` (reassembly, extrakce, IoC) + CLI `pcap-analyze`; testy `tests/test_f13_network_forensics.py` (39).
 
 ### F1.4 — Anti-Forensics detekce `[ ]
 Moduly detekující: timestomping (NTFS $FN vs $SI), log clearing (EVTX gaps), USN journal truncation, hidden partitions, steganografie (LSB PNG/JPG).

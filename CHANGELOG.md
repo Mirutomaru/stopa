@@ -20,6 +20,17 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
   statický scanner zůstává).
 - Safety: surové credential data se do DB neukládají — jen typ + SHA-256 fingerprint.
 
+#### F1.3 Síťová forenzika — PCAP analýza (scapy)
+- CLI `stopa pcap-analyze <case> <capture>`: parser .pcap/.pcapng přes scapy
+  (volitelná runtime závislost `[net]` extra, lazy import + fallback bez scapy).
+- TCP stream reassembly per-flow (seq sort, de-duplicita), UDP/DNS normalizace;
+  extrakce HTTP GET/POST s filename z Content-Disposition, FTP STOR/RETR, SMB2 detekce.
+- IoC detekce — 5 pravidel: dns_tunneling, c2_beaconing, suspicious_url_path,
+  base64_blob_payload, unusual_high_port_tcp (regex heuristiky; YARA odloženo na F1.4).
+- Artefakty `network/traffic|flow|http|ftp|smb|dns|ioc` do case DB idempotentně,
+  automaticky indexovány FTS (`artifacts_fts`); surové body do `<root>/extracted/<case_id>/network/`.
+- Safety: v DB jen SHA-256 fingerprint payloadů — nikdy plný obsah.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad
