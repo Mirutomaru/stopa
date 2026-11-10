@@ -271,6 +271,8 @@ def process_mobile_image(
     password: str | None = None,
     keyfile: Path | str | None = None,
     carve_free: bool = False,
+    fde_type: str | None = None,
+    recovery_key: str | None = None,
 ) -> ImageSummary:
     """Mobilní physical obraz (FÁZE 6b + B2) — FDE/FBE/LUKS detekce + unlock.
 
@@ -283,7 +285,12 @@ def process_mobile_image(
     ``process_disk_image`` (TSK). Bez FDE/FBE/LUKS (běžný RAW/E01) jde rovnou.
     Chybějící/špatné heslo → chyba v ``errors``.
     """
+    from stopa.data import bde_fvde
     from stopa.domain.fde import FdeError, decrypt_image_stream, is_fde_image
+    from stopa.domain.fde_bitlocker import (
+        decrypt_block_stream,
+        is_bitlocker_image,
+    )
     from stopa.domain.fde_fbe import decrypt_fbe_stream, is_fbe_image
     from stopa.domain.fde_luks import decrypt_luks, is_luks_image
 
@@ -302,6 +309,7 @@ def process_mobile_image(
         return summary
 
     work_path = image_path
+    fde_meta: tuple[str, str] | None = None  # (image_type, description) — nastaveno větví dispatche
     if is_fbe_image(head):
         # FÁZE B2 — Android FBE (AES-XTS sektorová); E3 RAM fix: streaming po chunkách
         try:
@@ -310,6 +318,7 @@ def process_mobile_image(
         except FdeError as e:
             summary.errors.append(f"FDE unlock selhal (FBE): {e}")
             return summary
+        fde_meta = ("fde", f"FBE obraz (fs={header.fs_type}) — AES-XTS, dešifrován heslem")
     elif is_luks_image(head):
         # FÁZE B2 — LUKS/dm-crypt (cryptsetup, vyžaduje root + loop device)
         try:
@@ -321,6 +330,20 @@ def process_mobile_image(
         if work_path is None:
             summary.errors.append(desc)
             return summary
+        fde_meta = ("luks", f"LUKS v{header.version} obraz — dešifrován cryptsetup")
+    elif is_bitlocker_image(head):
+        # F1.1 — STOPABLOCK whole-volume (AES-XTS 128/256, recovery key / heslo); streaming 1 MiB
+        try:
+            key = _fde_key_material(password, keyfile) or (recovery_key.encode("utf-8") if recovery_key else b"")
+            work_path, header = decrypt_block_stream(image_path, key)
+        except FdeError as e:
+            summary.errors.append(f"FDE unlock selhal (STOPABLOCK): {e}")
+            return summary
+        fde_meta = (
+            "fde",
+            (f"STOPABLOCK whole-volume (fs={header.fs_type}) — AES-XTS-{header.key_len // 2}, "
+             "dešifrován recovery key / heslem"),
+        )
     elif is_fde_image(head):
         # FÁZE 6b — STOPAFDE (AES-256-CBC, proprietární testovací formát); E3 RAM fix: streaming
         try:
@@ -329,19 +352,45 @@ def process_mobile_image(
         except FdeError as e:
             summary.errors.append(f"FDE unlock selhal: {e}")
             return summary
+        fde_meta = ("fde", f"FDE obraz (fs={header.fs_type}) — dešifrován heslem")
+    elif fde_type == "bitlocker":
+        # F1.1 — reálný BitLocker BVE přes libbde (explicitní --fde-type; recovery key primární)
+        if not bde_fvde.bde_available():
+            summary.errors.append("FDE unlock selhal: chybí libbde (nainstalujte runtime knihovnu)")
+            return summary
+        rk = recovery_key
+        if rk is None and password is None and keyfile is not None:
+            # recovery key v textovém souboru (48místný) — primární cesta dle ROADMAP V2
+            try:
+                rk = Path(keyfile).expanduser().read_text(encoding="utf-8").strip() or None
+            except OSError as e:
+                summary.errors.append(f"Chyba čtení recovery key souboru: {e}")
+                return summary
+        try:
+            res = bde_fvde.decrypt_bitlocker(image_path, password=password, recovery_key=rk)
+        except bde_fvde.BdeError as e:
+            summary.errors.append(f"BitLocker unlock selhal: {e}")
+            return summary
+        work_path = res.plaintext_path
+        fde_meta = ("bitlocker", "BitLocker BVE obraz — dešifrován libbde (recovery key / heslo)")
+    elif fde_type == "filevault":
+        # F1.1 — Apple FileVault přes libfvde (explicitní --fde-type; heslo)
+        if not bde_fvde.fvde_available():
+            summary.errors.append("FDE unlock selhal: chybí libfvde (nainstalujte runtime knihovnu)")
+            return summary
+        pw = password or ""
+        try:
+            res = bde_fvde.decrypt_filevault(image_path, password=pw)
+        except bde_fvde.FvdeError as e:
+            summary.errors.append(f"FileVault unlock selhal: {e}")
+            return summary
+        work_path = res.plaintext_path
+        fde_meta = ("filevault", "FileVault obraz — dešifrován libfvde (heslo, logical volume 0)")
 
-    # FDE/FBE/LUKS metadata (typ + popis) — jen pokud se něco dešifrovalo
-    if work_path != image_path:
+    # FDE/FBE/LUKS/STOPABLOCK/BVE/FV metadata (typ + popis) — jen pokud se něco dešifrovalo
+    if work_path != image_path and fde_meta is not None:
         summary.fde_unlocked = True
-        if is_fbe_image(head):
-            summary.image_type = "fde"
-            summary.description = f"FBE obraz (fs={header.fs_type}) — AES-XTS, dešifrován heslem"
-        elif is_luks_image(head):
-            summary.image_type = "luks"
-            summary.description = f"LUKS v{header.version} obraz — dešifrován cryptsetup"
-        else:
-            summary.image_type = "fde"
-            summary.description = f"FDE obraz (fs={header.fs_type}) — dešifrován heslem"
+        summary.image_type, summary.description = fde_meta
 
     try:
         inner = process_disk_image(db, source_id, work_path, profile, carve_free=carve_free)

@@ -740,6 +740,8 @@ def cmd_mobile(args: argparse.Namespace) -> int:
         db, source.id, img_path, profile,
         password=args.password, keyfile=getattr(args, "keyfile", None),
         carve_free=not args.no_carve,
+        fde_type=getattr(args, "fde_type", None),
+        recovery_key=getattr(args, "recovery_key", None),
     )
     if getattr(args, "json", False):
         _print_json(
@@ -776,6 +778,91 @@ def cmd_mobile(args: argparse.Namespace) -> int:
         for err in summary.errors[:5]:
             print(f"  ! {err}", file=sys.stderr)
     db.close()
+    return 0
+
+
+def cmd_decrypt(args: argparse.Namespace) -> int:
+    """F1.1 — BitLocker / FileVault dešifrování (libbde/libfvde + STOPABLOCK).
+
+    Detekce podle ``--type`` a magic na offsetu 0:
+      * STOPABLK → syntetický whole-volume formát (čistý Python, AES-XTS)
+      * bitlocker → reálný BVE obraz přes libbde (recovery key primární cesta)
+      * filevault → Apple FDE přes libfvde (heslo)
+
+    Výsledek = RAW plaintext do souboru (default: <obraz>.decrypted.img).
+    """
+    from stopa.data import bde_fvde
+    from stopa.domain.fde_bitlocker import (
+        FdeError,
+        decrypt_block_stream,
+        is_bitlocker_image,
+    )
+
+    img_path = Path(args.image).expanduser()
+    if not img_path.is_file():
+        print(f"Obraz neexistuje: {img_path}", file=sys.stderr)
+        return 2
+
+    out_path = (
+        Path(args.out).expanduser()
+        if args.out
+        else img_path.with_suffix(".decrypted.img")
+    )
+
+    try:
+        with open(img_path, "rb") as f:
+            head = f.read(36)
+
+        if is_bitlocker_image(head):
+            # syntetický STOPABLOCK — credential z recovery key nebo hesla
+            cred = args.recovery_key or args.password
+            if not cred:
+                print("Zadejte --recovery-key nebo --password", file=sys.stderr)
+                return 2
+            tmp_path, header = decrypt_block_stream(img_path, cred)
+            tmp_path.replace(out_path)
+            size = out_path.stat().st_size
+            desc = f"STOPABLOCK ({header.fs_type}, AES-XTS-{header.key_len // 2}) — dešifrováno {size / 1e6:.2f} MB"
+        elif args.type == "bitlocker":
+            if not bde_fvde.bde_available():
+                print("Chybí libbde (nainstalujte runtime knihovnu — viz STOPA_BDE_LIB)", file=sys.stderr)
+                return 3
+            res = bde_fvde.decrypt_bitlocker(img_path, password=args.password, recovery_key=args.recovery_key)
+            res.plaintext_path.replace(out_path)
+            size = out_path.stat().st_size
+            desc = f"{res.description} — {size / 1e6:.2f} MB"
+        elif args.type == "filevault":
+            if not bde_fvde.fvde_available():
+                print("Chybí libfvde (nainstalujte runtime knihovnu — viz STOPA_BDE_LIB)", file=sys.stderr)
+                return 3
+            if not args.password:
+                print("FileVault vyžaduje --password", file=sys.stderr)
+                return 2
+            res = bde_fvde.decrypt_filevault(img_path, password=args.password)
+            res.plaintext_path.replace(out_path)
+            size = out_path.stat().st_size
+            desc = f"{res.description} — {size / 1e6:.2f} MB"
+        else:
+            print(
+                "Neznámý typ obrazu — zadejte --type bitlocker|filevault (nebo je to STOPABLOCK)",
+                file=sys.stderr,
+            )
+            return 4
+    except FdeError as e:
+        print(f"FDE dešifrování selhalo: {e}", file=sys.stderr)
+        return 1
+    except bde_fvde.BdeError as e:
+        print(f"BitLocker dešifrování selhalo: {e}", file=sys.stderr)
+        return 1
+    except bde_fvde.FvdeError as e:
+        print(f"FileVault dešifrování selhalo: {e}", file=sys.stderr)
+        return 1
+
+    if getattr(args, "json", False):
+        _print_json({"image": str(img_path), "out": str(out_path), "description": desc})
+    else:
+        print(desc)
+        print(f"Plaintext: {out_path}")
     return 0
 
 
@@ -1867,12 +1954,30 @@ def build_parser() -> argparse.ArgumentParser:
                        help="FDE/FBE heslo (pokud je obraz šifrovaný)")
     mob_p.add_argument("--keyfile", metavar="SOUBOR", default=None,
                        help="extrahovaný klíč / passphrase soubor (má prioritu před --password)")
+    mob_p.add_argument("--fde-type", choices=["bitlocker", "filevault"], default=None,
+                       help="F1.1 — explicitní typ reálného FDE obrazu (libbde/libfvde); "
+                            "syntetické formáty se detekují z magic automaticky")
+    mob_p.add_argument("--recovery-key", metavar="KLÍČ", default=None,
+                       help="F1.1 — BitLocker recovery key (primární cesta dle ROADMAP V2)")
     mob_p.add_argument("--profile", default="forensic", choices=sorted(PROFILES),
                        help="processing profil (default: forensic)")
     mob_p.add_argument("--no-carve", action="store_true",
                        help="přeskočit carving nealokovaného prostoru")
     _add_json_flag(mob_p)
     mob_p.set_defaults(func=cmd_mobile)
+
+    dec_p = _ex_sub(sub, "decrypt", help="F1.1 — BitLocker/FileVault dešifrování (libbde/libfvde + STOPABLOCK)")
+    dec_p.add_argument("image", help="cesta k šifrovanému obrazu")
+    dec_p.add_argument("--type", choices=["bitlocker", "filevault"], default=None,
+                       help="typ FDE obrazu (pokud není detekován z magic STOPABLK)")
+    dec_p.add_argument("--recovery-key", metavar="KLÍČ", default=None,
+                       help="BitLocker recovery key (48místný; primární cesta dle ROADMAP V2)")
+    dec_p.add_argument("--password", metavar="HESLO", default=None,
+                       help="FDE/FBE heslo")
+    dec_p.add_argument("--out", metavar="SOUBOR", default=None,
+                       help="výstupní plaintext (default: <obraz>.decrypted.img)")
+    _add_json_flag(dec_p)
+    dec_p.set_defaults(func=cmd_decrypt)
 
     prof_p = _ex_sub(sub, "profiles", help="seznam processing profilů")
     _add_json_flag(prof_p)

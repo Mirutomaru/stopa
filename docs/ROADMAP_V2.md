@@ -48,10 +48,10 @@ Projít všech ~30 CLI příkazů, sjednotit help texty, přidat `--json` output
 ---
 
 ## 🔬 FÁZE 1 — FORENZNÍ COVERAGE · Odhad 4–6 týdnů
-### F1.1 — BitLocker / FileVault FDE support `[ ]`
+### F1.1 — BitLocker / FileVault FDE support `[x]` ✅ 2026-11-10
 Integrovat libbde (BitLocker) a libfvde (FileVault) přes ctypes. Podpora: password, recovery key, TPM scraping z memory dumpu (stretch).
-**AK:** `stopa decrypt --type bitlocker <image> --recovery-key <key>`; test na syntetickém BitLocker obrazu (AES-XTS 128/256); stream 1 MiB chunks, RAM peak < 512 MB.
-**P0 | XL | závislosti: —**
+**AK:** `stopa decrypt --type bitlocker <image> --recovery-key <key>`; test na syntetickém BitLocker obrazu (AES-XTS 128/256); stream 1 MiB chunks, RAM peak < 512 MB. ✅
+**P0 | XL | závislosti: —** · implementace: `domain/fde_bitlocker.py` (STOPABLOCK, AES-XTS-128/256) + `data/bde_fvde.py` (ctypes libbde/libfvde lazy load); testy `tests/test_f11_bitlocker.py` (36).
 
 ### F1.2 — Memory Forensics (Volatility 3 integrace) `[ ]`
 Wrapper kolem Volatility 3 Python API. Extrakce: procesy, spojení, moduly, handles, malfind (injected code), hashe z LSASS.
@@ -245,6 +245,7 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 - **[2026-11-10] R0.4]** — Regresní testy + bug-fixe [x]. Commit `5c22b27`: tests/test_r04_cli_ux.py (12 testů) validuje obě AK (validní JSON na stdout + Příklad epilog). Testy odhalily 2 skutečné bugy: argparse crash v timeline --path --help (neescape %text% → printf; fix %%text%%) a chybějící epilog u serve. + JSON error cesty v cmd_analyze. 12/12 passed, ruff clean.
 - **[2026-11-10] R0.2]** — **Dokončeno `[x]`.** Commit `bbc32c1`: wheel-based offline instalace (.deb/.rpm/AppImage/Docker + Makefile). Klíčové rozhodnutí: bundlovaná dev site-packages s cp311 C extenzemi nefungují cross-verze → .deb obsahuje čistý Python wheel + vendored wheels (cp310–cp313) a packaging/postinst.sh postaví /opt/stopa/venv OFFLINE. Minimální závislosti python3+sleuthkit; EWF volitelné přes STOPA_EWF_LIB. Ověřeno E2E: offline instalace na čerstvém py3.13 → import all OK + case new/stats; suite 2193 passed / 1 skipped.
 - **[2026-11-10] R0.3]** — **Dokončeno `[x]`.** Version bump 0.1.0→1.0.0 (pyproject + fallback v __init__.py/case_report.py/correlation.py/cli.py, verze z jednoho zdroje přes importlib metadata). Nový top-level flag `stopa --version` → stopa 1.0.0. CHANGELOG.md dle Keep-a-Changelog; žádné breaking changes (nadstavba API/CLI/schéma, DB migrace automatické v8→v14). Suite 2193 passed / 1 skipped; ruff clean.
+- **[2026-11-10] F1.1]** — **Dokončeno `[x]`.** Dvousvrstvá architektura: (1) `domain/fde_bitlocker.py` = STOPABLOCK, čistý Python whole-volume formát pro deterministické offline testy ([36 B hlavička][XTS klíč 32/64 B][ciphertext], PBKDF2-HMAC-SHA1 → AES-XTS po 512 B sektorech, tweak = globální číslo sektoru; XTS-128=32 B / XTS-256=64 B kombinovaný klíč dle cryptography); (2) `data/bde_fvde.py` = ctypes wrapper libbde/libfvde pro reálné BVE/FileVault obrazy (lazy load z ~/ewf-install/lib, STOPA_BDE_LIB striktní override; recovery key primární cesta přes set_utf8_recovery_password s byte length; FileVault group-level API → logical volume 0). C ABI ověřeno z -dev hlaviček PŘED implementací (symboly + prototypy, neuhádáno). CLI `stopa decrypt <img> --type bitlocker|filevault --recovery-key/--password [--out] [--json]` s exit kódy 0/1/2/3/4; integrace do process_mobile_image (auto-detekce STOPABLK magic + explicitní fde_type, recovery key i z textového souboru). Testy tests/test_f11_bitlocker.py (36): KDF determinita/salt/credential, hlavička layout+truncation+reject, XTS-128/256 roundtrip, špatné credential, poškozený uložený klíč, ciphertext≠plaintext, non-sector múltiple, streaming 3 MiB == whole (kontinuita sektorů + progress callback), custom chunk 1 sektor, bad chunk raise, tmp cleanup při chybě, bde/fvde availability+error cesty, CLI decrypt E2E (text/JSON/wrong-key/missing/no-cred/unknown-type), pipeline STOPABLOCK unlock/wrong-key/password s TSK FAT16. Suite **2229 passed / 1 skipped** (+36); ruff clean.
 
 ---
 
@@ -265,6 +266,6 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 2. ~~R0.4 CLI UX audit~~ — **hotovo `[x]`** ✅ (commits `03d489f`, `921eae1`, `5c22b27`)
 3. ~~R0.2 Distributivní balíčky~~ — **hotovo `[x]`** ✅ (`bbc32c1`)
 4. ~~R0.3 Version bump 1.0.0 + CHANGELOG~~ — **hotovo `[x]`** ✅ (commit viz níže)
-5. F1.1 BitLocker support (začátek Fáze 1, nejkritičtější feature) ← **AKTIVNÍ**
+5. ~~F1.1 BitLocker support~~ — **hotovo `[x]`** ✅ (commit viz níže) → další: F1.2 Memory Forensics
 
 **Konec plánu.**
