@@ -1411,6 +1411,9 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         rag = retrieve(args.question, db=db, case_id=args.case_id)
         # STP-019 — PII redaktor (settings.json toggle, default ON)
         redact_pii = _load_ai_redact_pii()
+        # R0.4 — progress bar u analyze (LLM volání trvá řádově desítky sekund)
+        bar = None if args.json else _rich_progress()
+        task_id = bar.add("AI orchestrace…", 100) if bar is not None else None
         try:
             result = orchestrate(
                 client.chat,
@@ -1426,6 +1429,13 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         except OrchestrationError as exc:
             print(f"AI orchestrace selhala: {exc}")
             return 1
+        finally:
+            if bar is not None and task_id is not None:
+                try:
+                    bar.update(task_id, completed=100)
+                    bar.stop()
+                except Exception as exc:  # noqa: BLE001 — progress je kosmetický
+                    _log.debug("Rich progress completion selhala: %s", exc)
 
         # audit AI dotazu (evidence modelu + promptu) — analysis_operations
         from stopa.intelligence.ai_orchestrator import build_prompt, route_agent
@@ -1605,13 +1615,53 @@ def _settings_bind_address() -> str | None:
         return None
 
 
+# R0.4 — příklady pro --help (AK: každý subpříkaz ukazuje reálný příklad)
+_SUBCOMMAND_EXAMPLES = {
+    "new": 'stopa case new "Případ 2026-014" --examiner M.Matúš',
+    "auto-export": "stopa case auto-export case-abc on --interval 30",
+    "auto-interval": "stopa case auto-interval case-abc 30   # nebo 'off'",
+    "add": "stopa add case-abc /mnt/evidence --profile forensic --resume",
+    "files": "stopa files case-abc --family image --limit 50",
+    "search": 'stopa search case-abc "invoice OR *.pdf" --source src-1',
+    "stats": "stopa stats case-abc",
+    "verify": "stopa verify case-abc --limit 20",
+    "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
+    "replay": "stopa replay case-abc op-123   # bez op = poslední extract",
+    "benchmark": "stopa benchmark case-abc --suite all",
+    "validate": "stopa validate case-abc",
+    "analyze": 'stopa analyze case-abc "Kdo odeslal tento e-mail?"',
+    "audit": "stopa audit case-abc -v --limit 50",
+    "backup": "stopa backup case-abc --out /mnt/backup",
+    "timeline": "stopa timeline case-abc --type browser_history --intel",
+    "correlate": "stopa correlate case-abc -v",
+    "image": "stopa image case-abc /path/disk.img --no-carve",
+    "mobile": "stopa mobile case-abc /path/phone.img --password HESLO",
+    "profiles": "stopa profiles",
+    "report": "stopa report case-abc --format pdf --lang cs",
+    "export": "stopa export case-abc --what timeline --format stix --bundle",
+    "plaso-import": "stopa plaso-import case-abc /path/l2tcsv.txt",
+    "timesketch-push": "stopa timesketch-push case-abc --what timeline --limit 1000",
+    "serve": "stopa serve --port 8473",
+}
+
+
+def _ex_sub(subparsers, name: str, *args, **kwargs) -> argparse.ArgumentParser:
+    """add_parser + epilog s příkladem (R0.4); bez záznamu vrací parser beze změny."""
+    p = subparsers.add_parser(name, *args, **kwargs)
+    example = _SUBCOMMAND_EXAMPLES.get(name)
+    if example:
+        p.formatter_class = argparse.RawDescriptionHelpFormatter
+        p.epilog = f"Příklad:\n  {example}"
+    return p
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stopa", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
 
-    case_p = sub.add_parser("case", help="správa případů")
+    case_p = _ex_sub(sub, "case", help="správa případů")
     case_sub = case_p.add_subparsers(dest="case_cmd", required=True)
-    new_p = case_sub.add_parser("new", help="vytvořit nový případ")
+    new_p = _ex_sub(case_sub, "new", help="vytvořit nový případ")
     new_p.add_argument("name", help="název případu")
     new_p.add_argument("--examiner", help="jméno znalce")
     new_p.add_argument("--notes", help="poznámky k případu")
@@ -1619,8 +1669,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_p.set_defaults(func=cmd_case_new)
 
     # STP-069 — opt-in automatický ZIP bundle po dokončení analýzy.
-    autoexp_p = case_sub.add_parser(
-        "auto-export", help="zapnout/vypnut automatický export (STP-069)"
+    autoexp_p = _ex_sub(case_sub, "auto-export", help="zapnout/vypnut automatický export (STP-069)"
     )
     autoexp_p.add_argument("case_id", help="ID případu")
     autoexp_p.add_argument("state", choices=["on", "off"], help="on = zapnout, off = vypnout")
@@ -1636,8 +1685,7 @@ def build_parser() -> argparse.ArgumentParser:
     autoexp_p.set_defaults(func=cmd_case_auto_export)
 
     # STP-070 — nastavení/vymazání intervalu periodického auto-bundle.
-    autoint_p = case_sub.add_parser(
-        "auto-interval", help="nastavit interval periodického auto-bundle (STP-070)"
+    autoint_p = _ex_sub(case_sub, "auto-interval", help="nastavit interval periodického auto-bundle (STP-070)"
     )
     autoint_p.add_argument("case_id", help="ID případu")
     autoint_p.add_argument(
@@ -1647,7 +1695,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(autoint_p)
     autoint_p.set_defaults(func=cmd_case_auto_interval)
 
-    add_p = sub.add_parser("add", help="přidat zdroj důkazů a zpracovat")
+    add_p = _ex_sub(sub, "add", help="přidat zdroj důkazů a zpracovat")
     add_p.add_argument("case_id", help="ID případu (z 'stopa case new')")
     add_p.add_argument("paths", nargs="+", help="složky nebo soubory ke zpracování")
     add_p.add_argument("--profile", default="forensic", choices=sorted(PROFILES),
@@ -1664,7 +1712,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(add_p)
     add_p.set_defaults(func=cmd_add)
 
-    files_p = sub.add_parser("files", help="seznam souborů v případu")
+    files_p = _ex_sub(sub, "files", help="seznam souborů v případu")
     files_p.add_argument("case_id")
     files_p.add_argument("--bad-ext", action="store_true", help="jen soubory s rozpornou příponou")
     files_p.add_argument("--dups", action="store_true", help="jen duplikáty")
@@ -1675,7 +1723,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(files_p)
     files_p.set_defaults(func=cmd_files)
 
-    search_p = sub.add_parser("search", help="full-text search (FTS5) napříč případem")
+    search_p = _ex_sub(sub, "search", help="full-text search (FTS5) napříč případem")
     search_p.add_argument("case_id")
     search_p.add_argument(
         "query",
@@ -1686,20 +1734,19 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(search_p)
     search_p.set_defaults(func=cmd_search)
 
-    stats_p = sub.add_parser("stats", help="shrnutí případu")
+    stats_p = _ex_sub(sub, "stats", help="shrnutí případu")
     stats_p.add_argument("case_id")
     _add_json_flag(stats_p)
     stats_p.set_defaults(func=cmd_stats)
 
-    ver_p = sub.add_parser("verify", help="E1 — re-hash všech souborů a kontrola integrity (SHA-256/MD5)")
+    ver_p = _ex_sub(sub, "verify", help="E1 — re-hash všech souborů a kontrola integrity (SHA-256/MD5)")
     ver_p.add_argument("case_id")
     ver_p.add_argument("--limit", type=int, default=20,
                        help="max. počet zobrazených problémů (default: 20)")
     _add_json_flag(ver_p)
     ver_p.set_defaults(func=cmd_verify)
 
-    int_p = sub.add_parser(
-        "integrity", help="P0 C4 — Evidence Integrity 2.0 (hash chaining + Ed25519 kontrolní body)"
+    int_p = _ex_sub(sub, "integrity", help="P0 C4 — Evidence Integrity 2.0 (hash chaining + Ed25519 kontrolní body)"
     )
     int_p.add_argument("case_id")
     int_p.add_argument("--init-key", action="store_true",
@@ -1709,8 +1756,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(int_p)
     int_p.set_defaults(func=cmd_integrity)
 
-    rep_p = sub.add_parser(
-        "replay", help="P0 C5 — Reproducibility Engine (opakovat operaci + porovnání výsledků)"
+    rep_p = _ex_sub(sub, "replay", help="P0 C5 — Reproducibility Engine (opakovat operaci + porovnání výsledků)"
     )
     rep_p.add_argument("case_id")
     rep_p.add_argument("op", nargs="?", default=None,
@@ -1718,8 +1764,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(rep_p)
     rep_p.set_defaults(func=cmd_replay)
 
-    bm_p = sub.add_parser(
-        "benchmark", help="P0 C6 — Benchmark Engine (deterministické benchmarky + regresní detekce)"
+    bm_p = _ex_sub(sub, "benchmark", help="P0 C6 — Benchmark Engine (deterministické benchmarky + regresní detekce)"
     )
     bm_p.add_argument("case_id", nargs="?", default=None,
                       help="případ pro historii/regrese (volitelné)")
@@ -1727,15 +1772,13 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(bm_p)
     bm_p.set_defaults(func=cmd_benchmark)
 
-    val_p = sub.add_parser(
-        "validate", help="P0 C6 — Evidence Validation Report (parser × validace)"
+    val_p = _ex_sub(sub, "validate", help="P0 C6 — Evidence Validation Report (parser × validace)"
     )
     val_p.add_argument("case_id")
     _add_json_flag(val_p)
     val_p.set_defaults(func=cmd_validate)
 
-    ana_p = sub.add_parser(
-        "analyze", help="P0 Intelligence I1 — AI orchestrace (5 agentů, auto/explicitní routing)"
+    ana_p = _ex_sub(sub, "analyze", help="P0 Intelligence I1 — AI orchestrace (5 agentů, auto/explicitní routing)"
     )
     ana_p.add_argument("case_id")
     ana_p.add_argument("question", help="analytický dotaz (čeština)")
@@ -1748,7 +1791,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(ana_p)
     ana_p.set_defaults(func=cmd_analyze)
 
-    aud_p = sub.add_parser("audit", help="E1 — neměnná stopa operací (audit trail)")
+    aud_p = _ex_sub(sub, "audit", help="E1 — neměnná stopa operací (audit trail)")
     aud_p.add_argument("case_id")
     aud_p.add_argument("--limit", type=int, default=50,
                        help="max. počet záznamů (default: 50)")
@@ -1759,14 +1802,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(aud_p)
     aud_p.set_defaults(func=cmd_audit)
 
-    bak_p = sub.add_parser("backup", help="E1 — záloha case DB (SQLite .backup, integrity check)")
+    bak_p = _ex_sub(sub, "backup", help="E1 — záloha case DB (SQLite .backup, integrity check)")
     bak_p.add_argument("case_id")
     bak_p.add_argument("--out", metavar="DIR",
                        help="výstupní složka (default: backups/ vedle case DB)")
     _add_json_flag(bak_p)
     bak_p.set_defaults(func=cmd_backup)
 
-    tl_p = sub.add_parser("timeline", help="AXIOM-style timeline extrahovaných artifactů")
+    tl_p = _ex_sub(sub, "timeline", help="AXIOM-style timeline extrahovaných artifactů")
     tl_p.add_argument("case_id")
     tl_p.add_argument("--source", help="filtr podle evidence source ID")
     tl_p.add_argument("--type", dest="type", help="filtr podle typu artifactu (např. browser_history)")
@@ -1781,14 +1824,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(tl_p)
     tl_p.set_defaults(func=cmd_timeline)
 
-    cor_p = sub.add_parser("correlate", help="E4 — Entity + Correlation Engine (explicitní krok)")
+    cor_p = _ex_sub(sub, "correlate", help="E4 — Entity + Correlation Engine (explicitní krok)")
     cor_p.add_argument("case_id")
     cor_p.add_argument("-v", "--verbose", action="store_true",
                        help="zobrazit detail propojení s evidence listy")
     _add_json_flag(cor_p)
     cor_p.set_defaults(func=cmd_correlate)
 
-    img_p = sub.add_parser("image", help="disk image (RAW/E01) — TSK file systems + carving")
+    img_p = _ex_sub(sub, "image", help="disk image (RAW/E01) — TSK file systems + carving")
     img_p.add_argument("case_id")
     img_p.add_argument("path", help="cesta k diskovému obrazu (.img/.dd/.raw/.e01)")
     img_p.add_argument("--profile", default="forensic", choices=sorted(PROFILES),
@@ -1798,7 +1841,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(img_p)
     img_p.set_defaults(func=cmd_image)
 
-    mob_p = sub.add_parser("mobile", help="mobilní physical obraz — FDE/FBE unlock + TSK")
+    mob_p = _ex_sub(sub, "mobile", help="mobilní physical obraz — FDE/FBE unlock + TSK")
     mob_p.add_argument("case_id")
     mob_p.add_argument("path", help="cesta k mobilnímu obrazu (.img/.dd, volitelně FDE)")
     mob_p.add_argument("--password", metavar="HESLO", default=None,
@@ -1812,11 +1855,11 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(mob_p)
     mob_p.set_defaults(func=cmd_mobile)
 
-    prof_p = sub.add_parser("profiles", help="seznam processing profilů")
+    prof_p = _ex_sub(sub, "profiles", help="seznam processing profilů")
     _add_json_flag(prof_p)
     prof_p.set_defaults(func=cmd_profiles)
 
-    rep_p = sub.add_parser("report", help="forenzní report (HTML/PDF) + chain of custody")
+    rep_p = _ex_sub(sub, "report", help="forenzní report (HTML/PDF) + chain of custody")
     rep_p.add_argument("case_id")
     rep_p.add_argument("--format", choices=["html", "pdf"], default="html",
                        help="výstupní formát (default: html; pdf vyžaduje weasyprint)")
@@ -1827,7 +1870,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(rep_p)
     rep_p.set_defaults(func=cmd_report)
 
-    exp_p = sub.add_parser("export", help="E10/STP-023 — export dat případu do CSV/JSON/JSONL/XML/STIX")
+    exp_p = _ex_sub(sub, "export", help="E10/STP-023 — export dat případu do CSV/JSON/JSONL/XML/STIX")
     exp_p.add_argument("case_id")
     exp_p.add_argument("--what", choices=["artifacts", "timeline", "correlations"],
                        default="artifacts",
@@ -1842,16 +1885,14 @@ def build_parser() -> argparse.ArgumentParser:
                        help="STP-068 — ZIP bundle všech datasetů (manifest + SHA-256, deterministický)")
     exp_p.set_defaults(func=cmd_export)
 
-    pli_p = sub.add_parser(
-        "plaso-import", help="STP-057 — Plaso import: l2tcsv soubor → case (source + artifacts + timeline)"
+    pli_p = _ex_sub(sub, "plaso-import", help="STP-057 — Plaso import: l2tcsv soubor → case (source + artifacts + timeline)"
     )
     pli_p.add_argument("case_id")
     pli_p.add_argument("path", help="cesta k l2tcsv souboru (17 polí log2timeline.pl)")
     _add_json_flag(pli_p)
     pli_p.set_defaults(func=cmd_plaso_import)
 
-    tsk_p = sub.add_parser(
-        "timesketch-push",
+    tsk_p = _ex_sub(sub, "timesketch-push",
         help="STP-059 — Timesketch push: case data → nový sketch + timeline (l2tcsv)",
     )
     tsk_p.add_argument("case_id")

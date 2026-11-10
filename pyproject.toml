@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.5",
     "regipy>=6",  # Windows registry hive parser (FÁZE 4b)
+    "rich>=13",  # R0.4 — progress bary v CLI (lazy import + TTY detekce; bez TTY se degraduje na plain text)
 ]
 
 [project.optional-dependencies]
