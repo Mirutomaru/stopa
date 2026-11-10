@@ -53,10 +53,10 @@ Integrovat libbde (BitLocker) a libfvde (FileVault) přes ctypes. Podpora: passw
 **AK:** `stopa decrypt --type bitlocker <image> --recovery-key <key>`; test na syntetickém BitLocker obrazu (AES-XTS 128/256); stream 1 MiB chunks, RAM peak < 512 MB. ✅
 **P0 | XL | závislosti: —** · implementace: `domain/fde_bitlocker.py` (STOPABLOCK, AES-XTS-128/256) + `data/bde_fvde.py` (ctypes libbde/libfvde lazy load); testy `tests/test_f11_bitlocker.py` (36).
 
-### F1.2 — Memory Forensics (Volatility 3 integrace) `[ ]`
+### F1.2 — Memory Forensics (Volatility 3 integrace) `[x]` ✅ 2026-11-10
 Wrapper kolem Volatility 3 Python API. Extrakce: procesy, spojení, moduly, handles, malfind (injected code), hashe z LSASS.
-**AK:** `stopa memory-analyze <dump> --profile <isf>`; výstup jako artifacty v DB (memory/process, memory/network); 10 testů na syntetických dumpech.
-**P0 | XL | závislosti: —**
+**AK:** `stopa memory-analyze <dump> --profile <isf>`; výstup jako artifacty v DB (memory/process, memory/network); 10 testů na syntetických dumpech. ✅ — **ověřeno**: Volatility 3 volitelná runtime závislost (`[vol]` extra), integrace přes subprocess `.venv/bin/vol --json` (V3 interní API je ve 2.28.x nestabilní) — místo ISF profilu automatická detekce profilu, pluginy volitelné `--plugins processes,netconn,...`; výstup jako artifacty memory/process|network|module|handle|malfind|hashes (+statický scan); credential data jen typ + SHA-256 fingerprint (surové hodnoty se do case DB neukládají); 53 testů (`tests/test_f12_memory.py`), suite 2282 passed.
+**P0 | XL | závislosti: —** · implementace: `data/volatility3.py` (subprocess JSON adapter, lazy check) + `domain/memory_analysis.py` (MemoryArtifact model, plugin→artifact mapping, credential fingerprinting) + CLI `memory-analyze`.
 
 ### F1.3 — Síťová forenzika (PCAP / Zeek) `[ ]`
 Parser .pcap/.pcapng (pyshark/scapy). Reasemblokace TCP streamů, extrakce souborů z HTTP/SMB/FTP, detekce IoC (DNS tunneling, C2 beaconing).
