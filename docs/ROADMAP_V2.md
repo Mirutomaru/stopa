@@ -272,6 +272,13 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 ## 🏁 CHECKPOINT SCHEDULE
 1. po Fázi 0: Release 1.0 venku, UX vyladěno · 2. po Fázi 1: coverage kompletní (BitLocker/memory/PCAP) · 3. po Fázi 2: výkonové metriky splněny, Rust core stabilní · 4. po Fázi 3: AI agent demo-ready · 5. po Fázi 4: enterprise beta s 3 testery · 6. po Fázi 5: compliance audit externí firmou · 7. po Fázi 6: Release 2.0
 
+### 📌 CK2 — Checkpoint Review po Fáze 1 (2026-11-11)
+**Progress:** Fáze 1 kompletní — R0.x + F1.1–F1.6 `[x]` (commits `6947ecd`, `b05cf17`, `58cd5f1`, `93748c1`, `9f430b7`, `faa4552`). Suite **2432 passed / 1 skipped** (+278 od baseline 2154), ruff clean. Coverage: AXIOM 200/232 = 100 % konkrétních extraktorů; nová forenzní domény: FDE (BitLocker/FileVault), memory (Volatility 3), síť (PCAP/IoC), anti-forensics, mobilní (UFDR/VCF/Signal/WhatsApp + import-mobile), LSA credential cache, SIM phonebook.
+**Metriky vs DoD:** test suite 2432/≥3500 (69 %); parser versions 77/120+; benchmark items beze změny (F2.x). Zbývajících 32 AXIOM řádků = framework rozhraní bez datového formátu (dokumentováno, ne pokrytelné parserymi).
+**Odhady Fáze 2:** F2.1 Rust/PyO3 carving engine je kritická cesta — odhad 6–8 týdnů drží při maturin CI na Linuxu; riziko Windows cross-compile (mitigace: Linux primary, Windows secondary target). F2.2 DuckDB závisí na F2.1 (timeline OLAP po Rust core).
+**Rizika:** (1) PyO3 build pipeline bez sítě pro offline distribuci — řešit v R0.2 wheel layoutu; (2) benchmark baseline 77 items musí být zmrazen PŘED F2.1 aby regrese >5 % měřila správně; (3) K-linka crypto čeká na release 2.0 scoping (docs/CRYPTO_FORENSICS_PROPOSAL.md).
+**Další:** CK2 podán → Fáze 2 začíná F2.1 (Rust/C++ carving engine), po něm F2.2 DuckDB.
+
 ## 🎯 OKAMŽITÉ AKCE (First 5)
 1. ~~R0.4 CLI UX audit~~ — **hotovo `[x]`** ✅ (commits `03d489f`, `921eae1`, `5c22b27`)
 2. ~~R0.2 Distributivní balíčky~~ — **hotovo `[x]`** ✅ (`bbc32c1`)
