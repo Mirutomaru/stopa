@@ -429,9 +429,33 @@ def carve(data: bytes, min_size: int = 64) -> list[CarvedFile]:
         return []
     out: list[CarvedFile] = []
     seen_offsets: set[int] = set()
+    hdrs = _header_signatures()
+    offsigs = _offset_signatures()
 
-    # 1) signatury s offsetem 0 — rychlé hledání magic
-    for magic, typ, family in _header_signatures():
+    # F2.1: Rust Aho-Corasick scan — všechny signatury v jednom průchodu.
+    # Parity s find smyčkami níže: per-pattern nenakládající shody, při stejném
+    # offsetu vyhrává menší index (Python zpracovává header signatury jako první).
+    from stopa.data import rust_core  # lazy — bez wheelu reference fallback cesta
+
+    patterns = [m for m, _, _ in hdrs] + [magic for _, magic, _, _ in offsigs]
+    offsets = rust_core.find_offsets(data, patterns)
+    if offsets is not None:
+        n_hdr = len(hdrs)
+        for pos, idx in offsets:
+            if idx < n_hdr:
+                _, typ, family = hdrs[idx]
+                cand = pos
+            else:
+                off, _magic, typ, family = offsigs[idx - n_hdr]
+                cand = pos - off  # začátek kandidáta (začátek boxu)
+                if cand < 0 or not _valid_bmff_box(data, cand):
+                    continue
+            _add_candidate(out, seen_offsets, data, cand, typ, family, min_size)
+        out.sort(key=lambda c: c.offset)
+        return out
+
+    # fallback — referenční cesta (Rust core nedostupný), bitová parity s výší
+    for magic, typ, family in hdrs:
         ml = len(magic)
         pos = data.find(magic)
         while pos != -1:
@@ -439,7 +463,7 @@ def carve(data: bytes, min_size: int = 64) -> list[CarvedFile]:
             pos = data.find(magic, pos + ml)
 
     # 2) signatury s offsetem > 0 — validace kontextu (box hlavička)
-    for off, magic, typ, family in _offset_signatures():
+    for off, magic, typ, family in offsigs:
         pos = data.find(magic)
         while pos != -1:
             start = pos - off  # začátek kandidáta (začátek boxu)

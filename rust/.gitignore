@@ -1,0 +1,4 @@
+# Rust build artefakty (maturin/cargo) — nekomitovat
+target/
+*.so
+__pycache__/

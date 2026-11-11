@@ -146,6 +146,69 @@ def _workload_parser(parser_id: str, workdir: Path) -> BenchmarkResult | None:
     )
 
 
+def _rust_core_data(workdir: Path) -> tuple[Path, bytes]:
+    """Deterministický vstup pro Rust core benchmark (hash 8 MiB + scan 16 MiB)."""
+    import hashlib as _h
+
+    def chunk(i: int, n: int = 1024 * 1024) -> bytes:
+        out = bytearray()
+        for j in range(0, n, 32):
+            out += _h.sha256(f"stopa-rust-bench-{i}-{j}".encode()).digest()[:32]
+        return bytes(out[:n])
+
+    blob = b"".join(chunk(i) for i in range(8))  # 8 MiB deterministicky
+    target = workdir / "rust_bench.bin"
+    target.write_bytes(blob)
+
+    from stopa.domain.signatures import SIGNATURES
+
+    scan = bytearray(b"\x00" * (16 * 1024 * 1024))
+    k = 0
+    for off, magic, _typ, _fam in SIGNATURES:
+        if off == 0 and len(magic) <= 32:
+            at = 64 * 1024 * (k + 1)
+            scan[at : at + len(magic)] = magic
+            k += 1
+    return target, bytes(scan)
+
+
+def _workload_rust_core(workdir: Path) -> BenchmarkResult | None:
+    """F2.1 Rust core: one-pass hashing (8 MiB) + Aho-Corasick scan (16 MiB).
+
+    Měří facadu ``stopa.data.rust_core`` — běží Rust cesta (wheel nainstalovaný);
+    bez wheelu se workload vynechá (return None), protože měřit Python fallback
+    pod stejným jménem by zkreslilo regresní detekci.
+    """
+    from stopa.data import rust_core
+
+    if not rust_core.is_available():
+        return None
+
+    target, scan = _rust_core_data(workdir)
+    from stopa.domain.signatures import SIGNATURES
+
+    patterns = [m for off, m, _t, _f in SIGNATURES if off == 0] + [
+        m for off, m, _t, _f in SIGNATURES if off > 0
+    ]
+
+    def run():
+        h = rust_core.hash_file(str(target), ["md5", "sha1", "sha256"])
+        o = rust_core.find_offsets(scan, patterns)
+        return (h or {}), (o or [])
+
+    ms, peak, res = _time_and_ram(run, iterations=3)
+    n_hashes = len(res[0]) if isinstance(res, tuple) else 0
+    n_offs = len(res[1]) if isinstance(res, tuple) else 0
+    return BenchmarkResult(
+        name="core.rust",
+        suite="core",
+        duration_ms=round(ms, 3),
+        ram_peak_bytes=peak,
+        artifacts=n_hashes + n_offs,
+        iterations=3,
+    )
+
+
 def run_benchmark(suite: str = "core", workdir: Path | None = None) -> list[BenchmarkResult]:
     """Spustí benchmark suite (``core`` | ``parsers`` | ``all``).
 
@@ -164,6 +227,10 @@ def run_benchmark(suite: str = "core", workdir: Path | None = None) -> list[Benc
         if suite in ("core", "all"):
             r = _workload_core(wd)
             results.append(r)
+            # F2.1 Rust core (hash + scan); bez nainstalovaného wheelu vynechán
+            rr = _workload_rust_core(wd)
+            if rr is not None:
+                results.append(rr)
         if suite in ("parsers", "all"):
             registry = build_registry()
             for pid in sorted(registry):

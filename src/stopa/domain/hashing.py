@@ -13,6 +13,9 @@ from pathlib import Path
 
 CHUNK_SIZE = 1024 * 1024  # 1 MiB — dobrý kompromis cache/IO pro NVMe i HDD
 
+# Algoritmy podporované Rust core one-pass akcelerátorem (F2.1)
+_RUST_ALGS = frozenset({"md5", "sha1", "sha256"})
+
 ProgressFn = Callable[[int, int], None]  # (bytes_read, total_bytes)
 
 
@@ -25,14 +28,26 @@ def hash_file(
 
     Vrátí {alg: hex_digest}. Neznámý algoritmus → ValueError (fail fast).
     Prázdný soubor → platné prázdné digesty (SHA-256 e3b0c442…).
+
+    F2.1: pokud je dostupný Rust core a všechny algoritmy jsou v {md5, sha1,
+    sha256} a progress není žádán, běží one-pass akcelerátor s uvolněným GILem;
+    jinak referenční Python cesta (výsledek bitově identický).
     """
     algs = [a.lower() for a in algorithms]
     unknown = [a for a in algs if not hasattr(hashlib, a)]
     if unknown:
         raise ValueError(f"Neznámé algoritmy: {', '.join(unknown)}")
 
-    hashes = {a: hashlib.new(a) for a in algs}
+    abs_path = str(Path(path))
+    if progress is None and set(algs) <= _RUST_ALGS:
+        from stopa.data import rust_core  # lazy — domain nezávisí na data při importu
+
+        result = rust_core.hash_file(abs_path, algs)
+        if result is not None:
+            return result
+
     total = Path(path).stat().st_size
+    hashes = {a: hashlib.new(a) for a in algs}
     read = 0
     with open(path, "rb") as f:
         while chunk := f.read(CHUNK_SIZE):

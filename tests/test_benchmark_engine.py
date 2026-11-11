@@ -100,12 +100,17 @@ class TestBenchmarkEngine:
         from stopa.data.benchmark_engine import run_benchmark
 
         results = run_benchmark(suite="core", workdir=tmp_path)
-        assert len(results) == 1
+        # pipeline.core vždy; core.rust jen když je nainstalovaný Rust wheel (F2.1)
+        assert len(results) in (1, 2)
         r = results[0]
         assert r.name == "pipeline.core"
         assert r.duration_ms > 0
         assert r.ram_peak_bytes > 0
         assert r.artifacts >= 0
+        if len(results) == 2:
+            rr = results[1]
+            assert rr.name == "core.rust"
+            assert rr.duration_ms > 0
 
     def test_parsers_workload(self, tmp_path: Path):
         from stopa.data.benchmark_engine import run_benchmark
