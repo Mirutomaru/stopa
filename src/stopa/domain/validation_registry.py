@@ -1012,6 +1012,19 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         ),
         test_files=("tests/test_w14_parsers.py",),
     ),
+    # ── ETAPA B vlna 15 — AXIOM port: SIM TPDU phonebook (F1.6) ──
+    "sim_tpdu": ParserValidation(
+        parser_id="sim_tpdu",
+        version="",
+        formats=(
+            "SIM TPDU phonebook textový export (AT+CPBR dump / CSV) — kontakty z SIM karty",
+        ),
+        limitations=(
+            "detekce name-based (*.tpdu, *.cpbr, *.simdump, .csv + content check)",
+            "kontakt = contact; dedup podle normalizovaného čísla; limit MAX_CONTACTS=500",
+        ),
+        test_files=("tests/test_sim_tpdu.py",),
+    ),
 }
 
 

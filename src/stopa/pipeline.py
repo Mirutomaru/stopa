@@ -277,6 +277,8 @@ from stopa.artifacts.sharepoint_wr import (
     extract_sharepoint_artifacts,
     is_sharepoint_file,
 )
+from stopa.artifacts.sim_tpdu import PARSER_VERSION as SIM_TPDU_VERSION
+from stopa.artifacts.sim_tpdu import extract_tpdu_artifacts, is_sim_tpdu_file
 from stopa.artifacts.skype_warrant_return import PARSER_VERSION as SKYPE_WR_VERSION
 from stopa.artifacts.skype_warrant_return import (
     extract_skype_artifacts,
@@ -317,6 +319,7 @@ from stopa.artifacts.win_jumplist import PARSER_VERSION as JUMPLIST_VERSION
 from stopa.artifacts.win_jumplist import extract_jump_list_artifacts, is_jump_list_file
 from stopa.artifacts.win_lnk import PARSER_VERSION as LNK_VERSION
 from stopa.artifacts.win_lnk import extract_lnk_artifacts
+from stopa.artifacts.win_lsa import extract_lsa_artifacts
 from stopa.artifacts.win_prefetch import PARSER_VERSION as PREFETCH_VERSION
 from stopa.artifacts.win_prefetch import extract_prefetch_artifacts
 from stopa.artifacts.win_schedtask import (
@@ -411,6 +414,10 @@ def _extract_registry_all(path: Path) -> list[Artifact]:
     except Exception as e:  # noqa: BLE001 — SID je bonus (ETAPA B vlna 1)
         log.warning("SID %s: %s", path, e)
     try:
+        arts.extend(extract_lsa_artifacts(path))
+    except Exception as e:  # noqa: BLE001 — LSA credential cache je bonus (vlna 15)
+        log.warning("LSA %s: %s", path, e)
+    try:
         arts.extend(extract_userassist_artifacts(path))
     except Exception as e:  # noqa: BLE001 — UserAssist je bonus (ETAPA B vlna 4)
         log.warning("UserAssist %s: %s", path, e)
@@ -458,6 +465,8 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     # ETAPA B vlna 4 — AXIOM port: DDG allowlisted websites + OpenOffice Base (.odb)
     "allowlisted_websites": (extract_allowlisted_websites_artifacts, ALLOWLISTED_WEBSITES_VERSION),
     "openoffice_base": (extract_openoffice_base_artifacts, OPENOFFICE_BASE_VERSION),
+    # ETAPA B vlna 15 — SIM TPDU phonebook (AT+CPBR textový export)
+    "sim_tpdu": (extract_tpdu_artifacts, SIM_TPDU_VERSION),
     # ETAPA B vlna 5 — AXIOM port: Google Takeout rodina + Drive activity
     "google_aggregated_activities": (
         extract_aggregated_activities_artifacts,
@@ -724,6 +733,9 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["allowlisted_websites"]
     if is_openoffice_base_file(name):
         return NAME_BASED_EXTRACTORS["openoffice_base"]
+    # ETAPA B vlna 15 — SIM TPDU phonebook (AT+CPBR textový export)
+    if is_sim_tpdu_file(name):
+        return NAME_BASED_EXTRACTORS["sim_tpdu"]
     return None
 
 

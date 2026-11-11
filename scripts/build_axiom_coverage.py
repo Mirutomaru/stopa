@@ -251,9 +251,13 @@ COVERED: dict[str, str] = {
     "CloudAzureVirtualMachineSnapshotArtifact": "covered",  # cloud_generic (Azure VM snapshoty)
     "CloudGmailMessagesArtifact": "covered",  # gmail_messages (zprávy)
     "GoogleMapsLabeledPlacesWarrantReturnArtifact": "covered",  # maps_labeled_places (označená místa WR)
+    # ETAPA B vlna 15 — dokončení konkrétních extraktorů (F1.6)
+    "LsaRegistryExtractor": "covered",  # win_lsa (LSA credential cache, fingerprint-only)
+    "TpduDataExtractor": "covered",  # sim_tpdu (SIM phonebook AT+CPBR textový export)
 }
 
-# base-class / rozhraní — ne extraktor jako takový
+# base-class / rozhraní — C# framework třidy, ne datový formát k parsování.
+# Pozor: LsaRegistryExtractor a TpduDataExtractor jsou KONKRÉTNI extraktory → COVERED.
 BASE_CLASSES = {
     "IArtifact", "ICloudArtifact", "ICustomArtifact", "ILegacyArtifact",
     "IWorldMapArtifact", "SimpleArtifact", "Artifact", "CloudArtifact",
@@ -261,8 +265,8 @@ BASE_CLASSES = {
     "XmlArtifact", "MessageArtifact", "ChannelArtifact", "LabelArtifact",
     "ServerArtifact", "UserArtifact", "DevicesArtifact", "DllArtifact",
     "MemoryArtifact", "IAttachmentExtractor", "BinaryTextExtractor",
-    "EventExtractor", "IconExtractor", "LsaRegistryExtractor",
-    "TpduDataExtractor", "IUnifiedLogsExtractor", "ICustomXmlArtifact",
+    "EventExtractor", "IconExtractor",
+    "IUnifiedLogsExtractor", "ICustomXmlArtifact",
     "ILsaRegistryExtractor", "ITpduDataExtractor", "IContainerEnabledArtifact",
     "CaseAmendingTestArtifact", "MappedLegacyEmailArtifact",
 }
@@ -529,6 +533,9 @@ def _covered_desc(name: str) -> str:
         "CloudAzureVirtualMachineSnapshotArtifact": "cloud_generic parser (Azure VM snapshoty → vm_snapshot azure:vm)",
         "CloudGmailMessagesArtifact": "gmail_messages parser (zprávy → email_message gmail:messages)",
         "GoogleMapsLabeledPlacesWarrantReturnArtifact": "maps_labeled_places parser (označená místa WR → location_point google:labeledplaces)",
+        # ETAPA B vlna 15 — dokončení konkrétních extraktorů (F1.6)
+        "LsaRegistryExtractor": "win_lsa parser (LSA credential cache, fingerprint-only SHA-256 otisk)",
+        "TpduDataExtractor": "sim_tpdu parser (SIM phonebook AT+CPBR textový export)",
     }
     return m.get(name, "existující parser")
 

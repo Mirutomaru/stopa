@@ -1,10 +1,10 @@
 """ETAPA B — ZÁVĚREČNÝ AUDIT (STP-037).
 
-Deterministické invarianty celé ETAPY B po vlnách 1–14:
+Deterministické invarianty celé ETAPY B po vlnách 1–15:
 - coverage matice ↔ AXIOM RE reference: bijekce 232 typů (oběma směry)
-- SUPPORTED = 198 typů, každý s parserem + testováním
-- DEPRECATED = 34 base-class rozhraní (multi, ne extraktory)
-- C3 registry: 76 verzovaných parserů, test_files existují, verze neprázdné
+- SUPPORTED = 200 typů, každý s parserem + testováním
+- DEPRECATED = 32 base-class rozhraní (multi, ne extraktory)
+- C3 registry: 77 verzovaných parserů, test_files existují, verze neprázdné
 - pipeline dispatch ↔ C3 registry sync (name-based extraktory mají záznamy)
 
 Spouští se offline — jen čtení CSV/JSON + importy.
@@ -66,12 +66,12 @@ class TestMatrixIntegrity:
 
 
 class TestEtapaBFinalState:
-    """Finální stav ETAPY B po vlnách 1–14."""
+    """Finální stav ETAPY B po vlnách 1–15."""
 
-    def test_supported_count_198(self):
+    def test_supported_count_200(self):
         rows = _load_matrix()
         supported = [r for r in rows if r["stav_implementace"] == "SUPPORTED"]
-        assert len(supported) == 198, f"očekáváno 198 SUPPORTED, je {len(supported)}"
+        assert len(supported) == 200, f"očekáváno 200 SUPPORTED, je {len(supported)}"
 
     def test_supported_all_have_parser_and_tests(self):
         """Každý SUPPORTED typ má přiřazen parser i testování."""
@@ -84,9 +84,9 @@ class TestEtapaBFinalState:
             ), f"{r['artifact_type']}: stav_testovani = {r['stav_testovani']!r}"
 
     def test_deprecated_are_base_classes(self):
-        """DEPRECATED = 34 base-class rozhraní (multi, ne extraktory)."""
+        """DEPRECATED = 32 base-class rozhraní (multi, ne extraktory)."""
         dep = [r for r in _load_matrix() if r["stav_implementace"] == "DEPRECATED"]
-        assert len(dep) == 34, f"očekáváno 34 DEPRECATED, je {len(dep)}"
+        assert len(dep) == 32, f"očekáváno 32 DEPRECATED, je {len(dep)}"
         for r in dep:
             assert r["platforma"] == "multi", f"{r['artifact_type']}: platforma = {r['platforma']}"
             assert (
@@ -94,19 +94,19 @@ class TestEtapaBFinalState:
             ), f"{r['artifact_type']}: zdroj_dat = {r['zdroj_dat']!r}"
 
     def test_no_unsupported_left(self):
-        """Po vlně 14 nezbývá žádný NOT_SUPPORTED typ (celá ETAPA B dokončena)."""
+        """Po vlně 15 nezbývá žádný NOT_SUPPORTED typ (celá ETAPA B dokončena)."""
         statuses = {r["stav_implementace"] for r in _load_matrix()}
         assert "NOT_SUPPORTED" not in statuses, f"zbývají: {statuses}"
 
 
 class TestC3RegistryFinalState:
-    """C3 registry po vlně 14."""
+    """C3 registry po vlně 15."""
 
-    def test_registry_count_76(self):
+    def test_registry_count_77(self):
         from stopa.domain.validation_registry import build_registry
 
         reg = build_registry()
-        assert len(reg) == 76, f"očekáváno 76 parserů, je {len(reg)}"
+        assert len(reg) == 77, f"očekáváno 77 parserů, je {len(reg)}"
 
     def test_all_test_files_exist(self):
         """Každý registry záznam odkazuje na existující test soubory."""

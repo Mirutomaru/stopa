@@ -5,15 +5,15 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 
 ## Souhrn
 
-- **✅ COVERED**: 198
+- **✅ COVERED**: 200
 - **🔧 PORTABLE-LOCAL**: 0
 - **☁️ CLOUD-EXPORT**: 0
 - **💾 MEMORY**: 0
-- **🧩 BASE-CLASS**: 34
+- **🧩 BASE-CLASS**: 32
 
 ---
 
-## ✅ COVERED — STOPA už umí (existující parser) (198)
+## ✅ COVERED — STOPA už umí (existující parser) (200)
 
 - `AllowlistedWebSitesArtifact` — allowlisted_websites parser (DDG tracker exceptions JSON)
 - `ApiHooksArtifact` — mem_hooks parser (API hooky — apiFunction/callbackAddress/hookType)
@@ -165,6 +165,7 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `KikLocalUserExtractor` — kik_messenger parser (SQLite dispatch chain, iOS ZKIK*/Android users+messages)
 - `LimerunnerArtifact` — limewire_p2p parser (P2P shared files JSON/pipe)
 - `LimewireArtifact` — limewire_p2p parser (P2P shared files JSON/pipe)
+- `LsaRegistryExtractor` — win_lsa parser (LSA credential cache, fingerprint-only SHA-256 otisk)
 - `LuckywireArtifact` — limewire_p2p parser (P2P shared files JSON/pipe)
 - `MSNArtifact` — msn_messenger parser (chat log text)
 - `MailRuChatArtifact` — mailru_agent parser (chat log text | formát)
@@ -209,12 +210,13 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `SocketsArtifact` — mem_network parser (sockety — pid/localAddress/remoteAddress/state)
 - `SockscanArtifact` — net_connections parser
 - `TimelineArtifact` — timeline engine
+- `TpduDataExtractor` — sim_tpdu parser (SIM phonebook AT+CPBR textový export)
 - `UserSidsArtifact` — win_sids (sekundární registry průchod + ProfileList)
 - `VoiceMailArtifact` — ios_voicemail parser (voicemail.db, date=unix s / trashed_date=CFAbsoluteTime)
 - `WiFiLocationsArtifact` — win_wlan parser (WLAN profile XML)
 - `WorldMapArtifact` — world map (timeline)
 
-## 🧩 BASE-CLASS — rozhraní / základní třída (34)
+## 🧩 BASE-CLASS — rozhraní / základní třída (32)
 
 - `Artifact` — rozhraní / základní třída
 - `BinaryTextExtractor` — rozhraní / základní třída
@@ -240,13 +242,11 @@ Klasifikace je datová (deterministická) — generováno `scripts/build_axiom_c
 - `IconExtractor` — rozhraní / základní třída
 - `LabelArtifact` — rozhraní / základní třída
 - `LegacyArtifact` — rozhraní / základní třída
-- `LsaRegistryExtractor` — rozhraní / základní třída
 - `MappedArtifact` — rozhraní / základní třída
 - `MappedLegacyEmailArtifact` — rozhraní / základní třída
 - `MemoryArtifact` — rozhraní / základní třída
 - `MessageArtifact` — rozhraní / základní třída
 - `ServerArtifact` — rozhraní / základní třída
 - `SimpleArtifact` — rozhraní / základní třída
-- `TpduDataExtractor` — rozhraní / základní třída
 - `UserArtifact` — rozhraní / základní třída
 - `XmlArtifact` — rozhraní / základní třída

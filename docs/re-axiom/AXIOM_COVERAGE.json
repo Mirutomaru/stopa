@@ -2,8 +2,8 @@
   "total_entries": 237,
   "unique_types": 232,
   "counts": {
-    "base-class": 34,
-    "covered": 198
+    "base-class": 32,
+    "covered": 200
   },
   "by_category": {
     "base-class": [
@@ -31,14 +31,12 @@
       "IconExtractor",
       "LabelArtifact",
       "LegacyArtifact",
-      "LsaRegistryExtractor",
       "MappedArtifact",
       "MappedLegacyEmailArtifact",
       "MemoryArtifact",
       "MessageArtifact",
       "ServerArtifact",
       "SimpleArtifact",
-      "TpduDataExtractor",
       "UserArtifact",
       "XmlArtifact"
     ],
@@ -193,6 +191,7 @@
       "KikLocalUserExtractor",
       "LimerunnerArtifact",
       "LimewireArtifact",
+      "LsaRegistryExtractor",
       "LuckywireArtifact",
       "MSNArtifact",
       "MailRuChatArtifact",
@@ -237,6 +236,7 @@
       "SocketsArtifact",
       "SockscanArtifact",
       "TimelineArtifact",
+      "TpduDataExtractor",
       "UserSidsArtifact",
       "VoiceMailArtifact",
       "WiFiLocationsArtifact",
