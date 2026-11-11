@@ -602,6 +602,57 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             db.close()
 
+    # ── F2.2 DuckDB OLAP analytics ────────────────────────────────────
+    @app.get("/api/cases/{case_id}/analytics")
+    def analytics(
+        case_id: str,
+        from_ts: datetime | None = Query(None),
+        to_ts: datetime | None = Query(None),
+        type: str | None = Query(None),
+        limit: int = 200,
+    ) -> dict:
+        """F2.2 — DuckDB OLAP agregace nad timeline (histogram, top typy, okno).
+
+        Bez nainstalovaného duckdb ([analytics] extra) → HTTP 503 s hláškou;
+        standardní timeline/search zůstává v SQLite (backward-kompatibilní).
+        """
+        from stopa.data.analytics import AnalyticsError, AnalyticsStore, duckdb_available
+
+        if not duckdb_available():
+            raise HTTPException(
+                status_code=503,
+                detail="DuckDB není nainstalováno — pip install 'stopa[analytics]'",
+            )
+        db = open_db(case_id)
+        try:
+            db_path = str(db.path)
+        finally:
+            db.close()
+        try:
+            store = AnalyticsStore(db_path)
+            payload: dict[str, object] = {
+                "case_id": case_id,
+                "status": store.status(),
+                "top_event_types": store.top_event_types(limit=20),
+                "entity_summary": store.entity_summary(),
+            }
+            if from_ts is not None and to_ts is not None:
+                events = store.timeline_range(
+                    from_ts.isoformat(),
+                    to_ts.isoformat(),
+                    event_type=type,
+                    limit=limit,
+                )
+                payload["timeline_window"] = {
+                    "from": from_ts.isoformat(),
+                    "to": to_ts.isoformat(),
+                    "events": events,
+                    "count": len(events),
+                }
+            return payload  # type: ignore[return-value]
+        except AnalyticsError as exc:
+            raise HTTPException(status_code=502, detail=f"Analytics chyba: {exc}") from exc
+
     # ── STP-018 Timeline Intelligence 2.0 ─────────────────────────────
     @app.post("/api/cases/{case_id}/timeline/intel")
     def timeline_intel(case_id: str, window_seconds: float = Query(60.0)) -> dict:
@@ -1870,6 +1921,13 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         finally:
             if db is not None:
                 db.close()
+        # F2.2 — materiálový DuckDB stav je odvozený artefakt; po smazání zmizí.
+        try:
+            from stopa.data.analytics import drop_case_analytics
+
+            drop_case_analytics(path)
+        except Exception as exc:  # noqa: BLE001 — cleanup nesmí rozbít delete
+            log.warning("DuckDB cleanup selhal pro case %s: %s", case_id, exc)
         return {"deleted": case_id}
 
     # ── statická SPA ──────────────────────────────────────────

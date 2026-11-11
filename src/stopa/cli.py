@@ -674,6 +674,73 @@ def cmd_correlate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_analytics(args: argparse.Namespace) -> int:
+    """F2.2 — DuckDB OLAP analytics nad timeline (agregace, histogram, top typy).
+
+    Bez nainstalovaného duckdb ([analytics] extra) → explicitní hláška + exit 3
+    (backward-kompatibilní: SQLite cesta zůstává pro standardní timeline/search).
+    """
+    from stopa.data.analytics import AnalyticsError, AnalyticsStore, duckdb_available
+
+    if not duckdb_available():
+        print("DuckDB není nainstalováno — pip install 'stopa[analytics]' (F2.2 OLAP)")
+        return 3
+    db = _open_db(args.case_id)
+    db_path = str(db.path)
+    db.close()
+    try:
+        store = AnalyticsStore(db_path)
+        status = store.status()
+        payload: dict[str, object] = {
+            "case_id": args.case_id,
+            "status": status,
+            "top_event_types": store.top_event_types(limit=20),
+            "entity_summary": store.entity_summary(),
+        }
+        if getattr(args, "from_ts", None) and getattr(args, "to_ts", None):
+            events = store.timeline_range(
+                args.from_ts,
+                args.to_ts,
+                event_type=getattr(args, "type", None),
+                limit=args.limit,
+            )
+            payload["timeline_window"] = {
+                "from": args.from_ts,
+                "to": args.to_ts,
+                "events": events,
+                "count": len(events),
+            }
+        if getattr(args, "json", False):
+            _print_json(payload)
+            return 0
+        live = status.get("live") or {}
+        print(
+            f"DuckDB OLAP — {int(live.get('timeline_events', 0))} událostí "
+            f"(fresh={status.get('fresh')}, readonly={status.get('readonly')})"
+        )
+        win = payload.get("timeline_window")
+        if isinstance(win, dict):
+            print(f"\nOKNO {win['from']} → {win['to']}: {win['count']} událostí")
+            for e in win["events"][: args.limit]:  # type: ignore[union-attr]
+                print(f"  {e['ts_utc']}  [{e['event_type']}]  {e.get('title') or ''}")
+        else:
+            hist = store.hourly_histogram()
+            if hist:
+                print("\nPO HODINÁCH:")
+                for h in hist[:24]:
+                    bar = "#" * min(60, max(1, int(h["events"] / 3) if h else 0))
+                    print(f"  {h['hour']}  {bar} ({h['events']})")
+            top = payload.get("top_event_types") or []
+            if isinstance(top, list):
+                print("\nTOP TYPY:")
+                for t in top[:10]:
+                    print(f"  {t['event_type']:24s} {t['count']}")
+        return 0
+    except AnalyticsError as exc:
+        print(f"Analytics chyba: {exc}")
+        return 2
+
+
 def cmd_image(args: argparse.Namespace) -> int:
     """Disk image processing (FÁZE 5) — TSK file systems + carving."""
     from stopa.data.image_pipeline import process_disk_image
@@ -2720,6 +2787,15 @@ def build_parser() -> argparse.ArgumentParser:
                        help="zobrazit detail propojení s evidence listy")
     _add_json_flag(cor_p)
     cor_p.set_defaults(func=cmd_correlate)
+
+    an_p = _ex_sub(sub, "analytics", help="F2.2 — DuckDB OLAP analytics nad timeline (agregace, histogram)")
+    an_p.add_argument("case_id")
+    an_p.add_argument("--from-ts", dest="from_ts", metavar="ISO", help="začátek okna (UTC ISO 8601)")
+    an_p.add_argument("--to-ts", dest="to_ts", metavar="ISO", help="konec okna (UTC ISO 8601)")
+    an_p.add_argument("--type", dest="type", help="filtr podle typu události")
+    an_p.add_argument("--limit", type=int, default=100)
+    _add_json_flag(an_p)
+    an_p.set_defaults(func=cmd_analytics)
 
     img_p = _ex_sub(sub, "image", help="disk image (RAW/E01) — TSK file systems + carving")
     img_p.add_argument("case_id")
