@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1001,6 +1002,256 @@ def cmd_memory_analyze(args: argparse.Namespace) -> int:
                 **summary,
             })
         return 0 if not plugin_errors or all_arts else (1 if not all_arts else 0)
+    finally:
+        db.close()
+
+
+@dataclass(frozen=True)
+class _BytesHolder:
+    """In-mem soubor z ZIP archivu (rel_path + bytes) — pro report.xml/VCF."""
+
+    rel: str
+    data: bytes
+
+
+def cmd_import_mobile(args: argparse.Namespace) -> int:
+    """F1.5 — Import mobilní extrakce (ROADMAP V2 Fáze 1).
+
+    Podporované zdroje (--source):
+      cellebrite — .ufd/.zip s report.xml (Cellebrite UFED evidence export),
+                   volitelně i .vcf karty v archivu,
+      msab       — .zip s .vcf kartami (MSAB XRY contacts export),
+      adb        — složka Android logical dumpu; každá SQLite DB jde přes
+                   existující extraktory (kontakty/WhatsApp msgstore/Signal).
+
+    Artefakty do case DB idempotentně (replace per file), timeline events pro
+    záznamy s časem, na konci korelace entit (AK: entity korelovány s
+    existujícími kontakty případu).
+
+    Exit codes: 0 = OK · 1 = nic neextrahováno / parse chyba · 2 = špatné argumenty
+    """
+    import hashlib
+    import zipfile
+
+    from stopa.domain.correlation import run_correlation
+    from stopa.domain.mobile_forensics import (
+        PARSER_VERSION,
+        UfedParseError,
+        contact_specs_from_card,
+        models_to_artifact_specs,
+        parse_ufdr_xml,
+        parse_vcf,
+    )
+    from stopa.models import Artifact, EvidenceSource, FileRecord
+
+    json_mode = getattr(args, "json", False)
+    dump_path = Path(args.dump).expanduser()
+    source_kind = args.source
+
+    # ── vstupní soubory per typ zdroje ───────────────────────────────
+    # [(rel_path, bytes|None)] — bytes pro textové parsery, None = DB (path)
+    inputs: list[tuple[str, _BytesHolder | Path]] = []
+    parse_errors: dict[str, str] = {}
+
+    def _hash_file(p: Path) -> str:
+        h = hashlib.sha256()
+        with open(p, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    if source_kind == "adb":
+        if not dump_path.is_dir():
+            print(f"ADB logical dump musí být složka: {dump_path}", file=sys.stderr)
+            return 2
+        for p in sorted(dump_path.rglob("*")):
+            if not p.is_file():
+                continue
+            suf = p.suffix.lower()
+            rel = p.relative_to(dump_path).as_posix()
+            if suf in (".db", ".sqlite"):
+                inputs.append((rel, p))
+            elif suf == ".vcf":
+                inputs.append((rel, p))  # VCF z backupu (řídké, ale levné)
+    else:
+        if not dump_path.exists():
+            print(f"Soubor neexistuje: {dump_path}", file=sys.stderr)
+            return 2
+
+        def _archive_members() -> list[tuple[str, bytes]] | None:
+            """ZIP (.ufd/.zip) → [(rel_path, bytes)]; složka → [..] z disk."""
+            if dump_path.is_dir():  # rozbalený export — procházíme přímo
+                out = []
+                for p in sorted(dump_path.rglob("*")):
+                    if not p.is_file() or p.stat().st_size > 256 * (1 << 20):
+                        continue
+                    out.append((p.relative_to(dump_path).as_posix(), p.read_bytes()))
+                return out
+            if dump_path.suffix.lower() in (".zip", ".ufd"):
+                try:
+                    with zipfile.ZipFile(dump_path) as zf:
+                        return [
+                            (zi.filename, zf.read(zi))
+                            for zi in zf.infolist()
+                            if not zi.is_dir() and zi.file_size <= 256 * (1 << 20)
+                        ]
+                except zipfile.BadZipFile as e:
+                    print(f"Neplatné ZIP/UFDR archív: {e}", file=sys.stderr)
+                    return None
+            print(
+                f"Nerozpoznaný formát pro --source {source_kind} "
+                "(očekávám .ufd/.zip/složku): " + str(dump_path),
+                file=sys.stderr,
+            )
+            return None
+
+        members = _archive_members()
+        if members is None:
+            return 2
+        for rel, data in members:
+            low = rel.lower()
+            if source_kind == "cellebrite" and (low.endswith("report.xml") or ".vcf" in low) or source_kind == "msab" and low.endswith(".vcf"):
+                inputs.append((rel, _BytesHolder(rel, data)))
+
+    if not inputs:
+        msg = (
+            f"Žádné vstupní soubory pro --source {source_kind} v {dump_path}"
+            + (" (očekávám report.xml)" if source_kind == "cellebrite" else "")
+            + (" (očekávám *.vcf)" if source_kind == "msab" else "")
+        )
+        print(msg, file=sys.stderr)
+        return 2
+
+    db = _open_db(args.case_id)
+    try:
+        # provenance: zdroj podle cesty (re-import → stejný source, idempotentní)
+        existing = next(
+            (s for s in db.list_sources(args.case_id) if s.path == str(dump_path)), None
+        )
+        kind = "folder" if source_kind == "adb" else "file"
+        source = existing or EvidenceSource(case_id=args.case_id, kind=kind, path=str(dump_path))
+        if existing is None:
+            db.add_source(source)
+
+        # F1.4 pitfall — re-ingest: timeline events (FK artifact_id bez ON DELETE)
+        # se vyčistí PŘED replace artifactů, jinak visící reference.
+        if existing is not None:
+            db.clear_timeline_events(source_id=source.id)
+
+        all_arts: list[Artifact] = []
+        file_ids: dict[str, str] = {}  # rel_path → file_id (idempotentní upsert)
+
+        for rel, holder in inputs:
+            size = len(holder.data) if isinstance(holder, _BytesHolder) else holder.stat().st_size
+            sha = hashlib.sha256(holder.data).hexdigest() if isinstance(
+                holder, _BytesHolder) else (_hash_file(holder))
+            rec = FileRecord(
+                source_id=source.id, rel_path=rel, name=Path(rel).name,
+                size_bytes=size, sha256=sha, signature_type=None,
+            )
+            file_id = db.upsert_file(rec)
+            file_ids[rel] = file_id
+
+            arts_for_file: list[Artifact] = []
+            if isinstance(holder, _BytesHolder):
+                data = holder.data
+                low = rel.lower()
+                try:
+                    specs: list = []
+                    if low.endswith("report.xml"):
+                        models, unknown = parse_ufdr_xml(data)
+                        specs = models_to_artifact_specs(models)
+                        if unknown:
+                            note = "neznámé typy: " + ",".join(sorted(set(unknown))[:8])
+                            parse_errors[rel] = (parse_errors.get(rel, "") + " " + note).strip()
+                    elif low.endswith(".vcf"):
+                        text = data.decode("utf-8", errors="replace")
+                        cards = parse_vcf(text)
+                        specs = [s for card in cards for s in contact_specs_from_card(card, engine=source_kind)]
+                except (UfedParseError, UnicodeDecodeError) as e:
+                    parse_errors[rel] = str(e)[:300]
+                    continue
+                arts_for_file = [
+                    Artifact(artifact_type=s.artifact_type, title=s.title,
+                             timestamp=s.timestamp, details=dict(s.details),
+                             parser_version=f"import-mobile/{PARSER_VERSION}")
+                    for s in specs
+                ]
+            else:  # adb: SQLite DB / VCF z disku
+                if holder.suffix.lower() == ".vcf":
+                    text = holder.read_text(encoding="utf-8", errors="replace")
+                    cards = parse_vcf(text)
+                    arts_for_file = [
+                        Artifact(artifact_type=s.artifact_type, title=s.title,
+                                 timestamp=s.timestamp, details=dict(s.details),
+                                 parser_version=f"import-mobile/{PARSER_VERSION}")
+                        for card in cards for s in contact_specs_from_card(card, engine="adb")
+                    ]
+                else:
+                    from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts
+
+                    arts_for_file = [
+                        a.model_copy(deep=True) for a in extract_sqlite_artifacts(holder)
+                    ]
+                    if not arts_for_file and holder.suffix.lower() != ".db":
+                        pass  # generic triage vrací [] jen pro neznámé schéma — OK
+
+            for a in arts_for_file:
+                a.source_id = source.id
+                a.file_id = file_id
+                a.rel_path = rel
+            db.replace_artifacts_for_file(file_id, arts_for_file)
+            all_arts.extend(arts_for_file)
+
+        # timeline events (po artifactech — FK artifact_id musí existovat)
+        tl_count = 0
+        for a in all_arts:
+            if a.timestamp is None:
+                continue
+            db.add_timeline_event(
+                source_id=source.id, artifact_id=a.id, file_id=a.file_id,
+                rel_path=a.rel_path, event_type=a.artifact_type, ts_utc=a.timestamp,
+                title=a.title, parser_version=f"import-mobile/{PARSER_VERSION}",
+                anomaly_flags=list(a.anomaly_flags), ts_origin="source",
+            )
+            tl_count += 1
+
+        db.commit()
+
+        # AK: entity korelovány s existujícími kontakty případu
+        corr = run_correlation(db, args.case_id)
+
+        by_type: dict[str, int] = {}
+        for a in all_arts:
+            by_type[a.artifact_type] = by_type.get(a.artifact_type, 0) + 1
+
+        if not json_mode:
+            print(f"  {len(all_arts)} artefaktů ze {len(inputs)} souborů "
+                  f"(timeline: {tl_count})")
+            for t_name in sorted(by_type):
+                print(f"    {t_name}: {by_type[t_name]}")
+            if parse_errors:
+                for rel, err in list(parse_errors.items())[:10]:
+                    print(f"  ! {rel}: {err}", file=sys.stderr)
+            print(
+                f"Korelace entit: {corr['entities']} entit, "
+                f"{corr['correlations_total']} propojení"
+            )
+
+        if json_mode:
+            _print_json({
+                "dump": str(dump_path),
+                "case_id": args.case_id,
+                "source_kind": source_kind,
+                "files_processed": len(inputs),
+                "artifacts": len(all_arts),
+                "timeline_events": tl_count,
+                "by_type": by_type,
+                "parse_errors": parse_errors,
+                **corr,
+            })
+
+        return 0 if all_arts else 1
     finally:
         db.close()
 
@@ -2523,6 +2774,14 @@ def build_parser() -> argparse.ArgumentParser:
                        help="deadline jednoho pluginu v sekundách (default: 600)")
     _add_json_flag(mem_p)
     mem_p.set_defaults(func=cmd_memory_analyze)
+
+    mob_p = _ex_sub(sub, "import-mobile", help="F1.5 — Import mobilní extrakce (Cellebrite UFDR / MSAB VCF / ADB logical dump)")
+    mob_p.add_argument("case_id", help="ID případu")
+    mob_p.add_argument("dump", help="cesta k .ufd/.zip/složce s exportem")
+    mob_p.add_argument("--source", choices=["cellebrite", "msab", "adb"], default="cellebrite",
+                       help="typ zdroje (default: cellebrite)")
+    _add_json_flag(mob_p)
+    mob_p.set_defaults(func=cmd_import_mobile)
 
     pcap_p = _ex_sub(sub, "pcap-analyze", help="F1.3 — Síťová forenzika: PCAP parser + TCP reassembly + IoC (Scapy)")
     pcap_p.add_argument("case_id", help="ID případu")

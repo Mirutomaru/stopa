@@ -38,6 +38,7 @@ KNOWN_ARTIFACT_TYPES: tuple[str, ...] = (
     "calendar_event",
     "call_log",
     "call_record",
+    "chat_conversation",
     "chat_message",
     "clipboard_entry",
     "cloud_file",

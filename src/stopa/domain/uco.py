@@ -32,6 +32,7 @@ UCO_ARTIFACT_MAP: dict[str, tuple[str, str]] = {
     "calendar_event": ("CalendarEntry", "observable"),
     "call_log": ("Call", "observable"),
     "call_record": ("Call", "observable"),
+    "chat_conversation": ("Message", "observable"),
     "chat_message": ("Message", "observable"),
     "cloud_file": ("File", "observable"),
     "cloud_instance": ("Device", "observable"),

@@ -11,6 +11,8 @@ Tento modul pokrývá mobilní DB, která nezachytí `sqlite_extract.py`:
   → whatsapp_message artifacty
 - iOS Safari History.db: `HistoryItems`(URL, VISIT_TIME=CFAbsoluteTime)
   → browser_history (engine ios_safari)
+- Signal signal.db: `ZWAMSGSTOREMESSAGE`(ZTEXT, ZENCRYPTED_TIMESTAMP=unix)
+  → chat_message artifacty s odesílatelem přes `ZUSER` (F1.5)
 
 Konvence sdílené s `sqlite_extract.py`:
 - IO je jen v `extract_mobile_artifacts()`; detektory jsou čisté funkce.
@@ -23,7 +25,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 
-from stopa.domain.times import from_apple_absolute
+from stopa.domain.times import from_apple_absolute, from_unix
 from stopa.models import Artifact
 
 log = logging.getLogger("stopa.artifacts.mobile")
@@ -144,7 +146,52 @@ def _extract_whatsapp(conn: sqlite3.Connection) -> list[Artifact]:
     return out
 
 
-# ── iOS Safari History.db ───────────────────────────────────────
+# ── Signal (Android signal.db) ────────────────────────────────
+
+
+def _is_signal_db(conn: sqlite3.Connection) -> bool:
+    """Signal Android DB: `ZWAMSGSTOREMESSAGE`(ZTEXT, ZENCRYPTED_TIMESTAMP)."""
+    tables = _tables(conn)
+    if "ZWAMSGSTOREMESSAGE" not in tables:
+        return False
+    cols = _table_columns(conn, "ZWAMSGSTOREMESSAGE")
+    return {"ZTEXT", "ZENCRYPTED_TIMESTAMP"} <= cols
+
+
+def _extract_signal_db(conn: sqlite3.Connection) -> list[Artifact]:
+    """Každá Signal zpráva → chat_message artifact (unix ts + odesílatel přes ZUSER)."""
+    has_user = "ZUSER" in _tables(conn) and {"_ID", "ADDRESS"} <= _table_columns(conn, "ZUSER")
+    if has_user:
+        rows = conn.execute(
+            "SELECT m.ZTEXT, m.ZENCRYPTED_TIMESTAMP, u.ADDRESS AS sender"
+            " FROM ZWAMSGSTOREMESSAGE m LEFT JOIN ZUSER u ON u._ID = m.ZFROM_PK"
+            " WHERE m.ZTEXT IS NOT NULL AND m.ZENCRYPTED_TIMESTAMP > 0"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT ZTEXT, ZENCRYPTED_TIMESTAMP, NULL AS sender FROM ZWAMSGSTOREMESSAGE"
+            " WHERE ZTEXT IS NOT NULL AND ZENCRYPTED_TIMESTAMP > 0"
+        ).fetchall()
+    out: list[Artifact] = []
+    for r in rows:
+        ts = from_unix(r["ZENCRYPTED_TIMESTAMP"])
+        text = (r["ZTEXT"] or "").strip()
+        sender = (r["sender"] or "").strip() or None
+        details: dict[str, object] = {"engine": "signal"}
+        if sender:
+            details["sender_e164"] = sender[:32]
+        out.append(
+            Artifact(
+                artifact_type="chat_message",
+                timestamp=ts,
+                title=text[:300] or "(prázdná zpráva)",
+                details=details,
+            )
+        )
+    return out
+
+
+# ── iOS Safari History.db ────────────────────────────────────────
 
 def _is_ios_safari(conn: sqlite3.Connection) -> bool:
     """iOS Safari History.db: `HistoryItems`(URL, VISIT_TIME=CFAbsoluteTime)."""
@@ -194,6 +241,8 @@ def extract_mobile_artifacts(conn: sqlite3.Connection) -> list[Artifact] | None:
             return _extract_ios_addressbook(conn)
         if _is_whatsapp(conn):
             return _extract_whatsapp(conn)
+        if _is_signal_db(conn):  # F1.5 — Signal (Android signal.db)
+            return _extract_signal_db(conn)
         if _is_ios_safari(conn):
             return _extract_ios_safari(conn)
     except sqlite3.Error as e:
