@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="cs"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STOPA — System Blueprint &amp; Architecture Specification</title>
+<style>
+:root{--bg:#0b0f14;--panel:#11161d;--ink:#d7e1ec;--dim:#8296ab;--acc:#4fd1c5;--warn:#ffb454;--crit:#ff5f56;--line:#1e2a38}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,'Segoe UI',Roboto,Inter,sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:2rem 1.4rem 6rem}
+header.hero{border-bottom:1px solid var(--line);padding-bottom:1.2rem;margin-bottom:1.6rem}
+h1{font-size:1.7rem;margin:.2rem 0;line-height:1.3}
+.meta{color:var(--dim);font-size:.85rem}
+nav.toc{position:sticky;top:0;background:rgba(11,15,20,.92);backdrop-filter:blur(6px);z-index:9;padding:.5rem 0;margin-bottom:1.4rem;border-bottom:1px solid var(--line)}
+nav.toc a{display:inline-block;width:34px;height:34px;line-height:34px;text-align:center;margin-right:4px;color:var(--dim);text-decoration:none;font-size:.8rem;font-family:ui-monospace,monospace;border-radius:6px}
+nav.toc a:hover{background:#17202b;color:var(--acc)}
+h2{margin-top:2.6rem;padding-top:.4rem;border-top:1px solid var(--line);font-size:1.3rem;color:#eaf2fa;scroll-margin-top:70px}
+h3{color:var(--acc);font-size:1.05rem;margin-top:1.6rem}
+code,pre{font-family:ui-monospace,'JetBrains Mono',Consolas,monospace;font-size:.84em}
+:not(pre)>code{background:#17202b;padding:.12em .4em;border-radius:4px;color:#9fd3ff}
+pre{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--acc);padding:.8rem 1rem;overflow-x:auto;border-radius:6px;line-height:1.5}
+table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.86em;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:.45rem .7rem;text-align:left;vertical-align:top}
+th{background:#151d27;color:#cfe3f5}tr:nth-child(even) td{background:#0e141b}
+blockquote{border-left:3px solid var(--warn);margin:1rem 0;padding:.4rem 1rem;background:#171408;border-radius:0 6px 6px 0;color:#f5d9a8}
+.mermaid{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:1rem;margin:1.2rem 0;text-align:center;overflow-x:auto}
+hr{border:none;border-top:1px dashed var(--line);margin:2.4rem 0}
+strong{color:#fff}.warn{color:var(--warn)}.crit{color:var(--crit)}
+footer{margin-top:3rem;color:var(--dim);font-size:.8rem;text-align:center}
+</style>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"dark",themeVariables:{primaryColor:"#17202b",primaryTextColor:"#d7e1ec",lineColor:"#4fd1c5"}});</script>
+</head><body><div class="wrap">
+<header class="hero"><h1>STOPA — System Blueprint &amp; Architecture Specification</h1>
+<div class="meta">Forenzní workbench · Python 3.13 + DuckDB OLAP · generováno z docs/SYSTEM_BLUEPRINT.md (commit 6e4626e)</div></header>
+<nav class="toc"><a href="#0-executive-summary-metadata" title="0. 📋 EXECUTIVE SUMMARY &amp;amp; METADATA">02</a><a href="#1-cil-kontext-a-architektura" title="1. 🎯 CÍL, KONTEXT A ARCHITEKTURA">03</a><a href="#2-struktura-projektu-a-moduly" title="2. 📁 STRUKTURA PROJEKTU A MODULY">04</a><a href="#3-datovy-tok-a-klicove-procesy" title="3. 🔄 DATOVÝ TOK A KLÍČOVÉ PROCESY">05</a><a href="#4-data-vrstva-a-schema" title="4. 🗄️ DATA VRSTVA A SCHEMA">06</a><a href="#5-integrace-a-rozhrani" title="5. 🔌 INTEGRACE A ROZHRANÍ">07</a><a href="#6-bezpecnost-a-autorizace" title="6. 🔐 BEZPEČNOST A AUTORIZACE">08</a><a href="#7-deployment-infrastruktura-a-cicd" title="7. 🚀 DEPLOYMENT, INFRASTRUKTURA A CI/CD">09</a><a href="#8-testovani-a-kvalita" title="8. 🧪 TESTOVÁNÍ A KVALITA">10</a><a href="#9-observability-a-logovani" title="9. 📊 OBSERVABILITY A LOGOVÁNÍ">11</a><a href="#10-performance" title="10. ⚡ PERFORMANCE">12</a><a href="#11-adr-rozhodnuti-z-dokumentace" title="11. 📚 ADR / ROZHODNUTÍ (z dokumentace)">13</a><a href="#12-tech-debt-a-rizika-p0p3" title="12. 🧹 TECH DEBT A RIZIKA (P0–P3)">14</a><a href="#13-hand-off-notes-pro-ai-agenty" title="13. 🤖 HAND-OFF NOTES PRO AI AGENTY">15</a><a href="#14-glosar" title="14. 📖 GLOSÁŘ">16</a></nav>
+<h1 id="stopa-system-blueprint-architecture-specification">STOPA — System Blueprint &amp; Architecture Specification</h1>
+<blockquote>
+<p><strong>Hand-off dokument pro AI agenty</strong> — dokážeš z něj okamžitě refaktorovat, rozšiřovat, dělat security review a generovat dokumentaci bez dalšího zkoumání kódu.
+Vytvořeno: 2026-11-11 · Commit základny: <code>aa7a60a</code> (main) · Cesta: <code>/home/ai/Prace/projekty/stopa</code></p>
+</blockquote>
+<h2 id="obsah">📑 Obsah</h2>
+<ul>
+<li><a href="#0--executive-summary--metadata">0. Executive Summary &amp; Metadata</a></li>
+<li><a href="#1--cíl-kontext-a-architektura">1. Cíl, Kontext a Architektura</a></li>
+<li><a href="#2--struktura-projektu-a-moduly">2. Struktura Projektu a Moduly</a></li>
+<li><a href="#3--datový-tok-a-klíčové-procesy">3. Datový Tok a Klíčové Procesy</a></li>
+<li><a href="#4--datová-vrstva-a-schéma">4. Datová Vrstva a Schéma</a></li>
+<li><a href="#5--integrace-a-rozhraní">5. Integrace a Rozhraní</a></li>
+<li><a href="#6--bezpečnost-a-autorizace">6. Bezpečnost a Autorizace</a></li>
+<li><a href="#7--deployment-infrastruktura-a-cicd">7. Deployment, Infrastruktura a CI/CD</a></li>
+<li><a href="#8--testování">8. Testování</a></li>
+<li><a href="#9--observability-a-diagnostics">9. Observability a Diagnostics</a></li>
+<li><a href="#10--performance">10. Performance</a></li>
+<li><a href="#11--architektonická-rozhodnutí">11. Architektonické Rozhodnutí (ADR)</a></li>
+<li><a href="#12--tech-debt--risika">12. Tech Debt &amp; Risika</a></li>
+<li><a href="#13--ai-agent-handoff-notes">13. AI-Agent Handoff Notes</a></li>
+<li><a href="#14--glosář">14. Glosář</a></li>
+</ul>
+<hr />
+<h2 id="0-executive-summary-metadata">0. 📋 EXECUTIVE SUMMARY &amp; METADATA</h2>
+<p><strong>One-liner:</strong> STOPA je unifikovaná forenzní workbench (AXIOM + UFED/Inseyets + X-Ways + Belkasoft X + FTK v jednom) — Python CLI + FastAPI web GUI + Rust core pro hashing/carving.</p>
+<table>
+<thead>
+<tr>
+<th>Metrika</th>
+<th>Hodnota</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LOC (Python src)</td>
+<td>48 714 řádků / 180 souborů</td>
+</tr>
+<tr>
+<td>LOC (testy)</td>
+<td>33 132 řádků / 123 test_*.py</td>
+</tr>
+<tr>
+<td>LOC (JS/HTML/CSS web SPA)</td>
+<td>~3 183 řádků</td>
+</tr>
+<tr>
+<td>LOC (Rust core, PyO3)</td>
+<td>392 (<code>rust/src/lib.rs</code>)</td>
+</tr>
+<tr>
+<td>Extraktory artefaktů</td>
+<td><strong>89</strong> (<code>src/stopa/artifacts/*.py</code>)</td>
+</tr>
+<tr>
+<td>Doménové moduly</td>
+<td>47 (<code>src/stopa/domain/*.py</code>)</td>
+</tr>
+<tr>
+<td>Data vrstva</td>
+<td>27 (<code>src/stopa/data/*.py</code>)</td>
+</tr>
+<tr>
+<td>Web API endpointy</td>
+<td>~50 (viz §5)</td>
+</tr>
+<tr>
+<td>CLI komandy</td>
+<td>~31 (viz §3.6)</td>
+</tr>
+<tr>
+<td>Verze</td>
+<td>1.0.0 · <code>main</code> @ <code>aa7a60a</code> · čistý working tree</td>
+</tr>
+<tr>
+<td>Stav projektu</td>
+<td><strong>production-grade</strong> (Fáze 2 probíhá — F2.1/F2.2 hotové, dále F2.3 dedup)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Rychlá navigace:</strong>
+- Entry point CLI: <code>src/stopa/cli.py</code> (<code>main()</code>, <code>pyproject.toml</code> → <code>stopa = "stopa.cli:main"</code>)
+- Entry point web: <code>src/stopa/web/app.py</code> (FastAPI <code>create_app()</code>)
+- Jediný analytický entrypoint: <code>src/stopa/pipeline.py</code> (<code>analyze()</code> — sdílený CLI i web)
+- Schéma DB: <code>src/stopa/data/schema.py</code> (<code>SCHEMA_VERSION = 14</code>) + <code>migrations.py</code>
+- Konfigurace: <code>pyproject.toml</code>, env <code>STOPA_LMSTUDIO_URL</code> (AI), <code>.dockerignore</code>
+- Testy: <code>tests/</code> (2 469 collected, offline — žádné sítě)</p>
+<p><strong>Jazyky:</strong> Python ≥3.10 (~85 %), JavaScript ES6 SPA (~12 %), Rust/PyO3 (2 %, <code>rust/src/lib.rs</code>), HTML/CSS.</p>
+<h2 id="1-cil-kontext-a-architektura">1. 🎯 CÍL, KONTEXT A ARCHITEKTURA</h2>
+<p><strong>Účel:</strong> Forenzní analýza digitálních důkazů — diskové obrazy (EWF/E01, raw), mobilní extrakty (UFED/Inseyets), cloud exporty (Google Takeout, iCloud, WhatsApp), paměť, PCAP — v jednom offline nástroji s reprodukovatelným audit trail.</p>
+<p><strong>Persony:</strong> Forenzní analytik / FDE (primary), AI agent pro automatizovanou analýzu (secondary — viz <code>STOPA_AI_GOVERNANCE.md</code>).</p>
+<h3 id="technologicky-stack-presne-verze-z-pyprojecttoml">Technologický stack (přesné verze z <code>pyproject.toml</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Komponenta</th>
+<th>Verze</th>
+<th>Pozn.</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python</td>
+<td>≥3.10 (venv <code>.venv</code> na 3.13)</td>
+<td>requires-python</td>
+</tr>
+<tr>
+<td>pydantic</td>
+<td>≥2.5</td>
+<td>výstupní modely, validace</td>
+</tr>
+<tr>
+<td>regipy</td>
+<td>≥6</td>
+<td>Windows registry hive parser</td>
+</tr>
+<tr>
+<td>rich</td>
+<td>≥13</td>
+<td>CLI progress bary (lazy import)</td>
+</tr>
+<tr>
+<td>fastapi / uvicorn[standard]</td>
+<td>≥0.115 / ≥0.30</td>
+<td>optional <code>[web]</code></td>
+</tr>
+<tr>
+<td>httpx</td>
+<td>≥0.27</td>
+<td>LM Studio klient + Plaso upload</td>
+</tr>
+<tr>
+<td>cryptography</td>
+<td>≥42</td>
+<td>optional <code>[fde]</code> — AES-256-CBC FDE dešifrování</td>
+</tr>
+<tr>
+<td>pytsk3</td>
+<td>≥20260715</td>
+<td>optional <code>[tsk]</code> — nativní TSK bindingy (primární backend, fallback CLI binárky)</td>
+</tr>
+<tr>
+<td>duckdb</td>
+<td>≥1.0</td>
+<td>optional <code>[analytics]</code> — F2.2 OLAP vrstva</td>
+</tr>
+<tr>
+<td>scapy</td>
+<td>≥2.5</td>
+<td>optional <code>[net]</code> — PCAP/TCP reassembly/IoC</td>
+</tr>
+<tr>
+<td>openpyxl / Pillow / weasyprint</td>
+<td>≥3.1 / ≥10 / ≥62</td>
+<td>optionals: iMessage XLSX, EXIF, PDF reporty</td>
+</tr>
+<tr>
+<td>pytest / ruff</td>
+<td>≥8 / ≥0.4</td>
+<td>dev</td>
+</tr>
+<tr>
+<td>Rust + PyO3</td>
+<td><code>rust/src/lib.rs</code> (392 řádků)</td>
+<td>one-pass hashing + Aho-Corasick carving scan (<code>data/rust_core.py</code>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="architektura-layered-monolith-s-cistym-jadrem-nikoli-hexagonalni-nikoli-microservices">Architektura — <strong>layered monolith s čistým jádrem</strong> (nikoli hexagonalní, nikoli microservices)</h3>
+<p><div class="mermaid">
+graph TD
+    CLI[cli.py — argparse, ~31 komand] --&gt; PIPE[pipeline.py :: analyze() — JEDINÝ analytický entrypoint]
+    WEB[web/app.py — FastAPI, ~50 endpointů] --&gt; PIPE
+    PIPE --&gt; ART[artifacts/ — 89 extraktorů artefaktů]
+    PIPE --&gt; DOM[domain/ — 47 modulu čistá logika bez I/O]
+    ART --&gt; DOM
+    DOM --&gt; DATA[data/ — repositories, SQLite, TSK, DuckDB, LM Studio klient]
+    WEB --&gt; INTEL[intelligence/ — multi-agent AI orchestrace]
+    INTEL --&gt; DOM
+    PRESENT[presentation/case_report.py] --&gt; DOM
+</div></p>
+<ul>
+<li><strong>Pravidlo závislostí:</strong> <code>artifacts</code> a <code>web</code> → <code>domain</code> (čistá logika, bez I/O) → <code>data</code> (všechna I/O). <code>pipeline.py</code> je jediný bod, kde se schází CLI i web — „jedna cesta k debugování" (<code>src/stopa/pipeline.py:1-9</code>).</li>
+<li><strong>Modulární mapa:</strong> viz §2. Acykličnost ověřena importem (domain neimportuje data/web/cli mimo injektované callables).</li>
+</ul>
+<h3 id="non-functional-requirements-vycteno-z-kodu">Non-functional requirements (vyčteno z kódu)</h3>
+<ul>
+<li><strong>Offline-first:</strong> žádná povinná síť; AI volitelná přes lokální LM Studio (<code>data/lmstudio_client.py</code>).</li>
+<li><strong>Graceful degradation</strong> všude: bez <code>duckdb</code> → SQLite fallback, bez <code>scapy</code> → statický PCAP scanner, bez <code>pytsk3</code> → CLI TSK binárky, bez LM Studio → <code>available=False</code>, ne výjimka.</li>
+<li><strong>Reprodukovatelnost:</strong> audit trail (hash-chain v <code>audit_log</code>), integrity checkpoints, lineage events — viz §6 a <code>domain/reproducibility.py</code>.</li>
+<li><strong>Testovatelnost:</strong> celá <code>intelligence/</code> testuje bez spuštěného LM Studio (IO injektováno jako callable).</li>
+</ul>
+<h2 id="2-struktura-projektu-a-moduly">2. 📁 STRUKTURA PROJEKTU A MODULY</h2>
+<pre><code>stopa/
+├── pyproject.toml        # manifest, verze, optionals, ruff + pytest config
+├── rust/src/lib.rs       # Rust core (PyO3): hashing + carving scan
+├── src/stopa/            # ★ hlavní package
+│   ├── __main__.py       # python -m stopa → cli.main()
+│   ├── cli.py            # 2 976 řádků, argparse, ~31 komand (viz §3.6)
+│   ├── pipeline.py       # 1 399 řádků — analyze(), FTK-style processing
+│   ├── models.py         # Pydantic modely sdílené CLI/web
+│   ├── installer.py      # instalace nativních závislostí (EWF/TSK)
+│   ├── sandbox_worker.py # izolovaný worker (FDE dešifrování apod.)
+│   ├── artifacts/        # 89 extraktorů — jeden soubor = jeden artefakt
+│   │                     #   PARSER_VERSION + is_*_file() + extract_*_artifacts()
+│   ├── domain/           # 47 modulů ČISTÁ logika bez I/O (viz §2.1)
+│   ├── data/             # 27 modulů VŠECHNA I/O: SQLite, TSK, DuckDB, LM Studio
+│   ├── intelligence/     # AI multi-agent engine (5 agentů + orchestrátor + RAG)
+│   ├── presentation/     # case_report.py — report rendering
+│   └── web/              # app.py (FastAPI) + static/ (vanilla JS SPA, 14 komponent)
+├── tests/                # 123 test_*.py, 2 469 collected, offline
+├── .github/workflows/    # ci.yml (lint+testy+pip-audit), release.yml
+├── Dockerfile            # multi-stage, image &lt; 1.5 GB AK
+├── docs/                 # AI_ARCHITECTURE apod. + TENTO dokument
+└── STOPA_*.md            # ROADMAP, CHANGELOG (97 kB!), SECURITY_REPORT, TECHNICAL_AUDIT, COVERAGE_MATRIX.csv
+</code></pre>
+<h3 id="21-modularni-mapa-domain-47-modulu-cista-logika">2.1 Modulární mapa — domain/ (47 modulů, čistá logika)</h3>
+<table>
+<thead>
+<tr>
+<th>Skupina</th>
+<th>Moduly</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Forenzické jádro</td>
+<td><code>hashing</code>, <code>carving</code>, <code>sqlite_carver/formatter/parser/recover</code>, <code>dedupe</code>, <code>bad_extension</code>, <code>integrity</code>, <code>lineage</code></td>
+</tr>
+<tr>
+<td>FDE dešifrování</td>
+<td><code>fde</code>, <code>fde_bitlocker</code>, <code>fde_fbe</code>, <code>fde_luks</code></td>
+</tr>
+<tr>
+<td>Forenzika domén</td>
+<td><code>mem_forensics</code>, <code>mobile_forensics</code>, <code>net_forensics</code>, <code>anti_forensics</code>, <code>plaso_import</code>, <code>timesketch_push</code></td>
+</tr>
+<tr>
+<td>Inteligence</td>
+<td><code>correlation</code>, <code>entities</code>, <code>entity_resolution</code>, <code>timeline_intel</code>, <code>timeline_anomaly</code>, <code>ai_assistant</code>, <code>ai_grounding</code> (grounding = anti-hallucinace)</td>
+</tr>
+<tr>
+<td>Export &amp; reporty</td>
+<td><code>export</code>, <code>export_schedule</code>, <code>report</code>, <code>pii_redaction</code></td>
+</tr>
+<tr>
+<td>Governance</td>
+<td><code>rbac</code>, <code>profiles</code>, <code>reproducibility</code>, <code>validation_registry</code>, <code>benchmark</code>, <code>evidence_model</code>, <code>uco</code>, <code>i18n</code>, <code>times</code>, <code>file_meta</code>, <code>file_preview</code>, <code>image_types</code>, <code>signatures</code>, <code>search_filters</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-data-27-modulu-vsechna-io">2.2 data/ (27 modulů, všechna I/O)</h3>
+<p><code>db.py</code> (SQLite connect), <code>schema.py</code> (DDL v14), <code>migrations.py</code> (6 migrací viz §4), repositories: <code>case/file/artifact/entity/audit_repository</code>; TSK: <code>tsk.py</code>(API)+<code>tsk_py.py</code>(pytsk3 bindingy)+<code>tsk_cli.py</code>(fallback binárky)+<code>tsk_types.py</code>; DuckDB: <code>analytics.py</code>; AI: <code>lmstudio_client.py</code>; ostatní: <code>ingest</code>, <code>image_pipeline</code>, <code>ewf_container</code>, <code>bde_fvde</code>, <code>pcap_io</code>, <code>volatility</code>, <code>benchmark_engine</code>, <code>diagnostics</code>, <code>validation_report</code>, <code>timesketch_client</code>, <code>rust_core.py</code>.</p>
+<h3 id="23-konvence">2.3 Konvence</h3>
+<ul>
+<li><strong>Feature-first v artifacts/</strong> (jeden soubor = jeden artefakt, <code>PARSER_VERSION</code> konstanta pro reprodukovatelnost), <strong>type-first v domain/data</strong> (vrstvy).</li>
+<li>Public API: <code>stopa.intelligence.__init__</code> exportuje <code>AGENTS</code>, <code>AgentProfile</code>, orchestrátor; ostatní moduly importují přímo (žádné barrel files mimo package init).</li>
+</ul>
+<h2 id="3-datovy-tok-a-klicove-procesy">3. 🔄 DATOVÝ TOK A KLÍČOVÉ PROCESY</h2>
+<h3 id="31-jak-data-prichazeji">3.1 Jak data přicházejí</h3>
+<p>CLI (<code>stopa add &lt;zdroj&gt; --case X</code>), web upload/POST <code>/api/cases/{id}/sources</code>, Plaso CSV import (multipart upload), UFED/Inseyets extrakty, cloud exporty jako soubory. <strong>Queue/broker: NEEXISTUJE</strong> — zpracování je synchronní v <code>analyze()</code> s <code>ThreadPoolExecutor</code> (<code>pipeline.py</code>).</p>
+<h3 id="32-jadrowy-pipeline-srcstopapipelinepyanalyze">3.2 Jádrowý pipeline (<code>src/stopa/pipeline.py::analyze()</code>)</h3>
+<p><div class="mermaid">
+sequenceDiagram
+    participant U as CLI/Web
+    participant P as pipeline.analyze()
+    participant W as walk zdroje
+    participant H as hashing (Rust core)
+    participant S as signatura + bad-ext check
+    participant D as dedupe napříč případem
+    participant R as upsert case DB
+    U-&gt;&gt;P: analyze(case, source, profile)
+    P-&gt;&gt;W: walk → WalkedFile záznamy
+    loop každý soubor
+        P-&gt;&gt;H: hashy podle profilu (SHA-256/MD5/…)
+        P-&gt;&gt;S: magic bytes signatura + bad extension check
+        P-&gt;&gt;D: dedupe + known-bad hash sets
+    end
+    P-&gt;&gt;R: upsert files/artifacts → ProcessResult
+</div></p>
+<h3 id="33-extrakce-artefaktu-dispatch-v-pipelinepy">3.3 Extrakce artefaktů — dispatch v <code>pipeline.py</code></h3>
+<p>89 extraktorů se registruje importem; každý má <code>is_*_file()</code> (detekce) + <code>extract_*_artifacts()</code> (výstup = Pydantic modely). Výsledky → tabulka <code>artifacts</code>.</p>
+<h3 id="34-timeline-analytics-f22-commit-aa7a60a">3.4 Timeline &amp; analytics (F2.2, commit <code>aa7a60a</code>)</h3>
+<p><code>data/analytics.py</code>: DuckDB <strong>ATTACH</strong> SQLite case DB + materiálové tabulky vedle (<code>case-XXX.db</code> → <code>case-XXX.duckdb</code>), staleness signatura pro invalidaci. AK: range 1h/10M eventů = 0.03 s, agregace 0.006 s.</p>
+<h3 id="35-error-handling">3.5 Error handling</h3>
+<ul>
+<li><strong>Retry:</strong> žádné retry mechanismy v jádru (offline nástroj). DLQ: NEEXISTUJE (<code>⚠️ NENALEZENO</code>).</li>
+<li><strong>Idempotency:</strong> upserty do case DB + <code>PARSER_VERSION</code> na artefaktech → re-run je idempotentní.</li>
+<li><strong>Sandbox:</strong> <code>sandbox_worker.py</code> izoluje rizikové operace (FDE dešifrování).</li>
+<li>Graceful degradation viz §1; výjimky jsou typované per-doména (<code>TskError</code>, <code>AnalyticsError</code>, <code>LmStudioUnavailable</code>, <code>OrchestrationError</code>).</li>
+</ul>
+<h3 id="36-cli-komandy-31-srcstopaclipy">3.6 CLI komandy (~31, <code>src/stopa/cli.py</code>)</h3>
+<p><code>case new/auto-export/auto-interval</code>, <code>add</code>, <code>files</code>, <code>stats</code>, <code>search</code>, <code>timeline</code>, <code>correlate</code>, <code>analytics</code>, <code>image</code>, <code>mobile</code>, <code>decrypt</code>, <code>memory-analyze</code>, <code>import-mobile</code>, <code>pcap-analyze</code>, <code>antiforensics</code>, <code>profiles</code>, <code>report</code>, <code>export</code>, <code>plaso-import</code>, <code>timesketch-push</code>, <code>verify</code>, <code>integrity</code>, <code>replay</code>, <code>benchmark</code>, <code>validate</code>, <code>analyze</code>, <code>audit</code>, <code>backup</code>, <code>serve</code>, <code>install</code>.</p>
+<h3 id="37-stavy-pripadu-state-machine">3.7 Stavy případu (state machine)</h3>
+<p><code>⚠️ NEZNÁMO — explicitní state machine v kódu neexistuje</code>; stavy jsou implicitní přes tabulku <code>cases</code> + <code>analysis_operations</code> (běžící/ukončené operace).</p>
+<h3 id="38-ai-multi-agent-flow-intelligence">3.8 AI multi-agent flow (<code>intelligence/</code>)</h3>
+<p><div class="mermaid">
+sequenceDiagram
+    participant W as web /ai/query|/ai/analyze
+    participant O as ai_orchestrator.route_agent()
+    participant A as AgentProfile (5×: timeline/artifact/media/report/case analyst)
+    participant L as lmstudio_client.chat()
+    participant G as domain.ai_grounding.ground_answer()
+    W-&gt;&gt;O: dotaz + case context (case_context.py, RAG = rag.py)
+    O-&gt;&gt;A: routing na profil agenta
+    A-&gt;&gt;L: prompt (build_prompt) → OpenAI-kompatibilní /chat/completions
+    L--&gt;&gt;A: raw odpověď
+    A-&gt;&gt;G: validace výstupu + grounding (anti-hallucinace, citace artefaktů)
+    G--&gt;&gt;W: AgentResult (Pydantic)
+</div></p>
+<h2 id="4-data-vrstva-a-schema">4. 🗄️ DATA VRSTVA A SCHEMA</h2>
+<p><strong>Primární store:</strong> SQLite, jeden DB soubor na případ (<code>case-XXX.db</code> v workspace); DuckDB vedle pro OLAP (§3.4). In-memory: žádné (⚠️ NENALEZENO — cache jen v procesu).</p>
+<p><strong>SCHEMA_VERSION = 14</strong> (<code>src/stopa/data/schema.py:13</code>). Migrace: <code>src/stopa/data/migrations.py</code> — up-only, <code>_schema_version(conn) &lt; SCHEMA_VERSION → ALTER</code> (24 migracních kroků). Rollback: NEEXISTUJE (<code>⚠️ NENALEZENO</code>) — konvence „verze nahoru jen".</p>
+<h3 id="41-er-diagram-hlavni-entita-a-relace-schemapy">4.1 ER diagram (hlavní entita a relace, <code>schema.py</code>)</h3>
+<p><div class="mermaid">
+erDiagram
+    cases ||--o{ sources : &quot;case_id&quot;
+    cases ||--o{ files : &quot;case_id&quot;
+    cases ||--o{ artifacts : &quot;case_id&quot;
+    cases ||--o{ timeline_events : &quot;case_id&quot;
+    cases ||--o{ entities : &quot;case_id&quot;
+    cases ||--o{ correlations : &quot;case_id&quot;
+    sources ||--o{ files : &quot;source_id&quot;
+    files |o--o{ artifacts : &quot;file_id&quot;
+    files ||--o{ timeline_events : &quot;file_id&quot;
+    artifacts ||--o{ lineage_events : &quot;artifact_id&quot;
+    cases ||--o{ audit_log : &quot;case_id&quot;
+    cases ||--o{ findings : &quot;case_id&quot;
+    cases ||--o{ custody_items : &quot;case_id&quot;
+    cases ||--o{ integrity_checkpoints : &quot;case_id&quot;
+</div></p>
+<p>15 tabulek: <code>cases, sources, files, artifacts, timeline_events, entities, correlations, meta, evidence_marks, audit_log, findings, lineage_events, integrity_checkpoints, analysis_operations, custody_items</code>.</p>
+<h3 id="42-indexy-vyber-schemapy">4.2 Indexy (výběr, <code>schema.py</code>)</h3>
+<p><code>idx_files_source</code>, <code>idx_files_sha256</code> (dedupe), <code>idx_artifacts_{source,ts,type,file}</code>, <code>idx_timeline_{ts,source}</code> (timeline = kritická cesta), <code>idx_entities_case</code>, <code>idx_correlations_case</code>, <code>idx_audit_ts</code>, <code>idx_findings_{case,kind}</code>, <code>idx_lineage_{case,op}</code>, <code>idx_ops_{case,type}</code>.</p>
+<h3 id="43-fk-a-constraints">4.3 FK a constraints</h3>
+<p><code>REFERENCES</code>: cases(6×), sources(4×), files(3×), artifacts(1×). <strong>Pozor (známý pitfall):</strong> <code>timeline_events.artifact_id</code> nemá <code>ON DELETE</code> — při výměně artefaktů volat <code>clear_timeline</code> PŘED replace, jinak dangling FK.</p>
+<h3 id="44-artefaktove-schemata">4.4 Artefaktové schémata</h3>
+<p>Každý extraktor vrací <strong>Pydantic modely</strong> (<code>src/stopa/models.py</code>) — typová validace na hranici parseru; <code>PARSER_VERSION</code> u artefaktu pro idempotentní re-run. JSON Schema: NENALEZENO (Pydantic = de-facto schéma, <code>.model_dump()</code> → řádky).</p>
+<h3 id="45-retention">4.5 Retention</h3>
+<p>Žádné automatické čištění/archivace v jádru (<code>⚠️ NENALEZENO</code>); <code>stopa backup</code> + <code>audit_log</code>/<code>lineage_events</code> slouží jako retenční záznam (chain of custody).</p>
+<h2 id="5-integrace-a-rozhrani">5. 🔌 INTEGRACE A ROZHRANÍ</h2>
+<table>
+<thead>
+<tr>
+<th>Integrace</th>
+<th>Typ</th>
+<th>Kde v kódu</th>
+<th>Poznámka</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LM Studio (OpenAI-kompatibilní API)</td>
+<td>REST <code>http://localhost:1234/v1</code></td>
+<td><code>data/lmstudio_client.py</code>, web <code>/api/cases/{id}/ai/*</code> (<code>web/app.py:1621,1670</code>)</td>
+<td>Env <code>STOPA_LMSTUDIO_URL</code>; nedostupnost → HTTP 503, nikdo nečeká navěky</td>
+</tr>
+<tr>
+<td>Timesketch</td>
+<td>REST push</td>
+<td><code>data/timesketch_client.py</code>, <code>/timesketch-push</code> (app.py:1350)</td>
+<td>Export timeline do externí vizualizace</td>
+</tr>
+<tr>
+<td>Plaso</td>
+<td>CLI import</td>
+<td><code>/plaso-import</code> + multipart upload (app.py:1469)</td>
+<td>Import plaso DB jako zdroj</td>
+</tr>
+<tr>
+<td>libyal (libewf/libafflib/libcommon)</td>
+<td><strong>ctypes .so</strong></td>
+<td><code>data/ewf_container.py</code>, env <code>STOPA_EWF_LIB</code></td>
+<td>Build z github master (<code>--depth 1</code>) v Docker stage 1 — ⚠️ nepinuje release tag</td>
+</tr>
+<tr>
+<td>TSK (The Sleuth Kit)</td>
+<td><code>pytsk3</code> bindingy → fallback CLI binárky</td>
+<td><code>data/tsk_py.py</code>, <code>tsk_cli.py</code>, <code>tsk_types.py</code></td>
+<td><code>tsk_py.py</code> má ruff per-file-ignores BLE001/S110 — idiom robustního walku</td>
+</tr>
+<tr>
+<td>scapy</td>
+<td>lazy import</td>
+<td>PCAP parser + TCP reassembly (F1.3)</td>
+<td>Bez scapy → statický scanner fallback</td>
+</tr>
+<tr>
+<td>DuckDB</td>
+<td>lazy import</td>
+<td><code>data/analytics.py</code></td>
+<td>Bez duckdb → SQLite fallback</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Volitelné extras</strong> (<code>pyproject.toml [project.optional-dependencies]</code>): <code>pdf</code>=weasyprint, <code>web</code>=fastapi+uvicorn+httpx+multipart, <code>fde</code>=cryptography (AES-256-CBC mobilní FDE), <code>tsk</code>=pytsk3, <code>xlsx</code>=openpyxl (iMessage cloud), <code>meta</code>=Pillow (EXIF), <code>net</code>=scapy, <code>analytics</code>=duckdb. <strong>Volba:</strong> jádro drží minimální (<code>pydantic, regipy, rich</code>); těžké nativní závislosti = opt-in → offline degradace (§1).</p>
+<h2 id="6-bezpecnost-a-autorizace">6. 🔐 BEZPEČNOST A AUTORIZACE</h2>
+<ul>
+<li><strong>AuthN/AuthZ web API: NEEXISTUJE</strong> (<code>⚠️ NENALEZENO</code>) — <code>web/app.py</code> nemá žádné api-key/CORS/auth middleware. 🚨 <strong>FINDING P1:</strong> bind na 0.0.0.0 (Docker CMD) bez authz = lokální síť má plný přístup k forenzním datům. Doporučení: minimálně <code>x-api-key</code> + CORS allowlist pro produkční nasazení.</li>
+<li><strong>Secrety:</strong> v kódu žádné hodnoty ([REDACTED] policy držená — grep nepotvrdil žádné tvrdé klíče); konfigurace přes env (<code>STOPA_LMSTUDIO_URL</code>, <code>STOPA_EWF_LIB</code>).</li>
+<li><strong>Šifrování:</strong> FDE dešifrování mobilních obrazů AES-256-CBC (<code>cryptography</code>, extra <code>fde</code>) v izolaci <code>sandbox_worker.py</code>; at-rest šifrování case DB: NENALEZENO.</li>
+<li><strong>Input validation:</strong> Pydantic na všech API modelech (FastAPI request body) + typované výjimky per doména; path traversal ochrana v file export/preview — ⚠️ NEZNÁMO bez detailního review <code>web/app.py</code> export endpointů.</li>
+<li><strong>Důkazová integrita:</strong> tabulky <code>integrity_checkpoints</code>, <code>custody_items</code>, <code>lineage_events</code>, <code>audit_log</code> (co/kdy/kdo-operace) + CLI <code>verify</code>/<code>integrity</code>/<code>replay</code>. SHA-256 hashy souborů v jádru (<code>idx_files_sha256</code>).</li>
+<li><strong>Závislosti:</strong> CI běží <code>pip-audit</code> (§7); CVE stav: ⚠️ NEZNÁMO (poslední audit viz GitHub Actions).</li>
+</ul>
+<h2 id="7-deployment-infrastruktura-a-cicd">7. 🚀 DEPLOYMENT, INFRASTRUKTURA A CI/CD</h2>
+<p><strong>Runtime:</strong> Python ≥3.10 (target ruff py310; Docker python:3.11); lokálně venv <code>.venv</code>; distribuce = pip wheel (s <code>static/**</code> package-data) nebo <strong>Docker multi-stage</strong> (<code>Dockerfile</code>):
+- stage 1 <code>native-builder</code>: autotools build libyal řetězce libcommon→libafflib→libewf do <code>/opt/native</code>
+- stage 2 <code>runtime</code>: slim image, <code>EXPOSE 8473</code>, <code>CMD ["stopa","serve","--host","0.0.0.0","--port","8473"]</code></p>
+<p><strong>IaC:</strong> NENALEZENO (<code>⚠️</code> — žádné Terraform/Pulumi/Ansible v repo). Orchestrace: ruční/Docker run.</p>
+<p><strong>CI/CD (<code>.github/workflows/ci.yml</code>, 5 jobů):</strong>
+1. <strong>Ruff check</strong> — lint brána
+2. <strong>Offline test suite</strong> — <code>pytest</code> bez sítě
+3. <strong>JS DOM tests</strong> — <code>graph.js</code> přes jsdom (frontend je testován)
+4. <strong>pip-audit</strong> — závislostní audit
+5. <strong>Benchmark vs baseline</strong> — 🚨 fail na regresi + artifact upload výsledků</p>
+<p>Feature flags: NENALEZENO (<code>⚠️</code>) — volitelnost řeší pip extras (§5), ne runtime flagy. Environments: dev (venv) / container; stage/prod ⚠️ NEZNÁMO.</p>
+<h2 id="8-testovani-a-kvalita">8. 🧪 TESTOVÁNÍ A KVALITA</h2>
+<ul>
+<li><strong>Suite:</strong> <code>tests/</code> — <strong>123 souborů, 2469 testů</strong> (pytest collect, 0.52 s); běží plně offline (CI job „Run offline test suite").</li>
+<li><strong>Rozsah:</strong> per-artefakt testy extraktorů, data vrstva (migrace/repo), web API (FastAPI TestClient), JS DOM (<code>graph.js</code> přes jsdom v CI).</li>
+<li><strong>Kvalitní brány:</strong> ruff (line-length 100, target py310) jako samostatný CI job; benchmark regression gate (§7); <code>docs/TESTING_STRATEGY.md</code>.</li>
+<li><strong>Poznámky k ignoracím (ruff per-file-ignores):</strong> <code>tsk_py.py</code> BLE001/S110 (C-extension bindingy), <code>tests/test_tsk_py.py</code> (dostupnostní probe), <code>web/app.py</code> B008 (FastAPI Query default).</li>
+<li><strong>TODO/FIXME v src:</strong> 0 — čistý kód.</li>
+</ul>
+<h2 id="9-observability-a-logovani">9. 📊 OBSERVABILITY A LOGOVÁNÍ</h2>
+<ul>
+<li><strong>Logging:</strong> stdlib <code>logging.getLogger(__name__)</code> per modul; CLI progress přes <code>rich</code> (lazy import, bez TTY → plain text). Structured logging/correlation IDs: NENALEZENO (<code>⚠️</code>).</li>
+<li><strong>Audit trail (forenzní):</strong> tabulka <code>audit_log</code> + endpoint <code>/api/cases/{id}/audit</code> — záznam operací na případu; <code>lineage_events</code> = provenance artefaktů.</li>
+<li><strong>Diagnostics:</strong> CLI <code>stopa diagnostics</code> / web <code>/api/diagnostics</code>; <code>validation_report.py</code> pro kontrolní zprávy.</li>
+<li><strong>Metrics/tracing:</strong> NENALEZENO (<code>⚠️</code>) — offline nástroj, benchmark místo APM.</li>
+</ul>
+<h2 id="10-performance">10. ⚡ PERFORMANCE</h2>
+<ul>
+<li><strong>DuckDB OLAP (F2.2):</strong> timeline range 1 h / 10 M eventů = <strong>0.03 s</strong> (AK &lt; 2 s), agregace <strong>0.006 s</strong> (AK &lt; 5 s) — commit <code>aa7a60a</code>.</li>
+<li><strong>Benchmark:</strong> CLI <code>stopa benchmark</code> + CI job proti baseline (fail na regresi); detaily <code>docs/STOPA_BENCHMARKS.md</code>.</li>
+<li><strong>Hashing:</strong> Rust core (<code>data/rust_core.py</code>) pro SHA-256/MD5 — native rychlost; dedupe přes <code>idx_files_sha256</code> napříč případem.</li>
+</ul>
+<h2 id="11-adr-rozhodnuti-z-dokumentace">11. 📚 ADR / ROZHODNUTÍ (z dokumentace)</h2>
+<p>Formální <code>docs/adr/</code> katalog: NENALEZENO (<code>⚠️</code>) — rozhodnutí žijí v <code>docs/architecture.md</code>, <code>STOPA_TARGET_ARCHITECTURE.md</code>, commit messagech. Klíčová:
+1. <strong>Offline-first</strong> — jádro běží bez sítě; AI/integrace = volitelné vrstvy s degradací.
+2. <strong>Pydantic na hranici parseru</strong> — typová validace artefaktů místo ručních dict.
+3. <strong>SQLite + DuckDB ATTACH</strong> (F2.2) — OLAP bez duplikování dat, materiálové tabulky se staleness signaturou.
+4. <strong>ctypes pro libyal</strong> místo wheelů — build z master v Dockeru; trade-off: nepinované release tagy (§6 riziko).
+5. <strong>Volitelné pip extras</strong> místo runtime feature flags.</p>
+<h2 id="12-tech-debt-a-rizika-p0p3">12. 🧹 TECH DEBT A RIZIKA (P0–P3)</h2>
+<table>
+<thead>
+<tr>
+<th>Priorita</th>
+<th>Položka</th>
+<th>Důkaz v kódu/dokumentu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P1</strong> 🚨</td>
+<td>Web API bez AuthN/AuthZ, bind 0.0.0.0</td>
+<td><code>web/app.py</code> — žádné auth/CORS middleware; <code>Dockerfile:85 CMD --host 0.0.0.0</code></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>libyal build z github <strong>master</strong> (nepinovaný)</td>
+<td><code>Dockerfile</code> stage 1 (<code>--depth 1</code>, bez tagu) → neredeterminabilní native závislosti</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Žádný rollback migrací SQLite</td>
+<td><code>data/migrations.py</code> — up-only</td>
+</tr>
+<tr>
+<td>P3</td>
+<td><code>timeline_events.artifact_id</code> bez ON DELETE</td>
+<td>známý pitfall (skill stopa); riziko dangling FK při replace artefaktů</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Frontend bez build stepu (vanilla JS modules)</td>
+<td><code>web/static/</code> 565 řádků — OK pro velikost, ale žádný typing</td>
+</tr>
+</tbody>
+</table>
+<h2 id="13-hand-off-notes-pro-ai-agenty">13. 🤖 HAND-OFF NOTES PRO AI AGENTY</h2>
+<p><strong>Checklist před editací:</strong>
+- [ ] Pochopit profil analýzy (<code>pipeline.py</code>) a že extraktoři se registrují importem — nový artefakt = nový modul v <code>src/stopa/artifacts/</code> + registrace + test.
+- [ ] Neřízat lazy imports volitelných extras (scapy, duckdb, pytsk3) — degradace je design (§1).
+- [ ] Migraci SQLite přidávat PŘÍRUSTKOVĚ (<code>SCHEMA_VERSION + 1</code>, up-only); nikdy neměnit staré migrace.
+- [ ] U výměny artefaktů volat <code>clear_timeline</code> PŘED replace (FK pitfall §4.3).
+- [ ] Run: <code>.venv/bin/python -m pytest</code> (2469 testů, offline) + <code>ruff check</code>.</p>
+<p><strong>ZÁKAZY:</strong>
+- ❌ Nedávat authz do jádra — web API je lokální nástroj; pokud přidáváš authz, jen v <code>web/</code>, nikde v data vrstvě.
+- ❌ Nepřidávat síťové volání do CLI defaultní cesty (offline-first).
+- ❌ Nenahrazovat Pydantic modely ručními dicty na hranici extraktorů.
+- ❌ Nenechávat <code>print()</code> — stdlib logging per modul.</p>
+<p><strong>Kam přidat funkci:</strong> nový artefakt → <code>src/stopa/artifacts/&lt;novo&gt;.py</code> (+ test v <code>tests/</code>); nové web endpointy → <code>web/app.py</code>; OLAP dotazy → <code>data/analytics.py</code>.</p>
+<h2 id="14-glosar">14. 📖 GLOSÁŘ</h2>
+<table>
+<thead>
+<tr>
+<th>Termín</th>
+<th>Význam</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>case / případ</td>
+<td>základní jednotka analýzy, vlastní SQLite DB (<code>case-XXX.db</code>)</td>
+</tr>
+<tr>
+<td>source</td>
+<td>vstupní artefakt: diskový obraz (EWF/raw), mobilní FDE, PCAP, memory dump…</td>
+</tr>
+<tr>
+<td>artifact</td>
+<td>extrahovaná položka (soubor, záznam, IoC) s Pydantic modelem + PARSER_VERSION</td>
+</tr>
+<tr>
+<td>timeline</td>
+<td>události s časovým razítkem (<code>timeline_events</code>), akcelerované DuckDB</td>
+</tr>
+<tr>
+<td>FDE</td>
+<td>Full Disk Encryption — AES-256-CBC dešifrování mobilního obrazu (extra <code>fde</code>)</td>
+</tr>
+<tr>
+<td>TSK</td>
+<td>The Sleuth Kit — filesystem vrstva; pytsk3 → CLI fallback</td>
+</tr>
+<tr>
+<td>EWF/E01</td>
+<td>Expert Witness Format (libyal), načítáno přes ctypes + <code>STOPA_EWF_LIB</code></td>
+</tr>
+<tr>
+<td>LM Studio</td>
+<td>lokální LLM server (OpenAI API, port 1234) pro AI vrstvu</td>
+</tr>
+<tr>
+<td>grounding</td>
+<td>validace AI odpovědi proti reálným artefaktům (<code>domain/ai_grounding.py</code>) — anti-hallucinace</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="priloha-a-klicove-cesty">Příloha A — Klíčové cesty</h3>
+<p><code>src/stopa/pipeline.py</code> (analyze), <code>src/stopa/cli.py</code> (~31 komandů), <code>src/stopa/models.py</code>, <code>src/stopa/data/{schema,migrations,db,analytics,image_pipeline,rust_core}.py</code>, <code>src/stopa/web/app.py</code> (48 endpointů), <code>src/stopa/intelligence/{ai_orchestrator,agents,rag}.py</code>, <code>Dockerfile</code>, <code>.github/workflows/ci.yml</code>.</p>
+<h3 id="priloha-b-overene-metriky">Příloha B — Ověřené metriky</h3>
+<p>218 .py souborů (src+tests) · 2469 testů · SCHEMA_VERSION 14 · 48 web endpointů · 0 TODO/FIXME v src · commit <code>aa7a60a</code> (main).</p>
+<p><em>Dokument generován analýzou kódu (skill analiza-aplikace), 2026-11-11. Všechny citace = skutečný stav repo, ne odhady.</em></p>
+<footer>Zdroj: /home/ai/Prace/projekty/stopa/docs/SYSTEM_BLUEPRINT.md · STOPA main aa7a60a → 6e4626e</footer>
+</div></body></html>
