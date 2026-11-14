@@ -102,11 +102,11 @@ class TestEtapaBFinalState:
 class TestC3RegistryFinalState:
     """C3 registry po vlně 15."""
 
-    def test_registry_count_77(self):
+    def test_registry_count_78(self):
         from stopa.domain.validation_registry import build_registry
 
         reg = build_registry()
-        assert len(reg) == 77, f"očekáváno 77 parserů, je {len(reg)}"
+        assert len(reg) == 78, f"očekáváno 78 parserů (vlna 15 + K2 crypto), je {len(reg)}"
 
     def test_all_test_files_exist(self):
         """Každý registry záznam odkazuje na existující test soubory."""

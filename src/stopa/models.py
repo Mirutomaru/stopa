@@ -99,6 +99,7 @@ class ProcessingProfile(BaseModel):
     deduplicate: bool = True  # duplikáty podle hash
     match_hash_sets: bool = True  # porovnání s known-bad hash sety
     extract_artifacts: bool = True  # AXIOM-style artifact extraktoři (SQLite, …)
+    crypto_scan: bool = True  # K2 — crypto forensics (wallets/exchange CSV/content scan)
 
 
 class Artifact(BaseModel):

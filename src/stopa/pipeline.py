@@ -69,6 +69,13 @@ from stopa.artifacts.cloud_generic import (
     extract_cloud_generic_artifacts,
     is_cloud_generic_file,
 )
+
+# K2 — crypto forensics (Electrum/MetaMask wallets, exchange CSV, content scan)
+from stopa.artifacts.crypto_extract import (
+    CRYPTO_EXTRACT_VERSION,
+    extract_crypto_artifacts,
+    is_crypto_candidate_file,
+)
 from stopa.artifacts.ddg_current_tabs import PARSER_VERSION as DDG_TABS_VERSION
 from stopa.artifacts.ddg_current_tabs import extract_current_tabs_artifacts, is_current_tabs_file
 from stopa.artifacts.drive_activity import PARSER_VERSION as DRIVE_ACTIVITY_VERSION
@@ -467,6 +474,8 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "openoffice_base": (extract_openoffice_base_artifacts, OPENOFFICE_BASE_VERSION),
     # ETAPA B vlna 15 — SIM TPDU phonebook (AT+CPBR textový export)
     "sim_tpdu": (extract_tpdu_artifacts, SIM_TPDU_VERSION),
+    # K2 — crypto forensics (Electrum/MetaMask wallets, exchange CSV, content scan)
+    "crypto_extract": (extract_crypto_artifacts, CRYPTO_EXTRACT_VERSION),
     # ETAPA B vlna 5 — AXIOM port: Google Takeout rodina + Drive activity
     "google_aggregated_activities": (
         extract_aggregated_activities_artifacts,
@@ -736,6 +745,10 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
     # ETAPA B vlna 15 — SIM TPDU phonebook (AT+CPBR textový export)
     if is_sim_tpdu_file(name):
         return NAME_BASED_EXTRACTORS["sim_tpdu"]
+    # K2 — crypto forensics: wallet/vault/exchange soubory podle názvu
+    # (default_wallet bez přípony → full-path retry níže v _extract_artifacts_for)
+    if is_crypto_candidate_file(name):
+        return NAME_BASED_EXTRACTORS["crypto_extract"]
     return None
 
 
@@ -830,7 +843,7 @@ def _run_extractor(
 
 
 def _extract_artifacts_for(
-    path: Path, signature_type: str | None
+    path: Path, signature_type: str | None, crypto_scan: bool = True
 ) -> tuple[list[Artifact], str | None]:
     """Artifact extraktoři pro jeden soubor — signatura PŘED name-based fallbackem.
 
@@ -863,6 +876,11 @@ def _extract_artifacts_for(
     if name_match is not None:
         fn, ver = name_match
         return _run_extractor(fn, path, ver), ver
+    # K2 — crypto content scan (spec AK): soubor nesedl žádný známý extraktor →
+    # sken textu na vestěné klíče/seedy/adresy. Defenzivní: binárka → [], velikost
+    # omezená uvnitř extraktoru; PII guard (fingerprint místo raw hodnot).
+    if crypto_scan:
+        return _run_extractor(extract_crypto_artifacts, path, CRYPTO_EXTRACT_VERSION), CRYPTO_EXTRACT_VERSION
     return [], None
 
 
@@ -966,7 +984,9 @@ def _process_file_worker(
     arts: list[Artifact] = []
     parser_ver: str | None = None
     if profile.extract_artifacts:
-        arts, parser_ver = _extract_artifacts_for(abs_path, rec.signature_type)
+        arts, parser_ver = _extract_artifacts_for(
+            abs_path, rec.signature_type, crypto_scan=profile.crypto_scan
+        )
 
     return _FileWork(
         rec=rec, artifacts=arts, parser_version=parser_ver, error=hash_error
