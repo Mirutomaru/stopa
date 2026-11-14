@@ -16,6 +16,7 @@ IO (File::open, buffer) běží uvnitř Rust core s uvolněným GILem.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 _logger = logging.getLogger(__name__)
@@ -92,6 +93,86 @@ def find_offsets(data: bytes, patterns: list[bytes]) -> list[tuple[int, int]] | 
         return [(int(off), int(idx)) for off, idx in raw]
     except Exception as exc:  # noqa: BLE001 - defenzivní, fallback místo pádu pipeline
         _logger.warning("Rust find_offsets selhal (%s) — Python fallback", exc)
+        return None
+
+
+def block_dedupe_file(
+    path: str | Path,
+    *,
+    avg_size: int | None = None,
+    min_size: int | None = None,
+    max_size: int | None = None,
+) -> list[tuple[str, int]] | None:
+    """One-pass block-level deduplikace souboru přes Rust core; ``None`` → Python fallback.
+
+    Vrací ``(sha256_hex, length)`` v pořadí bloků souboru — bitová parita s
+    ``domain.block_dedupe.chunk_bytes`` (parity testy F2.3). Volající bez wheelu
+    čte byty souboru a spustí referenční implementaci.
+
+    Parametrické chyby: ValueError ještě před voláním Rustu (stejná zpráva jako
+    referenční cesta); IO chyby se propagují jako OSError.
+    """
+    from stopa.domain import block_dedupe  # lazy — bez cyklu při načtení modulu
+
+    if avg_size is None:
+        avg_size = block_dedupe.DEFAULT_AVG_SIZE
+    if min_size is None:
+        min_size = block_dedupe.DEFAULT_MIN_SIZE
+    if max_size is None:
+        max_size = block_dedupe.DEFAULT_MAX_SIZE
+    block_dedupe.validate_sizes(avg_size, min_size, max_size)
+
+    mod = _load()
+    if mod is None:
+        return None
+    try:
+        raw = mod.block_dedupe(str(path), avg_size, min_size, max_size)
+        return [(str(h), int(l)) for h, l in raw]
+    except (OSError, ValueError):
+        raise  # soubor neexistuje / parametry — volající řeší explicitně
+    except Exception as exc:  # noqa: BLE001 - defenzivní, fallback místo pádu pipeline
+        _logger.warning("Rust block_dedupe selhal (%s) — Python fallback", exc)
+        return None
+
+
+def block_dedupe_files(
+    paths: list[str | Path],
+    *,
+    avg_size: int | None = None,
+    min_size: int | None = None,
+    max_size: int | None = None,
+) -> list[list[tuple[str, int]]] | None:
+    """Batch one-pass block-level deduplikace více souborů; ``None`` → Python fallback.
+
+    Jediné uvolnění GIL pro celý batch (bez per-file hraničního overheadu —
+    viz měření F2.3 AK2). Vrací list v pořadí ``paths``, každý prvek je
+    ``(sha256_hex, length)`` bloky souboru — shodné se opakovaným voláním
+    :func:`block_dedupe_file` na stejných datech (parity testy F2.3).
+
+    Parametrické chyby: ValueError ještě před voláním Rustu (validace jednou,
+    stejná zpráva jako referenční cesta); IO chyba se propaguje jako OSError
+    se jménem souboru.
+    """
+    from stopa.domain import block_dedupe  # lazy — bez cyklu při načtení modulu
+
+    if avg_size is None:
+        avg_size = block_dedupe.DEFAULT_AVG_SIZE
+    if min_size is None:
+        min_size = block_dedupe.DEFAULT_MIN_SIZE
+    if max_size is None:
+        max_size = block_dedupe.DEFAULT_MAX_SIZE
+    block_dedupe.validate_sizes(avg_size, min_size, max_size)
+
+    mod = _load()
+    if mod is None:
+        return None
+    try:
+        raws = mod.block_dedupe_files([str(p) for p in paths], avg_size, min_size, max_size)
+        return [[(str(h), int(l)) for h, l in blocks] for blocks in raws]
+    except (OSError, ValueError):
+        raise  # soubor neexistuje / parametry — volající řeší explicitně
+    except Exception as exc:  # noqa: BLE001 - defenzivní, fallback místo pádu pipeline
+        _logger.warning("Rust block_dedupe_files selhal (%s) — Python fallback", exc)
         return None
 
 

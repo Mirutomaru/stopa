@@ -243,9 +243,9 @@ class AnalyticsStore:
         """Signatura materiálového stavu odpovídá živým souborům (O(1))."""
         stored = _read_snapshot(self._con).get("signature")
         if not stored:
-            # ještě nebylo materiálováno — fresh jen u prázdného case
-            live = _sqlite_counts(self._con, self._alias)
-            return not any(live.values())
+            # ještě nebylo materiálováno — tl_* tabulky vůbec neexistují,
+            # takže i prázdný case je stale (jinak OLAP query spadne na chybějící tabulku)
+            return False
         return stored == db_signature(self._db_file)
 
     def status(self) -> dict:
@@ -332,3 +332,102 @@ class AnalyticsStore:
             }
             for r in rows
         ]
+
+    # ── F2.3: block-level deduplikace (CDC bloky v DuckDB) ──
+
+    _BLOCK_TABLE = "block_hashes"
+
+    def refresh_blocks(self) -> dict[str, int]:
+        """(Re)vypočítá CDC bloky pro souborové zdroje důkazů do ``block_hashes``.
+
+        Zdroje ``kind='file'`` se skutečně existující cestou na disku (disk image /
+        jednotlivé soubory); složkové zdroje jsou ve F2.3 mimo scope. Vždy
+        přepočítá — jednorázová operace, nespárovaná se SQLite signaturou
+        (bloky vycházejí z bajtů na disku, ne z SQLite).
+
+        Cesta: Rust core (``rust_core.block_dedupe_files`` — batch, jedno GIL
+        uvolnění pro všechny soubory) → bez wheelu Python reference
+        ``domain.block_dedupe.chunk_bytes``.
+
+        Vrací ``{"files": n_souborů, "blocks": celkem_bloků}``.
+        """
+        if self.readonly:
+            raise AnalyticsError("refresh_blocks() vyžaduje RW AnalyticsStore")
+
+        from stopa.data import rust_core  # lazy — wheel je volitelný
+
+        con = self._con
+        con.execute(
+            f"CREATE TABLE IF NOT EXISTS {self._BLOCK_TABLE} ("
+            "source_id TEXT, file_path TEXT, block_index INTEGER, sha256 TEXT, length INTEGER)"
+        )
+        srcs = con.execute(
+            f"SELECT id, path FROM {self._alias}.main.sources WHERE kind = 'file' ORDER BY id"
+        ).fetchall()
+
+        todo: list[tuple[object, Path]] = []
+        for source_id, file_path in srcs:
+            p = Path(file_path)
+            if not p.is_file():
+                continue  # zdroj bez souboru na disku — nečistíme tabulku
+            todo.append((source_id, p))
+
+        total_blocks = 0
+        files_done = 0
+        if not todo:
+            return {"files": 0, "blocks": 0}
+
+        chunks_by_file = rust_core.block_dedupe_files([p for _sid, p in todo])
+        if chunks_by_file is None:  # bez wheelu → Python reference (bajty do paměti)
+            from stopa.domain import block_dedupe
+
+            chunks_by_file = [block_dedupe.chunk_bytes(p.read_bytes()) for _sid, p in todo]
+
+        insert_sql = f"INSERT INTO {self._BLOCK_TABLE} VALUES (?, ?, ?, ?, ?)"
+        for (source_id, p), chunks in zip(todo, chunks_by_file):
+            con.execute(f"DELETE FROM {self._BLOCK_TABLE} WHERE source_id = ?", [source_id])
+            if chunks:
+                con.executemany(
+                    insert_sql,
+                    [[source_id, str(p), idx, h, length] for idx, (h, length) in enumerate(chunks)],
+                )
+            total_blocks += len(chunks)
+            files_done += 1
+        return {"files": files_done, "blocks": total_blocks}
+
+    def dedupe_summary(self) -> dict:
+        """Úspora místa z duplicity bloků (AK F2.3: ≥ 30 % na typických datech).
+
+        Bloky se stejným SHA-256 = identický obsah → stejná délka; unikátní bajty
+        = součet délek prvních výskytů hashů. Včetně top 10 nejvíce duplikovaných
+        bloků (pro forenzní interpretaci — co se v datech opakuje).
+        """
+        con = self._con
+        try:
+            agg = con.execute(
+                f"SELECT COUNT(*), COALESCE(SUM(length), 0), COUNT(DISTINCT sha256) "
+                f"FROM {self._BLOCK_TABLE}"
+            ).fetchone()
+            unique_bytes = con.execute(
+                f"SELECT COALESCE(SUM(length), 0) FROM (SELECT MIN(length) AS length "
+                f"FROM {self._BLOCK_TABLE} GROUP BY sha256)"
+            ).fetchone()[0]
+        except Exception as exc:
+            raise AnalyticsError("block_hashes neexistuje — spusťte refresh_blocks()") from exc
+
+        total_blocks, total_bytes, unique_blocks = int(agg[0]), int(agg[1]), int(agg[2])
+        duplicated_bytes = total_bytes - int(unique_bytes)
+        top = con.execute(
+            f"SELECT sha256, COUNT(*) AS n, MIN(length) AS length FROM {self._BLOCK_TABLE} "
+            "GROUP BY 1 HAVING n > 1 ORDER BY 2 DESC LIMIT 10"
+        ).fetchall()
+        return {
+            "total_blocks": total_blocks,
+            "unique_blocks": unique_blocks,
+            "duplicate_blocks": total_blocks - unique_blocks,
+            "total_bytes": total_bytes,
+            "unique_bytes": int(unique_bytes),
+            "duplicated_bytes": duplicated_bytes,
+            "savings_pct": round(duplicated_bytes / total_bytes * 100.0, 2) if total_bytes else 0.0,
+            "top_duplicated": [{"sha256": r[0], "count": int(r[1]), "length": int(r[2])} for r in top],
+        }

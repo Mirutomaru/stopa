@@ -12,7 +12,8 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = { version = "0.26", features = ["extension-module"] }
 sha1 = "0.10"
-sha2 = "0.10"
+# asm: SSE/AVX shapy — čistý Rust sha2 dělá ~1 GB/s, se asm > 3 GB/s (F2.3 AK overhead)
+sha2 = { version = "0.10", features = ["asm"] }
 md5 = "0.7"
 aho-corasick = "1"
 

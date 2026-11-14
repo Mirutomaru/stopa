@@ -697,6 +697,9 @@ def cmd_analytics(args: argparse.Namespace) -> int:
             "top_event_types": store.top_event_types(limit=20),
             "entity_summary": store.entity_summary(),
         }
+        if getattr(args, "dedupe", False):
+            refreshed = store.refresh_blocks()
+            payload["block_dedupe"] = {**store.dedupe_summary(), **refreshed}
         if getattr(args, "from_ts", None) and getattr(args, "to_ts", None):
             events = store.timeline_range(
                 args.from_ts,
@@ -718,6 +721,18 @@ def cmd_analytics(args: argparse.Namespace) -> int:
             f"DuckDB OLAP — {int(live.get('timeline_events', 0))} událostí "
             f"(fresh={status.get('fresh')}, readonly={status.get('readonly')})"
         )
+        bd = payload.get("block_dedupe")
+        if isinstance(bd, dict):
+            print(
+                f"\nF2.3 BLOCK DEDUP — {bd['files']} soubor(ů), "
+                f"{bd['total_blocks']} bloků (unikátních {bd['unique_blocks']})"
+            )
+            print(
+                f"  úspora deduplikace: {bd['savings_pct']} % "
+                f"({bd['duplicated_bytes']} B z {bd['total_bytes']} B)"
+            )
+            for t in bd["top_duplicated"][:5]:
+                print(f"  {t['sha256'][:16]}… ×{t['count']} ({t['length']} B/blok)")
         win = payload.get("timeline_window")
         if isinstance(win, dict):
             print(f"\nOKNO {win['from']} → {win['to']}: {win['count']} událostí")
@@ -2794,6 +2809,10 @@ def build_parser() -> argparse.ArgumentParser:
     an_p.add_argument("--to-ts", dest="to_ts", metavar="ISO", help="konec okna (UTC ISO 8601)")
     an_p.add_argument("--type", dest="type", help="filtr podle typu události")
     an_p.add_argument("--limit", type=int, default=100)
+    an_p.add_argument(
+        "--dedupe", action="store_true",
+        help="F2.3 — CDC bloky souborových zdrojů + úspora deduplikace (block_hashes)",
+    )
     _add_json_flag(an_p)
     an_p.set_defaults(func=cmd_analytics)
 
