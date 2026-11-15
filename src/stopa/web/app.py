@@ -13,15 +13,20 @@ Spuštění: ``stopa serve [--port 8473]`` nebo ``uvicorn stopa.web.app:app``.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
 import queue
 import re
+import sqlite3
 import threading
 import time
 import uuid
 from collections.abc import Callable
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -34,11 +39,13 @@ from pydantic import BaseModel, Field
 from stopa import __version__
 from stopa.data.db import CaseDB
 from stopa.data.lmstudio_client import LmStudioClient, LmStudioUnavailable
+from stopa.data.schema import MULTITENANT_DDL  # F4.4 — instance DB DDL
 from stopa.data.timesketch_client import (
     TimesketchClient,
     TimesketchError,
     TimesketchUnavailable,
 )
+from stopa.data.user_repository import UserRepository  # F4.4
 from stopa.domain.ai_assistant import (
     build_explain_prompt,
     build_nl_search_prompt,
@@ -48,6 +55,11 @@ from stopa.domain.ai_assistant import (
     parse_nl_search,
 )
 from stopa.domain.events import LiveEventBus, case_topic  # F4.2 — live events
+from stopa.domain.multitenant import (  # F4.4 — OIDC SSO + per-case RBAC
+    JwtError,
+    access_for_case,
+    verify_jwt,
+)
 from stopa.domain.rbac import (
     DEFAULT_ROLE,
     PERMISSIONS,
@@ -82,6 +94,50 @@ def validate_case_id(case_id: str) -> None:
     """Odmítne case_id, které by mohly uniknout DB adresáře (path traversal)."""
     if not _CASE_ID_RE.match(case_id):
         raise HTTPException(400, f"neplatné ID případu: {case_id!r}")
+
+
+# ── F4.4 — session tokens (HMAC-SHA256 signed, no new dependencies) ────────────────
+_SESSION_TTL_S = 12 * 3600  # 12h sessions
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def sign_session_token(payload: dict, secret: str, ttl_s: int = _SESSION_TTL_S) -> str:
+    """Signed session token ``body.sig`` (HMAC-SHA256 over body)."""
+    body_payload = {**payload, "exp": time.time() + ttl_s}
+    body = _b64url(json.dumps(body_payload, sort_keys=True).encode())
+    sig = hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest()
+    return f"{body}.{_b64url(sig)}"
+
+
+def verify_session_token(token: str, secret: str) -> dict | None:
+    """Fail-closed verification of the session token; invalid/expired → ``None``."""
+    try:
+        body, sig = token.rsplit(".", 1)
+        expect = hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest()
+        if not hmac.compare_digest(_b64url(expect), sig):
+            return None
+        payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+        if time.time() >= float(payload.get("exp", 0)):
+            return None
+        username = str(payload.get("u") or "")
+        return {"username": username} if username else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _default_jwks_fetch(jwks_uri: str) -> dict:
+    """Fetches JWKS from the IdP (Keycloak/Okta — HTTPS)."""
+    import urllib.request
+
+    with urllib.request.urlopen(jwks_uri, timeout=10) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+#: F4.4 — session token for the current request (set by HTTP middleware).
+_current_token_var: ContextVar[str | None] = ContextVar("stopa_session_token", default=None)
 
 
 class CaseIn(BaseModel):
@@ -142,6 +198,51 @@ class TimesketchPushIn(BaseModel):
     limit: int | None = Field(  # STP-065 — jen první N záznamů (None = vše)
         default=None, ge=1
     )
+
+
+class LoginIn(BaseModel):
+    """F4.4 — login body: SSO id_token or local username (exactly one)."""
+
+    id_token: str | None = None
+    username: str | None = None
+
+
+class OrgIn(BaseModel):
+    """F4.4 — organization creation."""
+
+    name: str = Field(min_length=1, max_length=100)
+
+
+class TeamIn(BaseModel):
+    """F4.4 — team creation (within an org)."""
+
+    org_id: str
+    name: str = Field(min_length=1, max_length=100)
+
+
+class UserIn(BaseModel):
+    """F4.4 — new user (admin UI)."""
+
+    username: str = Field(min_length=1, max_length=200)
+    display_name: str | None = None
+    team_id: str | None = None
+    role: str = "examiner"  # analyst|examiner|admin
+
+
+class UserUpdateIn(BaseModel):
+    """F4.4 — user update (only specified fields)."""
+
+    display_name: str | None = None
+    team_id: str | None = None
+    role: str | None = None
+    active: bool | None = None
+
+
+class MemberGrantIn(BaseModel):
+    """F4.4 — case membership grant."""
+
+    user_id: str
+    role: str = "examiner"  # analyst|examiner|admin
 
 
 class SettingsIn(BaseModel):
@@ -231,15 +332,21 @@ def _auto_export_scheduler_loop(db_dir: Path) -> None:
             log.warning("STP-070 scheduler tick selhal", exc_info=True)
 
 
-def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> FastAPI:
+def create_app(
+    db_dir: Path | None = None,
+    ws_heartbeat_s: float = 15.0,
+    sso_fetcher: Callable[[str], dict] | None = None,  # F4.4 — test hook for JWKS
+) -> FastAPI:
     """App factory — `db_dir` pro testy (tmp), default z env STOPA_DB_DIR.
 
     ``ws_heartbeat_s`` (F4.2): interval heartbeatu WebSocket spojení;
     v testech se zkracuje, aby se suite netestovala na 15 s čekání.
+    ``sso_fetcher`` (F4.4): injektovatelný JWKS fetch pro OIDC SSO testy (bez sítě).
     """
     app = FastAPI(title="STOPA", version=__version__)
     base = db_dir or _db_dir()
     app.state.db_dir = base  # pro testy (TestClient)
+    app.state.sso_fetcher = sso_fetcher  # F4.4 — OIDC JWKS test hook
 
     # STP-021 — Processing Monitor: registry běhů ingestu (in-memory, per-app).
     # Job = {id, case_id, source_id, status, done, total, error, result}.
@@ -292,6 +399,108 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
                     status=snapshot.get("status"), done=snapshot.get("done"),
                     total=snapshot.get("total"), error=snapshot.get("error"),
                 )
+
+    # ── F4.4 — Multi-tenant RBAC: instance DB + session auth ────────────────
+    def _instance_conn() -> sqlite3.Connection:
+        """Centrální instance DB sdílená napříč case DB (orgs/teams/users/case_members)."""
+        conn = sqlite3.connect(base / "stopa_instance.db")
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.executescript(MULTITENANT_DDL)  # idempotentní (IF NOT EXISTS)
+        return conn
+
+    def _user_repo() -> UserRepository:
+        """Repozitář na instance DB (single-process; volající zavírá ``.conn``)."""
+        return UserRepository(_instance_conn())
+
+    def _session_secret() -> str:
+        s = _load_settings().get("session_secret")
+        if not s:
+            s = uuid.uuid4().hex
+            data = dict(_load_settings())
+            data["session_secret"] = s
+            _save_settings(data)
+        return str(s)
+
+    def _current_user() -> tuple[str, dict | None]:
+        """F4.4 — vyhodnotí session: ``(status, user)``, status ∈ no-token|bad|ok."""
+        token = _current_token_var.get()
+        if not token:
+            return ("no-token", None)
+        payload = verify_session_token(token, _session_secret())
+        if payload is None:
+            return ("bad", None)
+        repo = _user_repo()
+        try:
+            row = repo.get_user(username=payload["username"])
+        finally:
+            repo.conn.close()
+        if row is None or not row["active"]:
+            return ("bad", None)
+        return ("ok", dict(row))
+
+    def _multi_user_mode() -> bool:
+        """Multi-user režim = existuje alespoň jeden uživatel (bootstrap detekce)."""
+        repo = _user_repo()
+        try:
+            return repo.multi_user_mode()
+        finally:
+            repo.conn.close()
+
+    @app.middleware("http")
+    async def _session_middleware(request, call_next):
+        """F4.4 — předá session token (header ``X-Stopa-Token`` nebo cookie) handlerům."""
+        tok = request.headers.get("x-stopa-token") or request.cookies.get("stopa_token")
+        _current_token_var.set(tok)
+        return await call_next(request)
+
+    def _sso_config() -> dict:
+        issuer = os.environ.get("STOPA_OIDC_ISSUER") or ""
+        client_id = os.environ.get("STOPA_OIDC_CLIENT_ID") or ""
+        return {"enabled": bool(issuer), "issuer": issuer, "client_id": client_id}
+
+    def _sso_verify_id_token(id_token: str) -> dict:
+        """Ověří OIDC ID token (Keycloak/Okta): RS256 přes JWKS nebo HS256 secret.
+
+        Discovery ``{issuer}/.well-known/openid-configuration``; s injektovaným
+        ``sso_fetcher`` se síť vůbec nevolá (testovací hook).
+        """
+        cfg = _sso_config()
+        if not cfg["enabled"]:
+            raise HTTPException(400, "SSO není nakonfigurováno (STOPA_OIDC_ISSUER)")
+        secret = os.environ.get("STOPA_OIDC_HS256_SECRET") or ""
+        jwks: dict | None = None
+        if not secret:
+            fetcher: Callable[[str], dict] | None = getattr(app.state, "sso_fetcher", None)
+            try:
+                if fetcher is not None:
+                    # testovací hook — bez sítě; fetcher vrací JWKS přímo
+                    jwks = fetcher(cfg["issuer"])
+                else:
+                    import urllib.request
+
+                    url = cfg["issuer"].rstrip("/") + "/.well-known/openid-configuration"
+                    with urllib.request.urlopen(url, timeout=10) as resp:
+                        disc = json.loads(resp.read().decode("utf-8"))
+                    jwks_uri = str(disc.get("jwks_uri") or "")
+                    if not jwks_uri:
+                        raise ValueError("OIDC discovery bez jwks_uri")
+                    jwks = _default_jwks_fetch(jwks_uri)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                raise HTTPException(502, f"OIDC JWKS fetch selhal: {exc}") from exc
+        audience = os.environ.get("STOPA_OIDC_AUDIENCE") or cfg["client_id"] or None
+        try:
+            return verify_jwt(
+                id_token,
+                jwks=jwks,
+                secret=secret or None,
+                issuer=cfg["issuer"],
+                audience=audience,
+            )
+        except JwtError as exc:
+            raise HTTPException(401, f"neplatný ID token: {exc}") from exc
 
     def open_db(case_id: str) -> CaseDB:
         validate_case_id(case_id)
@@ -361,8 +570,20 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
     # ── cases ─────────────────────────────────────────────────
     @app.get("/api/cases")
     def list_cases() -> list[dict]:
+        _require("case.read")  # legacy: settings role; multi-user bez tokenu → 401 fail-closed
+        # F4.4 — multi-user: uživatel vidí jen případy, ve kterých je člen (admin = vše).
+        visible: set[str] | None = None
+        status, user = _current_user()
+        if status == "ok" and normalize_role(user["role"]) != "admin":
+            repo = _user_repo()
+            try:
+                visible = set(repo.member_case_ids(user["id"]))  # fail-closed filtr
+            finally:
+                repo.conn.close()
         out = []
         for path in sorted(base.glob("case-*.db")):
+            if visible is not None and path.stem not in visible:
+                continue
             db = CaseDB(path)
             try:
                 case = db.get_case(path.stem)
@@ -443,7 +664,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
     # ── sources / ingest ──────────────────────────────────────
     @app.post("/api/cases/{case_id}/sources", status_code=201)
     def add_source(case_id: str, body: SourceIn) -> dict:
-        _require("source.add", "add_source")
+        _require("source.add", "add_source", case_id=case_id)
         root = Path(body.path).expanduser()
         if not root.exists():
             raise HTTPException(400, f"zdroj neexistuje: {root}")
@@ -628,7 +849,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         """
         from stopa.domain.review import ReviewError
 
-        _require("case.review", case_id)
+        _require("case.review", case_id, case_id=case_id)
         db = open_db(case_id)
         try:
             try:
@@ -837,7 +1058,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         Rozpory (souběžná aktivita subjektu) + duplikáty napříč zdroji nad
         materializovanou timeline. Idempotentní, deterministický výsledek.
         """
-        _require("analysis.run", "timeline_intel")
+        _require("analysis.run", "timeline_intel", case_id=case_id)
         from stopa.pipeline import run_timeline_intel
 
         db = open_db(case_id)
@@ -857,7 +1078,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
     @app.post("/api/cases/{case_id}/correlate")
     def correlate(case_id: str) -> dict:
         """Explicitní krok korelace (ROADMAP E4 bod 4) — re-run = clear + insert."""
-        _require("analysis.run", "correlate")
+        _require("analysis.run", "correlate", case_id=case_id)
         from stopa.domain.correlation import run_correlation
 
         db = open_db(case_id)
@@ -1145,7 +1366,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
             to_xml,
         )
 
-        _require("analysis.run", "interop_export")
+        _require("analysis.run", "interop_export", case_id=case_id)
         if what not in ("artifacts", "timeline", "correlations"):
             raise HTTPException(400, f"neplatný dataset: {what}")
         valid_formats = ("csv", "json", "jsonl", "xml", "stix", "l2tcsv", "uco")
@@ -1238,7 +1459,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
             to_zip_bundle,
         )
 
-        _require("analysis.run", "interop_export_bundle")
+        _require("analysis.run", "interop_export_bundle", case_id=case_id)
         if limit is not None and limit < 1:
             raise HTTPException(422, f"limit musí být ≥ 1 (dostalo se {limit})")
 
@@ -1309,7 +1530,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
             to_l2tcsv,
         )
 
-        _require("analysis.run", "l2tcsv_preview")
+        _require("analysis.run", "l2tcsv_preview", case_id=case_id)
         if what not in ("artifacts", "timeline", "correlations"):
             raise HTTPException(400, f"neplatný dataset: {what}")
         limit = max(1, min(int(limit), 500))
@@ -1370,7 +1591,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         )
         from stopa.domain.uco import to_uco_json
 
-        _require("analysis.run", "export_preview")
+        _require("analysis.run", "export_preview", case_id=case_id)
         if what not in ("artifacts", "timeline", "correlations"):
             raise HTTPException(400, f"neplatný dataset: {what}")
         if format not in ("l2tcsv", "csv", "uco"):
@@ -1453,7 +1674,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
 
         404 = pro daný dataset+formát ještě nebylo nic exportováno.
         """
-        _require("analysis.run", "last_export")
+        _require("analysis.run", "last_export", case_id=case_id)
         if what not in ("artifacts", "timeline", "correlations", "bundle"):
             raise HTTPException(400, f"neplatný dataset: {what}")
         # STP-068 — bundle se re-downloaduje jen jako zip; ostatní datasety
@@ -1500,7 +1721,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
 
         404 = auto-export ještě nikdy nebyl vygenerován.
         """
-        _require("analysis.run", "auto_export_download")
+        _require("analysis.run", "auto_export_download", case_id=case_id)
         db = open_db(case_id)
         try:
             case = db.get_case(case_id)
@@ -1541,7 +1762,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         )
         from stopa.domain.timesketch_push import push_to_timesketch
 
-        _require("analysis.run", "timesketch_push")
+        _require("analysis.run", "timesketch_push", case_id=case_id)
         if body.what not in ("artifacts", "timeline", "correlations"):
             raise HTTPException(400, f"neplatný dataset: {body.what}")
 
@@ -1597,7 +1818,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         503 — Timesketch nedostupná; 502 — dotaz selhal (HTTP != 200 /
         ne-JSON). Read-only → RBAC ``case.read`` (všechny role), bez auditu.
         """
-        _require("case.read", "timesketch_status")
+        _require("case.read", "timesketch_status", case_id=case_id)
 
         db = open_db(case_id)
         try:
@@ -1653,7 +1874,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         """
         from stopa.domain.plaso_import import import_l2tcsv
 
-        _require("analysis.run", "plaso_import")
+        _require("analysis.run", "plaso_import", case_id=case_id)
 
         filename = file.filename or ""
         if not filename.endswith((".csv", ".l2t.csv")):
@@ -1753,8 +1974,12 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
 
     # ── STP-052 — Audit Center (oblast O) ─────────────────────
     @app.get("/api/cases/{case_id}/audit")
-    def audit_center(case_id: str, limit: int = 100) -> dict:
+    def audit_center(
+        case_id: str, limit: int = 100, actor: str | None = Query(None)
+    ) -> dict:
         """Audit Center — neměnná stopa + integrity v jednom reportu.
+
+        F4.4: ``actor`` volitelně filtruje audit log per user (username).
 
         Agreguje (čistá čtení nad DB):
         - ``chain`` — výsledek ověření hash řetězce audit logu (C4),
@@ -1766,7 +1991,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         db = open_db(case_id)
         try:
             report = db.verify_audit_chain()
-            entries = db.list_audit_log(limit=max(1, min(int(limit), 1000)))
+            entries = db.list_audit_log(limit=max(1, min(int(limit), 1000)), actor=actor)
             checkpoints = db.list_integrity_checkpoints()
             checkpoint_checks = db.verify_integrity_checkpoints()
             return {
@@ -1807,7 +2032,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         """
         if body.mode not in ("nl_search", "summary", "explain"):
             raise HTTPException(400, f"neznámý režim: {body.mode}")
-        _require("analysis.run", "ai_query")
+        _require("analysis.run", "ai_query", case_id=case_id)
         db = open_db(case_id)
         try:
             case = db.get_case(case_id)
@@ -1863,7 +2088,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
 
         if not body.question.strip():
             raise HTTPException(400, "chybí otázka")
-        _require("analysis.run", "ai_analyze")
+        _require("analysis.run", "ai_analyze", case_id=case_id)
         db = open_db(case_id)
         try:
             case = db.get_case(case_id)
@@ -1943,7 +2168,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         """Graf hypotéz případu: uzly + hrany + lineage k artefaktům."""
         from stopa.intelligence.hypothesis_graph import graph_payload
 
-        _require("analysis.run", "hypotheses_list")
+        _require("analysis.run", "hypotheses_list", case_id=case_id)
         db = open_db(case_id)
         try:
             if db.get_case(case_id) is None:
@@ -1962,7 +2187,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
             store_graph,
         )
 
-        _require("analysis.run", "hypotheses_generate")
+        _require("analysis.run", "hypotheses_generate", case_id=case_id)
         db = open_db(case_id)
         try:
             if db.get_case(case_id) is None:
@@ -1994,7 +2219,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         """Ruční potvrzení/vyvrácení hypotézy (AK F3.5)."""
         from stopa.data.hypothesis_repository import HYPOTHESIS_STATUSES
 
-        _require("analysis.run", "hypotheses_status")
+        _require("analysis.run", "hypotheses_status", case_id=case_id)
         if body.status not in HYPOTHESIS_STATUSES:
             raise HTTPException(400, f"neplatný stav (očekáváno pending|confirmed|refuted): {body.status}")
         db = open_db(case_id)
@@ -2015,7 +2240,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         """Export grafu hypotéz — PDF/JSON (AK F3.5)."""
         from stopa.intelligence.hypothesis_graph import export_graph_json, export_graph_pdf
 
-        _require("analysis.run", "hypotheses_export")
+        _require("analysis.run", "hypotheses_export", case_id=case_id)
         if format not in ("json", "pdf"):
             raise HTTPException(400, f"neznámý formát: {format}")
         db = open_db(case_id)
@@ -2088,18 +2313,52 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         """Aktuální role; bez uložené hodnoty → default (examiner)."""
         return _load_settings().get("role") or DEFAULT_ROLE
 
-    def _require(permission: str, context: str = "") -> None:
-        """Validuje oprávnění aktuální role; chybí → HTTP 403."""
-        try:
-            require_permission(_current_role(), permission, context=context)
-        except RBACDenied as exc:
-            raise HTTPException(403, str(exc)) from exc
+    def _require(permission: str, context: str = "", *, case_id: str | None = None) -> None:
+        """Validuje oprávnění — F4.4 multi-user + STP-053 legacy role.
+
+        - **Session uživatel** (multi-user): efektivní role z per-case členství
+          (:func:`access_for_case`); ``case_id`` aktivuje case kontext;
+          bez přístupu → 403 fail-closed.
+        - **Bez tokenu**: multi-user režim → 401 (fail-closed); legacy single-operator
+          → settings role jako dosud (zpětná kompatibilita).
+        - **Neplatný/expirovaný token** → 401 (fail-closed).
+        """
+        status, user = _current_user()
+        if status == "ok":
+            if case_id is not None:
+                # case kontext: členství vyhrává (access_for_case), fail-closed 403
+                repo = _user_repo()
+                try:
+                    grants = repo.case_grants(user["id"], case_id)
+                finally:
+                    repo.conn.close()
+                has_access, role = access_for_case(user["role"], grants)
+                if not (has_access and role is not None):
+                    raise HTTPException(403, f"uživatel {user['username']} nemá přístup k případu")
+            else:
+                # globální operace mimo case kontext → globální role uživatele
+                role = user["role"]
+            try:
+                require_permission(role, permission, context=context or (case_id or ""))
+            except RBACDenied as exc:
+                raise HTTPException(403, str(exc)) from exc
+        elif status == "no-token":
+            if _multi_user_mode():
+                raise HTTPException(401, "chybějící session (F4.4 multi-user režim)")
+            try:
+                require_permission(_current_role(), permission, context=context)
+            except RBACDenied as exc:
+                raise HTTPException(403, str(exc)) from exc
+        else:  # bad token — fail-closed
+            raise HTTPException(401, "neplatná nebo expirovaná session")
 
     @app.get("/api/settings")
     def get_settings() -> dict:
         """Uživatelská nastavení (defaulty + uložené přepsání)."""
         s = _load_settings()
-        role = s.get("role") or DEFAULT_ROLE
+        # F4.4 — multi-user: role session uživatele mačí přepínač v settings
+        status, user = _current_user()
+        role = user["role"] if status == "ok" else (s.get("role") or DEFAULT_ROLE)
         return {
             "timezone_name": s.get("timezone_name", "Europe/Prague"),
             "ai_url": s.get("ai_url") or os.environ.get(
@@ -2111,6 +2370,13 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
             "bind_address": s.get("bind_address", "127.0.0.1"),
             # STP-019 — PII redaktor je default ON (fail-safe: maskovat)
             "ai_redact_pii": bool(s.get("ai_redact_pii", True)),
+            # F4.4 — multi-user režim + identita session (SPA topbar / login gate)
+            "multi_user_mode": _multi_user_mode(),
+            "user": (
+                {"username": user["username"], "role": user["role"]}
+                if status == "ok"
+                else None
+            ),
         }
 
     @app.get("/api/roles")
@@ -2151,11 +2417,183 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
         _save_settings(s)
         return get_settings()
 
-    # ── E12 — Cases CRUD (update/delete nad existujícím GET/POST) ──
+    # ── F4.4 — Multi-tenant RBAC endpoints (orgs/teams/users/members/sso) ───────
+    @app.get("/auth/me")
+    def auth_me() -> dict:
+        """Identita aktuální session + case členství; anonymní → 401 fail-closed."""
+        status, user = _current_user()
+        if status != "ok":
+            raise HTTPException(401, "neaktivní nebo neplatná session")
+        repo = _user_repo()
+        try:
+            memberships = repo.user_memberships(user["id"])
+        finally:
+            repo.conn.close()
+        return {**dict(user), "memberships": memberships}
+
+    @app.post("/auth/login")
+    def auth_login(body: LoginIn) -> dict:
+        """Login přes SSO ``id_token`` nebo lokální ``username`` (bootstrap režim)."""
+        if bool(body.id_token) == bool(body.username):
+            raise HTTPException(400, "zadejte právě id_token nebo username")
+        if body.id_token is not None:
+            claims = _sso_verify_id_token(body.id_token)  # RS256/HS256 fail-closed
+            repo = _user_repo()
+            try:
+                row = repo.get_user(username=str(claims["sub"]))
+            finally:
+                repo.conn.close()
+            if row is None or not row["active"]:
+                raise HTTPException(401, "uživatel není v STOPA (nebo je neaktivní)")
+        else:  # bootstrap: multi-user režim ještě nenastal (žádní uživatelé)
+            repo = _user_repo()
+            try:
+                if repo.multi_user_mode():
+                    raise HTTPException(401, "multi-user režim — použijte SSO login")
+                row = repo.get_user(username=body.username or "")
+            finally:
+                repo.conn.close()
+            if row is None or not row["active"]:
+                raise HTTPException(401, f"neznámý uživatel: {body.username!r}")
+        token = sign_session_token({"u": dict(row)["username"]}, _session_secret())
+        return {"token": token, "user": dict(row)}
+
+    @app.post("/auth/logout")
+    def auth_logout() -> dict:
+        """Logout (client odstraní token; secret zůstává — stateless HMAC)."""
+        return {"ok": True}
+
+    @app.get("/api/orgs")
+    def list_orgs() -> list[dict]:
+        _require("settings.read", "list_orgs")
+        repo = _user_repo()
+        try:
+            return repo.list_orgs()
+        finally:
+            repo.conn.close()
+
+    @app.post("/api/orgs", status_code=201)
+    def create_org(body: OrgIn) -> dict:
+        _require("settings.write", "create_org")
+        org_id = hashlib.sha256(f"org:{body.name}".encode()).hexdigest()[:16]
+        repo = _user_repo()
+        try:
+            return repo.upsert_org(org_id=org_id, name=body.name)
+        finally:
+            repo.conn.close()
+
+    @app.get("/api/teams")
+    def list_teams(org_id: str | None = Query(None)) -> list[dict]:
+        _require("settings.read", "list_teams")
+        repo = _user_repo()
+        try:
+            return repo.list_teams(org_id=org_id)
+        finally:
+            repo.conn.close()
+
+    @app.post("/api/teams", status_code=201)
+    def create_team(body: TeamIn) -> dict:
+        _require("settings.write", "create_team")
+        team_id = hashlib.sha256(f"team:{body.org_id}:{body.name}".encode()).hexdigest()[:16]
+        repo = _user_repo()
+        try:
+            return repo.upsert_team(team_id=team_id, org_id=body.org_id, name=body.name)
+        finally:
+            repo.conn.close()
+
+    @app.get("/api/users")
+    def list_users() -> list[dict]:
+        _require("settings.read", "list_users")
+        repo = _user_repo()
+        try:
+            return repo.list_users()
+        finally:
+            repo.conn.close()
+
+    @app.post("/api/users", status_code=201)
+    def create_user(body: UserIn) -> dict:
+        if normalize_role(body.role) is None:
+            raise HTTPException(400, f"neplatná role: {body.role!r}")
+        _require("settings.write", "create_user")
+        repo = _user_repo()
+        try:
+            user_id = hashlib.sha256(f"user:{body.username}".encode()).hexdigest()[:16]
+            try:
+                return repo.create_user(
+                    user_id=user_id,
+                    username=body.username,
+                    display_name=body.display_name,
+                    team_id=body.team_id,
+                    role=body.role,
+                )
+            except sqlite3.IntegrityError as exc:
+                raise HTTPException(409, f"username už existuje: {body.username!r}") from exc
+        finally:
+            repo.conn.close()
+
+    @app.patch("/api/users/{user_id}")
+    def update_user(user_id: str, body: UserUpdateIn) -> dict:
+        if body.role is not None and normalize_role(body.role) is None:
+            raise HTTPException(400, f"neplatná role: {body.role!r}")
+        _require("settings.write", "update_user")
+        repo = _user_repo()
+        try:
+            user = repo.get_user(user_id=user_id)
+            if user is None:
+                raise HTTPException(404, f"uživatel neexistuje: {user_id!r}")
+            if body.active is not None:
+                repo.set_user_active(user_id, bool(body.active))
+            return repo.upsert_user(
+                user_id=user_id,
+                username=dict(user)["username"],
+                display_name=body.display_name,  # None = bez změny (upsert sémantika)
+                team_id=body.team_id,
+                role=body.role,
+            )
+        finally:
+            repo.conn.close()
+
+    @app.post("/api/cases/{case_id}/members", status_code=201)
+    def grant_member(case_id: str, body: MemberGrantIn) -> dict:
+        """Per-case oprávnění — přide členství (role v případě)."""
+        if normalize_role(body.role) is None:
+            raise HTTPException(400, f"neplatná role: {body.role!r}")
+        _require("case.update", "members_grant", case_id=case_id)
+        open_db(case_id).close()  # existence check fail-closed (404 jinak)
+        repo = _user_repo()
+        try:
+            if repo.get_user(user_id=body.user_id) is None:
+                raise HTTPException(404, f"uživatel neexistuje: {body.user_id!r}")
+            return repo.grant_case(case_id, body.user_id, role=body.role)
+        finally:
+            repo.conn.close()
+
+    @app.delete("/api/cases/{case_id}/members/{user_id}", status_code=204)
+    def revoke_member(case_id: str, user_id: str) -> None:
+        _require("case.update", "members_revoke", case_id=case_id)
+        open_db(case_id).close()
+        repo = _user_repo()
+        try:
+            if not repo.revoke_case(case_id, user_id):
+                raise HTTPException(404, "členství neexistuje")
+        finally:
+            repo.conn.close()
+
+    @app.get("/api/cases/{case_id}/members")
+    def list_members(case_id: str) -> list[dict]:
+        _require("case.read", "members_list", case_id=case_id)
+        open_db(case_id).close()
+        repo = _user_repo()
+        try:
+            return repo.list_case_members(case_id)
+        finally:
+            repo.conn.close()
+
+    # ── E12 — Cases CRUD (update/delete nad existujícím GET/POST) ───────────────
     @app.patch("/api/cases/{case_id}")
     def update_case(case_id: str, body: CaseUpdateIn) -> dict:
         """Aktualizace metadat případu (name/examiner/notes/timezone/auto-export)."""
-        _require("case.update", "update_case")
+        _require("case.update", "update_case", case_id=case_id)
         db = open_db(case_id)
         try:
             ok = db.update_case(
@@ -2188,7 +2626,7 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
     @app.delete("/api/cases/{case_id}")
     def delete_case(case_id: str) -> dict:
         """Smaže případ i zdroje (kaskáda na files/artifacts/timeline)."""
-        _require("case.delete", "delete_case")
+        _require("case.delete", "delete_case", case_id=case_id)
         validate_case_id(case_id)
         path = base / f"{case_id}.db"
         db = CaseDB(path) if path.exists() else None
@@ -2207,6 +2645,13 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
             drop_case_analytics(path)
         except Exception as exc:  # noqa: BLE001 — cleanup nesmí rozbít delete
             log.warning("DuckDB cleanup selhal pro case %s: %s", case_id, exc)
+        # F4.4 — instance DB: smazat řádek case → FK CASCADE odstraní i členství
+        repo = _user_repo()
+        try:
+            repo.conn.execute("DELETE FROM cases WHERE id=?", (case_id,))
+            repo.conn.commit()
+        finally:
+            repo.conn.close()
         return {"deleted": case_id}
 
     # ── statická SPA ──────────────────────────────────────────

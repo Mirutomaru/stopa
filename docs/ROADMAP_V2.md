@@ -234,10 +234,20 @@ Stavy artifactů: draft → reviewed → approved → court-ready. Dva examinát
 - **Testy** `tests/test_f43_review.py` (**25 testů**): čistý automat (přeskočení/zpět/stejný stav/neznamé stavy/kvorum distinct), DB vrstva (kritičnost, 3-examinátor workflow A→B→C s audit trail + neměnnou historií, blokáda jednoho examinátora na kritickém, solo path nekritického, nedotčená DB při selhání), web API (201/409/404/422, end-to-end flow), **live WS `review.state`**, report filtr (aktivní i neaktivní workflow).
 - AK ✓: nelze obejít (stavový automat + CHECK constraints + kvorum); report jen court-ready; 3-examinátor scénář pokryt testem. stp041 aktualizován na v16 + `artifact_reviews`. Ruff clean; full suite viz commit message.
 
-### F4.4 — Multi-tenant RBAC rozšíření `[ ]`
+### F4.4 — Multi-tenant RBAC rozšíření `[x] ✅ 2026-11-15`
 Organizace → týmy → uživatelé; per-case permissions; SSO (OIDC/SAML); audit log per user.
 **AK:** Keycloak/Okta funkční; permission matrix na 50 scénářích; fail-closed default.
 **P1 | L | závislosti: F4.3**
+
+**IMPLEMENTACE (2026-11-15):**
+- **`src/stopa/domain/multitenant.py`** (nová, čistá doménová vrstva bez IO): `access_for_case(global_role, case_grants)` — role v případě vyhrává nad globální, admin = fallback; fail-closed = nečlen bez admin role nemá přístup ani ke čtení. `map_claims()` — role z JWT claims (`groups`/`roles`, nejvyšší privilegium mezi známými rolemi v prvním claimu s rolí). `verify_jwt()` — **HS256** (Keycloak symmetric) a **RS256 + JWKS** (Okta); `alg=none` fail-closed; kontrola `exp`/`nbf`/`iat`, volitelně `iss`/audience; RS256 = standardní RSA-PKCS1v15(SHA256(signing_input)) přes existující `cryptography 50.0.2` (bez nové závislosti); JWKS fetch injektovatelný (`sso_fetcher`) pro offline testy.
+- **Schéma v16 → v17**: reorganizace na `_SCHEMA_CORE` + `MULTITENANT_DDL` — tabulky `orgs`, `teams`, `users` (role CHECK analyst/examiner/admin), `case_members` (kompozitní PK, FK CASCADE) + stub `cases(id)` pro instance DB. Legacy migrace idempotentně doplní chybějící tabulky do starých case DB.
+- **`UserRepository`** (nový `src/stopa/data/user_repository.py`): CRUD orgs/týmů/uživatelé/členství; deterministické ID (`sha256(...)[:16]`); `user_memberships()` pro `/auth/me`; `member_case_ids()` pro filtrace listingu; `_ensure_case()` řeší FK (case ID žije v samostatném case-*.db).
+- **Web vrstva**: instance DB `stopa_instance.db` (pouze MULTITENANT_DDL); session tokeny HMAC-SHA256 `body.sig`, TTL 12 h, fail-closed; header `X-Stopa-Token`; `_require(permission, context, case_id=...)` — v case kontextu členství vyhrává + fail-closed 403, globální operace běží na globální roli uživatele; **legacy režim** (žádní uživatelé) = settings role jako doposud.
+- **Endpointy**: `POST /auth/login` (SSO id_token XOR username), `GET /auth/me` (+ členství); CRUD `/api/orgs|teams|users`; per-case `POST/DELETE/GET /api/cases/{id}/members`; audit `?actor=` filtr; settings rozšířeno o `multi_user_mode` + `user`. RBAC: nové oprávnění **`settings.read`** (všechny role); `case.create` zůstává examiner/admin.
+- **Fail-closed dokázáno matice**: bez tokenu 401; nečlen bez admin role 403 i na read; unknown role v grantu → 400 + CHECK constraint; smazání case kaskádně odstraní členství z instance DB.
+- **Testy** `tests/test_f44_multitenant.py` — **60 scénářů (≥ AK 50)**, skupiny L/M/A/B/C/D/E/F/G: legacy režim, fail-closed bez tokenu, globální admin fallback, case-kontext vs. globál, členství examiner, per-case elevace role, konflikty grantů (upsert/max privilegium/unknown), SSO+JWT edge cases (expired, issuer, **RS256 přes JWKS hook**), audit per user + identita v settings.
+- AK ✓: Keycloak/Okta = OIDC HS256/RS256-JWKS funkční; permission matrix 60 ≥ 50; fail-closed default pokryt skupinou M. stp041 na v17; db.py 599 řádků (budget <600). Ruff clean; full suite viz commit message.
 
 ### F4.5 — Case sharing & collaboration `[ ]`
 Sdílení případů (read/write), comments na artifactech, @mentions.

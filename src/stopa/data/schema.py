@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -18,7 +18,7 @@ def _schema_version(conn: sqlite3.Connection) -> int:
     return int(row["value"]) if row else 1
 
 
-SCHEMA = """
+_SCHEMA_CORE = """
 CREATE TABLE IF NOT EXISTS cases (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -257,7 +257,46 @@ CREATE TABLE IF NOT EXISTS artifact_reviews (
 );
 CREATE INDEX IF NOT EXISTS idx_artifact_reviews_case ON artifact_reviews(case_id);
 CREATE INDEX IF NOT EXISTS idx_artifact_reviews_artifact ON artifact_reviews(artifact_id);
+"""
 
+#: F4.4 — multi-tenant RBAC DDL; aplikuje se samostatně i na instance DB
+# (``{db_dir}/stopa_instance.db``) — orgs/teams/users/case_members jsou globální
+# objekty sdílené napříč case DB (stejné tabulky v case DB = forward-compat).
+MULTITENANT_DDL = """
+-- stub cases pro FK z case_members v instance DB; v case DB ho IF NOT EXISTS přeskočí
+CREATE TABLE IF NOT EXISTS cases (id TEXT PRIMARY KEY);
+
+-- F4.4: Multi-tenant RBAC — organizace → týmy → uživatelé + per-case členství.
+-- Fail-closed: nečlen bez admin role nemá přístup (domain/multitenant.py).
+CREATE TABLE IF NOT EXISTS orgs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS teams (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    UNIQUE(org_id, name)
+);
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    display_name TEXT,
+    team_id TEXT REFERENCES teams(id) ON DELETE SET NULL,
+    role TEXT NOT NULL DEFAULT 'examiner' CHECK (role IN ('analyst','examiner','admin')),
+    active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS case_members (
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('analyst','examiner','admin')),
+    granted_by TEXT,
+    ts_utc TEXT NOT NULL,
+    PRIMARY KEY(case_id, user_id)
+);
+"""
+
+SCHEMA = _SCHEMA_CORE + MULTITENANT_DDL + """
 -- P0 Core C5: Reproducibility Engine — záznamy analytických operací.
 -- Každá operace nese vstupní soubory + hashe, verze parserů/STOPA, hash konfigurace,
 -- deterministický souhrn výstupů a prostředí → opakovatelnost + porovnání výsledků.

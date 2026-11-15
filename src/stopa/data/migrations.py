@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from stopa.data.schema import SCHEMA_VERSION, _schema_version
+from stopa.data.schema import MULTITENANT_DDL, SCHEMA_VERSION, _schema_version
 from stopa.domain.integrity import GENESIS, compute_audit_hash
 
 
@@ -99,6 +99,15 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
             "INSERT OR REPLACE INTO meta (key, value)"
             " VALUES ('artifacts_fts_backfilled', '1')"
         )
+        conn.commit()
+    # F4.4 Multi-tenant RBAC — stará case DB (≤ v16) bez multi-tenant tabulek.
+    # Idempotentní (CREATE … IF NOT EXISTS); stub `cases` je no-op, protože case DB
+    # už má plnou cases tabulku z _SCHEMA_CORE. Instance DB dostane jen MULTITENANT_DDL.
+    existing_tables = {
+        r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }
+    if not {"orgs", "teams", "users", "case_members"} <= existing_tables:
+        conn.executescript(MULTITENANT_DDL)
         conn.commit()
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).

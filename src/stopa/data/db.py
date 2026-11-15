@@ -22,6 +22,7 @@ from stopa.data.hypothesis_repository import HypothesisRepository  # F3.5
 from stopa.data.migrations import apply_legacy_migrations  # ETAPA C vlna 3
 from stopa.data.query_cache import PROCESS_CACHE  # F2.5 — cache vrstva
 from stopa.data.schema import SCHEMA, SCHEMA_VERSION, _schema_version  # noqa: F401 — SCHEMA_VERSION backward compat (testy)
+from stopa.data.user_repository import UserRepository  # F4.4 — multi-tenant RBAC
 from stopa.domain.evidence_model import Finding
 from stopa.domain.lineage import LineageEvent
 from stopa.domain.reproducibility import AnalysisOperation
@@ -52,6 +53,7 @@ class CaseDB:
         self.artifact_repo = ArtifactRepository(self.conn)
         self.entity_repo = EntityRepository(self.conn)
         self.hypothesis_repo = HypothesisRepository(self.conn)  # F3.5
+        self.user_repo = UserRepository(self.conn)  # F4.4 — multi-tenant RBAC
         # F4.2 — live event hook (volitelný; nastaví web vrstva pro WebSocket push).
         self.on_event: Callable[[str, dict], None] | None = None
 
@@ -218,10 +220,10 @@ class CaseDB:
 
     # ── E1 Evidence Manager: audit log + custody items ────────
     def list_audit_log(
-        self, limit: int | None = 100, offset: int | None = None
+        self, limit: int | None = 100, offset: int | None = None, actor: str | None = None
     ) -> list[dict]:
-        """Audit trail — nejnovější operace první (chronologická stopa)."""
-        return self.audit_repo.list_audit_log(limit=limit, offset=offset)
+        """Audit trail — nejnovější operace první. F4.4: volitelný filtr per user."""
+        return self.audit_repo.list_audit_log(limit=limit, offset=offset, actor=actor)
 
     def set_custody_item(
         self,

@@ -101,15 +101,23 @@ class AuditRepository:
         return verify_chain(rows)
 
     def list_audit_log(
-        self, limit: int | None = 100, offset: int | None = None
+        self, limit: int | None = 100, offset: int | None = None, actor: str | None = None
     ) -> list[dict]:
-        """Audit trail — nejnovější operace první (chronologická stopa)."""
-        q = "SELECT id, ts, action, actor, details_json FROM audit_log ORDER BY id DESC"
+        """Audit trail — nejnovější operace první (chronologická stopa).
+
+        F4.4: volitelný filtr ``actor`` (audit log per user).
+        """
+        q = "SELECT id, ts, action, actor, details_json FROM audit_log"
+        params: list[object] = []
+        if actor is not None:
+            q += " WHERE actor = ?"
+            params.append(actor)
+        q += " ORDER BY id DESC"
         if limit is not None:
             q += f" LIMIT {int(limit)}"
         if offset:
             q += f" OFFSET {int(offset)}"
-        rows = self.conn.execute(q).fetchall()
+        rows = self.conn.execute(q, params).fetchall()
         return [
             {
                 "id": r["id"],

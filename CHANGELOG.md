@@ -214,6 +214,30 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 - Testy: `tests/test_f43_review.py` **25/25** (včetně 3-examinátor scénáře a live WS);
   stp041 aktualizován na v16; ruff clean.
 
+#### F4.4 Multi-tenant RBAC — orgs/týmy/uživatelé, per-case oprávnění, SSO OIDC
+- **`src/stopa/domain/multitenant.py`**: čistá doménová vrstva — `access_for_case()`
+  (role v případě vyhrává nad globální; admin = fallback; fail-closed default),
+  `map_claims()` (role z JWT claims `groups`/`roles`, nejvyšší privilegium mezi
+  známými rolemi), `verify_jwt()` — **HS256** (Keycloak) a **RS256 + JWKS** (Okta);
+  `alg=none` fail-closed, kontrola `exp`/`nbf`/`iat`, volitelně `iss`/audience;
+  RS256 = RSA-PKCS1v15(SHA256) přes existující `cryptography 50.0.2` (bez nové závislosti);
+  JWKS fetch injektovatelný pro offline testy.
+- **Schéma v16 → v17**: `_SCHEMA_CORE` + `MULTITENANT_DDL` — tabulky `orgs`, `teams`,
+  `users`, `case_members` (+ stub `cases(id)` pro instance DB); idempotentní legacy migrace.
+- **`UserRepository`** (nový): CRUD orgs/týmů/uživatelé/členství, deterministické ID,
+  `user_memberships()` + `member_case_ids()`, `_ensure_case()` (FK na case-*.db ID).
+- **Web vrstva**: instance DB `stopa_instance.db`; session tokeny HMAC-SHA256 `body.sig`
+  (TTL 12 h, fail-closed), header `X-Stopa-Token`; `_require(..., case_id=...)` — v case
+  kontextu členství vyhrává + fail-closed 403; legacy režim (bez uživatelů) = settings role.
+- **Endpointy**: `/auth/login` (SSO id_token XOR username), `/auth/me` (+ členství),
+  CRUD `/api/orgs|teams|users`, per-case `POST/DELETE/GET /api/cases/{id}/members`,
+  audit `?actor=`, settings + `multi_user_mode`/`user`. Nové oprávnění `settings.read`.
+- **Fail-closed**: bez tokenu 401; nečlen bez admin role 403 i na read; unknown role v
+  grantu → 400 + CHECK constraint; smazání case kaskádně odstraní členství.
+- Testy: `tests/test_f44_multitenant.py` — **permission matrix 60 scénářů (≥ AK 50)**,
+  skupiny L/M/A/B/C/D/E/F/G včetně RS256 přes JWKS hook a audit per user; stp041 na v17;
+  db.py 599 řádků (budget <600); ruff clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad
