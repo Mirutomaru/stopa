@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -191,6 +191,24 @@ CREATE TABLE IF NOT EXISTS findings (
 );
 CREATE INDEX IF NOT EXISTS idx_findings_case ON findings(case_id);
 CREATE INDEX IF NOT EXISTS idx_findings_kind ON findings(kind);
+
+-- F3.5: Hypothesis Graph — AI generuje graf hypotéz (pro → proti, confidence),
+-- člověk ručně potvrzuje/vyvrací. Citace = ID artefaktů (lineage k důkazu).
+CREATE TABLE IF NOT EXISTS hypotheses (
+    id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    claim TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.5 CHECK (confidence >= 0.1 AND confidence <= 0.9),
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'confirmed', 'refuted')),
+    support_json TEXT NOT NULL DEFAULT '[]',   -- ID artefaktů: důkazy PRO hypotézu
+    against_json TEXT NOT NULL DEFAULT '[]',   -- ID artefaktů: důkazy PROTI hypotéze
+    parent_id TEXT REFERENCES hypotheses(id) ON DELETE SET NULL,  -- podhypotéza (strom)
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_hypotheses_case ON hypotheses(case_id);
+CREATE INDEX IF NOT EXISTS idx_hypotheses_status ON hypotheses(status);
 
 -- P0 Core C2: Evidence Lineage Engine — append-only řetězec původu zjištění.
 -- Každý krok (extract/correlate/finding/report) nese verzi nástroje, hash konfigurace

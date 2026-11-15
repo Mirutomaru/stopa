@@ -159,10 +159,36 @@ NL → validní dotaz. Sandbox execution (read-only), result validation proti sc
   měřeno, sign/verify round-trip, tamper detekce, graceful degradation bez cryptography, LLM
   narrative + fallback, chybové cesty). Ruff clean; pyright 0/0/0.
 
-### F3.5 — Hypothesis graph `[ ]`
+### F3.5 — Hypothesis graph `[x] ✅ 2026-11-15`
 AI generuje graf hypotéz (pro → proti, confidence). Manuální potvrzení/vyvrácení.
 **AK:** Graf v UI; lineage k artifactům; export PDF/JSON.
 **P2 | L | závislosti: F3.1**
+
+**IMPLEMENTACE (F3.5, `intelligence/hypothesis_graph.py`, bez nových dep):**
+- Uzel grafu = claim + confidence (**0.1–0.9** — interval interpretace, CHECK constraint)
+  + status **pending/confirmed/refuted** + důkazy PRO/PROTI jako **ID artefaktů** (citace).
+  Strom podhypotéz přes `parent_id` (ON DELETE SET NULL). Tabulka `hypotheses` v schématu v15.
+- Generování dvěma cestami: **(a) AI** — injektovatelné `llm_call(prompt) -> str` vracející JSON
+  pole uzlů; **(b) deterministický fallback** z triage F3.2 (detekované profily → hypotézy z
+  template profilu, bez LLM). Fail-closed: neplatný JSON výstup LLM → `HypothesisGraphError`;
+  fail-soft grounding: neexistující citace se vyřadí (dropped citations do statistik).
+- Limity proti expanzi myšlení: `MAX_NODES` uzlů, `EVIDENCE_CAP_PER_SIDE` důkazů na stranu;
+  confidence clamp do [0.1, 0.9]; parent = index v JSON poli s mapováním přes `kept_pos`
+  (odolné vůči vyřazeným prvkům).
+- **Lineage:** `graph_payload()` rozřeší citace na existující artefakty (id/type/title) a
+  vrátí uzly + hrany (`parent`/`support`/`against`) — UI renderuje strom s důkazovými odkazy.
+- **Export PDF/JSON:** JSON round-trip; PDF přes WeasyPrint (lazy import → graceful
+  `RuntimeError`, bez nového povinného balíku). Audit akce: `hypothesis_graph_generated`.
+- Web API: `GET /api/cases/{id}/hypotheses` (payload), `POST .../generate` (AI/fallback,
+  503 bez LM Studio), `POST .../hypotheses/{hid}/status` (**ruční potvrzení/vyvrácení — AK**),
+  `GET .../export?format=json|pdf`. UI: panel „Hypothesis Graph“ v AI modulu (strom s confidence
+  badge, status pill ✓/✗ akce, klikací citace → File Inspector).
+- Data vrstva: `data/hypothesis_repository.py` (`HYPOTHESIS_STATUSES`) + CaseDB facade
+  (`add_hypothesis`, `list_hypotheses`, `get_hypothesis`, `set_hypothesis_status`).
+- Testy: `tests/test_f35_hypothesis_graph.py` — **20/20 PASSED** (fallback z triage, lineage +
+  fail-soft, přechody stavů, CHECK confidence, strom podhypotéz, LLM parsing/clamp/parent-mapping,
+  MAX_NODES/EVIDENCE_CAP kapce, export JSON/PDF, audit log, web E2E přes TestClient). Ruff clean;
+  pyright 0/0/0.
 
 ---
 

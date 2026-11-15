@@ -16,6 +16,7 @@ from stopa.data.audit_repository import AuditRepository  # ETAPA C vlna 1
 from stopa.data.case_repository import CaseRepository  # ETAPA C vlna 1
 from stopa.data.entity_repository import EntityRepository  # ETAPA C vlna 2
 from stopa.data.file_repository import FileRepository, _fts_query  # noqa: F401 — _fts_query backward compat (test_search)
+from stopa.data.hypothesis_repository import HypothesisRepository  # F3.5
 from stopa.data.migrations import apply_legacy_migrations  # ETAPA C vlna 3
 from stopa.data.query_cache import PROCESS_CACHE  # F2.5 — cache vrstva
 from stopa.data.schema import SCHEMA, SCHEMA_VERSION, _schema_version  # noqa: F401 — SCHEMA_VERSION backward compat (testy)
@@ -49,6 +50,7 @@ class CaseDB:
         # ETAPA C vlna 2 — artifacty/findings/lineage + entity/correlations.
         self.artifact_repo = ArtifactRepository(self.conn)
         self.entity_repo = EntityRepository(self.conn)
+        self.hypothesis_repo = HypothesisRepository(self.conn)  # F3.5
 
     def schema_version(self) -> int:
         """Aktuální verze schématu case DB (E1 — diagnostika / migrace)."""
@@ -340,6 +342,33 @@ class CaseDB:
     def delete_finding(self, finding_id: str) -> bool:
         """Odstraní finding; ``True`` pokud řádek existoval."""
         return self.artifact_repo.delete_finding(finding_id)
+
+    # ── F3.5: Hypothesis Graph (data layer → HypothesisRepository) ─────
+    def add_hypothesis(
+        self,
+        case_id: str,
+        claim: str,
+        confidence: float = 0.5,
+        support: list[str] | None = None,
+        against: list[str] | None = None,
+        parent_id: str | None = None,
+    ) -> str:
+        """Přidá uzel grafu hypotéz; vrací ID uzlu."""
+        return self.hypothesis_repo.add(
+            case_id, claim, confidence, support, against, parent_id
+        )
+
+    def list_hypotheses(self, case_id: str) -> list[dict]:
+        """Všechny hypotézy případu (pořadí vkladu)."""
+        return self.hypothesis_repo.list_by_case(case_id)
+
+    def get_hypothesis(self, hyp_id: str) -> dict | None:
+        """Jeden uzel grafu; ``None`` = nenalezen."""
+        return self.hypothesis_repo.get(hyp_id)
+
+    def set_hypothesis_status(self, hyp_id: str, status: str) -> bool:
+        """Ruční potvrzení/vyvrácení; ``True`` pokud uzel existoval."""
+        return self.hypothesis_repo.set_status(hyp_id, status)
 
     # ── P0 Core C2: Evidence Lineage (ETAPA C vlna 2 → ArtifactRepository) ──
     def log_lineage(

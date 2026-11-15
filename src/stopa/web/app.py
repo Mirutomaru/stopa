@@ -19,12 +19,13 @@ import re
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -109,6 +110,18 @@ class AiAnalyzeIn(BaseModel):
 
     question: str
     agent: str | None = None  # case_analyst|timeline_analyst|artifact_analyst|media_analyst|report_analyst
+
+
+class AiHypoGenerateIn(BaseModel):
+    """F3.5 — generování grafu hypotéz (use_ai = LM Studio, jinak fallback)."""
+
+    use_ai: bool = False
+
+
+class AiHypoStatusIn(BaseModel):
+    """F3.5 — ruční potvrzení/vyvrácení hypotézy."""
+
+    status: str
 
 
 class TimesketchPushIn(BaseModel):
@@ -1765,6 +1778,106 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             db.close()
 
     # ── E12 — System Diagnostics ──────────────────────────────
+    # ── F3.5: Hypothesis Graph (AI graf hypotéz + ruční potvrzení/vyvrácení) ──
+    @app.get("/api/cases/{case_id}/hypotheses")
+    def hypotheses_list(case_id: str) -> dict:
+        """Graf hypotéz případu: uzly + hrany + lineage k artefaktům."""
+        from stopa.intelligence.hypothesis_graph import graph_payload
+
+        _require("analysis.run", "hypotheses_list")
+        db = open_db(case_id)
+        try:
+            if db.get_case(case_id) is None:
+                raise HTTPException(404, "případ neexistuje")
+            return graph_payload(db, case_id)
+        finally:
+            db.close()
+
+    @app.post("/api/cases/{case_id}/hypotheses/generate", status_code=201)
+    def hypotheses_generate(case_id: str, body: AiHypoGenerateIn) -> dict:
+        """Sestaví a uloží graf hypotéz (AI nebo deterministický fallback)."""
+        from stopa.intelligence.hypothesis_graph import (
+            HypothesisGraphError,
+            build_hypothesis_graph,
+            graph_payload,
+            store_graph,
+        )
+
+        _require("analysis.run", "hypotheses_generate")
+        db = open_db(case_id)
+        try:
+            if db.get_case(case_id) is None:
+                raise HTTPException(404, "případ neexistuje")
+            llm_call: Callable[[str], str] | None = None
+            source = "fallback"
+            if body.use_ai:
+                client = LmStudioClient()
+                health = client.health()
+                if not health["available"]:
+                    raise HTTPException(503, "AI nedostupná — spusťte LM Studio (localhost:1234)")
+
+                def _llm(prompt: str) -> str:
+                    return client.chat([{"role": "user", "content": prompt}])
+
+                llm_call = _llm
+                source = "llm"
+            try:
+                nodes = build_hypothesis_graph(db, case_id, llm_call=llm_call)
+            except HypothesisGraphError as exc:
+                raise HTTPException(422, f"neplatný výstup LLM: {exc}") from exc
+            ids = store_graph(db, case_id, nodes, source=source)
+            return {"nodes": len(ids), "ids": ids, "graph": graph_payload(db, case_id)}
+        finally:
+            db.close()
+
+    @app.post("/api/cases/{case_id}/hypotheses/{hyp_id}/status")
+    def hypotheses_status(case_id: str, hyp_id: str, body: AiHypoStatusIn) -> dict:
+        """Ruční potvrzení/vyvrácení hypotézy (AK F3.5)."""
+        from stopa.data.hypothesis_repository import HYPOTHESIS_STATUSES
+
+        _require("analysis.run", "hypotheses_status")
+        if body.status not in HYPOTHESIS_STATUSES:
+            raise HTTPException(400, f"neplatný stav (očekáváno pending|confirmed|refuted): {body.status}")
+        db = open_db(case_id)
+        try:
+            node = db.get_hypothesis(hyp_id)
+            if node is None or node["case_id"] != case_id:
+                raise HTTPException(404, "hypotéza neexistuje")
+            db.set_hypothesis_status(hyp_id, body.status)
+            db.log_operation(
+                "hypothesis_status_changed", actor="web", details={"id": hyp_id, "status": body.status}
+            )
+            return db.get_hypothesis(hyp_id) or {}
+        finally:
+            db.close()
+
+    @app.get("/api/cases/{case_id}/hypotheses/export")
+    def hypotheses_export(case_id: str, format: str = Query("json")) -> Response:
+        """Export grafu hypotéz — PDF/JSON (AK F3.5)."""
+        from stopa.intelligence.hypothesis_graph import export_graph_json, export_graph_pdf
+
+        _require("analysis.run", "hypotheses_export")
+        if format not in ("json", "pdf"):
+            raise HTTPException(400, f"neznámý formát: {format}")
+        db = open_db(case_id)
+        try:
+            if db.get_case(case_id) is None:
+                raise HTTPException(404, "případ neexistuje")
+            if format == "json":
+                text = export_graph_json(db, case_id)
+                _save_last_export(case_id, "hypotheses", "json", text)
+                return Response(content=text, media_type="application/json")
+            out = _last_export_path(case_id, "hypotheses", "pdf")
+            try:
+                export_graph_pdf(db, case_id, out)
+            except RuntimeError as exc:
+                raise HTTPException(501, str(exc)) from exc
+            data = out.read_bytes()
+            _save_last_export_bytes(case_id, "hypotheses", "pdf", data)
+            return Response(content=data, media_type="application/pdf")
+        finally:
+            db.close()
+
     @app.get("/api/diagnostics")
     def diagnostics() -> dict:
         """Verze knihoven + dostupnost volitelných komponent (TSK/EWF/FDE).

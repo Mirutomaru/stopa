@@ -130,6 +130,27 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 - AK ✓: 3 šablony; generování < 30 s (ms v praxi, měřeno testem); Ed25519 sign/verify round-trip
   + tamper detekce — **14/14** testů `tests/test_f34_legal_docs.py`. Ruff + Pyright clean.
 
+#### F3.5 Hypothesis graph — AI graf hypotéz s ručním potvrzením/vyvrácením
+- `src/stopa/intelligence/hypothesis_graph.py` (bez nových dep): uzel = claim + confidence
+  (**0.1–0.9** CHECK constraint) + status **pending/confirmed/refuted** + důkazy PRO/PROTI
+  jako ID artefaktů; strom podhypotéz přes `parent_id`. Nová tabulka `hypotheses` (schéma v15),
+  `data/hypothesis_repository.py` + CaseDB facade (`add_hypothesis`, `list_hypotheses`,
+  `get_hypothesis`, `set_hypothesis_status`).
+- Generování: **(a) AI** — injektovatelné `llm_call(prompt) -> str` vracející JSON pole uzlů;
+  **(b) deterministický fallback** z triage F3.2 (detekované profily → hypotézy, bez LLM).
+  Fail-closed na neplatný LLM výstup (`HypothesisGraphError`); fail-soft grounding citace
+  (neexistující artefakty se vyřadí). Limity: `MAX_NODES`, `EVIDENCE_CAP_PER_SIDE`,
+  confidence clamp, parent-index mapping odolné vůči vyřazeným prvkům.
+- **Lineage:** `graph_payload()` rozřeší citace na existující artefakty (id/type/title) +
+  hrany `parent`/`support`/`against`. **Export PDF/JSON** — JSON round-trip; PDF přes
+  WeasyPrint (lazy import → graceful `RuntimeError`). Audit akce `hypothesis_graph_generated`.
+- Web API: `GET /api/cases/{id}/hypotheses`, `POST .../generate` (AI/fallback, 503 bez LM Studio),
+  `POST .../hypotheses/{hid}/status` (**ruční potvrzení/vyvrácení — AK**),
+  `GET .../export?format=json|pdf`. UI: panel „Hypothesis Graph“ v AI modulu (strom s confidence,
+  status ✓/✗ akce, klikací důkazové citace).
+- AK ✓: graf v UI; lineage k artifactům; export PDF/JSON — **20/20** testů
+  `tests/test_f35_hypothesis_graph.py` (včetně web E2E přes TestClient). Ruff + Pyright clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad

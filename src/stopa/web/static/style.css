@@ -368,3 +368,18 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 .perm-chip.perm-ok { color: #34c759; border-color: rgba(52,199,89,.35); background: rgba(52,199,89,.08); }
 .perm-chip.perm-no { opacity: .55; text-decoration: line-through; }
 
+/* ── F3.5 — HYPOTHESIS GRAPH ─────────────────────────── */
+.hypo-node { border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px; padding: 9px 12px; margin-top: 10px; background: rgba(255,255,255,.03); }
+.hypo-node .hypo-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.hypo-status { font-family: var(--mono); font-size: 10.5px; letter-spacing: .02em; color: var(--muted); white-space: nowrap; }
+.hypo-node.hypo-status-confirmed { border-left-color: rgba(48,209,88,.7); }
+.hypo-node.hypo-status-confirmed .hypo-status { color: var(--green); font-weight: 600; }
+.hypo-node.hypo-status-refuted { border-left-color: rgba(255,69,58,.7); opacity: .85; }
+.hypo-node.hypo-status-refuted .hypo-status { color: #ff453a; font-weight: 600; }
+.hypo-actions { display: flex; gap: 6px; margin-top: 7px; }
+.btn-hypo { border: 1px solid var(--border); background: rgba(255,255,255,.04); color: var(--text); border-radius: 6px; padding: 3px 11px; font-size: 12.5px; cursor: pointer; }
+.btn-hypo:hover { background: rgba(88,140,255,.16); border-color: rgba(88,140,255,.45); }
+.hypo-ev-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 6px; font-size: 11px; }
+.ai-cite.hypo-ev.sup { border-color: rgba(48,209,88,.35); background: rgba(48,209,88,.07); }
+.ai-cite.hypo-ev.agn { border-color: rgba(255,69,58,.35); background: rgba(255,69,58,.07); }
+

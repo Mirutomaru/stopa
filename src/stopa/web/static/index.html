@@ -233,6 +233,19 @@
       <input id="ai-artifact-id" placeholder="art-…" class="mono" autocomplete="off">
     </div>
     <div id="ai-chat"></div>
+
+    <!-- ── F3.5 — HYPOTHESIS GRAPH ─────────────────────────── -->
+    <h2 style="margin-top:18px">🕸 Hypothesis Graph</h2>
+    <p class="muted small">AI generuje graf hypotéz (claim + důkazy PRO/PROTI jako artefakty + confidence 0.1–0.9).
+       Hypotézu ručně potvrzujete nebo vyvracíte — strom podhypotéz se vykresluje odsazením.</p>
+    <div class="toolbar ai-toolbar">
+      <button id="btn-hypo-generate" class="primary">🕸 Generovat graf</button>
+      <label class="small muted"><input type="checkbox" id="hypo-use-ai"> AI (LM Studio)</label>
+      <span style="flex:1"></span>
+      <a href="#" id="btn-hypo-export-json">⬇ JSON</a>
+      <a href="#" id="btn-hypo-export-pdf">⬇ PDF</a>
+    </div>
+    <div id="hypo-graph" class="card small"><p class="muted small">Zatím žádný graf — vygenerujte ho tlačítkem výše.</p></div>
   </section>
 
   <!-- ── STP-050 — VALIDATION CENTER (C3 registry + C6 report) ── -->
