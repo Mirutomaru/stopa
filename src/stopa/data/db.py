@@ -6,6 +6,7 @@ Jedna DB na případ: cases, sources, files tabulky. Všechny operace idempotent
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from stopa.data.case_repository import CaseRepository  # ETAPA C vlna 1
 from stopa.data.entity_repository import EntityRepository  # ETAPA C vlna 2
 from stopa.data.file_repository import FileRepository, _fts_query  # noqa: F401 — _fts_query backward compat (test_search)
 from stopa.data.migrations import apply_legacy_migrations  # ETAPA C vlna 3
+from stopa.data.query_cache import PROCESS_CACHE  # F2.5 — cache vrstva
 from stopa.data.schema import SCHEMA, SCHEMA_VERSION, _schema_version  # noqa: F401 — SCHEMA_VERSION backward compat (testy)
 from stopa.domain.evidence_model import Finding
 from stopa.domain.lineage import LineageEvent
@@ -29,6 +31,9 @@ class CaseDB:
     def __init__(self, path: Path | str):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # F2.5 — scope query cache: realpath souboru DB (jednoznačná identita
+        # nezávisle na relativní/absolutní cestě a symlinkách).
+        self._cache_scope = os.path.realpath(str(self.path))
         self.conn = sqlite3.connect(self.path)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
@@ -134,7 +139,9 @@ class CaseDB:
 
     def delete_case(self, case_id: str) -> bool:
         """E12 — smaže případ i všechny jeho zdroje (kaskáda na files/artifacts/timeline)."""
-        return self.case_repo.delete_case(case_id)
+        deleted = self.case_repo.delete_case(case_id)
+        PROCESS_CACHE.invalidate(self._cache_scope)
+        return deleted
 
     # ── sources ──────────────────────────────────────────────
     def add_source(self, source: EvidenceSource) -> None:
@@ -148,8 +155,13 @@ class CaseDB:
 
     # ── files ────────────────────────────────────────────────
     def upsert_file(self, rec: FileRecord) -> str:
-        """Idempotentní insert/update podle (source_id, rel_path). Vrací kanonický file id."""
-        return self.file_repo.upsert_file(rec)
+        """Idempotentní insert/update podle (source_id, rel_path). Vrací kanonický file id.
+
+        F2.5 — invaliduje query cache (nový/ změněný soubor mění FTS výsledek).
+        """
+        row_id = self.file_repo.upsert_file(rec)
+        PROCESS_CACHE.invalidate(self._cache_scope)
+        return row_id
 
     def commit(self) -> None:
         self.conn.commit()
@@ -228,8 +240,20 @@ class CaseDB:
         - ``in-artifact:X`` → artifacts_fts MATCH → vráceny soubory s odpovídajícím artifactem
 
         Výsledek je řazen podle relevance (bm25) a omezen na existující soubory.
+
+        F2.5 — opakovaný dotaz (stejná query/source/limit pro stejný case DB
+        soubor) se servíruje z procesního cache (TTL 300 s; invalidace při
+        mutacích). Prázdná query vrací ``[]`` bez výpočtu.
         """
-        return self.file_repo.search(query, source_id=source_id, limit=limit)
+        if not query.strip():
+            return []
+
+        def _compute() -> list[FileRecord]:
+            return self.file_repo.search(query, source_id=source_id, limit=limit)
+
+        return PROCESS_CACHE.get_or_set(
+            "fts", self._cache_scope, _compute, query, source_id, limit
+        )
 
     def search_by_hash(
         self, hash_hex: str, source_id: str | None = None, limit: int | None = 100
@@ -247,16 +271,24 @@ class CaseDB:
     # ── artifacts (AXIOM-style) ──────────────────────────────
     # ── P0 Core C1: Unified Evidence Model — artifacts (ETAPA C vlna 2 → ArtifactRepository) ──
     def upsert_artifact(self, art: Artifact) -> None:
-        """Idempotentní upsert artifactu podle (source_id, artifact_type, rel_path)."""
+        """Idempotentní upsert artifactu podle (source_id, artifact_type, rel_path).
+
+        F2.5 — invaliduje query cache (artifacty mění entity/correlations/FTS).
+        """
         self.artifact_repo.upsert_artifact(art)
+        PROCESS_CACHE.invalidate(self._cache_scope)
 
     def replace_artifacts_for_file(self, file_id: str, arts: list[Artifact]) -> int:
         """Idempotentní výměna artifactů jednoho souboru (re-ingest → čisté data)."""
-        return self.artifact_repo.replace_artifacts_for_file(file_id, arts)
+        n = self.artifact_repo.replace_artifacts_for_file(file_id, arts)
+        PROCESS_CACHE.invalidate(self._cache_scope)
+        return n
 
     def clear_timeline_events(self, source_id: str | None = None) -> int:
         """Odstraní materializované timeline události; ``source_id=None`` vyčistí celý případ."""
-        return self.artifact_repo.clear_timeline_events(source_id)
+        n = self.artifact_repo.clear_timeline_events(source_id)
+        PROCESS_CACHE.invalidate(self._cache_scope)
+        return n
 
     def list_artifacts(
         self,
@@ -457,16 +489,28 @@ class CaseDB:
 
     # ── E4 Entity + Correlation Engine (ETAPA C vlna 2 → EntityRepository) ──
     def upsert_entities(self, case_id: str, rows) -> int:
-        """Idempotentní upsert kanonických entit (UNIQUE case+kind+value)."""
-        return self.entity_repo.upsert_entities(case_id, rows)
+        """Idempotentní upsert kanonických entit (UNIQUE case+kind+value).
+
+        F2.5 — invaliduje query cache (entity mění entity/correlations cache).
+        """
+        n = self.entity_repo.upsert_entities(case_id, rows)
+        PROCESS_CACHE.invalidate(self._cache_scope)
+        return n
 
     def list_entities(self, case_id: str) -> list[dict]:
-        """Kanonické entity případu (ORDER BY kind, value_normalized)."""
-        return self.entity_repo.list_entities(case_id)
+        """Kanonické entity případu (ORDER BY kind, value_normalized).
+
+        F2.5 — cache TTL 600 s; invalidace při upsert/delete entit i artifactů.
+        """
+        return PROCESS_CACHE.get_or_set(
+            "entities", self._cache_scope, lambda: self.entity_repo.list_entities(case_id), case_id
+        )
 
     def clear_correlations(self, case_id: str) -> int:
         """Vymaže propojení případu (re-run korelace = explicitní krok)."""
-        return self.entity_repo.clear_correlations(case_id)
+        n = self.entity_repo.clear_correlations(case_id)
+        PROCESS_CACHE.invalidate(self._cache_scope)
+        return n
 
     def add_correlation(
         self,
@@ -480,14 +524,21 @@ class CaseDB:
         last_seen: str | None = None,
     ) -> int:
         """Vloží jedno propojení s evidence listem. Vrací ID řádku."""
-        return self.entity_repo.add_correlation(
+        row_id = self.entity_repo.add_correlation(
             case_id, entity_a, entity_b, relation, confidence, evidence,
             first_seen=first_seen, last_seen=last_seen,
         )
+        PROCESS_CACHE.invalidate(self._cache_scope)
+        return row_id
 
     def list_correlations(self, case_id: str) -> list[dict]:
-        """Propojení případu s evidence listy (ORDER BY id)."""
-        return self.entity_repo.list_correlations(case_id)
+        """Propojení případu s evidence listy (ORDER BY id).
+
+        F2.5 — cache TTL 600 s; invalidace při upsert/clear propojení i entit.
+        """
+        return PROCESS_CACHE.get_or_set(
+            "correlations", self._cache_scope, lambda: self.entity_repo.list_correlations(case_id), case_id
+        )
 
     def close(self) -> None:
         self.conn.close()

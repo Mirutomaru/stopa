@@ -1773,8 +1773,11 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
         zobrazí jako „poslední aktivity“; chyby = processing_completed s errors>0.
         """
         from stopa.data.diagnostics import collect_diagnostics
+        from stopa.data.query_cache import PROCESS_CACHE
 
         out = collect_diagnostics()
+        # F2.5 — stav query cache (hit ratio pro opakované operace)
+        out["query_cache"] = PROCESS_CACHE.stats()
         recent: list[dict] = []
         for path in sorted(base.glob("case-*.db")):
             db = CaseDB(path)

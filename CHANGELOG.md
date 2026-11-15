@@ -43,6 +43,19 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
   idempotentní re-run (timeline se mažou PŘED výměnou artefaktů — FK bez ON DELETE).
 - 34 testů (`tests/test_f14_anti_forensics.py`); suite 2355 passed.
 
+#### F2.5 Cache vrstva — procesní LRU + TTL per query type
+- `src/stopa/data/query_cache.py`: thread-safe (RLock) LRU cache s TTL per typ
+  (`fts` 5 min, `entities`/`correlations` 10 min), scope = `os.path.realpath`
+  case DB souboru; procesní singleton `PROCESS_CACHE` sdílený všemi CaseDB
+  instancemi téhož souboru (web GUI běží per-request connectiony).
+- Cacheované operace: `CaseDB.search` (FTS), `list_entities`, `list_correlations`.
+- Explicitní invalidace na mutačních bodech facade (upsert_file, artifact/entity/
+  correlation upserty, replace/delete, delete_case) — O(1) přes reverzní index;
+  TTL = bezpečnostní síť proti přehlédnutému bodu.
+- Diagnostika: `/api/diagnostics.query_cache` (hits/misses/hit_ratio).
+- AK ověřeno testy: opakovaná FTS query < 50 ms ✓, hit ratio ≥ 70 % ✓ —
+  19 testů `tests/test_f25_query_cache.py`; suite 2957 passed / 1 skipped.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad
