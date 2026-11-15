@@ -79,6 +79,23 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
   grounding validuje 100 % citací ✓ — 15 testů `tests/test_f31_tool_agent.py`
   (5 unit + 10 AK scénářů s FakeLLM). Ruff + Pyright clean.
 
+#### F3.2 Triage profily — předpřipravené agendy pro typické případy
+- `src/stopa/intelligence/triage.py`: deterministický signálový engine nad case DB
+  (bez LLM, bez nových externích závislostí). 4 profily: **Ransomware** (timestomping,
+  ransom extenze/poznámky, kryptowallety, C2), **Insider threat** (USN truncation,
+  timestomping, odpojitelná média, osobní schránky), **CSAM/média** (steganografie,
+  obrázkové cluster ≥5, audio nahrávky, skryté partice), **Exfiltrace** (base64 bloby,
+  hromadné přílohy ≥3, cloud bulk upload ≥5, mazání po kopírování).
+- Signály = 5 druhů dotazů na case DB: `artifact_type`, `artifact_text` (IoC pravidla),
+  `timeline_flag` (kanonické flagy nesrovnalostí), `file_pattern` (regex + min_count),
+  `entity_pattern`. Detekce = score ≥ threshold **a** min. 2 různé signály (FPR guard);
+  každý zapálený signál nese důkazová ID (max 5).
+- Hypotézy: vyplnitelné template `{case_id}/{score}/{signals}` — kompatibilní s F3.1
+  `generate_hypothesis` a připravené pro report vrstvu. API: `evaluate_profile`,
+  `run_triage` (výstupy seřazené dle skóre), `get_profile`.
+- AK ✓: 4 profily; každý detekuje ≥8/10 syntetických pozitiv; FPR < 5 % — 14 testů
+  `tests/test_f32_triage_profiles.py` (8 parametrizovaných AK + 6 unit). Ruff + Pyright clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad
