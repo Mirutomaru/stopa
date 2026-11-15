@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, ApiError } from "../lib/api";
 import type { AiQueryResult } from "../lib/api";
 import { useCurrentCase } from "../lib/case";
+import { useLiveEvent } from "../lib/live-react";
 import { useI18n } from "../i18n";
 
 interface Msg {
@@ -17,6 +18,13 @@ export default function AiPanelPage() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveActions, setLiveActions] = useState<string[]>([]);
+
+  // F4.2 — live AI akce přes WS (posledních 5 z audit logu v reálném čase).
+  useLiveEvent("ai.action", (ev) => {
+    const ts = String(ev.ts ?? "").slice(11, 19);
+    setLiveActions((a) => [`${ts} ${String(ev.action ?? "")}`, ...a].slice(0, 5));
+  });
 
   if (!current) {
     return (<><h1>{t("ai_heading")}</h1><div className="muted">← {t("cases_heading")}.</div></>);
@@ -44,6 +52,11 @@ export default function AiPanelPage() {
     <>
       <h1>{t("ai_heading")} — {current.name}</h1>
       <div className="card">
+        {liveActions.length > 0 && (
+          <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+            AI akce (live): {liveActions.join(" · ")}
+          </div>
+        )}
         <div className="chat-log" aria-live="polite">
           {msgs.map((m, i) => (
             <div key={i} className={`chat-msg ${m.role}`}>{m.text}</div>

@@ -2,23 +2,35 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api";
 import type { CaseSummary } from "./api";
 
-/** Globální výběr případu (dashboard → podstránky). */
+/** Globální výběr případu (dashboard → podstránky). Instance mezi komponentami
+ *  synchronizují přes DOM event `stopa:case-changed` + localStorage. */
 export function useCurrentCase() {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [currentId, setCurrentId] = useState<string>(() => localStorage.getItem("stopa.case") ?? "");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api.listCases().then(setCases).catch((e: unknown) => setError(e instanceof ApiError ? e.message : String(e)));
+  const reloadCases = useCallback(() => {
+    api.listCases()
+      .then(setCases)
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : String(e)));
   }, []);
+
+  useEffect(() => {
+    reloadCases();
+    // synchronizace s ostatními instancemi (výběr v jiné komponentě / LiveBadge)
+    const onCaseChanged = () => setCurrentId(localStorage.getItem("stopa.case") ?? "");
+    window.addEventListener("stopa:case-changed", onCaseChanged);
+    return () => window.removeEventListener("stopa:case-changed", onCaseChanged);
+  }, [reloadCases]);
 
   const select = useCallback((id: string) => {
     localStorage.setItem("stopa.case", id);
     setCurrentId(id);
+    window.dispatchEvent(new Event("stopa:case-changed"));
   }, []);
 
   const current = cases.find((c) => c.id === currentId) ?? null;
-  return { cases, error, current, currentId, select };
+  return { cases, error, current, currentId, select, reloadCases };
 }
 
 export function useFetch<T>(fn: () => Promise<T>, deps: unknown[] = []) {

@@ -12,9 +12,11 @@ Spuštění: ``stopa serve [--port 8473]`` nebo ``uvicorn stopa.web.app:app``.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import queue
 import re
 import threading
 import time
@@ -24,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -45,6 +47,7 @@ from stopa.domain.ai_assistant import (
     parse_confidence,
     parse_nl_search,
 )
+from stopa.domain.events import LiveEventBus, case_topic  # F4.2 — live events
 from stopa.domain.rbac import (
     DEFAULT_ROLE,
     PERMISSIONS,
@@ -220,8 +223,12 @@ def _auto_export_scheduler_loop(db_dir: Path) -> None:
             log.warning("STP-070 scheduler tick selhal", exc_info=True)
 
 
-def create_app(db_dir: Path | None = None) -> FastAPI:
-    """App factory — `db_dir` pro testy (tmp), default z env STOPA_DB_DIR."""
+def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> FastAPI:
+    """App factory — `db_dir` pro testy (tmp), default z env STOPA_DB_DIR.
+
+    ``ws_heartbeat_s`` (F4.2): interval heartbeatu WebSocket spojení;
+    v testech se zkracuje, aby se suite netestovala na 15 s čekání.
+    """
     app = FastAPI(title="STOPA", version=__version__)
     base = db_dir or _db_dir()
     app.state.db_dir = base  # pro testy (TestClient)
@@ -233,17 +240,59 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     _jobs: dict[str, dict] = {}
     _jobs_lock = threading.Lock()
 
+    # F4.2 — LiveEventBus pro WebSocket push (in-memory; single-process model).
+    _bus = LiveEventBus(maxsize=256)
+    _ws_heartbeat_s = ws_heartbeat_s
+    _last_ingest_pub: dict[str, float] = {}  # job_id → monotonic ts throttlu
+
+    def _now_iso() -> str:
+        return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+    def _publish_case(case_id: str, etype: str, **payload) -> None:
+        """Publikuje událost na téma case; chyby jen loguje (defenzivní).
+
+        Parametr ``etype`` (ne ``event_type``): payload timeline eventu má
+        vlastní klíč ``event_type`` (typ záznamu), který by do kolize s
+        pozičním parametrem a hook ho potichu polkal.
+        """
+        ev = {"type": etype, "case_id": case_id, "ts": _now_iso(), **payload}
+        try:
+            _bus.publish(case_topic(case_id), ev)
+        except Exception:  # live kanál nesmí rozbít API cestu (jen debug log)
+            log.debug("live publish selhal pro %s", etype, exc_info=True)
+
+    def _attach_live_events(db: CaseDB, case_id: str) -> None:
+        """F4.2 — naváže ``db.on_event`` na bus (timeline + AI akce)."""
+        db.on_event = lambda etype, payload: _publish_case(case_id, etype, **payload)
+
     def _job_update(job_id: str, **fields) -> None:
         with _jobs_lock:
-            if job_id in _jobs:
-                _jobs[job_id].update(fields)
+            if job_id not in _jobs:
+                return
+            _jobs[job_id].update(fields)
+            snapshot = dict(_jobs[job_id])
+        # F4.2 — live progress ingestu přes WS (throttle 0,15 s/job;
+        # terminální stavy done/error se posílají vždy bez throttlu).
+        if "done" in fields or "total" in fields or "status" in fields:
+            terminal = snapshot.get("status") in ("done", "error")
+            now = time.monotonic()
+            if terminal or now - _last_ingest_pub.get(job_id, 0.0) >= 0.15:
+                _last_ingest_pub[job_id] = now
+                _publish_case(
+                    str(snapshot["case_id"]), "ingest.progress",
+                    job_id=job_id, source_id=snapshot.get("source_id"),
+                    status=snapshot.get("status"), done=snapshot.get("done"),
+                    total=snapshot.get("total"), error=snapshot.get("error"),
+                )
 
     def open_db(case_id: str) -> CaseDB:
         validate_case_id(case_id)
         path = base / f"{case_id}.db"
         if not path.exists():
             raise HTTPException(404, f"případ {case_id} nenalezen")
-        return CaseDB(path)
+        db = CaseDB(path)
+        _attach_live_events(db, case_id)  # F4.2 — live timeline/AI události
+        return db
 
     # ── STP-067 — cache posledního exportu (re-download z historie) ──
     def _last_export_path(case_id: str, what: str, format: str) -> Path:
@@ -416,6 +465,7 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
 
             def _run() -> None:
                 tdb = CaseDB(base / f"{case_id}.db")
+                _attach_live_events(tdb, case_id)  # F4.2 — live události i z bg ingestu
                 try:
                     source = EvidenceSource(
                         case_id=case_id,
@@ -476,6 +526,52 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             mine = [dict(j) for j in _jobs.values() if j["case_id"] == case_id]
         active = next((j for j in reversed(mine) if j["status"] == "running"), None)
         return {"active": active, "recent": list(reversed(mine[-10:]))}
+
+    # ── F4.2 — WebSocket real-time updates (live progress/timeline/AI) ─────
+    @app.websocket("/api/cases/{case_id}/ws")
+    async def case_events_ws(websocket: WebSocket, case_id: str) -> None:
+        """F4.2 — live události případu přes WebSocket.
+
+        Kontrakt:
+        - při připojení okamžitě ``{"type": "hello", ...}`` (marker pro
+          klienty = úspěšné (re)spojení);
+        - pak stream událostí ``ingest.progress`` / ``timeline.event`` /
+          ``ai.action`` (typ v poli ``type``, čas v ``ts`` ISO-8601 UTC);
+        - **heartbeat** ``{"type": "heartbeat"}`` každé ``ws_heartbeat_s``
+          při neaktivitě (AK F4.2; default 15 s, parametr factory pro testy);
+        - **reconnection** je na klientu (exponenciální backoff + fallback
+          na REST polling — graceful degradation: bez WS vše funguje dál);
+        - neznámý případ → close code 4004.
+
+        Latence AK < 200 ms: publish je nablokující put_nowait do fronty,
+        handler čte přes ``asyncio.to_thread`` (worker vlákna nepočeká).
+        """
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", case_id or ""):
+            await websocket.close(code=4000)
+            return
+        if not (base / f"{case_id}.db").exists():
+            await websocket.accept()
+            await websocket.close(code=4004, reason="případ nenalezen")
+            return
+
+        topic = case_topic(case_id)
+        q: queue.Queue = _bus.subscribe(topic)
+        try:
+            await websocket.accept()
+            await websocket.send_json({"type": "hello", "case_id": case_id, "ts": _now_iso()})
+            while True:
+                # get s timeoutem v worker vláknu — nepadá event loop;
+                # při datu se vrátí okamžitě (latence = put_nowait + scheduling).
+                try:
+                    event = await asyncio.to_thread(q.get, True, _ws_heartbeat_s)
+                except queue.Empty:
+                    await websocket.send_json({"type": "heartbeat", "ts": _now_iso()})
+                else:
+                    await websocket.send_json(event)
+        except WebSocketDisconnect:
+            pass  # normální konec (reconnection na klientu)
+        finally:
+            _bus.unsubscribe(topic, q)
 
     # ── files / search / timeline ─────────────────────────────
     @app.get("/api/cases/{case_id}/files")

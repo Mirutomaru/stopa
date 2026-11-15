@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { api } from "../lib/api";
 import type { EntityRow } from "../lib/api";
 import { useCurrentCase, useFetch } from "../lib/case";
+import { useLiveEvent } from "../lib/live-react";
 import { useI18n } from "../i18n";
 
 const KIND_COLORS: Record<string, string> = {
@@ -62,7 +63,12 @@ export default function EntitiesPage() {
     return (<><h1>{t("entities_heading")}</h1><div className="muted">← {t("cases_heading")}.</div></>);
   }
 
-  const { data, loading, error } = useFetch(() => api.entities(current.id), [current.id]);
+  const { data, loading, error, reload } = useFetch(() => api.entities(current.id), [current.id]);
+
+  // F4.2 — live (WS): hotový ingest → extrakce entity se obnoví.
+  useLiveEvent("ingest.progress", (ev) => {
+    if (ev.status === "done") reload();
+  });
 
   if (loading) return (<><h1>{t("entities_heading")}</h1><div className="muted">{t("loading")}</div></>);
   if (error) return (<><h1>{t("entities_heading")}</h1><div className="error">{t("error_prefix")} {error}</div></>);

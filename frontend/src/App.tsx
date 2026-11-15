@@ -6,6 +6,7 @@ import EntitiesPage from "./pages/Entities";
 import AiPanelPage from "./pages/AiPanel";
 import HypothesesPage from "./pages/Hypotheses";
 import ArtifactDetailPage from "./pages/ArtifactDetail";
+import LiveBadge from "./components/LiveBadge";
 import { useI18n } from "./i18n";
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
           {t("nav_hypotheses")}
         </NavLink>
         <div style={{ marginTop: "auto" }}>
+          <LiveBadge />
           <button onClick={() => setLang(lang === "cs" ? "en" : "cs")} aria-label="Jazyk / Language">
             🌐 {t("lang_toggle")}
           </button>

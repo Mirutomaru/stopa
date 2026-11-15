@@ -3,14 +3,20 @@ import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useCurrentCase, fmtBytes } from "../lib/case";
+import { useLiveEvent } from "../lib/live-react";
 import { useI18n } from "../i18n";
 
 export default function DashboardPage() {
   const { t } = useI18n();
-  const { cases, error, current, select } = useCurrentCase();
+  const { cases, error, current, select, reloadCases } = useCurrentCase();
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
   const [createErr, setCreateErr] = useState<string | null>(null);
+
+  // F4.2 — live (WS): ingest hotový/chyba → obnovit seznam případů (počty).
+  useLiveEvent("ingest.progress", (ev) => {
+    if (ev.status === "done" || ev.status === "error") reloadCases();
+  });
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();

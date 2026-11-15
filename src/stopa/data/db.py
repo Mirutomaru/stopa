@@ -6,8 +6,10 @@ Jedna DB na případ: cases, sources, files tabulky. Všechny operace idempotent
 
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -25,6 +27,8 @@ from stopa.domain.lineage import LineageEvent
 from stopa.domain.reproducibility import AnalysisOperation
 from stopa.models import Artifact, Case, EvidenceSource, FileRecord
 
+_log = logging.getLogger(__name__)
+
 
 class CaseDB:
     """Tenká SQLite vrstva — žádné business logiky (ta je v domain/)."""
@@ -32,18 +36,15 @@ class CaseDB:
     def __init__(self, path: Path | str):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # F2.5 — scope query cache: realpath souboru DB (jednoznačná identita
-        # nezávisle na relativní/absolutní cestě a symlinkách).
+        # F2.5 — scope query cache: realpath souboru DB (identita nezávislá na cestě/symlinks).
         self._cache_scope = os.path.realpath(str(self.path))
         self.conn = sqlite3.connect(self.path)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
-        # ETAPA C vlna 3 — idempotentní migrace starých case DB
-        # (původně inline; nyní data/migrations.py).
+        # ETAPA C vlna 3 — idempotentní migrace starých case DB (nyní data/migrations.py).
         apply_legacy_migrations(self.conn)
-        # ETAPA C vlna 1 — doménová repozitáře (sdílená connection). Facade
-        # CaseDB deleguje; backward compat API zůstává na CaseDB.
+        # ETAPA C vlna 1 — doménové repozitáře; facade deleguje, BC API zůstává na CaseDB.
         self.case_repo = CaseRepository(self.conn)
         self.file_repo = FileRepository(self.conn)
         self.audit_repo = AuditRepository(self.conn)
@@ -51,6 +52,16 @@ class CaseDB:
         self.artifact_repo = ArtifactRepository(self.conn)
         self.entity_repo = EntityRepository(self.conn)
         self.hypothesis_repo = HypothesisRepository(self.conn)  # F3.5
+        # F4.2 — live event hook (volitelný; nastaví web vrstva pro WebSocket push).
+        self.on_event: Callable[[str, dict], None] | None = None
+
+    def _emit_web_event(self, event_type: str, payload: dict) -> None:
+        """F4.2 — volá ``on_event`` defenzivně (hook nesmí rozbít pipeline)."""
+        if self.on_event is not None:
+            try:
+                self.on_event(event_type, payload)
+            except Exception:  # noqa: BLE001 — diagnostický kanál, ne kritická cesta
+                _log.debug("on_event hook selhal pro %s", event_type, exc_info=True)
 
     def schema_version(self) -> int:
         """Aktuální verze schématu case DB (E1 — diagnostika / migrace)."""
@@ -65,7 +76,10 @@ class CaseDB:
         strict: bool = False,  # STP-022 — RBAC minimální (actor povinný)
     ) -> int:
         """Neměnný záznam operace (append-only) + hash chaining (P0 Core C4). Vrací ID řádku."""
-        return self.audit_repo.log_operation(action, actor, details, strict=strict)
+        row_id = self.audit_repo.log_operation(action, actor, details, strict=strict)
+        if action.startswith("ai_"):  # F4.2 — live push akcí AI agenta (WS; jen prefix ai_)
+            self._emit_web_event("ai.action", {"action": action, "actor": actor})
+        return row_id
 
     def verify_audit_chain(self):
         """Ověří celý hash řetězec audit logu. Vrací :class:`ChainReport`."""
@@ -354,9 +368,7 @@ class CaseDB:
         parent_id: str | None = None,
     ) -> str:
         """Přidá uzel grafu hypotéz; vrací ID uzlu."""
-        return self.hypothesis_repo.add(
-            case_id, claim, confidence, support, against, parent_id
-        )
+        return self.hypothesis_repo.add(case_id, claim, confidence, support, against, parent_id)
 
     def list_hypotheses(self, case_id: str) -> list[dict]:
         """Všechny hypotézy případu (pořadí vkladu)."""
@@ -459,7 +471,7 @@ class CaseDB:
         subject_values: tuple[str, ...] | list[str] = (),  # STP-018: normalizované entity subjektu
     ) -> str:
         """Explicitní insert jednoho timeline eventu (ROADMAP E2 bod 2)."""
-        return self.artifact_repo.add_timeline_event(
+        event_id = self.artifact_repo.add_timeline_event(
             source_id=source_id,
             ts_utc=ts_utc,
             event_type=event_type,
@@ -474,6 +486,13 @@ class CaseDB:
             ts_origin=ts_origin,
             subject_values=subject_values,
         )
+        # F4.2 — live push nového timeline eventu (WS klienti).
+        self._emit_web_event("timeline.event", {
+            "event_id": event_id, "source_id": source_id, "title": title,
+            "ts_utc": ts_utc.isoformat() if hasattr(ts_utc, "isoformat") else str(ts_utc),
+            "event_type": event_type, "anomaly_flags": list(anomaly_flags),
+        })
+        return event_id
 
     def list_timeline_events(
         self,

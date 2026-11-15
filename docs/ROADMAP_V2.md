@@ -205,10 +205,19 @@ Dashboard, case explorer, timeline (zoom/lanes), entity graph (Maltego-like), ar
 - **Lighthouse (Playwright Chromium, headless)**: performance **100** / accessibility **100** / best-practices **96** / SEO **90**, LCP 0.8 s → AK „≥ 90" splněn ve všech kategoriích.
 - E2E důkaz: živý uvicorn :8099 + browser screenshot (SPA zrenderovaná, data z API).
 
-### F4.2 — WebSockets pro real-time updates `[ ]`
+### F4.2 — WebSockets pro real-time updates `[x] ✅ 2026-11-15`
 Live progress ingestu, live timeline events, live AI agent actions. Reconnection, heartbeat.
 **AK:** Latence < 200 ms; graceful degradation; test na 100 concurrent clients.
 **P0 | L | závislosti: F4.1**
+
+**IMPLEMENTACE (2026-11-15):**
+- **`src/stopa/domain/events.py`** (nový, čistá doménová vrstva bez IO): `LiveEventBus` — in-process pub/sub **bez Redis** (single-process model), téma ``case:{case_id}``, bounded queue per subscriber (`maxsize=256`), publish **nablokující** (pomalý konzument ztrácí nejstarší události, pipeline se nezastaví); `dropped` počítadlo; thread-safe (worker threads publishují, async WS handler čte).
+- **Hooky v `CaseDB` (`src/stopa/data/db.py`)**: volitelný `on_event`; `_emit_web_event()` defenzivní try/except (diagnostický kanál nesmí rozbít API cestu). Emituje se v `add_timeline_event` → `timeline.event` a v `log_operation` → `ai.action` **jen pro prefix `ai_`** (ostatní audit operace WS nezahltí).
+- **`src/stopa/web/app.py`**: `_bus = LiveEventBus(256)` v closure `create_app()`; factory parametr **`ws_heartbeat_s=15.0`**; helper `_attach_live_events(db, case_id)` napojuje hook na DB instance v obou cestách (sync ingest přes `open_db` i background worker), takže události chodí bez ohledu na volající kontext; `ingest.progress` s throttlem per job.
+- **WS endpoint `GET /api/cases/{case_id}/ws`**: okamžité `hello`, stream `ingest.progress` / `timeline.event` / `ai.action`, heartbeat každých `ws_heartbeat_s` (idle), neznámý case → close code **4004**; async čtení z queue přes `asyncio.to_thread(q.get, True, timeout)`.
+- **Frontend (React)**: `frontend/src/lib/live.ts` — singleton `LiveClient` (WebSocket + exponenciální backoff 500 ms → 8 s, status listeners, `pagehide` disconnect); hooky `useLiveConnection` / `useLiveEvent`; `components/LiveBadge.tsx` — LIVE/OFFLINE indikátor v sidebaru; stránky reagují live: Dashboard/CaseFiles/Entities obnova po hotovém ingestu, Timeline auto-refresh na `timeline.event`, AiPanel posledních 5 `ai.action`.
+- **Testy** `tests/test_f42_ws.py` (15): kontrakt hello, close 4004, heartbeat (`ws_heartbeat_s=0.3`), E2E ingest přes WS s měřením delivery latence < 200 ms (publish timestamp via monkeypatch), graceful degradation bez WS klientů, **100 současných klientů → každý dostal `timeline.event`**, hooky `CaseDB.on_event`, unit testy buse.
+- **E2E smoke na živém uvicornu** (:8099, reálný WS klient): hello ✓, stream progress→timeline→done ✓, post_to_timeline **140 ms < 200 AK**, close code 4004 ✓, REST timeline bez WS ✓.
 
 ### F4.3 — Peer-Review Workflow `[ ]`
 Stavy artifactů: draft → reviewed → approved → court-ready. Dva examinátoři schválí kritické nálezy; audit log změny.

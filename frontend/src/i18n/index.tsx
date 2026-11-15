@@ -29,6 +29,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     loading: "Načítám…",
     error_prefix: "Chyba:",
     retry: "Zkusit znovu",
+    live_online: "LIVE",
+    live_offline: "OFFLINE (REST)",
   },
   en: {
     app_title: "STOPA — Forensic workbench",
@@ -55,6 +57,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     loading: "Loading…",
     error_prefix: "Error:",
     retry: "Retry",
+    live_online: "LIVE",
+    live_offline: "OFFLINE (REST)",
   },
 };
 

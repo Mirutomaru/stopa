@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import type { TimelineRow } from "../lib/api";
 import { useCurrentCase } from "../lib/case";
+import { useLiveEvent } from "../lib/live-react";
 import { useI18n } from "../i18n";
 
 const PAGE = 300;
@@ -24,6 +25,18 @@ export default function TimelinePage() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useState(() => load());
+
+  // F4.2 — live (WS): nový timeline event / hotový ingest → auto-refresh.
+  const loadRef = useRef<() => void>(() => undefined);
+  loadRef.current = load;
+  useLiveEvent("timeline.event", () => loadRef.current(), Boolean(current));
+  useLiveEvent(
+    "ingest.progress",
+    (ev) => {
+      if (ev.status === "done" || ev.status === "error") loadRef.current();
+    },
+    Boolean(current),
+  );
 
   const lanes = useMemo(() => {
     if (!rows) return [];

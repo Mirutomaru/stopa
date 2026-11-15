@@ -170,6 +170,28 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 - Testy: vitest **10/10** (API klient, i18n toggle+persist, Dashboard smoke), Python
   `tests/test_f41_spa.py` **5/5** (mount `/spa`, sw.js, assety, legacy `/`). TSC strict 0 chyb.
 
+#### F4.2 WebSockets — real-time updates na `/api/cases/{id}/ws`
+- **`src/stopa/domain/events.py`**: `LiveEventBus` — in-process pub/sub **bez Redis**
+  (single-process model), téma ``case:{case_id}``, bounded queue per subscriber
+  (`maxsize=256`), publish nablokující (pomalý konzument ztrácí nejstarší, pipeline
+  se nezastaví); thread-safe.
+- **Hooky `CaseDB.on_event`** (`data/db.py`): emit v `add_timeline_event` →
+  `timeline.event`, v `log_operation` → `ai.action` jen pro prefix `ai_`; defenzivní
+  try/except (diagnostický kanál nesmí rozbít API cestu).
+- **Web**: `_bus` v closure `create_app()`, factory parametr `ws_heartbeat_s=15.0`,
+  helper `_attach_live_events()` napojuje hook na obě cesty (sync ingest i background
+  worker), `ingest.progress` s throttlem per job. Endpoint `GET /api/cases/{id}/ws`:
+  okamžité `hello`, stream `ingest.progress`/`timeline.event`/`ai.action`, heartbeat,
+  neznámý case → close code **4004**.
+- **Frontend**: singleton `LiveClient` (backoff 500 ms→8 s, disconnect na `pagehide`),
+  hooky `useLiveConnection`/`useLiveEvent`, `LiveBadge` LIVE/OFFLINE v sidebaru;
+  Dashboard/CaseFiles/Entities obnova po hotovém ingestu, Timeline auto-refresh,
+  AiPanel posledních 5 AI akcí. Graceful degradation: bez WS klientů vše přes REST.
+- AK ✓: latence < 200 ms (pytest měří delivery publish→klient; E2E smoke na živém
+  uvicornu naměřil **140 ms** včetně celého synchronního ingestu přes reálný TCP);
+  graceful degradation testováno; **100/100** současných klientů dostalo událost.
+- Testy: `tests/test_f42_ws.py` **15/15**; vitest 10/10; TSC strict 0 chyb; ruff clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad

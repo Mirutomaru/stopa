@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useCurrentCase, fmtBytes } from "../lib/case";
+import { useLiveEvent } from "../lib/live-react";
 import { useI18n } from "../i18n";
 
 const PAGE = 200;
@@ -23,6 +24,17 @@ export default function CaseFilesPage() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useState(() => load(offset));
+
+  // F4.2 — live (WS): hotový ingest → obnovit seznam souborů.
+  const loadRef = useRef<() => void>(() => undefined);
+  loadRef.current = () => load(offset);
+  useLiveEvent(
+    "ingest.progress",
+    (ev) => {
+      if (ev.status === "done" || ev.status === "error") loadRef.current();
+    },
+    Boolean(current),
+  );
 
   if (!current) {
     return (
