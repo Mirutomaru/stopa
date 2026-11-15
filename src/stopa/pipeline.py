@@ -11,15 +11,18 @@ Jeden kódový průchod pro CLI i web — jedna cesta k debugování.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import os
 import tempfile
+import threading  # F2.4 — stop_event pro graceful shutdown (CLI napojuje SIGINT/SIGTERM)
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from multiprocessing import get_context as _mp_get_context
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -907,6 +910,31 @@ class _FileWork:
     error: str | None = None  # hashing OSError — soubor se upsertuje bez hashů
 
 
+# F2.4 — stav worker procesu (ProcessPoolExecutor, spawn context).
+# `_pool_init` běží jednou na každém dětském procesu a uloží profile + hash sety
+# do globálů → per-task payload zůstává malý (jen WalkedFile + cesty), což je
+# klíčové pro levné picklování při desítkách tisíc souborů.
+_POOL_PROFILE: ProcessingProfile | None = None
+_POOL_SETS: dict[str, set[str]] = {}
+
+
+def _pool_init(profile: ProcessingProfile, normalized_sets: dict[str, set[str]]) -> None:
+    """Initializer ProcessPoolExecutor — nastaví sdílený stav worker procesu."""
+    global _POOL_PROFILE, _POOL_SETS
+    _POOL_PROFILE = profile
+    _POOL_SETS = normalized_sets
+
+
+def _process_file_task(wf: WalkedFile, abs_path_str: str, source_id: str) -> _FileWork:
+    """Task pro ProcessPoolExecutor — čte profile/sets z globálů worker procesu.
+
+    Top-level funkce (picklovatelná po referenci); `abs_path` je string, aby se
+    v child procesu nemuselo řešit picklování Path přes procesy.
+    """
+    assert _POOL_PROFILE is not None  # nastaveno _pool_init (initializer)
+    return _process_file_worker(wf, Path(abs_path_str), source_id, _POOL_PROFILE, _POOL_SETS)
+
+
 def _process_file_worker(
     wf: WalkedFile,
     abs_path: Path,
@@ -1002,6 +1030,10 @@ def process_source(
     progress: Callable[[int, int], None] | None = None,
     resume: bool = False,
     max_workers: int | None = None,
+    pool: str = "auto",
+    commit_every: int = 256,
+    stop_event: threading.Event | None = None,
+    max_inflight: int | None = None,
 ) -> ProcessResult:
     """Zpracuje jeden evidence source daným processing profilem.
 
@@ -1010,9 +1042,20 @@ def process_source(
     `resume` — E3 checkpointing: přeskočí soubory už v DB pro tento zdroj
         (předchozí běh byl dokončený); doplní jen nové soubory a timeline se
         nečistí. Default False = plný re-ingest (idempotentní upsert).
-    `max_workers` — E3 paralelizace: počet worker vláken pro hashing/parsing;
+    `max_workers` — E3 paralelizace: počet worker procesů/vláken pro hashing/parsing;
         None = auto (min(8, cpu_count)). DB writes + dedupe zůstávají v hlavním
-        vlákně → deterministický výsledek nezávislý na počtu vláken.
+        vlákně → deterministický výsledek nezávislý na počtu workerů.
+    `pool` — F2.4 typ poolu: "auto" (default) = procesy pro workers > 1 (GIL u
+        Python parserů; Rust core GIL stejně uvolňuje), "threads" = původní E3
+        režim, "processes" = vynutit procesy i pro workers == 1.
+    `commit_every` — F2.4 checkpointing: db.commit() každých N souborů; po kill
+        uprostřed běhu jsou zpracované soubory v DB a `resume=True` doplní zbytek
+        (bez ztráty dat). 0 = commit až na konci (původní chování).
+    `stop_event` — F2.4 graceful shutdown: threading.Event; když se nastaví,
+        okno se nedoplňuje novými úlohami, in-flight úlohy dojedou a stav se
+        committuje. CLI napojuje SIGINT/SIGTERM sem (result.interrupted = True).
+    `max_inflight` — F2.4 backpressure: max počtu současně odeslaných (in-flight)
+        úloh; None = auto (max(8, 4*workers)). Omezuje RAM i napředběh walku.
     """
     profile = get_profile(profile_name)
     result = ProcessResult(source_id=source_id, profile=profile.name)
@@ -1077,135 +1120,188 @@ def process_source(
     if not resume:
         db.clear_timeline_events(source_id=source_id)
 
-    # E3 paralelizace: drahé operace (hashing + signatura + parsery) běží v
-    # worker vláknech; DB writes + dedupe zůstávají v hlavním vlákně v pořadí
-    # procházky → deterministický originál vs. duplikát (FTK hide duplicates).
+    # E3/F2.4 paralelizace: drahé operace (hashing + signatura + parsery) běží v
+    # worker procesech/vláknech; DB writes + dedupe zůstávají v hlavním vlákně a
+    # konzumují se v pořadí procházky → deterministický originál vs. duplikát
+    # (FTK hide duplicates). F2.4: omezené okno in-flight úloh = backpressure mezi
+    # producerem (walk) a consumerem (parse); periodický commit = checkpoint pro
+    # graceful shutdown — po kill bez ztráty dat (zpracované soubory jsou v DB,
+    # nezpracované doplní resume=True).
     n = len(to_process)
     if max_workers is None:
         workers = min(8, os.cpu_count() or 4) if n > 1 else 1
     else:
         workers = max(1, max_workers)
 
+    pool_mode = "auto" if pool not in ("threads", "processes") else pool
+    use_processes = (pool_mode == "processes") or (pool_mode == "auto" and workers > 1)
+    window = max_inflight if max_inflight is not None else max(8, workers * 4)
+
     def _abs(wf: WalkedFile) -> Path:
         return root_resolved / wf.rel_path if not root.is_file() else root_resolved
 
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [
-            pool.submit(
-                _process_file_worker, wf, _abs(wf), source_id, profile, normalized_sets
+    def _apply_work(work: _FileWork, wf: WalkedFile, i: int) -> None:
+        """DB writes + dedupe pro jeden soubor — hlavní vlákno, pořadí procházky."""
+        rec = work.rec
+
+        result.files_total += 1
+        result.bytes_total += wf.size_bytes
+        if work.error is not None:
+            result.errors.append(work.error)
+        else:
+            result.hashed_md5 += int(rec.md5 is not None)
+            result.hashed_sha256 += int(rec.sha256 is not None)
+
+        # signatura — worker ji detekoval; počítáme jen pokud je nastavena
+        if rec.signature_type is not None:
+            result.signatures_detected += 1
+        if rec.bad_extension:
+            result.bad_extensions += 1
+
+        # ── dedupe napříč případem (FTK Advanced De-duplication) ──
+        # hlavní vlákno, pořadí procházky → deterministický originál
+        if profile.deduplicate:
+            # SHA-256 profily i MD5-only (eDiscovery); STP-022: +SHA-512
+            for digest in (rec.sha256, rec.md5, rec.sha512):
+                original = deduper.check_and_register(digest, wf.rel_path)
+                if original is not None:
+                    rec.is_duplicate_of = original
+                    result.duplicates += 1
+                    break
+
+        # ── known-bad hash sets — worker jen nastaví flag, tady počítáme ──
+        if rec.hash_set_hit:
+            result.hash_set_hits += 1
+
+        # kanonický file id — při re-ingestu se drží původní řádek (FK stability)
+        file_id = db.upsert_file(rec)  # nejdřív soubor — FK pro artifacts níže
+
+        # ── artifact extraktoři — worker je už extrahoval, tady jen DB + timeline ──
+        if profile.extract_artifacts:
+            arts = work.artifacts
+            parser_ver = work.parser_version
+            for a in arts:
+                a.source_id = source_id
+                a.file_id = file_id
+                a.rel_path = wf.rel_path
+                # E2 Timeline Engine — provenience (reprodukovatelnost analýzy):
+                # kdy byl artifact extrahován + jakou verzí parseru.
+                if a.extracted_at is None:
+                    a.extracted_at = now_utc
+                if a.parser_version is None and parser_ver is not None:
+                    a.parser_version = parser_ver
+            db.replace_artifacts_for_file(file_id, arts)
+            result.artifacts_extracted += len(arts)
+            # P0 Core C2: Evidence Lineage — output_refs kroku extract (ID artefaktů)
+            result.extracted_artifact_ids.extend(a.id for a in arts)
+
+            # E2 Timeline Engine — materializace timeline + detekce nesrovnalostí.
+            for a in arts:
+                if a.timestamp is None:
+                    continue  # bez času události → není timeline event
+                flags = detect_anomalies(
+                    a.artifact_type,
+                    a.timestamp,
+                    title=a.title,
+                    rel_path=wf.rel_path,
+                    file_mtime=rec.mtime,
+                    file_ctime=rec.ctime,
+                    ctx=anomaly_ctx,
+                )
+                if flags:
+                    a.anomaly_flags = tuple(flags)
+                # STP-018 — normalizované entity subjektu (pro detekci rozporů);
+                # čistá logika bez IO, defenzivně (chyba extrakce ≠ pád pipeline).
+                try:
+                    subject_values = tuple(sorted({e.value for e in extract_entities(a)}))
+                except Exception:  # noqa: BLE001 — analytický bonus, ne kritická cesta
+                    log.debug("subject extraction failed for artifact %s", a.id)
+                    subject_values = ()
+                db.add_timeline_event(
+                    source_id=source_id,
+                    artifact_id=a.id,
+                    file_id=file_id,
+                    rel_path=wf.rel_path,
+                    event_type=a.artifact_type,
+                    ts_utc=a.timestamp,
+                    title=a.title,
+                    confidence=a.confidence,
+                    parser_version=a.parser_version,
+                    extracted_at=a.extracted_at,
+                    anomaly_flags=tuple(flags),
+                    ts_origin=getattr(a, "ts_origin", None) or "source",
+                    subject_values=subject_values,
+                )
+                # průběžné doplnění kontextu — duplikát detekce + rozšiřování okna
+                key = f"{a.artifact_type}|{a.title or ''}|{wf.rel_path}"
+                anomaly_ctx.seen_timestamps.append((a.timestamp, key))
+                if (anomaly_ctx.window_start is None
+                        or a.timestamp < anomaly_ctx.window_start):
+                    anomaly_ctx.window_start = a.timestamp
+                if (anomaly_ctx.window_end is None
+                        or a.timestamp > anomaly_ctx.window_end):
+                    anomaly_ctx.window_end = a.timestamp
+
+        if progress is not None and ((i + 1) % 10 == 0 or i + 1 == n):
+            progress(skipped + i + 1, total)
+
+    with contextlib.ExitStack() as stack:
+        if use_processes and workers > 1:
+            # F2.4 — spawn context: children nedědí zámky rodiče (CLI běží s Rich
+            # Progress pozadím vlákna → fork by mohl v child procesu deadlocknout).
+            executor = stack.enter_context(
+                ProcessPoolExecutor(
+                    max_workers=workers,
+                    mp_context=_mp_get_context("spawn"),
+                    initializer=_pool_init,
+                    initargs=(profile, normalized_sets),
+                )
             )
-            for wf in to_process
-        ]
-        # konzumace v pořadí procházky — DB writes + dedupe deterministické
-        for i, (wf, fut) in enumerate(zip(to_process, futures)):
-            work = fut.result()
-            rec = work.rec
 
-            result.files_total += 1
-            result.bytes_total += wf.size_bytes
-            if work.error is not None:
-                result.errors.append(work.error)
-            else:
-                result.hashed_md5 += int(rec.md5 is not None)
-                result.hashed_sha256 += int(rec.sha256 is not None)
+            def _submit_one(wf_: WalkedFile) -> Future[_FileWork]:
+                return executor.submit(  # type: ignore[union-attr]
+                    _process_file_task, wf_, str(_abs(wf_)), source_id
+                )
+        else:
+            executor = stack.enter_context(ThreadPoolExecutor(max_workers=max(1, workers)))
 
-            # signatura — worker ji detekoval; počítáme jen pokud je nastavena
-            if rec.signature_type is not None:
-                result.signatures_detected += 1
-            if rec.bad_extension:
-                result.bad_extensions += 1
+            def _submit_one(wf_: WalkedFile) -> Future[_FileWork]:
+                return executor.submit(  # type: ignore[union-attr]
+                    _process_file_worker, wf_, _abs(wf_), source_id, profile, normalized_sets
+                )
 
-            # ── dedupe napříč případem (FTK Advanced De-duplication) ──
-            # hlavní vlákno, pořadí procházky → deterministický originál
-            if profile.deduplicate:
-                # SHA-256 profily i MD5-only (eDiscovery); STP-022: +SHA-512
-                for digest in (rec.sha256, rec.md5, rec.sha512):
-                    original = deduper.check_and_register(digest, wf.rel_path)
-                    if original is not None:
-                        rec.is_duplicate_of = original
-                        result.duplicates += 1
-                        break
+        inflight: list[tuple[Future[_FileWork], WalkedFile]] = []
+        it = iter(to_process)
+        next_wf: WalkedFile | None = next(it, None)
+        stopped = False
 
-            # ── known-bad hash sets — worker jen nastaví flag, tady počítáme ──
-            if rec.hash_set_hit:
-                result.hash_set_hits += 1
+        for i in range(n):
+            # F2.4 backpressure — doplnit okno na max `window` in-flight úloh;
+            # walk (producer) se tak nemůže běhat neomezeně napřed před parsem.
+            while len(inflight) < window and next_wf is not None:
+                if stop_event is not None and stop_event.is_set():
+                    stopped = True  # nová submit už ne; in-flight úlohy dojedou (graceful)
+                    break
+                inflight.append((_submit_one(next_wf), next_wf))
+                next_wf = next(it, None)
 
-            # kanonický file id — při re-ingestu se drží původní řádek (FK stability)
-            file_id = db.upsert_file(rec)  # nejdřív soubor — FK pro artifacts níže
+            if not inflight:
+                break  # vše odesláno+zkonzumováno (nebo stop bez in-flight úloh)
 
-            # ── artifact extraktoři — worker je už extrahoval, tady jen DB + timeline ──
-            if profile.extract_artifacts:
-                arts = work.artifacts
-                parser_ver = work.parser_version
-                for a in arts:
-                    a.source_id = source_id
-                    a.file_id = file_id
-                    a.rel_path = wf.rel_path
-                    # E2 Timeline Engine — provenience (reprodukovatelnost analýzy):
-                    # kdy byl artifact extrahován + jakou verzí parseru.
-                    if a.extracted_at is None:
-                        a.extracted_at = now_utc
-                    if a.parser_version is None and parser_ver is not None:
-                        a.parser_version = parser_ver
-                db.replace_artifacts_for_file(file_id, arts)
-                result.artifacts_extracted += len(arts)
-                # P0 Core C2: Evidence Lineage — output_refs kroku extract (ID artefaktů)
-                result.extracted_artifact_ids.extend(a.id for a in arts)
+            fut, wf = inflight.pop(0)
+            work = fut.result()  # konzumace v pořadí procházky → deterministické dedupe
+            _apply_work(work, wf, i)
+            if commit_every > 0 and (i + 1) % commit_every == 0:
+                db.commit()  # F2.4 checkpoint — stav přežije kill uprostřed běhu
 
-                # E2 Timeline Engine — materializace timeline + detekce nesrovnalostí.
-                for a in arts:
-                    if a.timestamp is None:
-                        continue  # bez času události → není timeline event
-                    flags = detect_anomalies(
-                        a.artifact_type,
-                        a.timestamp,
-                        title=a.title,
-                        rel_path=wf.rel_path,
-                        file_mtime=rec.mtime,
-                        file_ctime=rec.ctime,
-                        ctx=anomaly_ctx,
-                    )
-                    if flags:
-                        a.anomaly_flags = tuple(flags)
-                    # STP-018 — normalizované entity subjektu (pro detekci rozporů);
-                    # čistá logika bez IO, defenzivně (chyba extrakce ≠ pád pipeline).
-                    try:
-                        subject_values = tuple(sorted({e.value for e in extract_entities(a)}))
-                    except Exception:  # noqa: BLE001 — analytický bonus, ne kritická cesta
-                        log.debug("subject extraction failed for artifact %s", a.id)
-                        subject_values = ()
-                    db.add_timeline_event(
-                        source_id=source_id,
-                        artifact_id=a.id,
-                        file_id=file_id,
-                        rel_path=wf.rel_path,
-                        event_type=a.artifact_type,
-                        ts_utc=a.timestamp,
-                        title=a.title,
-                        confidence=a.confidence,
-                        parser_version=a.parser_version,
-                        extracted_at=a.extracted_at,
-                        anomaly_flags=tuple(flags),
-                        ts_origin=getattr(a, "ts_origin", None) or "source",
-                        subject_values=subject_values,
-                    )
-                    # průběžné doplnění kontextu — duplikát detekce + rozšiřování okna
-                    key = f"{a.artifact_type}|{a.title or ''}|{wf.rel_path}"
-                    anomaly_ctx.seen_timestamps.append((a.timestamp, key))
-                    if (anomaly_ctx.window_start is None
-                            or a.timestamp < anomaly_ctx.window_start):
-                        anomaly_ctx.window_start = a.timestamp
-                    if (anomaly_ctx.window_end is None
-                            or a.timestamp > anomaly_ctx.window_end):
-                        anomaly_ctx.window_end = a.timestamp
+    result.interrupted = stopped
 
-            if progress is not None and ((i + 1) % 10 == 0 or i + 1 == n):
-                progress(skipped + i + 1, total)
-
-    db.commit()
-    # E1 Evidence Manager: uzavření běhu — souhrny + verze parserů (reprodukovatelnost)
+    db.commit()  # F2.4 finální checkpoint (periodické commity už proběhly průběžně)
+    # E1 Evidence Manager: uzavření běhu — souhrny + verze parserů (reprodukovatelnost).
+    # F2.4: přerušený běh se eviduje jako processing_interrupted (checkpoint uložen,
+    # pokračování přes resume=True bez ztráty dat).
     db.log_operation(
-        "processing_completed",
+        "processing_completed" if not result.interrupted else "processing_interrupted",
         details={
             "source_id": source_id,
             "files_total": result.files_total,
@@ -1259,7 +1355,9 @@ def process_source(
     # STP-069 — Plánované/periodické exporty: opt-in automatický ZIP bundle po
     # úspěšném dokončení processingu. Fail-safe: chyba auto-exportu nikdy nepadne
     # hlavní flow (log + pokračování). Deterministický výstup (C4) přes to_zip_bundle.
-    _maybe_auto_export(db, source_id)
+    # F2.4: přerušený (částečný) běh nespouští plánovaný export — doplní resume.
+    if not result.interrupted:
+        _maybe_auto_export(db, source_id)
     return result
 
 

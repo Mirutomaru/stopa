@@ -146,3 +146,6 @@ class ProcessResult(BaseModel):
     # P0 Core C2: Evidence Lineage — ID extrahovaných artefaktů (output_refs kroku extract)
     extracted_artifact_ids: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+    # F2.4 graceful shutdown — běh přerušený stop_event/SIGINT; checkpoint je commitnutý,
+    # pokračování přes resume=True bez ztráty dat (zpracované soubory jsou v DB).
+    interrupted: bool = False

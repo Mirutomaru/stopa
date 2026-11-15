@@ -26,7 +26,9 @@ import argparse
 import json
 import logging
 import os
+import signal  # F2.4 — SIGINT/SIGTERM → graceful shutdown ingestu (stop_event)
 import sys
+import threading  # F2.4 — stop_event pro graceful shutdown
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -264,6 +266,16 @@ def cmd_add(args: argparse.Namespace) -> int:
     source_summaries: list[dict] = []
     # R0.4 — stav Rich progress tasku; musí být venku ze smyčky (B023), ať se neresetuje per zdroj
     _bar_state: dict[str, object] = {"task": None}
+    # F2.4 — graceful shutdown: SIGINT/SIGTERM → stop_event; pipeline dojedou in-flight
+    # úlohy + commitne checkpoint (pokračování přes --resume bez ztráty dat).
+    _stop_ev = threading.Event()
+
+    def _f24_stop_handler(signum: int, _frame: object) -> None:
+        _stop_ev.set()
+
+    _prev_signal_handlers = {
+        sig: signal.signal(sig, _f24_stop_handler) for sig in (signal.SIGINT, signal.SIGTERM)
+    }
     if not json_mode:
         print(f"Zpracovávám {len(args.paths)} zdrojů (profil: {profile.name})")
     for path_str in args.paths:
@@ -273,8 +285,15 @@ def cmd_add(args: argparse.Namespace) -> int:
             rc = 2
             source_summaries.append({"path": str(root), "error": "zdroj neexistuje"})
             continue
-        source = EvidenceSource(case_id=args.case_id, kind="folder" if root.is_dir() else "file", path=str(root))
-        db.add_source(source)
+        kind = "folder" if root.is_dir() else "file"
+        # E3/F2.4 — idempotentní zdroj: při --resume už existuje zdroj se stejnou cestou;
+        # musíme opakovat jeho ID, ať skip-set (files WHERE source_id=?) najde zpracované soubory.
+        existing = next(
+            (s for s in db.list_sources(args.case_id) if s.path == str(root)), None
+        )
+        source = existing or EvidenceSource(case_id=args.case_id, kind=kind, path=str(root))
+        if existing is None:
+            db.add_source(source)
         # E1 Evidence Manager: custody metadata + neměnná stopa nabytí důkazu
         db.set_custody_item(
             source.id,
@@ -308,6 +327,9 @@ def cmd_add(args: argparse.Namespace) -> int:
         result = process_source(
             db, source.id, root, args.profile, hash_sets, _progress,
             resume=getattr(args, "resume", False),
+            max_workers=args.workers,  # F2.4 — CLI --workers (default auto)
+            pool=args.pool,  # F2.4 — CLI --pool (auto = procesy pro N>1)
+            stop_event=_stop_ev,  # F2.4 — SIGINT/SIGTERM → graceful shutdown
         )
         if bar is not None and _bar_state["task"] is not None:
             # dokončit task (100 %) — Rich transient bar
@@ -342,8 +364,17 @@ def cmd_add(args: argparse.Namespace) -> int:
                 "hash_set_hits": result.hash_set_hits,
                 "artifacts_extracted": result.artifacts_extracted,
                 "errors": list(result.errors),
+                # F2.4 — graceful shutdown: checkpoint uložen, pokračování přes --resume
+                "interrupted": result.interrupted,
             }
         )
+        if result.interrupted:
+            if not json_mode:
+                print("  ⚠ přerušeno — checkpoint uložen; pokračování přes --resume")
+            rc = max(rc, 130)  # konvence SIGINT — skripty vědí, že mají spustit resume
+    # F2.4 — obnovit původní signal handlery (default KeyboardInterrupt apod.)
+    for _sig, _prev in _prev_signal_handlers.items():
+        signal.signal(_sig, _prev)
     if bar is not None:
         bar.stop()
 
@@ -2681,6 +2712,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_p.add_argument("--resume", action="store_true",
                        help="E3 checkpointing — přeskočit soubory už v DB "
                             "(pokračovat po přerušeném běhu)")
+    add_p.add_argument("--workers", type=int, default=None, metavar="N",
+                       help="F2.4 počet worker procesů/vláken (default: min(8, jádra CPU))")
+    add_p.add_argument("--pool", choices=["auto", "threads", "processes"], default="auto",
+                       help="F2.4 typ poolu: auto = procesy pro N>1 (GIL), threads = E3 režim")
     _add_json_flag(add_p)
     add_p.set_defaults(func=cmd_add)
 

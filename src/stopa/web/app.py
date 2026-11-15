@@ -414,6 +414,8 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
                     result = process_source(
                         tdb, source.id, root, body.profile,
                         progress=_progress, resume=body.resume,
+                        pool="threads",  # F2.4 — web běží s pozadím vlákny (uvicorn);
+                        # per-request spawn procesů by byl zbytečný + fork riziko
                     )
                     _job_update(job_id, status="done", result=result.model_dump())
                 except Exception as exc:  # defenzivně — thread nesmí umlčet chybu
@@ -434,7 +436,9 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
             )
             db.add_source(source)
             _job_update(job_id, source_id=source.id)
-            result = process_source(db, source.id, root, body.profile, progress=_progress, resume=body.resume)
+            # F2.4 — web běží s pozadím vlákny (uvicorn); per-request spawn procesů
+            # by byl zbytečný + fork riziko → explicitně threads (původní E3 režim)
+            result = process_source(db, source.id, root, body.profile, progress=_progress, resume=body.resume, pool="threads")
             _job_update(job_id, status="done", result=result.model_dump())
             return {
                 "source_id": source.id,
