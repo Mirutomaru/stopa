@@ -127,6 +127,14 @@ class AiHypoStatusIn(BaseModel):
     status: str
 
 
+class ReviewStateIn(BaseModel):
+    """Tělo POST .../artifacts/{artifact_id}/review (F4.3 Peer-Review Workflow)."""
+
+    state: str = Field(min_length=1, max_length=32)  # draft|reviewed|approved|court_ready
+    reviewer: str = Field(min_length=1, max_length=200)  # distinct examinátor (kvorum!)
+    note: str | None = Field(default=None, max_length=500)
+
+
 class TimesketchPushIn(BaseModel):
     """STP-059 — push datasetu případu do Timesketch sketchu."""
 
@@ -595,6 +603,61 @@ def create_app(db_dir: Path | None = None, ws_heartbeat_s: float = 15.0) -> Fast
                 offset=offset,
             )
             return [r.model_dump(mode="json") for r in recs]
+        finally:
+            db.close()
+
+    # F4.3 — Peer-Review Workflow (stavový automat v domain/review.py) ──────────
+    @app.get("/api/cases/{case_id}/artifacts")
+    def list_artifacts(case_id: str, file_id: str | None = None, limit: int = 500) -> list[dict]:
+        """Artefakty případu (volitelně filtr na soubor) včetně review_state."""
+        db = open_db(case_id)
+        try:
+            arts = db.list_artifacts(limit=limit) if file_id is None else [
+                a for a in db.list_artifacts(limit=10_000) if a.file_id == file_id
+            ]
+            return [a.model_dump(mode="json") for a in arts]
+        finally:
+            db.close()
+
+    @app.post("/api/cases/{case_id}/artifacts/{artifact_id}/review", status_code=201)
+    def artifact_review(case_id: str, artifact_id: str, body: ReviewStateIn) -> dict:
+        """Přechod review stavu (draft→reviewed→approved→court_ready).
+
+        409 = neplatný přechod/přeskočení/kvorum; 404 = artefakt neexistuje.
+        Každá akce = audit log + neměnný řádek v artifact_reviews (F4.3 AK).
+        """
+        from stopa.domain.review import ReviewError
+
+        _require("case.review", case_id)
+        db = open_db(case_id)
+        try:
+            try:
+                info = db.artifact_repo.set_review_state(
+                    artifact_id, body.state, body.reviewer, note=body.note
+                )
+            except ReviewError as e:
+                raise HTTPException(409, str(e)) from e
+            except ValueError as e:  # artefakt neexistuje (ReviewError je subclass)
+                raise HTTPException(404, str(e)) from e
+        finally:
+            db.close()
+        _publish_case(case_id, "review.state", **info)
+        return info
+
+    @app.get("/api/cases/{case_id}/artifacts/{artifact_id}/reviews")
+    def artifact_reviews(case_id: str, artifact_id: str) -> dict:
+        """Aktuální stav + kritičnost + neměnná historie review akcí."""
+        db = open_db(case_id)
+        try:
+            art = db.get_artifact(artifact_id)
+            if art is None:
+                raise HTTPException(404, f"artefakt {artifact_id} nenalezen")
+            return {
+                "artifact_id": artifact_id,
+                "review_state": art.review_state,
+                "critical": db.artifact_repo.is_critical_artifact(artifact_id),
+                "reviews": db.artifact_repo.list_artifact_reviews(artifact_id),
+            }
         finally:
             db.close()
 

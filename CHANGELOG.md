@@ -192,6 +192,28 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
   graceful degradation testováno; **100/100** současných klientů dostalo událost.
 - Testy: `tests/test_f42_ws.py` **15/15**; vitest 10/10; TSC strict 0 chyb; ruff clean.
 
+#### F4.3 Peer-Review Workflow — stavový automat + kvorum + audit trail
+- **`src/stopa/domain/review.py`**: čistý stavový automat `draft → reviewed → approved
+  → court_ready`; přechod vždy přesně o jeden krok vpřed (přeskočení i zpětný přechod
+  selže); kritický artefakt vyžaduje k schválení **minimálně 2 distinct examinátorů** —
+  stejný člověk se nepočítá dvakrát.
+- **Schéma v15 → v16**: `artifacts.review_state` + tabulka `artifact_reviews`
+  (neměnná historie review akcí pro soudní doložitelnost: kdo, kdy, na co); legacy
+  migrace doplní sloupec do starých DB.
+- **Kritičnost** je deterministická: analytický nález odkazující na soubor artefaktu
+  (`findings.provenance_json` přes `json_extract`, bez LIKE zkratkovitostí).
+- **Web API**: `GET /api/cases/{id}/artifacts` (listing s review_state),
+  `POST .../artifacts/{aid}/review` → 201 / 409 neplatný přechod nebo kvorum /
+  404 artefakt; `GET .../reviews` → kritičnost + historie. RBAC oprávnění
+  `case.review` (analyst/examiner/admin).
+- **Audit trail**: každá review akce = audit log `artifact.review` (hash chaining)
+  + řádek v `artifact_reviews`; při neplatném přechodu DB nedotčená.
+- **Report filtr**: běží-li workflow, report timeline obsahuje jen události od
+  court-ready artefaktů; bez review akcí backward compat (kompletní report).
+- Každý přechod emituje WS událost `review.state` (F4.2 live push).
+- Testy: `tests/test_f43_review.py` **25/25** (včetně 3-examinátor scénáře a live WS);
+  stp041 aktualizován na v16; ruff clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad

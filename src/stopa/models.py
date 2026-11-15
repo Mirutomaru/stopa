@@ -127,6 +127,7 @@ class Artifact(BaseModel):
     # Staré artifacty bez provenance zůstávají čitelné (default prázdný list / 'extracted').
     provenance: list[Provenance] = Field(default_factory=list)
     validation_status: str = "extracted"  # extracted | validated | needs_validation
+    review_state: str = "draft"  # F4.3 peer-review: draft|reviewed|approved|court_ready
 
 
 class ProcessResult(BaseModel):

@@ -219,10 +219,20 @@ Live progress ingestu, live timeline events, live AI agent actions. Reconnection
 - **Testy** `tests/test_f42_ws.py` (15): kontrakt hello, close 4004, heartbeat (`ws_heartbeat_s=0.3`), E2E ingest přes WS s měřením delivery latence < 200 ms (publish timestamp via monkeypatch), graceful degradation bez WS klientů, **100 současných klientů → každý dostal `timeline.event`**, hooky `CaseDB.on_event`, unit testy buse.
 - **E2E smoke na živém uvicornu** (:8099, reálný WS klient): hello ✓, stream progress→timeline→done ✓, post_to_timeline **140 ms < 200 AK**, close code 4004 ✓, REST timeline bez WS ✓.
 
-### F4.3 — Peer-Review Workflow `[ ]`
+### F4.3 — Peer-Review Workflow `[x] ✅ 2026-11-15`
 Stavy artifactů: draft → reviewed → approved → court-ready. Dva examinátoři schválí kritické nálezy; audit log změny.
 **AK:** Nelze obejít; report generuje jen court-ready artifacty; test 3-examinator scénáře.
 **P0 | L | závislosti: F4.1**
+
+**IMPLEMENTACE (2026-11-15):**
+- **`src/stopa/domain/review.py`** (nový, čistá doménová vrstva bez IO): stavový automat `STATES = draft → reviewed → approved → court_ready`; přechod **vždy přesně o jeden krok vpřed** — přeskočení i zpětný přechod zvedne `ReviewError`; kritický artefakt (odkazuje na něj analytický nález) vyžaduje k `approved` **minimálně 2 distinct examinátorů** (`MIN_CRITICAL_APPROVERS`) — stejný člověk se nepočítá dvakrát; `check_transition(current, new_state, is_critical, participants)`.
+- **Schéma v15 → v16**: sloupec `artifacts.review_state` (CHECK 4 stavy, default `draft`) + nová tabulka `artifact_reviews` (neměnná historie: case_id, artifact_id, reviewer, new_state, note, ts_utc; indexy per case/artifact). Legacy migrace doplní `review_state` do starých DB.
+- **`ArtifactRepository`**: `is_critical_artifact()` — deterministická kritičnost přes `findings.provenance_json` + `json_extract(je.value, '$.file_id')` (bez LIKE); `set_review_state()` — validace + UPDATE + append do `artifact_reviews` + audit log `artifact.review` (hash chaining) v jednom commitu; při neplatném přechodu DB nedotčená; `list_artifact_reviews()` historie starší→novější.
+- **Web API**: `GET /api/cases/{id}/artifacts?file_id=&limit=` (listing s `review_state`); `POST /api/cases/{id}/artifacts/{aid}/review` → **201** (info o přechodu), **409** neplatný přechod/přeskočení/kvorum, **404** neexistující artefakt; `GET .../reviews` → kritičnost + historie. RBAC oprávnění **`case.review`** (analyst/examiner/admin); identita examinátora explicitní v těle requestu (`reviewer`).
+- **Report filtr**: pokud v případě proběhla jakákoli review akce, report timeline obsahuje **jen události od court-ready artefaktů**; bez aktivního workflow backward compat (vše) — stará DB bez tabulky chycena přes `sqlite3.OperationalError`.
+- **F4.2×F4.3**: každý přechod emituje WS událost **`review.state`** na téma `case:{id}` (live update v SPA).
+- **Testy** `tests/test_f43_review.py` (**25 testů**): čistý automat (přeskočení/zpět/stejný stav/neznamé stavy/kvorum distinct), DB vrstva (kritičnost, 3-examinátor workflow A→B→C s audit trail + neměnnou historií, blokáda jednoho examinátora na kritickém, solo path nekritického, nedotčená DB při selhání), web API (201/409/404/422, end-to-end flow), **live WS `review.state`**, report filtr (aktivní i neaktivní workflow).
+- AK ✓: nelze obejít (stavový automat + CHECK constraints + kvorum); report jen court-ready; 3-examinátor scénář pokryt testem. stp041 aktualizován na v16 + `artifact_reviews`. Ruff clean; full suite viz commit message.
 
 ### F4.4 — Multi-tenant RBAC rozšíření `[ ]`
 Organizace → týmy → uživatelé; per-case permissions; SSO (OIDC/SAML); audit log per user.

@@ -10,6 +10,7 @@ generovat vždy HTML (court-ready i tak, tiskne se z prohlížeče).
 from __future__ import annotations
 
 import logging
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -104,6 +105,24 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
 
     # E10: timeline (materializované události, chronologicky) + korelace entity.
     # Lokální čas počítá build_html() přes case timezone_name — tady jen ISO UTC.
+    tl_rows = db.list_timeline_events(limit=500)
+    # F4.3 — Peer-Review Workflow: pokud v případě proběhla jakákoli review akce,
+    # report obsahuje JEN události od court-ready artefaktů (backward compat:
+    # bez aktivního workflow zůstává vše). Kritická kontrola u generace reportu.
+    try:
+        _review_active = bool(
+            db.conn.execute("SELECT 1 FROM artifact_reviews LIMIT 1").fetchone()
+        )
+    except sqlite3.OperationalError:  # stará DB bez tabulky → workflow neaktivní
+        _review_active = False
+    if _review_active:
+        court_ready_ids = {
+            r["id"]
+            for r in db.conn.execute(
+                "SELECT id FROM artifacts WHERE review_state = 'court_ready'"
+            ).fetchall()
+        }
+        tl_rows = [e for e in tl_rows if e.get("artifact_id") in court_ready_ids]
     timeline_events = tuple(
         TimelineEvent(
             ts_utc=e["ts_utc"],
@@ -117,7 +136,7 @@ def build_report_data(db: CaseDB, case_id: str) -> ReportData:
             contradiction_group_id=e.get("contradiction_group_id"),
             dup_group_id=e.get("dup_group_id"),
         )
-        for e in db.list_timeline_events(limit=500)
+        for e in tl_rows
     )
     correlations = tuple(
         CorrelationRow(

@@ -46,6 +46,7 @@ EXPECTED_TABLES = {
     "analysis_operations",
     "custody_items",
     "hypotheses",  # F3.5 — graf hypotéz (AI + ruční potvrzení/vyvrácení)
+    "artifact_reviews",  # F4.3 — peer-review workflow: auditní stopa review akcí
 }
 
 EXPECTED_AUDIT_TRIGGERS = {"audit_no_update", "audit_no_delete"}
@@ -67,8 +68,8 @@ def _trigger_names(conn: sqlite3.Connection) -> set[str]:
 
 
 class TestSchemaModule:
-    def test_schema_version_is_15(self):
-        assert SCHEMA_VERSION == 15
+    def test_schema_version_is_16(self):
+        assert SCHEMA_VERSION == 16
 
     def test_schema_version_fallback_on_empty_db(self, tmp_path: Path):
         """Bez meta řádku vrací 1 (staré DB bez verze)."""

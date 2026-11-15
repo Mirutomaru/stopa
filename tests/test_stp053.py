@@ -162,7 +162,8 @@ class TestPermissionsFor:
         from stopa.domain.rbac import permissions_for
 
         perms = set(permissions_for("analyst"))
-        assert perms == {"case.read", "analysis.run", "file.flag"}
+        # F4.3 — analyst zvládá i peer-review (identita examinátora je explicitní v requestu)
+        assert perms == {"case.read", "analysis.run", "file.flag", "case.review"}
 
     def test_unknown_role_read_only(self):
         from stopa.domain.rbac import permissions_for
@@ -189,7 +190,8 @@ class TestSettingsPermissionsField:
         body = client.get("/api/settings").json()
         assert body["role"] == "analyst"
         perms = set(body["permissions"])
-        assert perms == {"case.read", "analysis.run", "file.flag"}
+        # F4.3 — nová oprávnění case.review (peer-review workflow)
+        assert perms == {"case.read", "analysis.run", "file.flag", "case.review"}
         # case lifecycle chybí
         assert "case.create" not in perms
         assert "settings.write" not in perms

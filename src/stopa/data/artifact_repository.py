@@ -381,6 +381,99 @@ class ArtifactRepository:
         ).fetchone()
         return _row_to_analysis_operation(row) if row else None
 
+    # ── F4.3 Peer-Review Workflow: stavový automat + auditní stopa ────────────
+    def is_critical_artifact(self, artifact_id: str) -> bool:
+        """Kritický = existuje analytický nález odkazující na soubor artefaktu.
+
+        Odkaz řešíme přes ``findings.provenance_json`` (Provenance.file_id) —
+        deterministické porovnání přes json_each, bez LIKE zkratkovitostí.
+        """
+        row = self.conn.execute(
+            "SELECT file_id FROM artifacts WHERE id = ?", (artifact_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"nenašel se artefakt {artifact_id}")
+        if not row["file_id"]:
+            return False
+        n = self.conn.execute(
+            "SELECT COUNT(*) FROM findings f, json_each(f.provenance_json) je"
+            " WHERE json_extract(je.value, '$.file_id') = ?",
+            (row["file_id"],),
+        ).fetchone()[0]
+        return n > 0
+
+    def list_artifact_reviews(self, artifact_id: str) -> list[dict]:
+        """Neměnná historie review akcí artefaktu (starší → novější)."""
+        rows = self.conn.execute(
+            "SELECT case_id, artifact_id, reviewer, new_state, note, ts_utc"
+            " FROM artifact_reviews WHERE artifact_id = ? ORDER BY id",
+            (artifact_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def set_review_state(
+        self,
+        artifact_id: str,
+        new_state: str,
+        reviewer: str,
+        note: str | None = None,
+    ) -> dict:
+        """Přechod stavu review podle pravidel :mod:`stopa.domain.review`.
+
+        Píše ``artifacts.review_state`` + append do ``artifact_reviews``
+        + audit log (hash chaining). Vrací info o novém stavu; při neplatném
+        přechodu zvedne :class:`~stopa.domain.review.ReviewError` (ValueError)
+        a DB zůstává nedotčená.
+        """
+        from stopa.data.audit_repository import AuditRepository
+        from stopa.domain.review import ReviewError, check_transition
+
+        row = self.conn.execute(
+            "SELECT a.id, s.case_id, a.review_state FROM artifacts a"
+            " JOIN sources s ON s.id = a.source_id WHERE a.id = ?",
+            (artifact_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"nenašel se artefakt {artifact_id}")
+        reviewer = (reviewer or "").strip()
+        if not reviewer:
+            raise ReviewError("examinátor je povinný")
+        current = row["review_state"] or "draft"
+        is_critical = self.is_critical_artifact(artifact_id)
+        past = [r["reviewer"] for r in self.list_artifact_reviews(artifact_id)]
+        participants = list(dict.fromkeys(past + [reviewer]))  # distinct, zachová pořadí
+        check_transition(current, new_state, is_critical=is_critical, participants=participants)
+
+        ts_utc = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            "UPDATE artifacts SET review_state = ? WHERE id = ?",
+            (new_state, artifact_id),
+        )
+        self.conn.execute(
+            "INSERT INTO artifact_reviews"
+            " (case_id, artifact_id, reviewer, new_state, note, ts_utc)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (row["case_id"], artifact_id, reviewer, new_state, note, ts_utc),
+        )
+        AuditRepository(self.conn).log_operation(
+            "artifact.review",
+            actor=reviewer,
+            details={
+                "artifact_id": artifact_id,
+                "from": current,
+                "to": new_state,
+                "critical": is_critical,
+                "note": note,
+            },
+        )  # log_operation sám commituje (sdílená connection)
+        return {
+            "artifact_id": artifact_id,
+            "review_state": new_state,
+            "previous_state": current,
+            "critical": is_critical,
+            "ts_utc": ts_utc,
+        }
+
     # ── E2 Timeline Engine: materializovaná timeline (timeline_events) ───────
     def add_timeline_event(
         self,
@@ -652,6 +745,7 @@ def _row_to_artifact(r: sqlite3.Row) -> Artifact:
             else []
         ),
         validation_status=r["validation_status"] if "validation_status" in keys else "extracted",
+        review_state=r["review_state"] if "review_state" in keys else "draft",  # F4.3
     )
 
 

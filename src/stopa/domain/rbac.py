@@ -57,6 +57,9 @@ PERMISSIONS: dict[str, frozenset[str]] = {
     "analysis.run": frozenset(ROLES),
     # flagování souborů (evidence/report) — i analytik
     "file.flag": frozenset({"analyst", "examiner", "admin"}),
+    # F4.3 peer-review přechody stavu artefaktů — i analytik;
+    # identita examinátora je explicitní v těle requestu (kvorum distinct lidí).
+    "case.review": frozenset({"analyst", "examiner", "admin"}),
     # case lifecycle — jen examiner a admin
     "case.create": frozenset({"examiner", "admin"}),
     "case.update": frozenset({"examiner", "admin"}),

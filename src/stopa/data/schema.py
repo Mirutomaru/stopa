@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -72,7 +72,9 @@ CREATE TABLE IF NOT EXISTS artifacts (
     anomaly_flags TEXT,  -- komou oddělené kanonické flagy nesrovnalostí
     -- P0 Core C1: Unified Evidence Model — strukturovaná provenance + stav validace
     provenance_json TEXT NOT NULL DEFAULT '[]',
-    validation_status TEXT NOT NULL DEFAULT 'extracted'  -- extracted|validated|needs_validation
+    validation_status TEXT NOT NULL DEFAULT 'extracted',  -- extracted|validated|needs_validation
+    review_state TEXT NOT NULL DEFAULT 'draft'            -- F4.3 peer-review: draft→reviewed→approved→court_ready
+        CHECK (review_state IN ('draft','reviewed','approved','court_ready'))
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_source ON artifacts(source_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifacts(timestamp);
@@ -239,6 +241,22 @@ CREATE TABLE IF NOT EXISTS integrity_checkpoints (
     signature_b64 TEXT NOT NULL,    -- Ed25519 podpis last_hash (base64)
     reason TEXT                     -- ingest | correlate | export | manual | …
 );
+
+-- F4.3 — Peer-Review Workflow: auditní stopa review akcí u artefaktů.
+-- Aktuální stav = normalizovaný sloupec artifacts.review_state; tady je neměnná
+-- historie (kdo, kdy, na co) pro soudní doložitelnost. Kritický artefakt
+-- vyžaduje ≥ 2 distinct examinátorů před schválením (domain/review.py).
+CREATE TABLE IF NOT EXISTS artifact_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+    reviewer TEXT NOT NULL,
+    new_state TEXT NOT NULL CHECK (new_state IN ('draft','reviewed','approved','court_ready')),
+    note TEXT,
+    ts_utc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_artifact_reviews_case ON artifact_reviews(case_id);
+CREATE INDEX IF NOT EXISTS idx_artifact_reviews_artifact ON artifact_reviews(artifact_id);
 
 -- P0 Core C5: Reproducibility Engine — záznamy analytických operací.
 -- Každá operace nese vstupní soubory + hashe, verze parserů/STOPA, hash konfigurace,

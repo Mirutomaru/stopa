@@ -47,6 +47,8 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
         # P0 Core C1: Unified Evidence Model — strukturovaná provenance + stav validace.
         ("provenance_json", "TEXT NOT NULL DEFAULT '[]'"),
         ("validation_status", "TEXT NOT NULL DEFAULT 'extracted'"),
+        # F4.3 Peer-Review Workflow — stav artifactu (validaci hlídá domain/review.py).
+        ("review_state", "TEXT NOT NULL DEFAULT 'draft'"),
     ):
         if col not in art_cols:
             conn.execute(f"ALTER TABLE artifacts ADD COLUMN {col} {decl}")
