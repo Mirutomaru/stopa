@@ -56,6 +56,29 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 - AK ověřeno testy: opakovaná FTS query < 50 ms ✓, hit ratio ≥ 70 % ✓ —
   19 testů `tests/test_f25_query_cache.py`; suite 2957 passed / 1 skipped.
 
+#### F3.1 AI Agent framework — ReAct tool-use nad živým case DB
+- `src/stopa/intelligence/tool_agent.py`: vlastní ReAct smyčka (bez nových
+  externích závislostí — dle ROADMAP volby „LangGraph / vlastní"): LLM plánuje
+  kroky JSON (`thought` + přesně jeden z `action`/`final_answer`), runtime
+  spouští nástroj, observation se vrací do smyčky; terminace = `final_answer`
+  nebo `max_steps`.
+- 5 deterministických nástrojů `(db, case_id, params) -> dict`: `search_fts`,
+  `get_timeline` (time-range + anomalies_only), `resolve_entity` (+ korelace),
+  `run_yara` (WIF/BTC/ETH/BIP-39 bez yara-python; BIP-39 přes K1 `detect_in_text`,
+  do výstupu jen SHA-256 fingerprint — raw seed ne), `generate_hypothesis`
+  (confidence ∝ počet podpůrných dokazových prvků).
+- Auditovatelnost: každá akce → `audit_log` action=`ai_agent_action`
+  (append-only hash chain; details = step/tool/params/observation_chars/elapsed_ms).
+- Grounding: ve final answer se validuje **100 % citací** `[art:id]`/`[file:id]`
+  proti case DB — jediná nevalidní = fail-closed `GroundingError`.
+- Guardrails: XOR action/final_answer (Pydantic), `max_steps`, PII redaction
+  default ON (STP-019), tolerance markdown fence, neznámý nástroj = observation
+  s chybou (agent může opravit). LLM injektovatelná (`llm_call`) → offline
+  deterministické testy bez LM Studio.
+- AK: agent vyřeší 10/10 testovacích případů ✓; každá akce v audit logu ✓;
+  grounding validuje 100 % citací ✓ — 15 testů `tests/test_f31_tool_agent.py`
+  (5 unit + 10 AK scénářů s FakeLLM). Ruff + Pyright clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad

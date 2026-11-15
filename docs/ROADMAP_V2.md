@@ -114,10 +114,12 @@ Cache pro opakované operace: FTS queries, entity resolution, correlation graf (
 ---
 
 ## 🤖 FÁZE 3 — AI COPILOT UPGRADE · Odhad 4–5 týdnů
-### F3.1 — AI Agent framework (LangGraph / vlastní) `[ ]`
+### F3.1 — AI Agent framework (LangGraph / vlastní) `[x] ✅ 2026-11-15`
 Agent s tool-use: search_fts, get_timeline, resolve_entity, run_yara, generate_hypothesis. Plánování akcí (ReAct).
 **AK:** Agent vyřeší 10/10 testovacích případů; každá akce v audit logu; grounding validuje 100 % citací.
 **P0 | XL | závislosti: —**
+
+**IMPLEMENTACE (`src/stopa/intelligence/tool_agent.py`):** ReAct smyčka nad živým case DB, **bez nových externích závislostí** (volba „LangGraph / vlastní" → vlastní framework; LangGraph = nová runtime závislost pro deterministický forenzní tool). 5 nástrojů jako `(db, case_id, params) -> dict`: `search_fts`, `get_timeline` (time-range + anomalies_only), `resolve_entity` (+ korelace), `run_yara` = deterministický signature scanner WIF/BTC/ETH/BIP-39 bez yara-python (BIP-39 přes K1 `detect_in_text`; do výstupu jen fingerprint, ne raw seed), `generate_hypothesis` (confidence ∝ počet podpůrných dokazových prvků). Každá akce → `audit_log` (append-only hash chain, action=`ai_agent_action`). **Grounding: 100 % citací** `[art:id]`/`[file:id]` ve final answer validováno proti DB — jediná nevalidní = fail-closed (`GroundingError`, auditovatelné). Guardrails: `max_steps`, XOR action/final_answer, PII redaction default ON (STP-019), markdown fence tolerance. LLM injektovatelná (`llm_call`) → offline deterministické testy bez LM Studio. **SUITE:** 15/15 (`tests/test_f31_tool_agent.py`): 5 unit (nástroje) + 10 AK scénářů s FakeLLM (audit log + hash chain, grounding valid/invalid, max_steps, nevalidní JSON, neznámý nástroj + recovery, XOR, PII redaction, fence tolerance, end-to-end ransomware case).
 
 ### F3.2 — Triage profily (Ransomware, Insider Threat, CSAM, Exfiltrace) `[ ]`
 Předpřipravené agendy: YARA rules, timeline queries, entity filters, hypothesis templates.

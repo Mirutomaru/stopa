@@ -35,6 +35,14 @@ from stopa.intelligence.rag import (
     sanitize_fts_query,
     technical_registry_chunks,
 )
+from stopa.intelligence.tool_agent import (
+    GroundingError,
+    MaxStepsError,
+    ReActStep,
+    ToolAgentError,
+    ToolAgentResult,
+    run_tool_agent,
+)
 
 __all__ = [
     "AGENTS",
@@ -43,12 +51,17 @@ __all__ = [
     "ArtifactAnalystOutput",
     "CaseAnalystOutput",
     "CaseContext",
+    "GroundingError",
+    "MaxStepsError",
     "MediaAnalystOutput",
     "OrchestrationError",
     "RagChunk",
     "RagContext",
+    "ReActStep",
     "ReportAnalystOutput",
     "TimelineAnalystOutput",
+    "ToolAgentError",
+    "ToolAgentResult",
     "audit_ai_query",
     "build_case_context",
     "chunk_markdown",
@@ -57,6 +70,7 @@ __all__ = [
     "prompt_hash",
     "retrieve",
     "route_agent",
+    "run_tool_agent",
     "sanitize_fts_query",
     "technical_registry_chunks",
 ]
