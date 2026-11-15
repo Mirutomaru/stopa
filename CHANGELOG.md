@@ -112,6 +112,24 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
   (parameterized — explicitní scénář s `'; DROP TABLE files; --`); timeout 5 s —
   19 testů `tests/test_f33_nl_query.py`. Ruff + Pyright clean.
 
+#### F3.4 Generování právních dokumentů — Forensic Methodology / Chain of Custody / Expert Witness
+- `src/stopa/intelligence/legal_docs.py`: tři šablony vyplněné z case DB (bez nových dep):
+  **forensic_methodology** (rozsah, metodika, statistika, reprodukovatelnost),
+  **chain_of_custody** (affidavit + řetěz úlohy z append-only audit logu s hash chainingem),
+  **expert_witness** (Daubert/SWGDE kritéria, hlavní nálezy, expertní tvrzení).
+- AI narrative sekce přes injektovatelné `llm_call(prompt) -> str`; bez LLM nebo při jejím
+  selhání deterministický fallback text (dokument se neztrácí).
+- **Ed25519 podpis dokumentu:** re-use `domain/integrity.py` (`sign_hash`, `verify_signature`)
+  + klíč případu `db.ensure_integrity_key()`; lazy import `cryptography` → graceful degradation
+  (nepodepsaný dokument s poznámkou). Podpis na SHA-256 kanonického obsahu (`signed_content`),
+  integritní blok s hashem+podpisem připojen za obsah.
+- Nezávislé ověření `verify_legal_doc()` bez soukromého klíče (tampering dokumentu → False).
+  Právní review = explicitní sekce „Právní review“ v každé šabloně (lidský krok dle AK).
+- API: `generate_legal_doc(db, case_id, doc_type, llm_call=None)`, `verify_legal_doc(result)`,
+  `LEGAL_DOC_TYPES` (3), `LegalDocResult`.
+- AK ✓: 3 šablony; generování < 30 s (ms v praxi, měřeno testem); Ed25519 sign/verify round-trip
+  + tamper detekce — **14/14** testů `tests/test_f34_legal_docs.py`. Ruff + Pyright clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad

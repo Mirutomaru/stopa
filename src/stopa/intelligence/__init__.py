@@ -24,6 +24,14 @@ from stopa.intelligence.ai_orchestrator import (
     route_agent,
 )
 from stopa.intelligence.case_context import CaseContext, build_case_context
+from stopa.intelligence.legal_docs import (
+    INTEGRITY_MARKER,
+    LEGAL_DOC_TYPES,
+    LegalDocError,
+    LegalDocResult,
+    generate_legal_doc,
+    verify_legal_doc,
+)
 from stopa.intelligence.nl_query import (
     DEFAULT_TIMEOUT_S,
     MAX_ROWS_HARD_CAP,
@@ -76,6 +84,8 @@ __all__ = [
     "DEFAULT_TIMEOUT_S",
     "EXFILTRATION",
     "INSIDER_THREAT",
+    "INTEGRITY_MARKER",
+    "LEGAL_DOC_TYPES",
     "MAX_ROWS_HARD_CAP",
     "PROFILES",
     "RANSOMWARE",
@@ -86,6 +96,8 @@ __all__ = [
     "CaseContext",
     "GroundingError",
     "InvalidQueryError",
+    "LegalDocError",
+    "LegalDocResult",
     "MatchedSignal",
     "MaxStepsError",
     "MediaAnalystOutput",
@@ -109,6 +121,7 @@ __all__ = [
     "chunk_markdown",
     "evaluate_profile",
     "execute_sandboxed",
+    "generate_legal_doc",
     "get_profile",
     "known_tables",
     "load_doc_layer",
@@ -121,4 +134,5 @@ __all__ = [
     "run_triage",
     "sanitize_fts_query",
     "technical_registry_chunks",
+    "verify_legal_doc",
 ]

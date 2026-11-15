@@ -135,10 +135,29 @@ NL → validní dotaz. Sandbox execution (read-only), result validation proti sc
 
 **IMPLEMENTACE (2026-11-15):** `src/stopa/intelligence/nl_query.py` — NL → parametrizovaný SELECT **bez nových externích závislostí**; LLM injektovatelná (`llm_call(nl_text, schema_context) -> {sql, params}`; offline = FakeLLM v testech). Pipeline: (1) `build_schema_context` — živé schéma z case DB (`PRAGMA table_info`, FTS shadow tabulky `*_data/*_idx/*_docsize/*_config` vynechány); (2) validace: jedno vyjádření, musí začínat SELECT/WITH, zakázaná slova INSERT/UPDATE/DELETE/DROP/ALTER/CREATE/PRAGMA/REPLACE, whitelist tabulek z `sqlite_master`, počet placeholderů = počet parametrů → jinak `InvalidQueryError`; (3) **sandbox** = samostatné read-only spojení `file:<case>.db?mode=ro` (dotaz nemůže mutovat case DB ani při chybě validace); (4) **timeout 5 s** (`DEFAULT_TIMEOUT_S`) přes `set_progress_handler(callback, 250_000)` → `QueryTimeoutError`; výstup omezen na `MAX_ROWS_HARD_CAP` řádků (`truncated=True`). Každý dotaz → `audit_log` (action=`nl_query`). API: `run_nl_query`, `execute_sandboxed`, `build_schema_context`, `known_tables`. Testy `tests/test_f33_nl_query.py`: **19/19** — AK 50 NL queries = **50/50 (100 % ≥ 90 %)** + injection scénář (`'; DROP TABLE files; --` v parametru), read-only sandbox, timeout na 80k řádcích, truncation cap, validace (ne-SELECT, neznámá tabulka/sloupec, mismatch parametrů). Ruff + Pyright clean.
 
-### F3.4 — Generování právních dokumentů `[ ]`
+### F3.4 — Generování právních dokumentů `[x] ✅ 2026-11-15`
 Šablony: Forensic Methodology Report, Chain of Custody Affidavit, Expert Witness Summary (Daubert/SWGDE). AI vyplní z artifactů.
 **AK:** 3 šablony; generování < 30 s; právní review (lidský); Ed25519 podpis dokumentu.
 **P1 | M | závislosti: F3.1**
+
+**IMPLEMENTACE (F3.4, `intelligence/legal_docs.py`, bez nových dep):**
+- Tři šablony z case DB (`_collect_case_data` — zdroje, statistiky souborů/artefaktů/entit, audit log):
+  **forensic_methodology** (rozsah+metodika, statistika, reprodukovatelnost), **chain_of_custody**
+  (affidavit + řetěz úlohy z append-only audit logu s hash chainingem), **expert_witness**
+  (Daubert/SWGDE kritéria, hlavní nálezy, expertní tvrzení).
+- AI narrative sekce přes injektovatelné `llm_call(prompt) -> str` (bez LLM = deterministický
+  fallback text; selhání LLM → fallback + debug log — dokument se neztrácí).
+- **Ed25519 podpis dokumentu:** re-use helperů `domain/integrity.py` (`sign_hash`,
+  `verify_signature`) + klíč případu `db.ensure_integrity_key()`; lazy import `cryptography`
+  → graceful degradation (nepodepsaný dokument s poznámkou). Podpis padá na SHA-256
+  kanonického obsahu (`signed_content`); integritní blok s hashem+podpisem se připojí za obsah.
+- Nezávislé ověření `verify_legal_doc()` bez soukromého klíče (rekonstrukce obsahu z dokumentu,
+  tampering → False). Právní review = explicitní sekce „Právní review“ v každé šabloně (lidský krok).
+- Audit akce: dokument se generuje read-only nad case DB. API: `generate_legal_doc(db, case_id,
+  doc_type, llm_call=None)`, `verify_legal_doc(result)`, `LEGAL_DOC_TYPES` (3), `LegalDocResult`.
+- Testy: `tests/test_f34_legal_docs.py` — **14/14 PASSED** (AK parametrizované ×3 typy, < 30 s
+  měřeno, sign/verify round-trip, tamper detekce, graceful degradation bez cryptography, LLM
+  narrative + fallback, chybové cesty). Ruff clean; pyright 0/0/0.
 
 ### F3.5 — Hypothesis graph `[ ]`
 AI generuje graf hypotéz (pro → proti, confidence). Manuální potvrzení/vyvrácení.
