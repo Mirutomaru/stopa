@@ -6,6 +6,8 @@ IO vrstva (AXIOM-style): čte soubor, volá čisté doménové parsery
 
 Strategie:
 - strukturované formáty mají přednost (Electrum JSON → MetaMask vault → exchange CSV);
+- Bitcoin Core ``wallet.dat`` — BDB btree kontejner, čistě pythonová čtečka
+  (``domain.crypto.bdb``, bez nových závislostí) — adresy/labely/transakce + detekce šifrování;
 - nestrukturovaný text → K1 content scan (seedy/klíče/adresy/transakční refy) —
   jen u souborů, které se dají dekodovat jako text a jsou do ``CRYPTO_TEXT_SCAN_MAX``.
 
@@ -20,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from stopa.domain.crypto.addresses import validate_address
+from stopa.domain.crypto.bdb import BdbError, is_bdb_btree
 from stopa.domain.crypto.enums import AddressStatus
 from stopa.domain.crypto.exchanges import ExchangeRecord, parse_exchange_csv
 from stopa.domain.crypto.models import (
@@ -29,10 +32,12 @@ from stopa.domain.crypto.models import (
     make_detection_artifact,
 )
 from stopa.domain.crypto.wallets import (
+    BitcoinCoreWallet,
     ElectrumWallet,
     MetaMaskVaultData,
     is_electrum_wallet,
     is_metamask_vault,
+    parse_bitcoin_core_wallet,
     parse_electrum_wallet,
     parse_metamask_vault,
 )
@@ -43,6 +48,7 @@ CRYPTO_EXTRACT_VERSION = "1.0"
 # limity — velká binárka nesmí zpomalit ingest
 CRYPTO_MAX_BYTES = 16 * 1024 * 1024  # strukturované parsery (JSON/CSV)
 CRYPTO_TEXT_SCAN_MAX = 4 * 1024 * 1024  # K1 regex scan
+CRYPTO_BDB_MAX_BYTES = 64 * 1024 * 1024  # wallet.dat — BDB potřebuje celý soubor (stránky od 0)
 CRYPTO_MAX_RECORDS = 20_000  # strop počtu exchange záznamů na soubor
 
 # K1 content scan — kandidáti na adresy (tokeny, které formátovými pravidly sedí)
@@ -166,6 +172,48 @@ def _metamask_artifact(v: MetaMaskVaultData, rel_path: str | None) -> Artifact:
     )
 
 
+def _bitcoin_core_artifact(w: BitcoinCoreWallet, rel_path: str | None) -> Artifact:
+    """Bitcoin Core wallet.dat → 1 artefakt (metadata bez raw klíčů, PII-safe)."""
+
+    wd = WalletDetection(
+        wallet_type="bitcoin_core",
+        detection_basis="content_marker",
+        confidence=0.95,
+        encrypted=w.encrypted,  # BDB: přítomnost/absence crypted_key je definitivní
+        version_hint=(
+            f"bdb btree; walletversion={w.wallet_version}"
+            if w.wallet_version is not None
+            else "bdb btree"
+        ),
+        public_addresses=list(w.addresses),
+    )
+    details = make_detection_artifact(
+        CryptoDetectionResult(wallets=[wd]), rel_path, artifact_type="crypto_wallet"
+    )
+    # K2.1 detaily — adresy/txid jsou on-chain (veřejná) data; labely mohou být PII → strop 200
+    details["bitcoin_core"] = {
+        "encrypted": w.encrypted,
+        "wallet_version": w.wallet_version,
+        "best_block_hash": w.best_block_hash_hex,
+        "private_key_count": w.private_key_count,
+        "record_count": w.record_count,
+        "labels": dict(list(w.labels.items())[:200]),
+        "transaction_ids": [t.hex() for t in w.transaction_ids[:500]],
+        "warnings": list(w.warnings),
+    }
+    title = (
+        f"Bitcoin Core wallet ({len(w.addresses)} adres, {len(w.transaction_ids)} transakcí)"
+        + (" [šifrován]" if w.encrypted else "")
+    )
+    return Artifact(
+        artifact_type="crypto_wallet",
+        title=title[:200],
+        details=details,
+        confidence=0.95,
+        parser_version=CRYPTO_EXTRACT_VERSION,
+    )
+
+
 def _exchange_artifacts(records: list[ExchangeRecord], rel_path: str | None) -> list[Artifact]:
     """Exchange záznamy → artefakty (1/record, strop CRYPTO_MAX_RECORDS)."""
 
@@ -260,7 +308,8 @@ def _k1_artifact(result: CryptoDetectionResult, rel_path: str | None) -> Artifac
 def extract_crypto_artifacts(path: Path | str) -> list[Artifact]:
     """Extrahuje crypto artefakty ze souboru; žádné → ``[]``.
 
-    Řád: Electrum JSON → MetaMask vault → exchange CSV → K1 text scan.
+    Řád: Electrum JSON → MetaMask vault → exchange CSV → Bitcoin Core BDB (wallet.dat)
+    → K1 text scan.
     Chyby I/O / parsování se logicky hlásí jako prázdný výsledek (defenzivní —
     crypto scan nesmí rozbít hlavní ingest).
     """
@@ -298,6 +347,29 @@ def extract_crypto_artifacts(path: Path | str) -> list[Artifact]:
         parsed = parse_exchange_csv(text)
         if parsed is not None and parsed.records:
             return _exchange_artifacts(parsed.records, rel_path)
+
+    # 2b) Bitcoin Core wallet.dat — BDB btree kontejner (binárka, magic @12 meta stránky)
+    if is_bdb_btree(data):
+        full = data
+        try:
+            size = p.stat().st_size
+        except OSError:
+            return []
+        if CRYPTO_MAX_BYTES < size <= CRYPTO_BDB_MAX_BYTES:
+            # BDB indexuje stránky od offsetu 0 — potřebujeme celý soubor, ne jen 16 MB
+            try:
+                with p.open("rb") as fh:
+                    full = fh.read(size + 1)
+            except OSError:
+                return []
+        elif size > CRYPTO_BDB_MAX_BYTES:
+            return []  # obří soubor — nenačítat do RAM (defenzivní)
+        try:
+            w = parse_bitcoin_core_wallet(full)
+        except BdbError:
+            return []  # poškozená btree → nezařadit jako wallet artefakt
+        if w is not None:
+            return [_bitcoin_core_artifact(w, rel_path)]
 
     # 3) K1 content scan — jen reálný text do CRYPTO_TEXT_SCAN_MAX
     #    (JSON/CSV bez strukturovaného matche může obsahovat adresy v hodnotách)

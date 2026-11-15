@@ -531,7 +531,7 @@ CRYPTO_ARTIFACT_TYPES = [
 - [ ] **K1.4** Test suite (500+ test cases)
 
 ### Fáze K2 — Wallet & Exchange
-- [ ] **K2.1** Bitcoin Core wallet.dat parser *(re-scoping: odložit, BDB = samostatný C-dependency)*
+- [x] **K2.1** Bitcoin Core wallet.dat parser ✅ 2026-11-16 — čistě Python BDB btree čtečka (`domain/crypto/bdb.py`), bez runtime závislosti; původní re-scoping (C-dependency) tím pádem odstraněn
 - [ ] **K2.2** Electrum wallet parser
 - [ ] **K2.3** MetaMask vault decryptor
 - [ ] **K2.4** Exchange CSV parsers (Binance, Coinbase, Kraken)

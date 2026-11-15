@@ -27,6 +27,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from stopa.domain.crypto._keccak import keccak256
+from stopa.domain.crypto.bdb import BdbError, parse_bdb_btree  # noqa: F401
 
 # ── modely ───────────────────────────────────────────────────────────────
 
@@ -410,3 +411,86 @@ def parse_metamask_vault(
     if password is None:
         return MetaMaskVaultData(kdf=str(obj.get("dkty") or "scrypt").lower(), decrypted=False)
     return decrypt_metamask_vault(raw, password)
+
+
+# ── K2.1: Bitcoin Core wallet.dat (BDB btree) ────────────────────────
+
+#: Klíče Bitcoin Core v BDB — prefixy / formát klíčů (CWallet::Load*):
+#:   name:<adresa>  → label; tx<32B txid> → CTxOutRef (UTXO); walletversion u32 LE;
+#:   bestblock <32B hash>; crypted_key <64B> (přítomnost = šifrovaná peněženka).
+_BTC_NAME_PREFIX = b"name:"
+_BTC_TX_PREFIX = b"tx"
+
+
+class BitcoinCoreWallet(BaseModel):
+    """Vyextrahovaná metadata z Bitcoin Core ``wallet.dat`` (bez raw klíčů).
+
+    Adresy a labely = veřejná data; privátní klíče se neukládají — jen počet
+    záznamů (PII guard, spec §7). Transakční ID jsou on-chain data (veřejná).
+    """
+
+    encrypted: bool = False  # přítomnost záznamu crypted_key
+    addresses: list[str] = Field(default_factory=list)  # name:<addr> klíče
+    labels: dict[str, str] = Field(default_factory=dict)  # adresa → label (i "")
+    transaction_ids: list[bytes] = Field(default_factory=list)  # tx<32B> klíče
+    wallet_version: int | None = None  # u32 LE z "walletversion"
+    best_block_hash_hex: str | None = None  # "bestblock" (32 B)
+    private_key_count: int = 0  # heuristika CKey záznamů (klíč 0x02/0x03, value ≥45 B)
+    record_count: int = 0  # celkový počet KV záznamů v DB
+    warnings: list[str] = Field(default_factory=list)
+
+
+def parse_bitcoin_core_wallet(data: bytes) -> BitcoinCoreWallet | None:
+    """Parsování Bitcoin Core ``wallet.dat`` (BDB btree, logické jméno NULL).
+
+    :param data: celý obsah souboru.
+    :returns: extrahovaná metadata; ``None``, pokud btree neobsahuje žádné
+      rozpoznatelné bitcoin záznamy (jiná aplikace stejný kontejner).
+    :raises BdbError: strukturní poškození btree (volající kód → soubor mimo).
+
+    Heuristika privátních klíčů: Bitcoin Core ukládá CKey pod klíčem = veřejný
+    klíč, první byte value 0x02 (KEY_PRIVKEY) / 0x03 (WATCH_ONLY), délka ≥ 45 B.
+    """
+
+    records = parse_bdb_btree(data)
+    wallet = BitcoinCoreWallet(record_count=len(records))
+    recognized = False
+
+    for key, value in records:
+        if key.startswith(_BTC_NAME_PREFIX):
+            addr = key[len(_BTC_NAME_PREFIX) :].decode("latin-1")
+            label = value.decode("latin-1", "replace")
+            if addr and addr not in wallet.labels:
+                wallet.labels[addr] = label
+                wallet.addresses.append(addr)
+                recognized = True
+        elif key.startswith(_BTC_TX_PREFIX) and len(key) == 2 + 32:
+            wallet.transaction_ids.append(bytes(key[2:]))
+            recognized = True
+        elif key == b"walletversion":
+            if len(value) >= 4:
+                wallet.wallet_version = int.from_bytes(value[:4], "little")
+                recognized = True
+        elif key == b"bestblock" and len(value) == 32:
+            wallet.best_block_hash_hex = value.hex()
+            recognized = True
+        elif key == b"crypted_key":
+            wallet.encrypted = True
+            recognized = True
+        else:
+            # CKey záznamy: klíč = veřejný klíč (první byte 0x02/0x03), value ≥ 45 B
+            if len(key) >= 1 and key[0] in (0x02, 0x03) and len(value) >= 45:
+                wallet.private_key_count += 1
+
+    if not recognized:
+        return None
+    if wallet.encrypted:
+        wallet.warnings.append(
+            "peněženka je šifrovaná (crypted_key) — privátní klíče bez hesla nečitelné"
+        )
+    elif wallet.private_key_count > 0:
+        wallet.warnings.append(
+            f"{wallet.private_key_count} privátních klíčů v čistém textu "
+            "(nesifrovaná peněženka)"
+        )
+    return wallet

@@ -263,6 +263,28 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
   read/write tokéní, mention filtr, konflikt 409, live WS, mail backend); stp041 na v18;
   db.py 599 řádků (budget <600); ruff clean.
 
+#### K2.1 Bitcoin Core wallet.dat parser — čistě Python BDB btree čtečka
+- **`src/stopa/domain/crypto/bdb.py`** — nová doménová vrstva, **čistě Python bez nové
+  runtime závislosti** (jen stdlib `struct`, žádné I/O): BDB btree reader dle
+  `db_page.h` libdb **5.3.21 i 4.8.30** (`DB_BTREEMAGIC=0x053162` @offset 12 meta
+  stránky, `DB_BTREEVERSION=9` — konstanty identické v obou verzích → parser pokrývá
+  staré wallet.dat). PAGE header přesně 26 B + u16 index tabulka; leaf/internal/overflow
+  walk; item type: **1=B_KEYDATA** (data @off+3), **3=B_OVERFLOW** (řetězec overflow
+  stránek). API: `is_bdb_btree(data)` levný gate, `parse_bdb_btree(bytes) -> list[(key,value)]`
+  v pořadí stromu; jakákoli strukturní nekonzistence → `BdbError` (defenzivně).
+- **Doménový model** `BitcoinCoreWallet` + `parse_bitcoin_core_wallet` (`wallets.py`):
+  klíčové vzory CWallet::Load* — `name:<addr>`→label, `tx<32B txid>`→CTxOutRef,
+  **přítomnost `crypted_key` = šifrovaná peněženka** (warning), `walletversion`,
+  `bestblock`; heuristika CKey jen count (PII guard — raw klíče se do DB neukládají).
+- **Pipeline** (`crypto_extract.py`): větev před K1 content scan, detekce podle obsahu
+  (magic) ne názvu souboru; limit `CRYPTO_BDB_MAX_BYTES=64 MB`; artefakt `crypto_wallet`,
+  confidence **0.95**, `details["bitcoin_core"]` = encrypted/wallet_version/best_block/
+  private_key_count + labely a txids se stropy.
+- Fixture: C generátor libdb-5.3 → `tests/data/wallet_{small,big}.dat`; cross-validace
+  Python parser vs C cursor dump = byte-for-byte match. **PITFALL:** logické DB jméno
+  při `db->open` = NULL; PyPI `bdb` = stdlib breakpoint debugger, ne BerkeleyDB.
+- Testy: `tests/test_k21_wallet_dat.py` **21/21**; suite **3183 passed / 1 skipped** (+21); ruff clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad
