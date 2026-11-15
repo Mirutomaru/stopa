@@ -238,6 +238,31 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
   skupiny L/M/A/B/C/D/E/F/G včetně RS256 přes JWKS hook a audit per user; stp041 na v17;
   db.py 599 řádků (budget <600); ruff clean.
 
+#### F4.5 Case sharing & collaboration — komentáře, @mentions, notifikace
+- **`src/stopa/domain/collab.py`**: čistá doménová vrstva — `parse_mentions()`
+  (e-mail `x@y.z` mention netvoří; deduplikace v pořadí prvního výskytu),
+  `validate_comment_body()` (strip, max 4000 znaků), `case_access_level()` —
+  read/write úroveň sdílení přes F4.4 `access_for_case`: examiner/admin → write,
+  analyst → read, bez přístupu None (fail-closed).
+- **Schéma v17 → v18**: `COLLAB_DDL` pro case DB — `artifact_comments`
+  (FK ON DELETE CASCADE na artefakt, CHECK délky, `mentions_json`, `revision`
+  pro optimistic locking) + `notifications` (inbox per uživatel); idempotentní
+  legacy migrace do starých case DB. Instance DB zůstává na MULTITENANT_DDL.
+- **`CollabRepository`** (nový): CRUD komentářů — editace bumpne `revision`,
+  mismatch `expected_revision` → ValueError (**konflikt = HTTP 409**) — a
+  notifikace (unread, mark_read, mark_all_read).
+- **Web API**: `POST/GET /api/cases/{id}/artifacts/{aid}/comments`;
+  `PUT/DELETE .../comments/{cid}` (jen autor → jinak 403); `GET .../sharing`
+  (členové + read/write úroveň); inbox `GET/POST .../notifications`.
+  Nové oprávnění `comment.post` (examiner/admin — píše jen write-úroveň).
+- **Notifikace**: grant členství → „případ sdílen s vámi"; @mention → in-app +
+  e-mail pro každého zmíněného existujícího uživatele; `create_app(mail_backend=)`
+  injektovatelný transport, selhání mailu API cestu nerozbije (graceful degradation).
+- **Real-time**: WS push `comment.new`/`comment.updated`/`comment.deleted` na téma case.
+- Testy: `tests/test_f45_collab.py` **33/33** (doména, repozitář, E2E — SSO HS256,
+  read/write tokéní, mention filtr, konflikt 409, live WS, mail backend); stp041 na v18;
+  db.py 599 řádků (budget <600); ruff clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad

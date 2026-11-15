@@ -15,7 +15,8 @@ from pathlib import Path
 
 from stopa.data.artifact_repository import ArtifactRepository  # ETAPA C vlna 2
 from stopa.data.audit_repository import AuditRepository  # ETAPA C vlna 1
-from stopa.data.case_repository import CaseRepository  # ETAPA C vlna 1
+from stopa.data.case_repository import CaseRepository
+from stopa.data.collab_repository import CollabRepository  # F4.5 — comments + notifications
 from stopa.data.entity_repository import EntityRepository  # ETAPA C vlna 2
 from stopa.data.file_repository import FileRepository, _fts_query  # noqa: F401 — _fts_query backward compat (test_search)
 from stopa.data.hypothesis_repository import HypothesisRepository  # F3.5
@@ -54,6 +55,7 @@ class CaseDB:
         self.entity_repo = EntityRepository(self.conn)
         self.hypothesis_repo = HypothesisRepository(self.conn)  # F3.5
         self.user_repo = UserRepository(self.conn)  # F4.4 — multi-tenant RBAC
+        self.collab_repo = CollabRepository(self.conn)  # F4.5 — comments + notifications
         # F4.2 — live event hook (volitelný; nastaví web vrstva pro WebSocket push).
         self.on_event: Callable[[str, dict], None] | None = None
 
@@ -592,8 +594,6 @@ class CaseDB:
 
     def close(self) -> None:
         self.conn.close()
-
-
 
 # ETAPA C vlna 1: _FTS5_OPS + _fts_query přesunuty do file_repository.py
 # (import nahoře; backward compat pro `from stopa.data.db import _fts_query`).

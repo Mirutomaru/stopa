@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from stopa.data.schema import MULTITENANT_DDL, SCHEMA_VERSION, _schema_version
+from stopa.data.schema import COLLAB_DDL, MULTITENANT_DDL, SCHEMA_VERSION, _schema_version
 from stopa.domain.integrity import GENESIS, compute_audit_hash
 
 
@@ -108,6 +108,11 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     }
     if not {"orgs", "teams", "users", "case_members"} <= existing_tables:
         conn.executescript(MULTITENANT_DDL)
+        conn.commit()
+    # F4.5 Case sharing & collaboration — stará case DB (≤ v17) bez kolaboračních
+    # tabulek. Idempotentní; FK artifact_comments → artifacts existuje jen v case DB.
+    if not {"artifact_comments", "notifications"} <= existing_tables:
+        conn.executescript(COLLAB_DDL)
         conn.commit()
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).

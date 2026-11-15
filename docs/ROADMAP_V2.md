@@ -249,10 +249,20 @@ Organizace → týmy → uživatelé; per-case permissions; SSO (OIDC/SAML); aud
 - **Testy** `tests/test_f44_multitenant.py` — **60 scénářů (≥ AK 50)**, skupiny L/M/A/B/C/D/E/F/G: legacy režim, fail-closed bez tokenu, globální admin fallback, case-kontext vs. globál, členství examiner, per-case elevace role, konflikty grantů (upsert/max privilegium/unknown), SSO+JWT edge cases (expired, issuer, **RS256 přes JWKS hook**), audit per user + identita v settings.
 - AK ✓: Keycloak/Okta = OIDC HS256/RS256-JWKS funkční; permission matrix 60 ≥ 50; fail-closed default pokryt skupinou M. stp041 na v17; db.py 599 řádků (budget <600). Ruff clean; full suite viz commit message.
 
-### F4.5 — Case sharing & collaboration `[ ]`
+### F4.5 — Case sharing & collaboration `[x] ✅ 2026-11-15`
 Sdílení případů (read/write), comments na artifactech, @mentions.
 **AK:** Real-time comments; notifikace email+in-app; conflict resolution při souběžných editacích.
 **P2 | L | závislosti: F4.3, F4.4**
+
+**IMPLEMENTACE (2026-11-15):**
+- **`src/stopa/domain/collab.py`** (nová, čistá doménová vrstva bez IO): `parse_mentions()` — regex s lookbehind za písmenem/cifrou (e-mail `x@y.z` mention netvoří), deduplikace v pořadí prvního výskytu, max 32 znaků; `validate_comment_body()` — strip + limit 4000 znaků (`MAX_COMMENT_LEN`); `case_access_level(global_role, grants)` — read/write úroveň sdílení přes F4.4 `access_for_case`: efektivní role examiner/admin → **write**, analyst → **read**, bez přístupu → `None` (fail-closed).
+- **Schéma v17 → v18**: nová samostatná konstanta `COLLAB_DDL` pro case DB — tabulka `artifact_comments` (denormalizované `case_id`, FK `artifact_id → artifacts(id) ON DELETE CASCADE`, `CHECK length(body) <= 4000`, `mentions_json`, **`revision`** pro optimistic locking, `edited_at`) + indexy; tabulka `notifications` (inbox per uživatel: kind shared/mention, read flag). Instance DB zůstává na `MULTITENANT_DDL`; legacy migrace doplní chybějící kolaborační tabulky do starých case DB ≤ v17.
+- **`CollabRepository`** (nový `src/stopa/data/collab_repository.py`, ETAPA C pattern): CRUD komentářů (`add/get/list/update/delete`; editace bumpne `revision`, `expected_revision` mismatch → `ValueError`) + notifikace (`add/list/unread/mark_read/mark_all_read`, limit clamp 1–500). Mutace commitují, integrity chyby propaguje; doménová pravidla zůstávají v `domain/collab.py`.
+- **Web vrstva**: modely `CommentIn` (body 1–4000), `CommentEditIn(+ expected_revision)`; endpointy `POST/GET /api/cases/{id}/artifacts/{aid}/comments`, `PUT/DELETE .../comments/{cid}` (edit/delete jen autor → jinak 403, **konflikt = 409**), `GET /api/cases/{id}/sharing` (členové + access_level read/write), `GET /api/cases/{id}/notifications[?unread_only]` + `POST .../read-all`. RBAC: nové oprávnění **`comment.post`** (examiner/admin — píše jen write-úroveň); čtení komentářů = `case.read` (všechny role s přístupem).
+- **Notifikace**: grant členství → in-app + e-mail „případ X byl sdílen s vámi"; @mention v komentáři → in-app + e-mail pro každého zmíněného existujícího uživatele (self-mention a neznámé jméno se odfiltrují). `create_app(mail_backend=...)` — injektovatelný email transport `{"to", "subject", "body"}`; selhání/absence mailu API cestu nerozbije (graceful degradation, jen log).
+- **Real-time**: WS push na téma case — události `comment.new`, `comment.updated` (vč. nové `revision`), `comment.deleted`; bez WS klientů vše funguje dál přes REST (F4.2 graceful degradation).
+- **Testy** `tests/test_f45_collab.py` — 33 testů: doména (mentions/validace/read-write pravidla), repozitář (CRUD, verze + konflikt, inbox lifecycle), web E2E (legacy single-operator; multi-user read/write tokéní SSO HS256: analyst=403 na write, povýšení→write; @mention→inbox+e-mail; self/unknown mention filtr; edit/delete jen autor; **WS real-time** `comment.new`/`comment.updated`; e-mail backend — doručení + selhání mailu nerozbije komentář).
+- AK ✓: real-time comments (WS test); email+in-app notifikace (injektovatelný transport, defenzivní); conflict resolution (optimistické zamykání `expected_revision` → 409). stp041 na v18; db.py 599 řádků (budget <600). Ruff clean; full suite viz commit message.
 
 ---
 

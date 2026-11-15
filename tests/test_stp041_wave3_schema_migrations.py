@@ -52,6 +52,9 @@ EXPECTED_TABLES = {
     "teams",
     "users",
     "case_members",
+    # F4.5 — case sharing & collaboration: komentáře na artefaktech + inbox
+    "artifact_comments",
+    "notifications",
 }
 
 EXPECTED_AUDIT_TRIGGERS = {"audit_no_update", "audit_no_delete"}
@@ -73,9 +76,9 @@ def _trigger_names(conn: sqlite3.Connection) -> set[str]:
 
 
 class TestSchemaModule:
-    def test_schema_version_is_17(self):
-        """F4.4: v17 přidává multi-tenant tabulky (orgs/teams/users/case_members)."""
-        assert SCHEMA_VERSION == 17
+    def test_schema_version_is_18(self):
+        """F4.5: v18 přidává kolaborační tabulky (artifact_comments/notifications)."""
+        assert SCHEMA_VERSION == 18
 
     def test_schema_version_fallback_on_empty_db(self, tmp_path: Path):
         """Bez meta řádku vrací 1 (staré DB bez verze)."""

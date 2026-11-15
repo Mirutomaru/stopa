@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -296,7 +296,43 @@ CREATE TABLE IF NOT EXISTS case_members (
 );
 """
 
-SCHEMA = _SCHEMA_CORE + MULTITENANT_DDL + """
+#: F4.5 — Case sharing & collaboration DDL (case DB): comments na artefaktech
+# + in-app notifikace. ``artifact_comments.case_id`` je denormalizace (artifacts
+# nemá vlastní case_id sloupec — JOIN přes files→sources; viz F4.3).
+COLLAB_DDL = """
+-- F4.5: Case sharing & collaboration — comments na artefaktech + @mentions.
+-- Optimistické zamykání: revision bumpuje se každou editací (conflict resolution);
+-- mentions_json = [username, …] rozparsované z těla komentáře (domain/collab.py).
+CREATE TABLE IF NOT EXISTS artifact_comments (
+    id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL,
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+    author TEXT NOT NULL,
+    body TEXT NOT NULL CHECK (length(body) <= 4000),
+    mentions_json TEXT NOT NULL DEFAULT '[]',
+    revision INTEGER NOT NULL DEFAULT 0,
+    edited_at TEXT,
+    ts_utc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_artifact_comments_case ON artifact_comments(case_id);
+CREATE INDEX IF NOT EXISTS idx_artifact_comments_artifact ON artifact_comments(artifact_id);
+
+-- F4.5: In-app notifikace (inbox per uživatel; email backend injektovatelný).
+-- username = příjemce (lidově čitelné, přežije i smazání uživatele z org).
+CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('mention', 'comment', 'shared')),
+    body TEXT NOT NULL,
+    case_id TEXT,
+    artifact_id TEXT,
+    read INTEGER NOT NULL DEFAULT 0,
+    ts_utc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(username, read);
+"""
+
+SCHEMA = _SCHEMA_CORE + MULTITENANT_DDL + COLLAB_DDL + """
 -- P0 Core C5: Reproducibility Engine — záznamy analytických operací.
 -- Každá operace nese vstupní soubory + hashe, verze parserů/STOPA, hash konfigurace,
 -- deterministický souhrn výstupů a prostředí → opakovatelnost + porovnání výsledků.

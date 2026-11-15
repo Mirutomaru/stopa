@@ -60,6 +60,9 @@ PERMISSIONS: dict[str, frozenset[str]] = {
     # F4.3 peer-review přechody stavu artefaktů — i analytik;
     # identita examinátora je explicitní v těle requestu (kvorum distinct lidí).
     "case.review": frozenset({"analyst", "examiner", "admin"}),
+    # F4.5 — kolaborativní komentáře na artefaktech; píše jen write-úroveň
+    # (efektivní role examiner/admin); čtení = case.read (všechny role).
+    "comment.post": frozenset({"examiner", "admin"}),
     # F4.4 — čtení organizační struktury (orgs/teams) pro UI; zápis
     # vyžaduje settings.write. Všechny role včetně analytika.
     "settings.read": frozenset(ROLES),

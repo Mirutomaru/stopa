@@ -245,6 +245,18 @@ class MemberGrantIn(BaseModel):
     role: str = "examiner"  # analyst|examiner|admin
 
 
+class CommentIn(BaseModel):
+    """F4.5 — nový komentář na artefakt (body 1–4000 znaků)."""
+
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class CommentEditIn(CommentIn):
+    """F4.5 — editace komentáře; expected_revision = optimistické zamykání."""
+
+    expected_revision: int | None = None
+
+
 class SettingsIn(BaseModel):
     """E12 — uživatelská nastavení (jen zadaná pole se uloží)."""
 
@@ -336,17 +348,22 @@ def create_app(
     db_dir: Path | None = None,
     ws_heartbeat_s: float = 15.0,
     sso_fetcher: Callable[[str], dict] | None = None,  # F4.4 — test hook for JWKS
+    mail_backend: Callable[[dict], None] | None = None,  # F4.5 — email transport (injektovatelný)
 ) -> FastAPI:
     """App factory — `db_dir` pro testy (tmp), default z env STOPA_DB_DIR.
 
     ``ws_heartbeat_s`` (F4.2): interval heartbeatu WebSocket spojení;
     v testech se zkracuje, aby se suite netestovala na 15 s čekání.
     ``sso_fetcher`` (F4.4): injektovatelný JWKS fetch pro OIDC SSO testy (bez sítě).
+    ``mail_backend`` (F4.5): volitelný email transport pro notifikace; payload =
+    ``{"to": username, "subject": str, "body": str}``. Bez backendu zůstávají
+    notifikace in-app (graceful degradation — mail nesmí rozbít API cestu).
     """
     app = FastAPI(title="STOPA", version=__version__)
     base = db_dir or _db_dir()
     app.state.db_dir = base  # pro testy (TestClient)
     app.state.sso_fetcher = sso_fetcher  # F4.4 — OIDC JWKS test hook
+    app.state.mail_backend = mail_backend  # F4.5 — email transport (None = in-app only)
 
     # STP-021 — Processing Monitor: registry běhů ingestu (in-memory, per-app).
     # Job = {id, case_id, source_id, status, done, total, error, result}.
@@ -2555,18 +2572,27 @@ def create_app(
 
     @app.post("/api/cases/{case_id}/members", status_code=201)
     def grant_member(case_id: str, body: MemberGrantIn) -> dict:
-        """Per-case oprávnění — přide členství (role v případě)."""
+        """Per-case oprávnění — přide členství (role v případě); F4.5 → sdílecí notifikace."""
         if normalize_role(body.role) is None:
             raise HTTPException(400, f"neplatná role: {body.role!r}")
         _require("case.update", "members_grant", case_id=case_id)
-        open_db(case_id).close()  # existence check fail-closed (404 jinak)
+        db = open_db(case_id)  # existence check fail-closed (404 jinak)
         repo = _user_repo()
         try:
             if repo.get_user(user_id=body.user_id) is None:
                 raise HTTPException(404, f"uživatel neexistuje: {body.user_id!r}")
-            return repo.grant_case(case_id, body.user_id, role=body.role)
+            info = repo.grant_case(case_id, body.user_id, role=body.role)
+            # F4.5 — sdílení případu: in-app + email notifikace pro nového člena.
+            uname = next(
+                (m["username"] for m in repo.list_case_members(case_id) if m["user_id"] == body.user_id),
+                "?",
+            )
+            msg = f"případ {case_id} byl sdílen s vámi (role: {body.role})"
+            _notify_user(db, uname, "shared", msg, case_id=case_id)
+            return info
         finally:
             repo.conn.close()
+            db.close()
 
     @app.delete("/api/cases/{case_id}/members/{user_id}", status_code=204)
     def revoke_member(case_id: str, user_id: str) -> None:
@@ -2588,6 +2614,150 @@ def create_app(
             return repo.list_case_members(case_id)
         finally:
             repo.conn.close()
+
+    # ── F4.5 — Case sharing & collaboration (comments na artefaktech + notifikace)
+    def _comment_username() -> str:
+        """Identita autora komentáře / vlastníka inboxu — session username; legacy = "user"."""
+        status, user = _current_user()
+        return user["username"] if status == "ok" else "user"
+
+    def _notify_user(
+        db: CaseDB, uname: str, kind: str, body: str, case_id: str | None = None, artifact_id: str | None = None
+    ) -> None:
+        """F4.5 — in-app notifikace + volitelný e-mail (defenzivní: mail nesmí rozbít API cestu)."""
+        db.collab_repo.add_notification(uname, kind, body[:200], case_id=case_id, artifact_id=artifact_id)
+        mail = getattr(app.state, "mail_backend", None)
+        if mail is None:
+            return
+        try:
+            mail({"to": uname, "subject": f"STOPA ({kind})", "body": body})
+        except Exception:  # noqa: BLE001 — defenzivní (jen log)
+            log.warning("F4.5 e-mail pro %s selhal (%s)", uname, kind)
+
+    @app.get("/api/cases/{case_id}/sharing")
+    def sharing_summary(case_id: str) -> list[dict]:
+        """F4.5 — přehled sdílení případu: členové + read/write úroveň (efektivní role)."""
+        _require("case.read", "sharing_summary", case_id=case_id)
+        open_db(case_id).close()
+        repo = _user_repo()
+        try:
+            out = []
+            for m in repo.list_case_members(case_id):
+                level = "write" if m["role"] in ("examiner", "admin") else "read"
+                out.append({**m, "access_level": level})
+            return out
+        finally:
+            repo.conn.close()
+
+    @app.post("/api/cases/{case_id}/artifacts/{artifact_id}/comments", status_code=201)
+    def add_comment(case_id: str, artifact_id: str, body_in: CommentIn) -> dict:
+        """F4.5 — komentář na artefakt (write úroveň); @mentions → notifikace."""
+        from stopa.domain.collab import parse_mentions, validate_comment_body
+
+        _require("comment.post", "add_comment", case_id=case_id)
+        try:
+            text = validate_comment_body(body_in.body)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+        mentions = parse_mentions(text)
+        author = _comment_username()
+        db = open_db(case_id)
+        repo = _user_repo()
+        try:
+            if db.get_artifact(artifact_id) is None:
+                raise HTTPException(404, f"artefakt {artifact_id} nenalezen")
+            info = db.collab_repo.add_comment(case_id, artifact_id, author, text, mentions)
+            known = {u["username"] for u in repo.list_users()}
+            for name in mentions:
+                if name != author and name in known:
+                    _notify_user(
+                        db, name, "mention", f"{author}: {text}", case_id=case_id, artifact_id=artifact_id
+                    )
+        finally:
+            repo.conn.close()
+            db.close()
+        payload = {"id": info["id"], "artifact_id": artifact_id, "author": author, "body": text}
+        _publish_case(case_id, "comment.new", **payload)
+        return info
+
+    @app.get("/api/cases/{case_id}/artifacts/{artifact_id}/comments")
+    def list_comments(case_id: str, artifact_id: str) -> list[dict]:
+        """F4.5 — komentářové vlákno artefaktu (read úroveň)."""
+        _require("case.read", "list_comments", case_id=case_id)
+        db = open_db(case_id)
+        try:
+            return db.collab_repo.list_comments(case_id, artifact_id)
+        finally:
+            db.close()
+
+    @app.put("/api/cases/{case_id}/artifacts/{artifact_id}/comments/{comment_id}")
+    def edit_comment(
+        case_id: str, artifact_id: str, comment_id: str, body_in: CommentEditIn
+    ) -> dict:
+        """F4.5 — editace vlastního komentáře; expected_revision = optimistické zamykání (409)."""
+        from stopa.domain.collab import parse_mentions, validate_comment_body
+
+        _require("comment.post", "edit_comment", case_id=case_id)
+        try:
+            text = validate_comment_body(body_in.body)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+        me = _comment_username()
+        db = open_db(case_id)
+        try:
+            cur = db.collab_repo.get_comment(comment_id)
+            if cur is None or cur["artifact_id"] != artifact_id:
+                raise HTTPException(404, f"komentář {comment_id} nenalezen")
+            if cur["author"] != me:
+                raise HTTPException(403, "komentář upravuje jen jeho autor")
+            try:
+                info = db.collab_repo.update_comment(
+                    comment_id, text, parse_mentions(text), body_in.expected_revision
+                )
+            except ValueError as e:  # verze se změnila (souběžná editace) → konflikt
+                raise HTTPException(409, str(e)) from e
+        finally:
+            db.close()
+        payload = {"id": info["id"], "artifact_id": artifact_id, "revision": int(info["revision"])}
+        _publish_case(case_id, "comment.updated", **payload)
+        return info
+
+    @app.delete("/api/cases/{case_id}/artifacts/{artifact_id}/comments/{comment_id}", status_code=204)
+    def delete_comment(case_id: str, artifact_id: str, comment_id: str) -> None:
+        """F4.5 — smazání komentáře (jen jeho autor)."""
+        _require("comment.post", "delete_comment", case_id=case_id)
+        me = _comment_username()
+        db = open_db(case_id)
+        try:
+            cur = db.collab_repo.get_comment(comment_id)
+            if cur is None or cur["artifact_id"] != artifact_id:
+                raise HTTPException(404, f"komentář {comment_id} nenalezen")
+            if cur["author"] != me:
+                raise HTTPException(403, "komentář smaže jen jeho autor")
+            db.collab_repo.delete_comment(comment_id)
+        finally:
+            db.close()
+        _publish_case(case_id, "comment.deleted", comment_id=comment_id, artifact_id=artifact_id)
+
+    @app.get("/api/cases/{case_id}/notifications")
+    def my_notifications(case_id: str, unread_only: bool = False) -> list[dict]:
+        """F4.5 — in-app inbox session uživatele (per případ)."""
+        _require("case.read", "my_notifications", case_id=case_id)
+        db = open_db(case_id)
+        try:
+            return db.collab_repo.list_notifications(_comment_username(), unread_only=unread_only)
+        finally:
+            db.close()
+
+    @app.post("/api/cases/{case_id}/notifications/read-all", status_code=204)
+    def mark_all_read(case_id: str) -> None:
+        """F4.5 — označit všechny notifikace v inboxu jako přečtené."""
+        _require("case.read", "read_all_notifications", case_id=case_id)
+        db = open_db(case_id)
+        try:
+            db.collab_repo.mark_all_read(_comment_username())
+        finally:
+            db.close()
 
     # ── E12 — Cases CRUD (update/delete nad existujícím GET/POST) ───────────────
     @app.patch("/api/cases/{case_id}")
