@@ -2053,6 +2053,11 @@ def create_app(db_dir: Path | None = None) -> FastAPI:
     # ── statická SPA ──────────────────────────────────────────
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+    # F4.1 — nová React SPA (build z frontend/ do static/spa); /spa → index.html.
+    spa_dir = STATIC_DIR / "spa"
+    if spa_dir.is_dir():
+        app.mount("/spa", StaticFiles(directory=spa_dir, html=True), name="spa")
+
     @app.get("/")
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")

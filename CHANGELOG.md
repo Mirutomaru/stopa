@@ -151,6 +151,25 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 - AK ✓: graf v UI; lineage k artifactům; export PDF/JSON — **20/20** testů
   `tests/test_f35_hypothesis_graph.py` (včetně web E2E přes TestClient). Ruff + Pyright clean.
 
+#### F4.1 SPA Frontend — React 18 + TypeScript + Vite na `/spa`
+- Rozhodnutí: **React 18 + TS + Vite** jako čistý static build servírovaný existujícím
+  FastAPI (bez SSR/Node serveru v produkci → zachován single-process model). Kód v `frontend/`,
+  build → `src/stopa/web/static/spa`; mount `/spa` v `app.py`, legacy vanilla JS GUI na `/`
+  zůstává s odkazem „SPA →“ (přechodová doba).
+- **Views**: Dashboard (případy + creation), File System grid (paginace, family filtr),
+  Artifact detail, Timeline (zoom = časové okno, lanes podle typu události, anomaly flagy),
+  Entity graph (SVG kruhový layout, barva = kind — Maltego-like), AI Copilot chat
+  (`nl_search`/`summary` přes `POST /ai/query`), Hypothesis Graph (F3.5 UI: generování
+  fallback/AI, ✓ potvrdit / ✗ vyvrátit, export JSON/PDF).
+- **Typovaný API klient** `frontend/src/lib/api.ts` proti endpointům FastAPI
+  (CaseSummary/FileRow/TimelineRow/EntityRow/HypoGraphPayload + ApiError s detail z těla).
+- **i18n CS/EN** context (persist v localStorage) — AK ✓. **Offline-first Service Worker**
+  `sw.js`: static cache-first, API network-first + cache fallback = read-only režim — AK ✓.
+- **Lighthouse (Playwright Chromium)**: performance **100** / accessibility **100** /
+  best-practices **96** / SEO **90**, LCP 0.8 s → AK „≥ 90“ splněn ve všech kategoriích.
+- Testy: vitest **10/10** (API klient, i18n toggle+persist, Dashboard smoke), Python
+  `tests/test_f41_spa.py` **5/5** (mount `/spa`, sw.js, assety, legacy `/`). TSC strict 0 chyb.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad

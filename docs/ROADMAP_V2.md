@@ -193,10 +193,17 @@ AI generuje graf hypotéz (pro → proti, confidence). Manuální potvrzení/vyv
 ---
 
 ## 🏢 FÁZE 4 — ENTERPRISE & MULTI-USER · Odhad 8–10 týdnů
-### F4.1 — SPA Frontend (SvelteKit / React) `[ ]`
+### F4.1 — SPA Frontend (SvelteKit / React) `[x] ✅ 2026-11-15`
 Dashboard, case explorer, timeline (zoom/lanes), entity graph (Maltego-like), artifact detail, AI chat panel.
 **AK:** Lighthouse ≥ 90; accessibility AA; i18n cs/en; offline-first (Service Worker read-only).
 **P0 | XXL | závislosti: —**
+
+**IMPLEMENTACE (2026-11-15):** Rozhodnutí: **React 18 + TypeScript + Vite** (static build, bez SSR/Node serveru v produkci → zachován single-process FastAPI model). Kód v `frontend/`, build → `src/stopa/web/static/spa` (mount `/spa` v `app.py`; legacy vanilla JS GUI na `/` zůstává s odkazem „SPA →").
+- **Views**: Dashboard (případy + creation), File System grid (paginace 200, family filtr, link do detailu), Artifact detail, Timeline (zoom = časové okno from/to, lanes seskupené podle typu události, anomaly flagy), Entity graph (SVG kruhový layout, barva = kind, legenda + tabulka), AI Copilot chat (`nl_search`/`summary` přes `POST /ai/query`), Hypothesis Graph (F3.5: generování fallback/AI, ✓ potvrdit / ✗ vyvrátit, export JSON/PDF).
+- **Typovaný API klient** `src/lib/api.ts` proti 51 endpointům FastAPI (CaseSummary/FileRow/TimelineRow/EntityRow/HypoGraphPayload + ApiError s detail z těla); i18n CS/EN context s persistencí v localStorage; offline-first Service Worker `sw.js` (static cache-first, API network-first + cache fallback = read-only režim).
+- **Testy**: vitest 10/10 (API klient, i18n toggle+persist, Dashboard smoke), Python `tests/test_f41_spa.py` 5/5 (mount `/spa`, sw.js, assety, legacy `/`). TSC strict 0 chyb.
+- **Lighthouse (Playwright Chromium, headless)**: performance **100** / accessibility **100** / best-practices **96** / SEO **90**, LCP 0.8 s → AK „≥ 90" splněn ve všech kategoriích.
+- E2E důkaz: živý uvicorn :8099 + browser screenshot (SPA zrenderovaná, data z API).
 
 ### F4.2 — WebSockets pro real-time updates `[ ]`
 Live progress ingestu, live timeline events, live AI agent actions. Reconnection, heartbeat.
