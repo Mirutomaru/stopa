@@ -96,6 +96,22 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 - AK ✓: 4 profily; každý detekuje ≥8/10 syntetických pozitiv; FPR < 5 % — 14 testů
   `tests/test_f32_triage_profiles.py` (8 parametrizovaných AK + 6 unit). Ruff + Pyright clean.
 
+#### F3.3 Natural Language Query → SQL/FTS — dotazování do případu přirozeným jazykem
+- `src/stopa/intelligence/nl_query.py`: NL text → **parametrizovaný SELECT** nad case DB
+  (bez nových externích závislostí; LLM injektovatelná jako `llm_call(nl_text, schema_context)`,
+  offline testy s FakeLLM).
+- Pipeline: živé schéma z DB (`build_schema_context`, FTS shadow tabulky vynechány) →
+  validace (jedno vyjádření SELECT/WITH, zakázaná slova INSERT/UPDATE/DELETE/DROP/ALTER/
+  CREATE/PRAGMA/REPLACE, whitelist tabulek z `sqlite_master`, počet placeholderů = počet
+  parametrů; jinak `InvalidQueryError`) → **read-only sandbox** samostatné spojení
+  `file:<case>.db?mode=ro` (dotaz nemůže mutovat case DB) → **timeout 5 s** přes
+  `set_progress_handler(callback, 250_000)` (`QueryTimeoutError`) → výstup omezen na
+  `MAX_ROWS_HARD_CAP` řádků (`truncated=True`). Každý dotaz → `audit_log` (action=`nl_query`).
+- API: `run_nl_query`, `execute_sandboxed`, `build_schema_context`, `known_tables`.
+- AK ✓: 50 testovacích NL queries = **50/50 (100 % ≥ 90 %)**; žádný SQL injection
+  (parameterized — explicitní scénář s `'; DROP TABLE files; --`); timeout 5 s —
+  19 testů `tests/test_f33_nl_query.py`. Ruff + Pyright clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad
