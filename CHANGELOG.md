@@ -285,6 +285,34 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
   při `db->open` = NULL; PyPI `bdb` = stdlib breakpoint debugger, ne BerkeleyDB.
 - Testy: `tests/test_k21_wallet_dat.py` **21/21**; suite **3183 passed / 1 skipped** (+21); ruff clean.
 
+#### K3 On-chain offline-first analýza — clustering, graf transakcí, risk scoring
+- **Bundlované sankční listy** `src/stopa/domain/crypto/data/sanctions_{ofac,eu}.json` —
+  OFAC **44 záznamů** (Tornado Cash CYBER 2022-08-08: mixer×32 ETH; Garantex + cyber BTC) a
+  EU **6 záznamů** (269/2014 konsolidovaný text, entry 541 Garantex: BTC×3+ETH+BSC+TRX);
+  všechny ověřeny proti primárním zdrojům (`ofac.treasury.gov/recent-actions/*`, EUR-Lex).
+- **`domain/crypto/onchain_models.py`** — Pydantic v2 modely (`TxRecord`/`Cluster`/`RiskScore`…);
+  částky v minimálních jednotkách (BTC=sats, ETH=wei); normalizace: ETH/BSC hex → lowercase
+  (EIP-55 je checksum, ne formát adresy), base58/bech32 literálně.
+- **K3.2 `clustering.py`** — deterministické common-input union-find + change-detection
+  (residual rule: výstup == total_in − ostatní výstupy; ≥2 různé výstupní adresy; refund
+  input→output téže tx vyloučen); důkazy pod stabilním klíčem (nejmenší adresa tx — union kořen
+  se může změnit) a strop **50 txids**.
+- **K3.3 `tx_graph.py`** — přesné node stats + poměrný model částek hran
+  (`share = output.amount * input.amount / total_in`; jediný vstup = plná částka); DFS detekce
+  cyklů s kanonizací rotací (lex. nejmenší adresa první → dedup z více startů) + explicitní
+  self-loopy; omezené cesty `expand_paths` (depth); Mermaid/JSON export.
+- **K3.4 `risk_scoring.py`** — deterministická tabulka: bez shody **0/none**, exchange/individual
+  **95/high**, mixer/darknet_market **100/critical**; více shod → max skóre + důvody z obou listů;
+  lazy `lru_cache` loader.
+- **K3.1 `onchain_api.py`** — Blockchair/Etherscan klienti **jen opt-in** (explicitní API klíč);
+  injektovatelný transport → plně offline testy; defenzivní normalizace wire schémat
+  (nedict items skip, ISO-8601→epoch); `TxCache` JSON schema v1 s atomickým zápisem (tmp+rename),
+  poškozená cache/neodpovídající schema → `{}` + `last_error` (graceful degradation).
+- **CLI** `stopa onchain <case> [--api-key KEY] [--etherscan-key KEY] [--no-network]
+  [--depth N] [--json]` — adresy z crypto artefaktů případu; síť opt-in, jinak cache + listy.
+- Testy: `tests/test_k3_onchain.py` **97/97** (unit všech 5 modulů + parametrizovaný smoke všech
+  bundlovaných záznamů OFAC/EU + CLI E2E human/JSON/prázdný case); suite **3280 passed / 1 skipped** (+97); ruff clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad

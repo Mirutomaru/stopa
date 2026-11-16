@@ -1,0 +1,492 @@
+{
+  "list": "ofac_sdn",
+  "title": "OFAC SDN crypto addresses (v1 snapshot)",
+  "updated": "2026-11-16",
+  "note": "Curated snapshot for offline risk scoring. Every entry verified against the primary OFAC source page cited in 'source' on 2026-11-16.",
+  "entries": [
+    {
+      "address": "0x8589427373D6D84E98730D7795D8f6f8731FDA16",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x722122dF12D4e14e13Ac3b6895a86e84145b6967",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xDD4c48C0B24039969fC16D1cdF626eaB821d3384",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xd90e2f925DA726b50C4Ed8D0Fb90Ad053324F31b",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xd96f2B1c14Db8458374d9Aca76E26c3D18364307",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x4736dCf1b7A3d580672CcE6E7c65cd5cc9cFBa9D",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xD4B88Df4D29F5CedD6857912842cff3b20C8Cfa3",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x910Cbd523D972eb0a6f4cAe4618aD62622b39DbF",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xA160cdAB225685dA1d56aa342Ad8841c3b53f291",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xFD8610d20aA15b7B2E3Be39B396a1bC3516c7144",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xF60dD140cFf0706bAE9Cd734Ac3ae76AD9eBC32A",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x22aaA7720ddd5388A3c0A3333430953C68f1849b",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xBA214C1c1928a32Bffe790263E38B4Af9bFCD659",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xb1C8094B234DcE6e03f10a5b673c1d8C69739A00",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x527653eA119F3E6a1F5BD18fbF4714081D7B31ce",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x58E8dCC13BE9780fC42E8723D8EaD4CF46943dF2",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xD691F27f38B395864Ea86CfC7253969B409c362d",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xaEaaC358560e11f52454D997AAFF2c5731B6f8a6",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x1356c899D8C9467C7f71C195612F8A395aBf2f0a",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xA60C772958a3eD56c1F15dD055bA37AC8e523a0D",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x169AD27A470D064DEDE56a2D3ff727986b15D52B",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x0836222F2B2B24A3F36f98668Ed8F0B38D1a872f",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xF67721A2D8F736E75a49FdD7FAd2e31D8676542a",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x9AD122c22B14202B4490eDAf288FDb3C7cb3ff5E",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x905b63Fff465B9fFBF41DeA908CEb12478ec7601",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x07687e702b410Fa43f4cB4Af7FA097918ffD2730",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x94A1B5CdB22c43faab4AbEb5c74999895464Ddaf",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xb541fc07bC7619fD4062A54d96268525cBC6FfEF",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x12D66f87A04A9E220743712cE6d9bB1B5616B8Fc",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x47CE0C6eD5B0Ce3d3A51fdb1C52DC66a7c3c2936",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0x23773E65ed146A459791799d01336DB287f25334",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "0xD21be7248e0197Ee08E0c20D4a96DEBdaC3D20Af",
+      "chain": "eth",
+      "entity": "TORNADO CASH (a.k.a. Tornado Cash Classic / Nova)",
+      "program": "CYBER",
+      "listed_date": "2022-08-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20220808",
+      "tags": [
+        "mixer"
+      ]
+    },
+    {
+      "address": "3Lpoy53K625zVeE47ZasiG5jGkAxJ27kh1",
+      "chain": "btc",
+      "entity": "GARANTEX EUROPE OU",
+      "program": "RUSSIA-EO14024",
+      "listed_date": "2022-04-05",
+      "source": "https://ofac.treasury.gov/recent-actions/20220405",
+      "tags": [
+        "exchange"
+      ]
+    },
+    {
+      "address": "0x7FF9cFad3877F21d41Da833E2F775dB0569eE3D9",
+      "chain": "eth",
+      "entity": "GARANTEX EUROPE OU",
+      "program": "RUSSIA-EO14024",
+      "listed_date": "2022-04-05",
+      "source": "https://ofac.treasury.gov/recent-actions/20220405",
+      "tags": [
+        "exchange"
+      ]
+    },
+    {
+      "address": "3E6ZCKRrsdPc35chA9Eftp1h3DLW18NFNV",
+      "chain": "trx",
+      "entity": "GARANTEX EUROPE OU",
+      "program": "RUSSIA-EO14024",
+      "listed_date": "2022-04-05",
+      "source": "https://ofac.treasury.gov/recent-actions/20220405",
+      "tags": [
+        "exchange"
+      ]
+    },
+    {
+      "address": "3K4rjdh8A5yi6LWvft2rbmyZvqEbPSSSX4",
+      "chain": "btc",
+      "entity": "HYDRA MARKET (a.k.a. HYDRA)",
+      "program": "RUSSIA-EO14024",
+      "listed_date": "2022-04-05",
+      "source": "https://ofac.treasury.gov/recent-actions/20220405",
+      "tags": [
+        "darknet_market"
+      ]
+    },
+    {
+      "address": "17mhyeBX617ABZ1ffThhUTJkHUcMvCkfd5",
+      "chain": "btc",
+      "entity": "HYDRA MARKET (a.k.a. HYDRA)",
+      "program": "RUSSIA-EO14024",
+      "listed_date": "2022-04-05",
+      "source": "https://ofac.treasury.gov/recent-actions/20220405",
+      "tags": [
+        "darknet_market"
+      ]
+    },
+    {
+      "address": "158treVZBGMBThoaympxccPdZPtqUfYrT9",
+      "chain": "btc",
+      "entity": "POLYANIN, Yevgeniy Igorevich (ransomware operator)",
+      "program": "CYBER2",
+      "listed_date": "2021-11-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20211108",
+      "tags": [
+        "individual"
+      ]
+    },
+    {
+      "address": "389Sft4nJFkPGhbagk9FN4jXncA9piYTuU",
+      "chain": "btc",
+      "entity": "POLYANIN, Yevgeniy Igorevich (ransomware operator)",
+      "program": "CYBER2",
+      "listed_date": "2021-11-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20211108",
+      "tags": [
+        "individual"
+      ]
+    },
+    {
+      "address": "39Te8MbphSgs7npDJPj2hbNzhke61NTcnB",
+      "chain": "btc",
+      "entity": "POLYANIN, Yevgeniy Igorevich (ransomware operator)",
+      "program": "CYBER2",
+      "listed_date": "2021-11-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20211108",
+      "tags": [
+        "individual"
+      ]
+    },
+    {
+      "address": "31p6woV4e55HUfC2aGynFhzQnGoJFW26cD",
+      "chain": "btc",
+      "entity": "POLYANIN, Yevgeniy Igorevich (ransomware operator)",
+      "program": "CYBER2",
+      "listed_date": "2021-11-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20211108",
+      "tags": [
+        "individual"
+      ]
+    },
+    {
+      "address": "3DNsaQnaUz7wkQny1ZDSmtz6QfbEShxoDD",
+      "chain": "btc",
+      "entity": "POLYANIN, Yevgeniy Igorevich (ransomware operator)",
+      "program": "CYBER2",
+      "listed_date": "2021-11-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20211108",
+      "tags": [
+        "individual"
+      ]
+    },
+    {
+      "address": "3AjyprBY5yhijiCjUC5NUJutGbwhd3AQdE",
+      "chain": "btc",
+      "entity": "POLYANIN, Yevgeniy Igorevich (ransomware operator)",
+      "program": "CYBER2",
+      "listed_date": "2021-11-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20211108",
+      "tags": [
+        "individual"
+      ]
+    },
+    {
+      "address": "0xfec8a60023265364d066a1212fde3930f6ae8da7",
+      "chain": "eth",
+      "entity": "POLYANIN, Yevgeniy Igorevich (ransomware operator)",
+      "program": "CYBER2",
+      "listed_date": "2021-11-08",
+      "source": "https://ofac.treasury.gov/recent-actions/20211108",
+      "tags": [
+        "individual"
+      ]
+    }
+  ]
+}

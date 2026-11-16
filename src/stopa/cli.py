@@ -1820,6 +1820,177 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+_K3_CHAIN_MAP = {
+    "bitcoin": "btc", "btc": "btc", "bitcoin-cash": "btc",
+    "ethereum": "eth", "eth": "eth", "bsc": "eth", "polygon": "eth",
+}
+
+
+def _k3_norm_chain(chain: str | None) -> str:
+    return _K3_CHAIN_MAP.get((chain or "").lower(), "unknown")
+
+
+def cmd_onchain(args: argparse.Namespace) -> int:
+    """K3 On-chain analýza — clustering + graf transakcí + risk scoring (offline-first).
+
+    Vstup: adresy extrahované z crypto artefaktů případu. Síť je opt-in
+    (--api-key / --etherscan-key); jinak jen bundlované sankční listy + cache.
+    """
+    from stopa.domain.crypto.clustering import cluster_common_input, detect_change_addresses
+    from stopa.domain.crypto.onchain_api import (
+        BlockchairClient,
+        EtherscanClient,
+        OnchainApiError,
+        TxCache,
+    )
+    from stopa.domain.crypto.risk_scoring import score_addresses as k3_score
+    from stopa.domain.crypto.tx_graph import (
+        build_graph,
+        detect_cycles,
+        expand_paths,
+        top_recipients,
+        top_senders,
+    )
+
+    db = _open_db(args.case_id)
+    try:
+        # 1) sběr adres z crypto artefaktů (value → chain; první detekce má přednost)
+        addrs: dict[str, str] = {}
+        for atype in ("crypto_detection", "crypto_wallet"):
+            for art in db.list_artifacts(artifact_type=atype):
+                d = art.details or {}
+                for a in d.get("addresses") or []:  # AddressValidation dump
+                    if not isinstance(a, dict):
+                        continue
+                    v = (a.get("raw_value") or "").strip()
+                    if v and v not in addrs:
+                        addrs[v] = _k3_norm_chain(a.get("chain"))
+                for w in d.get("wallets") or []:  # WalletDetection dump
+                    for v in w.get("public_addresses") or []:
+                        if isinstance(v, str) and v.strip() and v not in addrs:
+                            addrs[v] = "unknown"
+
+        # 2) risk scoring — bundlované OFAC/EU listy (offline, deterministické)
+        scores = k3_score(list(addrs))
+
+        # 3) transakce: cache + volitelná síť
+        cache_path = _db_dir() / f"{args.case_id}.txcache.json"
+        cache = TxCache(cache_path)
+        txs_by_addr = cache.load() or {}
+        warnings: list[str] = []
+
+        clients: dict[str, object] = {}
+        if not args.no_network and args.api_key:
+            try:
+                clients["btc"] = BlockchairClient(args.api_key)
+            except OnchainApiError as exc:
+                warnings.append(f"blockchair: {exc}")
+        if not args.no_network and getattr(args, "etherscan_key", None):
+            try:
+                clients["eth"] = EtherscanClient(args.etherscan_key)
+            except OnchainApiError as exc:
+                warnings.append(f"etherscan: {exc}")
+
+        for addr in sorted(addrs):
+            if addr in txs_by_addr:
+                continue  # cache hit — offline-first
+            chain = addrs[addr]
+            client = clients.get(chain)
+            if client is None:
+                continue  # bez klienta (nebo neznámý chain) zůstáváme offline
+            try:
+                txs_by_addr[addr] = client.fetch_address_txs(addr)  # type: ignore[union-attr]
+            except OnchainApiError as exc:
+                warnings.append(f"{addr[:16]}…: {exc}")
+
+        if clients and not args.no_network:
+            try:
+                cache.save(txs_by_addr)
+            except OnchainApiError as exc:
+                warnings.append(str(exc))
+
+        all_txs = list({t.txid: t for tx_list in txs_by_addr.values() for t in tx_list}.values())
+
+        # 4) clustering + graf (jen pokud jsou transakce k dispozici)
+        clusters_out: list[dict] = []
+        graph_out: dict | None = None
+        cycles: list[list[str]] = []
+        paths_from_risk: dict[str, list[list[str]]] = {}
+        change: set[str] = set()
+
+        if all_txs:
+            clusters = cluster_common_input(all_txs)
+            own_all = set(addrs)  # všechny adresy případu = „vlastní" pro change-detekci
+            change = detect_change_addresses(all_txs, own_all)
+            ranked = sorted(
+                clusters, key=lambda c: (-len(c.addresses), c.cluster_id)
+            )[:50]
+            clusters_out = [c.model_dump() for c in ranked]
+
+            graph = build_graph(all_txs)
+            cycles = detect_cycles(graph, max_len=4)
+            risky = [a for a in sorted(addrs) if scores[a].level in ("high", "critical")]
+            for a in risky:
+                paths_from_risk[a] = expand_paths(graph, a, depth=args.depth)[:20]
+
+            graph_out = {
+                "nodes_total": len(graph.nodes),
+                "edges_total": len(graph.edges),
+                "top_senders": [list(x) for x in top_senders(graph)],
+                "top_recipients": [list(x) for x in top_recipients(graph)],
+            }
+
+        result = {
+            "case_id": args.case_id,
+            "addresses_total": len(addrs),
+            "address_scores": [
+                {
+                    "address": a,
+                    "chain": addrs[a],
+                    "score": scores[a].score,
+                    "level": scores[a].level,
+                    "reasons": scores[a].reasons,
+                }
+                for a in sorted(addrs)
+            ],
+            "high_risk_count": sum(1 for s in scores.values() if s.level in ("high", "critical")),
+            "transactions_loaded": len(all_txs),
+            "clusters": clusters_out,
+            "change_addresses": sorted(change) if all_txs else [],
+            "graph": graph_out,
+            "cycles": cycles,
+            "paths_from_risk": paths_from_risk,
+            "cache_path": str(cache_path),
+            "cache_last_error": cache.last_error,
+            "warnings": warnings,
+        }
+
+        if getattr(args, "json", False):
+            _print_json(result)
+            return 0
+
+        print(f"K3 on-chain: {args.case_id}")
+        print(f"  adres v případě: {len(addrs)} (high/critical: {result['high_risk_count']})")
+        for a in sorted(addrs):
+            s = scores[a]
+            if s.level != "none":
+                print(f"  [{s.level}] {a} — score={s.score}")
+                for r in s.reasons[:2]:
+                    print(f"      {r}")
+        if all_txs:
+            print(f"  transakcí načteno: {len(all_txs)} (cache: {cache_path})")
+            print(f"  clusterů: {len(clusters_out)}, cyklů: {len(cycles)}")
+            for c in clusters_out[:10]:
+                print(f"    C{c['cluster_id']}: {', '.join(c['addresses'])} [{'; '.join(c['txids'][:3])}]")
+        else:
+            print("  transakce bez cache/sítě — clustering nebyl proveden (offline scoring OK)")
+        for w in warnings:
+            print(f"  warning: {w}", file=sys.stderr)
+        return 0
+    finally:
+        db.close()
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     """E10 — export dat případu do CSV/JSON (artifacts / timeline / correlations)."""
     from stopa.domain.export import (
@@ -2957,6 +3128,20 @@ def build_parser() -> argparse.ArgumentParser:
     exp_p.add_argument("--bundle", action="store_true",
                        help="STP-068 — ZIP bundle všech datasetů (manifest + SHA-256, deterministický)")
     exp_p.set_defaults(func=cmd_export)
+
+    oc_p = _ex_sub(sub, "onchain",
+                   help="K3 On-chain analýza — clustering + graf transakcí + risk scoring (offline-first)")
+    oc_p.add_argument("case_id")
+    oc_p.add_argument("--api-key", default=None, metavar="KEY",
+                      help="Blockchair API key — volitelná síť pro BTC (bez klíče jen cache + listy)")
+    oc_p.add_argument("--etherscan-key", default=None, metavar="KEY",
+                      help="Etherscan API key — volitelná síť pro ETH")
+    oc_p.add_argument("--no-network", action="store_true",
+                      help="použít jen cache + bundlované listy (ignorovat API klíče)")
+    oc_p.add_argument("--depth", type=int, default=3,
+                      help="hloubka expanze cest z high-risk adres v grafu (default: 3)")
+    _add_json_flag(oc_p)
+    oc_p.set_defaults(func=cmd_onchain)
 
     pli_p = _ex_sub(sub, "plaso-import", help="STP-057 — Plaso import: l2tcsv soubor → case (source + artifacts + timeline)"
     )

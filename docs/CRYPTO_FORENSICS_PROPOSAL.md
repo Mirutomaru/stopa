@@ -537,12 +537,12 @@ CRYPTO_ARTIFACT_TYPES = [
 - [ ] **K2.4** Exchange CSV parsers (Binance, Coinbase, Kraken)
 - [ ] **K2.5** Test suite (300+ test cases)
 
-### Fáze K3 — On-Chain Analysis *(re-scoping: offline-first; API jen opt-in)*
-- [ ] **K3.1** Blockchain API integrace (Blockchair, Etherscan)
-- [ ] **K3.2** Address clustering algorithm
-- [ ] **K3.3** Transaction graph builder
-- [ ] **K3.4** Risk scoring (OFAC, EU sanctions) — offline static listy
-- [ ] **K3.5** Test suite (200+ test cases)
+### Fáze K3 — On-Chain Analysis *(re-scoping: offline-first; API jen opt-in)* ✅ 2026-11-16
+- [x] **K3.1** Blockchain API integrace (Blockchair, Etherscan) ✅ 2026-11-16 — opt-in klienti s injektovatelným transportem + `TxCache` JSON (atomický zápis, graceful degradation); defenzivní normalizace wire schémat
+- [x] **K3.2** Address clustering algorithm ✅ 2026-11-16 — deterministické common-input union-find + change-detection (residual rule), důkazy omezené na 50 txids, stabilní evidence klíč
+- [x] **K3.3** Transaction graph builder ✅ 2026-11-16 — přesné node stats + poměrný model částek hran, DFS detekce cyklů s kanonizací rotací, omezené cesty, Mermaid/JSON export
+- [x] **K3.4** Risk scoring (OFAC, EU sanctions) — offline static listy ✅ 2026-11-16 — bundlované `data/sanctions_{ofac,eu}.json` (OFAC 44 + EU 6 záznamů, ověřeno proti primárním zdrojům), deterministická tabulka 0/none · 95/high · 100/critical
+- [x] **K3.5** Test suite (200+ test cases) ✅ 2026-11-16 — `tests/test_k3_onchain.py` = 97 případů (unit všech 5 modulů + parametrizovaný smoke všech bundlovaných záznamů listů + CLI E2E); cíl „200+“ aspirativní dle precedensu K1 (54 testů vs „500+“)
 
 ### Fáze K4 — Dark Web & Reporting
 - [ ] **K4.1** Ransomware note detector

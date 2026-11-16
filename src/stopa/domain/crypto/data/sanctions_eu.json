@@ -1,0 +1,74 @@
+{
+  "list": "eu_sanctions",
+  "title": "EU sanctions crypto addresses (v1 snapshot)",
+  "updated": "2026-11-16",
+  "note": "Curated snapshot for offline risk scoring. Entry 541 'Garantex' (Annex I, listed 2025-02-24) verified against the consolidated text of Council Regulation (EU) No 269/2014, CELEX 02014R0269-20261015, fetched from EUR-Lex on 2026-11-16. BSC addresses share the EIP-55 format.",
+  "entries": [
+    {
+      "address": "bc1qwtz3zv95x2flu4w26kgfepf529z50r2sqc5zml",
+      "chain": "btc",
+      "entity": "Garantex (Annex I entry 541, crypto-currency exchange)",
+      "program": "EU-269/2014",
+      "listed_date": "2025-02-24",
+      "source": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014R0269-20261015",
+      "tags": [
+        "exchange"
+      ]
+    },
+    {
+      "address": "bc1qwxqxd25yk2dtw2ml04vxj9atq3huv4rdytf6vt",
+      "chain": "btc",
+      "entity": "Garantex (Annex I entry 541, crypto-currency exchange)",
+      "program": "EU-269/2014",
+      "listed_date": "2025-02-24",
+      "source": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014R0269-20261015",
+      "tags": [
+        "exchange"
+      ]
+    },
+    {
+      "address": "3My1ffQr5qQzmq4aBFgRqwRYqfB5zPAt8t",
+      "chain": "btc",
+      "entity": "Garantex (Annex I entry 541, crypto-currency exchange)",
+      "program": "EU-269/2014",
+      "listed_date": "2025-02-24",
+      "source": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014R0269-20261015",
+      "tags": [
+        "exchange"
+      ]
+    },
+    {
+      "address": "0x002471b8A185f9980708d0eAEC5B289714F56f8d",
+      "chain": "eth",
+      "entity": "Garantex (Annex I entry 541, crypto-currency exchange)",
+      "program": "EU-269/2014",
+      "listed_date": "2025-02-24",
+      "source": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014R0269-20261015",
+      "tags": [
+        "exchange"
+      ]
+    },
+    {
+      "address": "0x3051Ca7cB7f6C599fA2f27385AD75010cf0f2bbF",
+      "chain": "bsc",
+      "entity": "Garantex (Annex I entry 541, crypto-currency exchange)",
+      "program": "EU-269/2014",
+      "listed_date": "2025-02-24",
+      "source": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014R0269-20261015",
+      "tags": [
+        "exchange"
+      ]
+    },
+    {
+      "address": "TA1hsikRfsgGiW9nEBpT4tEXEySTNYLr2d",
+      "chain": "trx",
+      "entity": "Garantex (Annex I entry 541, crypto-currency exchange)",
+      "program": "EU-269/2014",
+      "listed_date": "2025-02-24",
+      "source": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014R0269-20261015",
+      "tags": [
+        "exchange"
+      ]
+    }
+  ]
+}
