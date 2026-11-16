@@ -552,13 +552,13 @@ CRYPTO_ARTIFACT_TYPES = [
 - [x] **K4.5** SWGDE-compliant crypto report generator ✅ 2026-11-16 — 10 sekcí, formáty md|html|json, Ed25519 podpis + SHA-256 dle legal_docs konvencí, graceful degradation bez kryptobackendu
 - [x] **K4.6** Test suite (200+ test cases) ✅ 2026-11-16 — `tests/test_k4_darkweb.py` = 85 případů (unit všech modulů + CLI E2E darkweb/crypto-report); cíl „200+“ aspirativní dle precedensu K1/K3
 
-### Fáze K5 — Advanced Features *(re-scoping: po release 2.0, stretch)*
-- [ ] **K5.1** DeFi protocol detection (Uniswap, Aave, atd.)
-- [ ] **K5.2** NFT ownership tracking
-- [ ] **K5.3** Cross-chain bridge analysis
-- [ ] **K5.4** Privacy coin analysis (Monero, Zcash) — off-chain evidence only
-- [ ] **K5.5** AI-powered krypto copilot (specializované prompty)
-- [ ] **K5.6** Test suite (300+ test cases)
+### Fáze K5 — Advanced Features *(re-scoping: po release 2.0, stretch)* `[x]` ✅ 2026-11-16
+- [x] **K5.1** DeFi protocol detection (Uniswap, Aave, atd.) ✅ 2026-11-16 — `domain/crypto/defi.py` + bundlovaný registry `data/defi_protocols.json` (8 protokolů, adresy ověřeny proti primárním zdrojům: Uniswap v2/v3 deployments, Aave v3 Pool)
+- [x] **K5.2** NFT ownership tracking ✅ 2026-11-16 — `domain/crypto/nft.py` + registry `data/nft_contracts.json` (sbírky CryptoPunks/BAYC + marketplaces); flexibilní normalizace EVM exportů, deterministický ownership chain `(block_number, tx_index)`, mint = první držitel od ZERO_ADDRESS
+- [x] **K5.3** Cross-chain bridge analysis ✅ 2026-11-16 — `domain/crypto/bridges.py` + registry `data/bridges.json` (Wormhole multi-chain ověřeno vs xdapp-book; Binance-Peg honestně verified=false); heuristika: adresa na ≥ 2 chainách bez přímého transferu = bridge indikace
+- [x] **K5.4** Privacy coin analysis (Monero, Zcash) — off-chain evidence only ✅ 2026-11-16 — `domain/crypto/privacy_coins.py`: XMR plnou K1 validací (`validate_address`, chain MONERO; standard 95 / integrated 106 znaků), Zcash t-addr strukturovaně (t1 + base32 body 74–80, checksum offline neověřen), payment ID jen v kontextu ±80 znaků kolem monero termínu
+- [x] **K5.5** AI-powered krypto copilot (specializované prompty) ✅ 2026-11-16 — `intelligence/crypto_copilot.py` dle F3.x patternu: injektovatelné `llm_call(prompt) -> str`, LLM výstup = data ne autorita (strict validace risk_level), deterministický fallback při jakékoli chybě
+- [x] **K5.6** Test suite ✅ 2026-11-16 — `tests/test_k5_advanced.py` **91 případů** (registry, unit všech 5 modulů, CLI E2E human/JSON, determinismus end-to-end); cíl „300+ test cases“ aspirativní dle precedensu K1/K3/K4. Suite **3456 passed / 1 skipped** (+91); ruff clean
 
 ---
 

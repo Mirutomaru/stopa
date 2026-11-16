@@ -1,0 +1,82 @@
+{
+  "list": "defi_protocols",
+  "title": "Known DeFi protocol contracts (v1 snapshot)",
+  "updated": "2026-11-16",
+  "note": "Curated offline registry for K5.1. verified=true entries checked against official deployment docs on 2026-11-16; addresses are lowercase-hex (EIP-55 checksum not enforced — comparison is case-insensitive).",
+  "entries": [
+    {
+      "address": "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+      "chain": "eth",
+      "protocol": "uniswap",
+      "version": "v2",
+      "kind": "amm_factory",
+      "verified": true,
+      "source": "https://developers.uniswap.org/docs/protocols/v2/deployments"
+    },
+    {
+      "address": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+      "chain": "eth",
+      "protocol": "uniswap",
+      "version": "v2",
+      "kind": "router",
+      "verified": true,
+      "source": "https://developers.uniswap.org/docs/protocols/v2/deployments"
+    },
+    {
+      "address": "0x1F98431c8aD98523631AE4a59f2Ac7d082EFBFb6",
+      "chain": "eth",
+      "protocol": "uniswap",
+      "version": "v3",
+      "kind": "factory",
+      "verified": true,
+      "source": "https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments"
+    },
+    {
+      "address": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
+      "chain": "eth",
+      "protocol": "aave",
+      "version": "v3",
+      "kind": "lending_pool",
+      "verified": true,
+      "source": "https://etherscan.io/address/0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+    }
+  ],
+  "text_terms": {
+    "uniswap": [
+      "uniswap",
+      "uni v2",
+      "uni-v3",
+      "uniswap v3"
+    ],
+    "aave": [
+      "aave",
+      "supply aave",
+      "borrow aave"
+    ],
+    "compound": [
+      "compound finance",
+      "ctoken",
+      "cerc20"
+    ],
+    "curve": [
+      "curve pool",
+      "curve.fi"
+    ],
+    "maker": [
+      "makerdao",
+      "sky protocol",
+      "dai savings rate"
+    ],
+    "lido": [
+      "steth",
+      "lido staking"
+    ],
+    "yearn": [
+      "yearn.finance",
+      "yvToken"
+    ],
+    "dydx": [
+      "dydx"
+    ]
+  }
+}

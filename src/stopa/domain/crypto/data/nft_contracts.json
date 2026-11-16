@@ -1,0 +1,30 @@
+{
+  "list": "nft_contracts",
+  "title": "Known NFT collection contracts (v1 snapshot)",
+  "updated": "2026-11-16",
+  "note": "Curated offline registry for K5.2. verified=true entries checked against primary sources on 2026-11-16; comparison case-insensitive.",
+  "entries": [
+    {
+      "address": "0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB",
+      "chain": "eth",
+      "collection": "CryptoPunks",
+      "standard": "erc721",
+      "verified": true,
+      "source": "https://github.com/larvalabs/cryptopunks (readme) + https://etherscan.io"
+    },
+    {
+      "address": "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d",
+      "chain": "eth",
+      "collection": "Bored Ape Yacht Club",
+      "standard": "erc721",
+      "verified": true,
+      "source": "https://etherscan.io/token/0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d"
+    }
+  ],
+  "marketplaces": [
+    "opensea",
+    "rarible",
+    "looksrare",
+    "blur"
+  ]
+}

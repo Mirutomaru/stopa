@@ -2130,6 +2130,158 @@ def cmd_crypto_report(args: argparse.Namespace) -> int:
         db.close()
 
 
+def cmd_advanced(args: argparse.Namespace) -> int:
+    """K5 Advanced — DeFi + NFT + cross-chain bridge + privacy coins (+ copilot).
+
+    Skenuje textové soubory zdrojů případu (jako K4 darkweb); cross-chain analýza
+    běží nad K3 TxCache (pokud existuje); AI copilot = deterministický fallback
+    (LLM v CLI bez explicitního klíče nevolejeme).
+    """
+    from stopa.domain.crypto.bridges import analyze_cross_chain, detect_bridge_in_text
+    from stopa.domain.crypto.defi import detect_defi_in_text
+    from stopa.domain.crypto.nft import detect_nft_in_text
+    from stopa.domain.crypto.onchain_api import TxCache
+    from stopa.domain.crypto.privacy_coins import detect_privacy_in_text
+    from stopa.intelligence.crypto_copilot import run_crypto_copilot
+
+    _text_exts = {".txt", ".md", ".log", ".html", ".htm", ".csv"}
+    max_bytes = 4 * 1024 * 1024
+
+    db = _open_db(args.case_id)
+    try:
+        files_to_scan: list[tuple[str, str]] = []
+        if args.file:
+            for p in args.file:
+                files_to_scan.append((p, os.path.abspath(p)))
+        else:
+            for src in db.list_sources(args.case_id):
+                if src.kind != "file":
+                    continue
+                ap = os.path.abspath(src.path)
+                ext = os.path.splitext(ap)[1].lower()
+                if ext not in _text_exts or not os.path.isfile(ap):
+                    continue
+                try:
+                    if os.path.getsize(ap) > max_bytes:
+                        continue
+                except OSError:
+                    continue
+                files_to_scan.append((src.id, ap))
+
+        defi_findings = []
+        nft_findings = []
+        bridge_mentions = []
+        privacy_findings = []
+        scanned: list[str] = []
+        for label, path in sorted(files_to_scan):
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                    text = fh.read(max_bytes)
+            except OSError as exc:
+                print(f"  warning: {path}: {exc}", file=sys.stderr)
+                continue
+            scanned.append(label)
+            defi_findings.extend(detect_defi_in_text(text, origin=label))
+            nf = detect_nft_in_text(text, origin=label)
+            if nf is not None:
+                nft_findings.append(nf.model_dump())
+            bf = detect_bridge_in_text(text, origin=label)
+            if bf is not None:
+                bridge_mentions.append(bf.model_dump())
+            privacy_findings.extend(detect_privacy_in_text(text, origin=label))
+
+        # cross-chain analýza nad K3 TxCache (adresy per chain)
+        per_chain: dict[str, set[str]] = {}
+        cache_path = _db_dir() / f"{args.case_id}.txcache.json"
+        if cache_path.exists():
+            try:
+                txs_by_addr = TxCache(cache_path).load() or {}
+                for addr, txs in txs_by_addr.items():
+                    for t in txs:
+                        per_chain.setdefault(t.chain.lower(), set()).add(addr)
+            except Exception as exc:  # noqa: BLE001 — jde i bez cache
+                print(f"  warning: TxCache {cache_path}: {exc}", file=sys.stderr)
+        bridge_links = analyze_cross_chain({c: sorted(a) for c, a in per_chain.items()})
+
+        # kritické sankční shody z K3 (adresy crypto artefaktů) — pro copilota
+        critical_sanctions = 0
+        from stopa.domain.crypto.risk_scoring import score_addresses as k3_score
+
+        addrs: set[str] = set()
+        for art in db.list_artifacts(artifact_type="crypto_detection"):
+            d = art.details or {}
+            for a in d.get("addresses") or []:
+                if isinstance(a, dict) and (a.get("raw_value") or "").strip():
+                    addrs.add((a["raw_value"] or "").strip())
+        if addrs:
+            critical_sanctions = sum(1 for sc in k3_score(sorted(addrs)).values() if sc.score >= 100)
+
+        summary = {
+            "case_id": args.case_id,
+            "defi_findings": len(defi_findings),
+            "nft_findings": len(nft_findings),
+            "bridge_links": len(bridge_links),
+            "privacy_findings": len(privacy_findings),
+            "critical_sanctions": critical_sanctions,
+        }
+        copilot = run_crypto_copilot(None, summary)
+
+        result = {
+            "case_id": args.case_id,
+            "files_scanned": len(scanned),
+            "defi_findings": [f.model_dump() for f in defi_findings],
+            "nft_findings": nft_findings,
+            "bridge_text_mentions": bridge_mentions,
+            "cross_chain_links": [l.model_dump() for l in bridge_links],
+            "privacy_findings": [f.model_dump() for f in privacy_findings],
+            "copilot": copilot.to_dict(),
+        }
+        if getattr(args, "json", False):
+            _print_json(result)
+            return 0
+
+        print(f"K5 advanced: {args.case_id} (naskenováno souborů: {len(scanned)})")
+        for f in defi_findings:
+            terms = ", ".join(f.matched_terms) or "—"
+            addrs_txt = f", adresy={', '.join(f.matched_addresses)}" if f.matched_addresses else ""
+            print(
+                f"  DEFI → {f.protocol} [{f.origin}] (score={f.score}, termíny: {terms}{addrs_txt})"
+            )
+        for nf in nft_findings:
+            coll = ", ".join(nf["collections"]) or "—"
+            mkt = ", ".join(nf["marketplaces"]) or "—"
+            tids = ",".join(str(t) for t in nf["token_ids"]) or "—"
+            print(
+                f"  NFT → [{nf['origin']}] (score={nf['score']}, sbírky: {coll}, "
+                f"marketplaces: {mkt}, token_id: {tids})"
+            )
+        for bf in bridge_mentions:
+            print(f"  BRIDGE TEXT → [{bf['origin']}]: {', '.join(bf['bridges'])}")
+        for l in bridge_links:
+            bn = f" ({l.bridge_name})" if l.bridge_name else ""
+            print(
+                f"  CROSS-CHAIN LINK → {l.entity} chains={','.join(l.chains)} "
+                f"[{l.evidence}{bn}]"
+            )
+        for pf in privacy_findings:
+            val = pf.value if pf.evidence_kind != "text_term" else ""
+            print(
+                f"  PRIVACY → {pf.coin}:{pf.evidence_kind}"
+                + (f" {val}" if val else "")
+                + f" [{pf.origin}]"
+            )
+        c = copilot.to_dict()
+        print(f"  COPILOT: risk={c['risk_level']} (source={c['source']})")
+        for kf in c["key_findings"]:
+            print(f"    - {kf}")
+        if not defi_findings and not nft_findings and not bridge_mentions \
+                and not bridge_links and not privacy_findings:
+            print("  žádné K5 indikátory nenalezeny")
+        return 0
+    finally:
+        db.close()
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     """E10 — export dat případu do CSV/JSON (artifacts / timeline / correlations)."""
     from stopa.domain.export import (
@@ -3299,6 +3451,14 @@ def build_parser() -> argparse.ArgumentParser:
                      help="výstupní soubor (default: <db_dir>/reports/<case>.crypto_report.<fmt>)")
     _add_json_flag(crp)
     crp.set_defaults(func=cmd_crypto_report)
+
+    adv_p = _ex_sub(sub, "advanced",
+                    help="K5 Advanced — DeFi + NFT + cross-chain bridge + privacy coins (+ AI copilot)")
+    adv_p.add_argument("case_id")
+    adv_p.add_argument("--file", action="append", default=None, metavar="SOUBOR",
+                       help="skenovat konkrétní soubor (může být opakováno; default: textové zdroje případu)")
+    _add_json_flag(adv_p)
+    adv_p.set_defaults(func=cmd_advanced)
 
     pli_p = _ex_sub(sub, "plaso-import", help="STP-057 — Plaso import: l2tcsv soubor → case (source + artifacts + timeline)"
     )

@@ -1,0 +1,46 @@
+{
+  "list": "bridges",
+  "title": "Known cross-chain bridges (v1 snapshot)",
+  "updated": "2026-11-16",
+  "note": "Curated offline registry for K5.3. verified=true entries checked against official documentation on 2026-11-16; contracts keyed by lowercase chain id used in K3 TxCache.",
+  "entries": [
+    {
+      "name": "wormhole",
+      "chains": [
+        "eth",
+        "bsc",
+        "polygon",
+        "avalanche"
+      ],
+      "contracts": {
+        "eth": "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B",
+        "bsc": "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B",
+        "polygon": "0x7A4B5a56256163F07b2C80A7cA55aBE66c4ec4d7",
+        "avalanche": "0x54a8e5f9c4CbA08F9943965859F6c34eAF03E26c"
+      },
+      "verified": true,
+      "source": "https://docs.wormhole.com (xdapp-book src/reference/contracts.md)"
+    },
+    {
+      "name": "binance_bridge",
+      "chains": [
+        "eth",
+        "bsc"
+      ],
+      "contracts": {
+        "bsc": "0x986b57146f1569dcff7dd52c0a919d8cb9bcfa63"
+      },
+      "verified": false,
+      "source": "widely cited Binance-Peg bridge contract; BSCScan label not re-verified offline (HTTP 403) — treat as unconfirmed until checked on-chain"
+    }
+  ],
+  "text_terms": [
+    "wormhole",
+    "layerzero",
+    "multichain",
+    "stargate",
+    "celer cbridge",
+    "hashkey chain bridge",
+    "binance peg"
+  ]
+}

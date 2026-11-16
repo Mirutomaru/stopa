@@ -332,6 +332,30 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 - Testy: `tests/test_k4_darkweb.py` **85/85** (unit všech modulů + CLI E2E darkweb/crypto-report human/JSON);
   suite **3365 passed / 1 skipped** (+85); ruff clean.
 
+#### K5 Advanced — DeFi, NFT, cross-chain bridges, privacy coins, AI copilot
+- **`domain/crypto/defi.py`** (nová) + registry `data/defi_protocols.json` — K5.1 DeFi detekce: 8 protokolů
+  (Uniswap v2/v3, Aave, Compound, Curve, Maker/Sky, Lido, Yearn, dYdX), adresy ověřeny proti primárním
+  zdrojům (oficiální deployments); skóre = 2× unikátní termín + 5× známá adresa (EIP-55 je checksum →
+  porovnání case-insensitive).
+- **`domain/crypto/nft.py`** (nová) + registry `data/nft_contracts.json` — K5.2 NFT tracking: sbírky
+  CryptoPunks/BAYC (CryptoPunks ověřeno vs larvalabs readme), marketplaces (OpenSea/Rarible/LooksRare/Blur);
+  flexibilní normalizace EVM exportů, ownership chain deterministicky `(block_number, tx_index)`,
+  mint = první držitel od ZERO_ADDRESS.
+- **`domain/crypto/bridges.py`** (nová) + registry `data/bridges.json` — K5.3 cross-chain bridge analýza:
+  Wormhole multi-chain kontrakty (ETH/BSC/Polygon/Avalanche, ověřeno vs xdapp-book), Binance-Peg honestně
+  `verified=false`; heuristika = adresa na ≥ 2 chainách bez přímého transferu (`multi_chain_presence`) +
+  explicitní shoda kontraktu z registry.
+- **`domain/crypto/privacy_coins.py`** (nová) — K5.4 privacy coins off-chain: XMR plnou K1 validací
+  (chain MONERO; standard 95 / integrated 106 znaků), Zcash t-addr strukturovaně (`t1` + base32 body 74–80,
+  checksum offline neověřen → poznámka), payment ID jen v kontextu ±80 znaků kolem monero termínu.
+- **`intelligence/crypto_copilot.py`** (nová) — K5.5 AI copilot dle F3.x patternu: injektovatelné
+  `llm_call(prompt) -> str`, LLM výstup = data ne autorita (strict validace risk_level), deterministický
+  fallback při jakékoli chybě (práha critical_sanctions>0=critical · defi+nft+bridges≥4 nebo privacy≥5=high).
+- **CLI**: `stopa advanced <case> [--file PATH …] [--json]` — sken textových zdrojů případu (konvence K4,
+  ≤ 4 MB) + cross-chain analýza nad K3 TxCache; v CLI deterministický fallback.
+- Testy: `tests/test_k5_advanced.py` **91/91** (registry, unit všech 5 modulů, CLI E2E human/JSON,
+  determinismus end-to-end); suite **3456 passed / 1 skipped** (+91); ruff clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad
