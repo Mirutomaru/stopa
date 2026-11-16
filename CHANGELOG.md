@@ -313,6 +313,25 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 - Testy: `tests/test_k3_onchain.py` **97/97** (unit všech 5 modulů + parametrizovaný smoke všech
   bundlovaných záznamů OFAC/EU + CLI E2E human/JSON/prázdný case); suite **3280 passed / 1 skipped** (+97); ruff clean.
 
+#### K4 Dark Web & Reporting — ransom note, marketplace, mixer, fund flow, SWGDE report
+- **`domain/crypto/darkweb.py`** (nová) — K4.1 ransom note detector: 7 rodin (LockBit, Conti, REvil,
+  DarkSide, BlackMatter, WannaCry, Petya/GoldenEye), částky BTC/USD, deadline, adresy; deterministické
+  skórování + tiebreak (lexikograficky první). K4.2 marketplace extractor: PGP bloky, vendor/product/escrow
+  termíny; pravidlo „PGP + validní adresa“ se počítá i bez skóre ≥ 4. K4.3 mixer detekce: CoinJoin heuristika
+  (`n_in ≥ 8` a `n_out ≥ max(2, n_in//2)`), bundlované mixer adresy z OFAC/EU list (tagy), textové zmínky;
+  důvody s txid + počty. Extrakce adres reusing K1 pattern z `artifacts/crypto_extract.py`
+  (token regex + `validate_address`) → směr závislosti domain ← artifacts zachován.
+- **`domain/crypto/fund_flow.py`** (nová) — K4.4 fund flow diagram: D3-kompatibilní JSON + self-contained
+  HTML/SVG **bez CDN**; deterministický kruh seřazený `(-out_amount, id)`; kategorie uzlu prioritou
+  mixer > darknet_market > exchange; **KPI render < 5 s pro 1000 TX** ověřeno testem (naměřeno ms).
+- **`presentation/crypto_report.py`** (nová) — K4.5 SWGDE-kompatibilní report: 10 sekcí, formáty `md|html|json`;
+  Ed25519 podpis + SHA-256 dle legal_docs konvencí (`db.ensure_integrity_key()` + `integrity.sign_hash`),
+  graceful degradation bez kryptobackendu (podpis None, digest zůstává); částky v minimálních jednotkách.
+- **CLI**: `stopa darkweb <case> [--file PATH …] [--json]` — sken textových zdrojů případu
+  (.txt/.md/.log/.html/.htm/.csv ≤ 4 MB) + K3 TxCache; `stopa crypto-report <case> --format md|html|json`.
+- Testy: `tests/test_k4_darkweb.py` **85/85** (unit všech modulů + CLI E2E darkweb/crypto-report human/JSON);
+  suite **3365 passed / 1 skipped** (+85); ruff clean.
+
 ## [1.0.0] — 2026-11-10
 
 První stabilní release. Konsoliduje celý vývoj od vývojové verze 0.1.0 (září–listopad

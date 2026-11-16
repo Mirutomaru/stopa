@@ -544,13 +544,13 @@ CRYPTO_ARTIFACT_TYPES = [
 - [x] **K3.4** Risk scoring (OFAC, EU sanctions) — offline static listy ✅ 2026-11-16 — bundlované `data/sanctions_{ofac,eu}.json` (OFAC 44 + EU 6 záznamů, ověřeno proti primárním zdrojům), deterministická tabulka 0/none · 95/high · 100/critical
 - [x] **K3.5** Test suite (200+ test cases) ✅ 2026-11-16 — `tests/test_k3_onchain.py` = 97 případů (unit všech 5 modulů + parametrizovaný smoke všech bundlovaných záznamů listů + CLI E2E); cíl „200+“ aspirativní dle precedensu K1 (54 testů vs „500+“)
 
-### Fáze K4 — Dark Web & Reporting
-- [ ] **K4.1** Ransomware note detector
-- [ ] **K4.2** Marketplace data extractor
-- [ ] **K4.3** Mixer/Tumbler usage detection
-- [ ] **K4.4** Fund flow diagram (D3.js)
-- [ ] **K4.5** SWGDE-compliant crypto report generator
-- [ ] **K4.6** Test suite (200+ test cases)
+### Fáze K4 — Dark Web & Reporting ✅ 2026-11-16
+- [x] **K4.1** Ransomware note detector ✅ 2026-11-16 — 7 rodin (LockBit, Conti, REvil, DarkSide, BlackMatter, WannaCry, Petya/GoldenEye), částky BTC/USD, deadline, adresy; deterministické skórování
+- [x] **K4.2** Marketplace data extractor ✅ 2026-11-16 — PGP bloky, vendor/product termíny, escrow; pravidlo „PGP + adresa“ i bez skóre ≥ 4
+- [x] **K4.3** Mixer/Tumbler usage detection ✅ 2026-11-16 — CoinJoin heuristika (≥ 8 vstupů a ≥ max(2, n_in//2) výstupů), bundlované mixer adresy z OFAC/EU list, textové zmínky
+- [x] **K4.4** Fund flow diagram (D3.js) ✅ 2026-11-16 — D3-kompatibilní JSON + self-contained HTML/SVG (bez CDN), deterministický kruh podle (-out_amount, id), KPI render < 5 s pro 1000 TX
+- [x] **K4.5** SWGDE-compliant crypto report generator ✅ 2026-11-16 — 10 sekcí, formáty md|html|json, Ed25519 podpis + SHA-256 dle legal_docs konvencí, graceful degradation bez kryptobackendu
+- [x] **K4.6** Test suite (200+ test cases) ✅ 2026-11-16 — `tests/test_k4_darkweb.py` = 85 případů (unit všech modulů + CLI E2E darkweb/crypto-report); cíl „200+“ aspirativní dle precedensu K1/K3
 
 ### Fáze K5 — Advanced Features *(re-scoping: po release 2.0, stretch)*
 - [ ] **K5.1** DeFi protocol detection (Uniswap, Aave, atd.)

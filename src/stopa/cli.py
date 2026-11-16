@@ -1991,6 +1991,145 @@ def cmd_onchain(args: argparse.Namespace) -> int:
         db.close()
 
 
+def cmd_darkweb(args: argparse.Namespace) -> int:
+    """K4 Dark Web & Illicit Activity — ransom note + marketplace + mixer detektory.
+
+    Skenuje textové soubory zdrojů případu (kind=file, podporované extenze,
+    ≤ 4 MB); výsledek = ransom note šablony, marketplace důkazy a zmínky mixerů.
+    """
+    from stopa.domain.crypto.darkweb import (
+        detect_marketplace_data,
+        detect_mixer_mentions,
+        detect_ransom_note,
+    )
+
+    _text_exts = {".txt", ".md", ".log", ".html", ".htm", ".csv"}
+    max_bytes = 4 * 1024 * 1024
+
+    db = _open_db(args.case_id)
+    try:
+        files_to_scan: list[tuple[str, str]] = []  # (label, abspath)
+        if args.file:
+            for p in args.file:
+                files_to_scan.append((p, os.path.abspath(p)))
+        else:
+            for src in db.list_sources(args.case_id):
+                if src.kind != "file":
+                    continue
+                ap = os.path.abspath(src.path)
+                ext = os.path.splitext(ap)[1].lower()
+                if ext not in _text_exts or not os.path.isfile(ap):
+                    continue
+                try:
+                    if os.path.getsize(ap) > max_bytes:
+                        continue
+                except OSError:
+                    continue
+                files_to_scan.append((src.id, ap))
+
+        notes_found: list[dict] = []
+        marketplace_found: list[dict] = []
+        mixer_mentions: set[str] = set()
+        scanned: list[str] = []
+        for label, path in sorted(files_to_scan):
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                    text = fh.read(max_bytes)
+            except OSError as exc:
+                print(f"  warning: {path}: {exc}", file=sys.stderr)
+                continue
+            scanned.append(label)
+            rn = detect_ransom_note(text)
+            if rn.is_ransom_note:
+                notes_found.append(
+                    {"file": label, **rn.model_dump()}
+                )
+            mp = detect_marketplace_data(text)
+            if mp.is_marketplace:
+                marketplace_found.append({"file": label, **mp.model_dump()})
+            mixer_mentions.update(detect_mixer_mentions(text))
+
+        result = {
+            "case_id": args.case_id,
+            "files_scanned": len(scanned),
+            "ransom_notes": notes_found,
+            "marketplace_evidence": marketplace_found,
+            "mixer_mentions": sorted(mixer_mentions),
+        }
+        if getattr(args, "json", False):
+            _print_json(result)
+            return 0
+
+        print(f"K4 dark web: {args.case_id} (naskenováno souborů: {len(scanned)})")
+        for n in notes_found:
+            fam = f" [{n['family']}]" if n["family"] else ""
+            print(
+                f"  RANSOM NOTE → {n['file']}{fam} "
+                f"(score={n['score']}, adresy={len(n['addresses'])})"
+            )
+            for a in n["addresses"]:
+                print(f"    - {a}")
+        for m in marketplace_found:
+            print(
+                f"  MARKETPLACE → {m['file']} (score={m['score']}, "
+                f"pgp={m['pgp_keys']}, adresy={len(m['addresses'])})"
+            )
+            for a in m["addresses"]:
+                print(f"    - {a}")
+        if mixer_mentions:
+            print(f"  MIXER ZMÍNKY: {', '.join(sorted(mixer_mentions))}")
+        if not notes_found and not marketplace_found and not mixer_mentions:
+            print("  žádné ransom/marketplace/mixer indikátory nenalezeny")
+        return 0
+    finally:
+        db.close()
+
+
+def cmd_crypto_report(args: argparse.Namespace) -> int:
+    """K4.5 — SWGDE krypto report (10 sekcí, md|html|json, Ed25519 podpis)."""
+    from stopa.domain.crypto.onchain_api import TxCache
+    from stopa.presentation.crypto_report import generate_crypto_report
+
+    db = _open_db(args.case_id)
+    try:
+        # on-chain TX z K3 cache (pokud existuje) → timeline + fund-flow sekce
+        txs_by_addr: dict[str, list] | None = None
+        cache_path = _db_dir() / f"{args.case_id}.txcache.json"
+        if cache_path.exists():
+            try:
+                cache = TxCache(cache_path)
+                txs_by_addr = cache.load() or None
+            except Exception as exc:  # noqa: BLE001 — report jde i bez cache
+                print(f"  warning: TxCache {cache_path}: {exc}", file=sys.stderr)
+
+        out: Path | None = None
+        if args.out:
+            out = Path(args.out).expanduser().resolve()
+        else:
+            default_name = f"crypto_report.{args.format}"
+            out = (_db_dir() / "reports" / f"{args.case_id}.{default_name}")
+
+        res = generate_crypto_report(
+            db, args.case_id, args.format, out=out, txs_by_addr=txs_by_addr
+        )
+        if getattr(args, "json", False):
+            payload = {k: v for k, v in res.model_dump().items() if k != "content"}
+            payload["out"] = str(out)
+            _print_json(payload)
+            return 0
+
+        print(f"K4.5 SWGDE report: {args.case_id} [{res.format}]")
+        for k, v in sorted(res.stats.items()):
+            print(f"  {k}: {v}")
+        if res.sha256_hex:
+            print(f"  sha256: {res.sha256_hex[:16]}…")
+        print(f"  podpis: {'Ed25519 OK' if res.signature_b64 else 'nepodepsán (graceful)'}")
+        print(f"  → {out}")
+        return 0
+    finally:
+        db.close()
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     """E10 — export dat případu do CSV/JSON (artifacts / timeline / correlations)."""
     from stopa.domain.export import (
@@ -3142,6 +3281,24 @@ def build_parser() -> argparse.ArgumentParser:
                       help="hloubka expanze cest z high-risk adres v grafu (default: 3)")
     _add_json_flag(oc_p)
     oc_p.set_defaults(func=cmd_onchain)
+
+    dw_p = _ex_sub(sub, "darkweb",
+                   help="K4 Dark Web & Illicit Activity — ransom note + marketplace + mixer detektory")
+    dw_p.add_argument("case_id")
+    dw_p.add_argument("--file", action="append", default=None, metavar="SOUBOR",
+                      help="skenovat konkrétní soubor (může být opakováno; default: textové zdroje případu)")
+    _add_json_flag(dw_p)
+    dw_p.set_defaults(func=cmd_darkweb)
+
+    crp = _ex_sub(sub, "crypto-report",
+                  help="K4.5 — SWGDE krypto report (10 sekcí; md|html|json + Ed25519 podpis)")
+    crp.add_argument("case_id")
+    crp.add_argument("--format", choices=["md", "html", "json"], default="md",
+                     help="výstupní formát (default: md)")
+    crp.add_argument("--out", metavar="SOUBOR",
+                     help="výstupní soubor (default: <db_dir>/reports/<case>.crypto_report.<fmt>)")
+    _add_json_flag(crp)
+    crp.set_defaults(func=cmd_crypto_report)
 
     pli_p = _ex_sub(sub, "plaso-import", help="STP-057 — Plaso import: l2tcsv soubor → case (source + artifacts + timeline)"
     )
