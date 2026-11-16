@@ -406,10 +406,10 @@ def generate_legal_doc(
             f"neznámý typ dokumentu {doc_type!r} (dostupné: {', '.join(LEGAL_DOC_TYPES)})"
         ) from None
 
-    import stopa  # lazy — verze přes importlib.metadata, fallback "1.0.0"
+    import stopa  # lazy — verze přes importlib.metadata, fallback "2.0.0"
 
     data = _collect_case_data(db, case_id)
-    signed_content = builder(data, llm_call, getattr(stopa, "__version__", "1.0.0"))
+    signed_content = builder(data, llm_call, getattr(stopa, "__version__", "2.0.0"))
     digest = hashlib.sha256(signed_content.encode("utf-8")).hexdigest()
 
     signature_b64: str | None = None

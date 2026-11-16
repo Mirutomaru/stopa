@@ -55,7 +55,7 @@ class CryptoReportData(BaseModel):
     """Strukturovaná data krypto reportu (základ všech formátů)."""
 
     case_id: str
-    stopa_version: str = "1.0.0"
+    stopa_version: str = "2.0.0"
     sections: dict[str, str] = Field(default_factory=dict)  # klíč → markdown text
     stats: dict[str, int] = Field(default_factory=dict)
 
@@ -107,7 +107,7 @@ def build_crypto_report_data(
     case_id: str,
     *,
     txs_by_addr: dict[str, list] | None = None,
-    stopa_version: str = "1.0.0",
+    stopa_version: str = "2.0.0",
 ) -> CryptoReportData:
     """Sestaví data všech 10 sekcí z DB (čistá čtení + injektovatelné TX)."""
     from stopa.domain.crypto.fund_flow import build_fund_flow, to_d3_json

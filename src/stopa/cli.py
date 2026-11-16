@@ -2388,7 +2388,7 @@ def _write_export_manifest(db: CaseDB, case_id: str, out_path: Path, content: by
     try:
         tool_version = version("stopa")
     except PackageNotFoundError:  # dev run bez instalace / chybějící metadata
-        tool_version = "1.0.0"
+        tool_version = "2.0.0"
     from stopa.domain.integrity import build_manifest, manifest_hash, sign_manifest
 
     name = out_path.name

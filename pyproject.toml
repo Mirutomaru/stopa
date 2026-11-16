@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stopa"
-version = "1.0.0"
+version = "2.0.0"
 description = "STOPA — unifikovaná forenzní workbench (AXIOM + UFED/Inseyets + X-Ways + Belkasoft X + FTK v jednom)"
 requires-python = ">=3.10"
 dependencies = [

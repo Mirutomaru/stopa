@@ -7,6 +7,18 @@ respektuje [Semantické verzování](https://semver.org/lang/cs/).
 
 ## [Unreleased]
 
+*(fronta prázdná po release 2.0 — čeká push na remote)*
+
+## [2.0.0] — 2026-11-16
+
+**STOPA 2.0 — AI + SPA frontend + multi-tenant collaboration + crypto forensics (K-linka).**
+Vše od 1.0.0: F3.x (AI agent, triage profily, NL→SQL query, právní dokumenty s Ed25519 podpisem,
+hypothesis graph), F4.x (React SPA, WebSockets live, peer-review workflow, multi-tenant RBAC,
+case sharing & collaboration) a celá K-linka crypto forensics: K1 detekce/validátory, K2 wallets
+pipeline, K2.1 Bitcoin Core wallet.dat parser, K3 on-chain offline-first (sankce/clustering/risk),
+K4 dark web & SWGDE report, K5 advanced (DeFi/NFT/cross-chain bridges/privacy coins/AI copilot).
+Suite **3456 passed / 1 skipped**; ruff clean.
+
 ### Přidáno (Added)
 
 #### F1.2 Memory Forensics — Volatility 3 integrace
