@@ -2,7 +2,7 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report)
+## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility)
 
 ### Added (FÁZE 5 Compliance & Court-Readiness, P0)
 - **Merkle doména** `domain/case_seal.py` (čistá logika bez I/O): kanonizace řádků (`json.dumps(..., ensure_ascii=False, sort_keys=True)`), leaf hash s doménovým tagem `stopa-case-seal/v1` + jménem tabulky (totéž datum v jiné tabulce ≠ stejný leaf), deterministický Merkle root — prázdný stav = konstantní `EMPTY_ROOT`, 1 řádek = identity; fixované globální pořadí leafů artifacts → timeline_events → audit_log.
@@ -22,6 +22,14 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 - **CLI** `stopa compliance <case> [--out DIR] [--json]`; **web** endpoint `/api/cases/{id}/compliance-report?format=pdf|json` + tlačítko „🔏 Compliance (PDF)" v reportingu.
 - **Testy** `tests/test_f52_compliance_report.py` (+15): doména — determinismus kanonického JSON, stabilita digestu, Ed25519 sign/verify round-trip, tamper payloadu → FAIL, chybějící klíče → False, struktura payloadu, deterministický HTML render; presentation — WB logy z audit logu (prefix akce i details cesta), AI grounding agregace per tool, CoC, Merkle seal sekce po `seal_case`, generace podepsaného JSON+PDF s nezávislou verifikací podpisu ze souboru, graceful degradation bez cryptography.
 - **AK ✓**: PDF + JSON (WeasyPrint 70.0), Ed25519 podpis ověřený z napsaného souboru (`verify_report` True na reálných case DB), deterministický payload. Ruff clean; full suite viz commit message.
+
+### Added — F5.3 Parser versioning & reproducibility
+- **Doména** `domain/reproducibility.py` (staví na C5 Reproducibility Engine, čistá logika bez I/O): nové deterministické diff helpers `compare_outputs()` (klíč po klíči; prázdný seznam = identické) a `version_diffs()` (mapa parser verze — chybějící klíč = rozdíl), `diff_snapshots(base, new)` → `SnapshotDiff(identical, diffs)` pro reparse report.
+- **Pipeline** `process_source(..., pinned_parser_version=None)` — *pinned provenience*: všechny artefakty re-parse běhu dostanou prokládanou verzi parserové sady (override registry stampování na hlavním vláknu, žádné změny worker/executoru); operation snapshot nese upřímnou mapu `{**parser_versions(), "pinned": V}` + params `pinned_parser_version`.
+- **Data** `artifact_repository.latest_extract_op(source_id=None)` — base snapshot pro reparse (nejnovější extract operace, volitelně per zdroj). Nová facade metoda v db.py nepřidaná → budget <600 drží.
+- **CLI** `stopa reparse <case> [--source-id ID] --parser-version V [--workdir DIR] [--json]`: base snapshot z analysis_operations → verifikace vstupních souborů (SHA-256 vs snapshot) → extrakce do čisté dočasné DB (původní case = append-only, nedotčen) s pinned provenience → diff report (vstupy + výstupy + verze parserů). Re-parse se připojí k `analysis_operations` (op_type=`reparse`, params `original_op_id`) + audit log `reparse_completed`. Exit kódy: **0** = vstupy OK a výstupy identické, **1** = chyba, **2** = rozdíly.
+- **Testy** `tests/test_f53_reparse.py` (+16) offline: doména (version_diffs/diff_snapshots incl. pinned-only diff), data (latest_extract_op newest + source filter), pipeline (pinning stampuje všechny artefakty; bez pinu registry verze; operation snapshot nese 'pinned'), CLI E2E (exit 0 + snapshot storage + audit, JSON mód, změněný vstup → exit 2, chybějící extract op / kořen zdroje → exit 1, explicitní --source-id).
+- **AK ✓**: `stopa reparse <case> --parser-version <v>` s 100 % reprodukovatelným výsledkem — E2E živě: vstupy OK + identické výstupy (exit 0); tamperovaný vstup → hash diff + output diff (exit 2); JSON mód nezávisle parzovatelný. Ruff clean; full suite viz commit message.
 
 ## [Unreleased] — 2026-11-07 (STP-055: oblast Q Interop ★ = UCO mapping)
 

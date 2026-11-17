@@ -2638,6 +2638,169 @@ def cmd_seal(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_reparse(args: argparse.Namespace) -> int:
+    """F5.3 — re-run extrakce s deklarovánou verzí parseru + diff report.
+
+    Semantika (staví na C5 Reproducibility Engine):
+      1. base snapshot = nejnovější extract operace zdroje (analysis_operations),
+      2. ověření vstupních souborů (SHA-256 na disku vs. snapshot),
+      3. čistá dočasná DB — původní případ se nedotkne (append-only evidence);
+         extrakce běží s prokládanou verzí parserové sady (pinned provenience),
+      4. diff report: deterministický souhrn výstupů + mapy verzí parserů,
+      5. snapshot storage — reparse se appenduje do analysis_operations.
+
+    Exit: 0 = vstupy OK a výstupy identické (reprodukovatelné); 1 = chyba;
+    2 = nalezeny rozdíly (vstupy nebo výstupy).
+    """
+    json_mode = getattr(args, "json", False)
+    db = _open_db(args.case_id)
+    try:
+        import tempfile
+        import time as _time
+
+        from stopa import __version__ as _stopa_ver
+        from stopa.domain.hashing import hash_file
+        from stopa.domain.reproducibility import (
+            compare_outputs,
+            verify_inputs,
+            version_diffs,
+        )
+        from stopa.pipeline import parser_versions, process_source, summarize_outputs
+
+        base_op = db.artifact_repo.latest_extract_op(source_id=args.source_id)
+        if base_op is None:
+            msg = "žádná zaznamenaná extrakční operace (op_type='extract') v případě"
+            print(msg, file=sys.stderr) if not json_mode else _print_json(
+                {"ok": False, "error": msg}
+            )
+            return 1
+        source_id = base_op.source_id
+        src_row = db.conn.execute(
+            "SELECT path FROM sources WHERE id = ?", (source_id,)
+        ).fetchone()
+        if src_row is None:
+            raise KeyError(f"zdroj {source_id} nenalezen v DB")
+        root = Path(src_row["path"])
+        if not root.exists():
+            raise FileNotFoundError(f"kořen zdroje neexistuje na disku: {root}")
+        profile_name = base_op.params_json.get("profile", "forensic")
+
+        # 1) vstupní ověření — aktuální hashe na disku vs. base snapshot (C5)
+        current_hashes: dict[str, str | None] = {}
+        for f in base_op.input_files:
+            rel = f.get("rel_path") or ""
+            p = root / rel if not root.is_file() else root
+            try:
+                digests = hash_file(p, ["sha256"]) or {}
+                current_hashes[rel] = digests.get("sha256")
+            except OSError:
+                current_hashes[rel] = None  # soubor zmizel / nečitelný
+        inputs_ok, input_diffs = verify_inputs(list(base_op.input_files), current_hashes)
+
+        # 2) čistá dočasná DB — původní případ se nedotkne (append-only evidence)
+        workdir = Path(args.workdir) if getattr(args, "workdir", None) else Path(
+            tempfile.gettempdir()
+        )
+        tmp_db_path = workdir / f"stopa-reparse-{source_id}.db"
+        t0 = _time.monotonic()
+        replay_db = CaseDB(tmp_db_path)
+        try:
+            case = Case(name=f"reparse {source_id}")
+            replay_db.add_case(case)
+            src = EvidenceSource(
+                case_id=case.id, kind="folder", path=str(root), size_bytes=None
+            )
+            replay_db.add_source(src)
+            result = process_source(
+                replay_db,
+                src.id,
+                root,
+                profile_name=profile_name,
+                pinned_parser_version=args.parser_version,
+            )
+        finally:
+            replay_db.close()
+
+        # 3) snapshot storage — reparse operace se appenduje do case DB (historie verzí)
+        new_versions = {**parser_versions(), "pinned": args.parser_version}
+        new_op_id = db.record_operation(
+            "reparse",
+            case_id=base_op.case_id,
+            source_id=source_id,
+            input_files=list(base_op.input_files),
+            parser_versions=new_versions,
+            stopa_version=_stopa_ver,
+            config_hash=base_op.config_hash,
+            params={
+                "profile": profile_name,
+                "pinned_parser_version": args.parser_version,
+                "original_op_id": base_op.id,
+            },
+            outputs=summarize_outputs(result),
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        db.log_operation(
+            "reparse_completed",
+            details={
+                "source_id": source_id,
+                "pinned_parser_version": args.parser_version,
+                "original_op_id": base_op.id,
+                "reparse_op_id": new_op_id,
+                "inputs_identical": inputs_ok,
+            },
+        )
+
+        # 4) diff report — výstupy + verze parserů (base vs. reparse)
+        out_report = compare_outputs(base_op.outputs_json, summarize_outputs(result))
+        vdiffs = version_diffs(base_op.parser_versions or {}, new_versions)
+        out = {
+            "ok": True,
+            "case_id": db.path.stem,
+            "source_id": source_id,
+            "profile": profile_name,
+            "pinned_parser_version": args.parser_version,
+            "original_op_id": base_op.id,
+            "reparse_op_id": new_op_id,
+            "inputs_identical": inputs_ok,
+            "input_diffs": list(input_diffs),
+            "outputs_identical": out_report.identical,
+            "output_diffs": list(out_report.diffs),
+            "version_diffs": list(vdiffs),
+        }
+        if json_mode:
+            _print_json(out)
+        else:
+            print(f"Reparse (F5.3) — zdroj {source_id}, prokládaná verze parseru: {args.parser_version}")
+            print(f"  base snapshot: op {base_op.id} ({profile_name}) → reparse op {new_op_id}")
+            if inputs_ok:
+                print(f"  vstupní soubory: OK ({len(base_op.input_files)}× SHA-256 shodné)")
+            else:
+                print("  vstupní soubory: ZMĚNENY")
+                for d in list(input_diffs)[:10]:
+                    print(f"    - {d}")
+                if len(input_diffs) > 10:
+                    print(f"    … a dalších {len(input_diffs) - 10}")
+            if out_report.identical:
+                print("  výstupy: identické (reprodukovatelné)")
+            else:
+                print("  výstupy: LIŠÍ")
+                for d in list(out_report.diffs)[:20]:
+                    print(f"    - {d}")
+            if vdiffs:
+                print("  verze parserů:")
+                for d in list(vdiffs)[:15]:
+                    print(f"    - {d}")
+        return 0 if (inputs_ok and out_report.identical) else 2
+    except Exception as e:  # noqa: BLE001 — defenzivně: reparse nezanechá traceback
+        if json_mode:
+            _print_json({"ok": False, "error": f"reparse selhalo: {e}"})
+        else:
+            print(f"reparse selhalo: {e}", file=sys.stderr)
+        return 1
+    finally:
+        db.close()
+
+
 def cmd_compliance(args: argparse.Namespace) -> int:
     """F5.2 — SWGDE/ISO 27037 compliance report (JSON + PDF, Ed25519 podpis)."""
     json_mode = getattr(args, "json", False)
@@ -3175,6 +3338,7 @@ _SUBCOMMAND_EXAMPLES = {
     "verify": "stopa verify case-abc --limit 20",
     "seal": "stopa seal case-abc --reason 'před soudním předložením'",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
+    "reparse": "stopa reparse case-abc --parser-version 2.4   # F5.3 — pinned verze + diff report",
     "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
     "replay": "stopa replay case-abc op-123   # bez op = poslední extract",
     "benchmark": "stopa benchmark case-abc --suite all",
@@ -3327,6 +3491,18 @@ def build_parser() -> argparse.ArgumentParser:
                         help="výstupní adresář (default: složka case DB)")
     _add_json_flag(comp_p)
     comp_p.set_defaults(func=cmd_compliance)
+
+    rp_p = _ex_sub(sub, "reparse",
+                   help="F5.3 — re-run extrakce s deklarovánou verzí parseru + diff report")
+    rp_p.add_argument("case_id")
+    rp_p.add_argument("--source-id", default=None, metavar="ID",
+                      help="zdroj (default: zdroj nejnovější extract operace)")
+    rp_p.add_argument("--parser-version", required=True, metavar="V",
+                      help="prokládaná verze parserové sady (pinned provenience)")
+    rp_p.add_argument("--workdir", default=None, metavar="DIR",
+                      help="umístění dočasné reparse DB (default: systémový tmp)")
+    _add_json_flag(rp_p)
+    rp_p.set_defaults(func=cmd_reparse)
 
     int_p = _ex_sub(sub, "integrity", help="P0 C4 — Evidence Integrity 2.0 (hash chaining + Ed25519 kontrolní body)"
     )

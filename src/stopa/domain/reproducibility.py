@@ -112,3 +112,30 @@ def compare_outputs(original: dict, new: dict) -> ComparisonReport:
         if old_v != new_v:
             diffs.append(f"{key}: {old_v!r} → {new_v!r}")
     return ComparisonReport(identical=not diffs, diffs=tuple(diffs))
+
+
+def version_diffs(base_pv: dict[str, str], new_pv: dict[str, str]) -> tuple[str, ...]:
+    """F5.3 — rozdíly map parser verze (base snapshot vs reparse).
+
+    Porovnává se každý klíč v kterékoli mapě; chybějící klíč = rozdíl.
+    Prázdná n-tice = verze parserů se neliší.
+    """
+    diffs: list[str] = []
+    for key in sorted(set(base_pv) | set(new_pv)):
+        old_v = base_pv.get(key)
+        new_v = new_pv.get(key)
+        if old_v != new_v:
+            diffs.append(f"parser[{key}]: {old_v!r} → {new_v!r}")
+    return tuple(diffs)
+
+
+def diff_snapshots(base: AnalysisOperation, new: AnalysisOperation) -> ComparisonReport:
+    """F5.3 — diff report mezi dvěma snapshoty operace (base vs reparse).
+
+    Porovná deterministický souhrn výstupů + mapu verzí parserů; vrací lidsky
+    čitelný seznam všech rozdílu (prázdný = snapshoty identické). Čistá logika.
+    """
+    out = compare_outputs(base.outputs_json, new.outputs_json)
+    diffs: list[str] = list(out.diffs)
+    diffs.extend(version_diffs(base.parser_versions or {}, new.parser_versions or {}))
+    return ComparisonReport(identical=not diffs, diffs=tuple(diffs))

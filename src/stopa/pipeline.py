@@ -1034,6 +1034,7 @@ def process_source(
     commit_every: int = 256,
     stop_event: threading.Event | None = None,
     max_inflight: int | None = None,
+    pinned_parser_version: str | None = None,
 ) -> ProcessResult:
     """Zpracuje jeden evidence source daným processing profilem.
 
@@ -1056,6 +1057,9 @@ def process_source(
         committuje. CLI napojuje SIGINT/SIGTERM sem (result.interrupted = True).
     `max_inflight` — F2.4 backpressure: max počtu současně odeslaných (in-flight)
         úloh; None = auto (max(8, 4*workers)). Omezuje RAM i napředběh walku.
+    `pinned_parser_version` — F5.3 reparse: prokládaná verze parserové sady;
+        všechny extrahované artefakty dostanou tuto provenience místo aktuální
+        registry (chování parserů se nemění → deterministický souhrn je stejný).
     """
     profile = get_profile(profile_name)
     result = ProcessResult(source_id=source_id, profile=profile.name)
@@ -1190,6 +1194,9 @@ def process_source(
                     a.extracted_at = now_utc
                 if a.parser_version is None and parser_ver is not None:
                     a.parser_version = parser_ver
+                # F5.3 reparse — prokládaná verze parserové sady (provenience)
+                if pinned_parser_version is not None:
+                    a.parser_version = pinned_parser_version
             db.replace_artifacts_for_file(file_id, arts)
             result.artifacts_extracted += len(arts)
             # P0 Core C2: Evidence Lineage — output_refs kroku extract (ID artefaktů)
@@ -1340,15 +1347,23 @@ def process_source(
             (source_id,),
         ).fetchall()
     ]
+    # F5.3 reparse — snapshot mapy verzí odrazí, co se skutečně použilo:
+    # registry + prokládaná verze (přítomná jen u re-parse běhu).
+    if pinned_parser_version is not None:
+        _recorded_versions = {**parser_versions(), "pinned": pinned_parser_version}
+        _op_params = {"profile": profile_name, "pinned_parser_version": pinned_parser_version}
+    else:
+        _recorded_versions = parser_versions()
+        _op_params = {"profile": profile_name}
     db.record_operation(
         "extract",
         case_id=_case_id_for_source(db, source_id),
         source_id=source_id,
         input_files=input_files,
-        parser_versions=parser_versions(),
+        parser_versions=_recorded_versions,
         stopa_version=_stopa_pkg.__version__,
         config_hash=config_hash({"profile": profile_name}),
-        params={"profile": profile_name},
+        params=_op_params,
         outputs=summarize_outputs(result),
         duration_ms=int((time.monotonic() - _t0) * 1000),
     )

@@ -381,6 +381,21 @@ class ArtifactRepository:
         ).fetchone()
         return _row_to_analysis_operation(row) if row else None
 
+    def latest_extract_op(self, source_id: str | None = None) -> AnalysisOperation | None:
+        """F5.3 — nejnovější extract operace (base snapshot pro reparse).
+
+        Volitelně omezená zdrojem; None pokud v DB žádný extract běh nezaznamenán.
+        Pořadí podle created_at, id (stejná konvence jako ``list_operations``).
+        """
+        sql = "SELECT * FROM analysis_operations WHERE op_type = 'extract'"
+        params: list[str] = []
+        if source_id is not None:
+            sql += " AND source_id = ?"
+            params.append(source_id)
+        sql += " ORDER BY created_at DESC, id DESC LIMIT 1"
+        row = self.conn.execute(sql, params).fetchone()
+        return _row_to_analysis_operation(row) if row else None
+
     # ── F4.3 Peer-Review Workflow: stavový automat + auditní stopa ────────────
     def is_critical_artifact(self, artifact_id: str) -> bool:
         """Kritický = existuje analytický nález odkazující na soubor artefaktu.
