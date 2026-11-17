@@ -127,7 +127,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 |---|---|---|
 | **A — Audit** | git status/commit; mapa repo; testy se skutečnými výsledky; bezpečnostní rizika; seznam priorit | ✅ tento commit (ROADMAP_2_1.md + EXECUTIVE_SUMMARY.md) |
 | **B — Plán** | technický plán po malých krocích; u každé změny přínos/riziko/závislosti/testy; změny vyžadující souhlas uživatele (migrace v20, plugin API SemVer, schéma ledgeru) | ✅ P0 sekce nahoře (AK + velikosti) |
-| **C — Kritická bezpečnost a integrita** | P0-1..P0-5; izolované změny + testy po každé | 🔄 **✅ P0-3 hotové** (izolovaný workdir, RLIMIT_CPU+NOFILE, output cap, unshare net; 60/60 testů); dále: P0-5 threat model → P0-2 pečetě → P0-4 validation lab → P0-1 provenance (migrace v20) |
+| **C — Kritická bezpečnost a integrita** | P0-1..P0-5; izolované změny + testy po každé | 🔄 **✅ P0-3 + P0-5 hotové** (sandbox hardening 60/60 testů; `SECURITY_THREAT_MODEL.md` T-1..T-10); dále: P0-2 pečetě → P0-4 validation lab → P0-1 provenance (migrace v20) |
 | **D — Kvalita parserů a architektura** | P1-1, P1-4, P0-6 migrace po schváleném plánu | ⏳ |
 | **E — AI** | P1-2 | ⏳ |
 | **F — Nové funkce** | jen schválené a odůvodněné; po malých releasovatelných celcích | ⏳ |
