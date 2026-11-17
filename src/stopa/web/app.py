@@ -46,6 +46,7 @@ from stopa.data.timesketch_client import (
     TimesketchUnavailable,
 )
 from stopa.data.user_repository import UserRepository  # F4.4
+from stopa.data.write_blocker_repository import WriteBlockerRepository  # F5.4
 from stopa.domain.ai_assistant import (
     build_explain_prompt,
     build_nl_search_prompt,
@@ -71,6 +72,12 @@ from stopa.domain.rbac import (
     require_permission,
 )
 from stopa.domain.times import to_local_iso
+from stopa.domain.write_blocker import (  # F5.4 — write-blocker API
+    VENDORS,
+    detect_write_blocker,
+    ingest_gate,
+    known_vendor_ids,
+)
 from stopa.models import Case, EvidenceSource
 from stopa.pipeline import process_source
 
@@ -151,6 +158,21 @@ class SourceIn(BaseModel):
     profile: str = "forensic"
     resume: bool = False  # E3 checkpointing — přeskočit soubory už v DB
     background: bool = False  # STP-021 — async ingest (default sync = backward compat)
+
+
+class WBAttachIn(BaseModel):
+    """F5.4 — write-blocker připojení (vendor auto-detekce z device stringu)."""
+
+    device: str | None = None
+    vendor: str | None = None  # explicitní override, když detekce nestačí
+    product: str | None = None
+    notes: str | None = None
+
+
+class WBRemoveIn(BaseModel):
+    """F5.4 — write-blocker odebrání."""
+
+    reason: str | None = None
 
 
 class AiQueryIn(BaseModel):
@@ -265,6 +287,7 @@ class SettingsIn(BaseModel):
     role: str | None = None  # examiner | analyst | admin
     bind_address: str | None = None
     ai_redact_pii: bool | None = None  # STP-019 — maskovat PII v LLM promptech
+    require_write_blocker: bool | None = None  # F5.4 — ingest gate bez WB (default OFF)
 
 
 class CaseUpdateIn(BaseModel):
@@ -686,6 +709,15 @@ def create_app(
         if not root.exists():
             raise HTTPException(400, f"zdroj neexistuje: {root}")
         db = open_db(case_id)
+
+        # F5.4 — write-blocker gate (settings require_write_blocker, default OFF;
+        # 409 = brána blokuje ingest bez připojeného WB)
+        _wb_gate = ingest_gate(
+            WriteBlockerRepository(db.conn, db.audit_repo).latest_state(),
+            bool(_load_settings().get("require_write_blocker", False)),
+        )
+        if not _wb_gate.allowed:
+            raise HTTPException(409, _wb_gate.warning or "write-blocker gate")
 
         # STP-021 — Processing Monitor: registrovat běh (sync i async).
         job_id = uuid.uuid4().hex[:12]
@@ -1986,6 +2018,71 @@ def create_app(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
+    # ── F5.4 — Write-blocker integration API (status + attach/remove) ──────────
+    @app.get("/api/cases/{case_id}/write-blocker")
+    def wb_status(case_id: str) -> dict:
+        """Aktuální WB stav + rozhodnutí ingest brány pro UI."""
+        db = open_db(case_id)
+        try:
+            repo = WriteBlockerRepository(db.conn, db.audit_repo)
+            state = repo.latest_state()
+            require_wb = bool(_load_settings().get("require_write_blocker", False))
+            gate = ingest_gate(state, require_wb)
+            return {
+                "state": state,
+                "require_wb": require_wb,
+                "allowed": gate.allowed,
+                "warning": gate.warning,
+                # podporovaní vendori pro UI select (AK: 3 vendori)
+                "vendors": [{"id": v.vendor_id, "label": v.label} for v in VENDORS],
+                "history": repo.history(),
+            }
+        finally:
+            db.close()
+
+    @app.post("/api/cases/{case_id}/write-blocker/attach", status_code=201)
+    def wb_attach(case_id: str, body: WBAttachIn) -> dict:
+        """Zaznamenat připojení WB (auto-detekce vendoru z device stringu)."""
+        _require("source.add", "wb_attach", case_id=case_id)
+        db = open_db(case_id)
+        try:
+            repo = WriteBlockerRepository(db.conn, db.audit_repo)
+            device = (body.device or "").strip()
+            match = detect_write_blocker(device) if device else None
+            vendor_id = body.vendor or (match.vendor_id if match else None)
+            if not vendor_id:
+                raise HTTPException(
+                    400,
+                    f"vendor nedetekován ({device!r}) — zadejte vendor z "
+                    f"{', '.join(known_vendor_ids())}",
+                )
+            row_id = repo.attach(
+                vendor=vendor_id,
+                product=body.product,
+                device=device or None,
+                notes=body.notes,
+            )
+            return {
+                "vendor": vendor_id,
+                "detected_from_device": match is not None and bool(device),
+                "audit_id": row_id,
+            }
+        finally:
+            db.close()
+
+    @app.post("/api/cases/{case_id}/write-blocker/remove")
+    def wb_remove(case_id: str, body: WBRemoveIn) -> dict:
+        """Zaznamenat odebrání WB."""
+        _require("source.add", "wb_remove", case_id=case_id)
+        db = open_db(case_id)
+        try:
+            row_id = WriteBlockerRepository(db.conn, db.audit_repo).remove(
+                reason=body.reason
+            )
+            return {"audit_id": row_id}
+        finally:
+            db.close()
+
     # ── STP-050 — Validation Center (C3 registry + C6 report) ──
     @app.get("/api/cases/{case_id}/validation")
     def validation_report(case_id: str) -> dict:
@@ -2424,6 +2521,8 @@ def create_app(
             "bind_address": s.get("bind_address", "127.0.0.1"),
             # STP-019 — PII redaktor je default ON (fail-safe: maskovat)
             "ai_redact_pii": bool(s.get("ai_redact_pii", True)),
+            # F5.4 — write-blocker ingest gate (default OFF = backward compat)
+            "require_write_blocker": bool(s.get("require_write_blocker", False)),
             # F4.4 — multi-user režim + identita session (SPA topbar / login gate)
             "multi_user_mode": _multi_user_mode(),
             "user": (
@@ -2468,6 +2567,8 @@ def create_app(
             s["bind_address"] = body.bind_address
         if body.ai_redact_pii is not None:
             s["ai_redact_pii"] = bool(body.ai_redact_pii)
+        if body.require_write_blocker is not None:  # F5.4 — WB ingest gate
+            s["require_write_blocker"] = bool(body.require_write_blocker)
         _save_settings(s)
         return get_settings()
 

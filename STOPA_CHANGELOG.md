@@ -2,7 +2,7 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility)
+## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API)
 
 ### Added (FÁZE 5 Compliance & Court-Readiness, P0)
 - **Merkle doména** `domain/case_seal.py` (čistá logika bez I/O): kanonizace řádků (`json.dumps(..., ensure_ascii=False, sort_keys=True)`), leaf hash s doménovým tagem `stopa-case-seal/v1` + jménem tabulky (totéž datum v jiné tabulce ≠ stejný leaf), deterministický Merkle root — prázdný stav = konstantní `EMPTY_ROOT`, 1 řádek = identity; fixované globální pořadí leafů artifacts → timeline_events → audit_log.
@@ -30,6 +30,14 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 - **CLI** `stopa reparse <case> [--source-id ID] --parser-version V [--workdir DIR] [--json]`: base snapshot z analysis_operations → verifikace vstupních souborů (SHA-256 vs snapshot) → extrakce do čisté dočasné DB (původní case = append-only, nedotčen) s pinned provenience → diff report (vstupy + výstupy + verze parserů). Re-parse se připojí k `analysis_operations` (op_type=`reparse`, params `original_op_id`) + audit log `reparse_completed`. Exit kódy: **0** = vstupy OK a výstupy identické, **1** = chyba, **2** = rozdíly.
 - **Testy** `tests/test_f53_reparse.py` (+16) offline: doména (version_diffs/diff_snapshots incl. pinned-only diff), data (latest_extract_op newest + source filter), pipeline (pinning stampuje všechny artefakty; bez pinu registry verze; operation snapshot nese 'pinned'), CLI E2E (exit 0 + snapshot storage + audit, JSON mód, změněný vstup → exit 2, chybějící extract op / kořen zdroje → exit 1, explicitní --source-id).
 - **AK ✓**: `stopa reparse <case> --parser-version <v>` s 100 % reprodukovatelným výsledkem — E2E živě: vstupy OK + identické výstupy (exit 0); tamperovaný vstup → hash diff + output diff (exit 2); JSON mód nezávisle parzovatelný. Ruff clean; full suite viz commit message.
+
+### Added — F5.4 Write-blocker integration API
+- **Doména** `domain/write_blocker.py` (čistá logika bez I/O): registry **3 vendorů** s detekčními regexy na device/product string (Tableau Technology, WiebeTech, Kroll Ontrack/Metalink); `detect_write_blocker(text)` auto-detekce (case-insensitive, neznámé → None; explicitní vendor jako záloha). WB stav = poslední audit záznam s prefixem **`wb_`** (`compute_state`; akce `wb_attached`/`wb_removed`) — stejný kontrakt, který čte F5.2 compliance report (backward/forward kompatibilita bez migrace). Konfigurovatelná ingest brána `ingest_gate(state, require)` — settings klíč **`require_write_blocker`, default OFF** (backward compat); gate ON + WB chybí/odebrán → hard blokování.
+- **Data** `data/write_blocker_repository.py`: `WriteBlockerRepository(conn, audit_repo)` — append-only zápis do existujícího audit logu (`attach`/`remove`) + `latest_state()` + `history()`. Bez nové tabulky a bez facade metody v db.py → budget 599 řádků drží.
+- **CLI**: `stopa wb status|attach|remove <case>` — status vrátí stav WB + rozhodnutí brány (exit **2** = blokováno, JSON mód); attach s auto-detekcí vendoru z `--device` (explicitní `--vendor choices=...` jako záloha). Gate v `stopa add`: bez připojeného WB a se zapnutou bránou → ⛔ na stderr + exit **2**, ingest neproběhne.
+- **Web**: `GET /api/cases/{id}/write-blocker` (stav + gate rozhodnutí + vendori pro UI select + historie), `POST .../attach`, `POST .../remove`; ingest `POST /api/cases/{id}/sources` vrací **409** při zapnuté bráně; settings `require_write_blocker` přes stávající GET/PUT `/api/settings`; frontend widget v add-source kartě (živý stav WB + připojení s auto-detekcí).
+- **Testy** `tests/test_f54_write_blocker.py` (+23) offline: doména — detekce všech 3 vendorů, neznámá zařízení → None, case-insensitivity, registry tvar, stavová sémantika (attach/remove/reattach), gate matice; data — attach/latest_state round-trip, remove + historie v pořadí; CLI E2E — status exit kódy 0/2, auto-detekce + audit řádek, explicitní vendor záloha, gate blokuje/pouští `stopa add`; Web E2E — GET stav, attach s detekcí (201), neznámé zařízení (400), remove, ingest **409** při zapnuté bráně a 201 po připojení WB.
+- **AK ✓**: auto-detekce 3 vendorů; varování UI+CLI (sdílená doménová sémantika); ingest bez WB potvrzení nelze (configurable, default OFF). E2E živě ověřeno: status/attach/remove exit kódy 0/2, gate blokuje a rozblokuje `stopa add`. Ruff clean; full suite viz commit message.
 
 ## [Unreleased] — 2026-11-07 (STP-055: oblast Q Interop ★ = UCO mapping)
 

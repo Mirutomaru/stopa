@@ -246,6 +246,44 @@ async function renderDashboard(cid) {
         `<span class="n">${n}</span></div>`).join("")
     : '<p class="muted small">Zatím žádné artifacty.</p>';
 
+  /* F5.4 — write-blocker stav (auto-detekce vendorů, gate varování) */
+  function renderWBStatus(wb) {
+    const el = document.getElementById("wb-status");
+    if (!el) return;
+    const st = wb.state;
+    if (st && st.attached) {
+      const v = (wb.vendors?.find((x) => x.id === st.vendor)?.label || st.vendor || "?") +
+        (st.product ? ` ${st.product}` : "") +
+        (st.device ? ` (${st.device})` : "");
+      el.textContent = `✓ WB připojen: ${v}${st.ts ? " @ " + fmtDT(st.ts) : ""}`;
+    } else if (st) {
+      el.textContent = `⚠ WB odebrán${st.reason ? ` (${st.reason})` : ""} — přepojte před ingestem`;
+    } else if (wb.require_wb) {
+      el.textContent = "⛔ WB není připojen a brána je zapnutá — ingest je blokován";
+    } else {
+      el.textContent = "⚠ Write-blocker není připojen (brána vypnutá)";
+    }
+  }
+
+  api(`/api/cases/${Store.get("caseId")}/write-blocker`)
+    .then((wb) => renderWBStatus(wb))
+    .catch(() => { const el = document.getElementById("wb-status"); if (el) el.textContent = "WB: —"; });
+
+  document.getElementById("btn-wb-attach").onclick = async () => {
+    const cid = Store.get("caseId");
+    if (!cid) return;
+    const device = document.getElementById("wb-device").value.trim();
+    try {
+      const r = await api(`/api/cases/${cid}/write-blocker/attach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ device, vendor: document.getElementById("wb-vendor").value || null }),
+      });
+      toast(`✓ WB připojen (${r.vendor})`);
+      await openCase(cid); // refresh — znovu načte WB stav + statistiky
+    } catch (e) { toast(`⚠ ${e.message}`); }
+  };
+
   // přidat zdroj (STP-021: volitelný background ingest s živým progress)
   document.getElementById("btn-add-source").onclick = async () => {
     const path = document.getElementById("src-path").value.trim();

@@ -36,8 +36,15 @@ from pathlib import Path
 _log = logging.getLogger("stopa.cli")
 
 from stopa.data.db import CaseDB
+from stopa.data.write_blocker_repository import WriteBlockerRepository  # F5.4
 from stopa.domain.mem_forensics import DEFAULT_PLUGINS as _VOL_DEFAULT_PLUGINS
 from stopa.domain.profiles import PROFILES, get_profile
+from stopa.domain.write_blocker import (  # F5.4 — write-blocker API
+    detect_write_blocker,
+    ingest_gate,
+    known_vendor_ids,
+    vendor_label,
+)
 from stopa.models import Case, EvidenceSource
 from stopa.pipeline import load_hash_sets, process_source, run_timeline_intel
 
@@ -65,6 +72,18 @@ def _load_ai_redact_pii() -> bool:
     except (json.JSONDecodeError, OSError):
         return True
     return bool(data.get("ai_redact_pii", True)) if isinstance(data, dict) else True
+
+
+def _load_require_write_blocker() -> bool:
+    """F5.4 — write-blocker gate toggle ze settings.json (default OFF)."""
+    p = _db_dir() / "settings.json"
+    if not p.exists():
+        return False
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    return bool(data.get("require_write_blocker", False)) if isinstance(data, dict) else False
 
 
 def case_examiner(db: CaseDB, case_id: str) -> str | None:
@@ -249,6 +268,15 @@ def cmd_case_auto_interval(args: argparse.Namespace) -> int:
 
 def cmd_add(args: argparse.Namespace) -> int:
     db = _open_db(args.case_id)
+    # F5.4 — write-blocker gate (settings.json require_write_blocker, default OFF;
+    # exit 2 = brána blokuje ingest bez připojeného WB)
+    wb_gate = ingest_gate(
+        WriteBlockerRepository(db.conn, db.audit_repo).latest_state(),
+        _load_require_write_blocker(),
+    )
+    if not wb_gate.allowed:
+        print(f"⛔ {wb_gate.warning}", file=sys.stderr)
+        return 2
     profile = get_profile(args.profile)  # early validace jména profilu
     json_mode = getattr(args, "json", False)
 
@@ -2801,6 +2829,101 @@ def cmd_reparse(args: argparse.Namespace) -> int:
         db.close()
 
 
+# ── F5.4 — Write-blocker integration API (status/attach/remove) ────────────────
+def cmd_wb_status(args: argparse.Namespace) -> int:
+    """F5.4 — aktuální WB stav + rozhodnutí brány (exit 2 = blokováno)."""
+    db = _open_db(args.case_id)
+    repo = WriteBlockerRepository(db.conn, db.audit_repo)
+    state = repo.latest_state()
+    require = _load_require_write_blocker()
+    gate = ingest_gate(state, require)
+    if getattr(args, "json", False):
+        print(
+            json.dumps(
+                {
+                    "case_id": args.case_id,
+                    "state": state,
+                    "require_wb": require,
+                    "allowed": gate.allowed,
+                    "warning": gate.warning,
+                },
+                ensure_ascii=False,
+            )
+        )
+    else:
+        if state is None:
+            print("WB: není připojen (žádný wb_* záznam v audit logu)")
+        elif state.get("attached"):
+            v = vendor_label(state.get("vendor")) or state.get("vendor") or "?"
+            prod = f" {state['product']}" if state.get("product") else ""
+            dev = f" ({state['device']})" if state.get("device") else ""
+            print(
+                f"WB: ✓ připojen — {v}{prod}{dev} "
+                f"@ {state.get('ts') or '?'} by {state.get('actor') or '—'}"
+            )
+        else:
+            reason = state.get("reason") or "—"
+            print(f"WB: ⚠ odebrán ({reason}) @ {state.get('ts') or '?'}")
+        gate_note = "zapnutá" if require else "vypnutá"
+        verdict = "pouští ingest" if gate.allowed else "blokuje ingest"
+        print(f"Brána (require_write_blocker): {gate_note} → {verdict}")
+    return 0 if gate.allowed else 2
+
+
+def cmd_wb_attach(args: argparse.Namespace) -> int:
+    """F5.4 — zaznamenat připojení WB (auto-detekce vendoru z --device)."""
+    db = _open_db(args.case_id)
+    repo = WriteBlockerRepository(db.conn, db.audit_repo)
+    device = (args.device or "").strip()
+    match = detect_write_blocker(device) if device else None
+    vendor_id = args.vendor or (match.vendor_id if match else None)
+    if not vendor_id:
+        ids = ", ".join(known_vendor_ids())
+        print(
+            f"Auto-detekce vendoru nezdarila ({device!r}) — zadte --vendor {ids}",
+            file=sys.stderr,
+        )
+        return 2
+    row_id = repo.attach(
+        vendor=vendor_id,
+        product=args.product,
+        device=device or None,
+        notes=args.notes,
+        actor=case_examiner(db, args.case_id),
+    )
+    label = vendor_label(vendor_id) or vendor_id
+    if getattr(args, "json", False):
+        print(
+            json.dumps(
+                {
+                    "case_id": args.case_id,
+                    "vendor": vendor_id,
+                    "label": label,
+                    "detected_from_device": match is not None and bool(device),
+                    "audit_id": row_id,
+                },
+                ensure_ascii=False,
+            )
+        )
+    else:
+        src_note = f" (auto-detekce z {device!r})" if match else ""
+        print(f"✓ WB připojen: {label}{src_note} [audit #{row_id}]")
+    return 0
+
+
+def cmd_wb_remove(args: argparse.Namespace) -> int:
+    """F5.4 — zaznamenat odebrání WB."""
+    db = _open_db(args.case_id)
+    repo = WriteBlockerRepository(db.conn, db.audit_repo)
+    row_id = repo.remove(reason=args.reason, actor=case_examiner(db, args.case_id))
+    if getattr(args, "json", False):
+        print(json.dumps({"case_id": args.case_id, "audit_id": row_id}, ensure_ascii=False))
+    else:
+        reason_note = f" ({args.reason})" if args.reason else ""
+        print(f"✓ WB odebrán{reason_note} [audit #{row_id}]")
+    return 0
+
+
 def cmd_compliance(args: argparse.Namespace) -> int:
     """F5.2 — SWGDE/ISO 27037 compliance report (JSON + PDF, Ed25519 podpis)."""
     json_mode = getattr(args, "json", False)
@@ -3339,6 +3462,7 @@ _SUBCOMMAND_EXAMPLES = {
     "seal": "stopa seal case-abc --reason 'před soudním předložením'",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
     "reparse": "stopa reparse case-abc --parser-version 2.4   # F5.3 — pinned verze + diff report",
+    "wb": "stopa wb attach case-abc --device 'Tableau TBW-100'   # F5.4 — WB připojení + auto-detekce",
     "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
     "replay": "stopa replay case-abc op-123   # bez op = poslední extract",
     "benchmark": "stopa benchmark case-abc --suite all",
@@ -3503,6 +3627,36 @@ def build_parser() -> argparse.ArgumentParser:
                       help="umístění dočasné reparse DB (default: systémový tmp)")
     _add_json_flag(rp_p)
     rp_p.set_defaults(func=cmd_reparse)
+
+    # F5.4 — write-blocker integration API (status/attach/remove + ingest gate)
+    wb_p = _ex_sub(sub, "wb", help="F5.4 — write-blocker: status/attach/remove")
+    wb_sub = wb_p.add_subparsers(dest="wb_cmd", required=True)
+    wbs_p = wb_sub.add_parser(
+        "status", help="aktuální WB stav + rozhodnutí brány (exit 2 = blokováno)"
+    )
+    wbs_p.add_argument("case_id")
+    _add_json_flag(wbs_p)
+    wbs_p.set_defaults(func=cmd_wb_status)
+    wba_p = wb_sub.add_parser(
+        "attach", help="zaznamenat připojení WB (auto-detekce vendoru z --device)"
+    )
+    wba_p.add_argument("case_id")
+    wba_p.add_argument("--device", default=None, metavar="DEV",
+                       help="zařízení/product string (např. 'Tableau TBW-100')")
+    wba_p.add_argument("--vendor", default=None, choices=known_vendor_ids(),
+                       help="explicitní vendor (když auto-detekce nestačí)")
+    wba_p.add_argument("--product", default=None, metavar="P",
+                       help="model WB (volitelné)")
+    wba_p.add_argument("--notes", default=None, metavar="N",
+                       help="volný text poznámky")
+    _add_json_flag(wba_p)
+    wba_p.set_defaults(func=cmd_wb_attach)
+    wbm_p = wb_sub.add_parser("remove", help="zaznamenat odebrání WB")
+    wbm_p.add_argument("case_id")
+    wbm_p.add_argument("--reason", default=None, metavar="R",
+                       help="důvod odebrání (volitelné)")
+    _add_json_flag(wbm_p)
+    wbm_p.set_defaults(func=cmd_wb_remove)
 
     int_p = _ex_sub(sub, "integrity", help="P0 C4 — Evidence Integrity 2.0 (hash chaining + Ed25519 kontrolní body)"
     )

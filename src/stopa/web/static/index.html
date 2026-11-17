@@ -80,6 +80,20 @@
         </label>
         <button id="btn-add-source" class="primary">Zpracovat</button>
       </div>
+      <!-- F5.4 — write-blocker stav + připojení (auto-detekce 3 vendorů) -->
+      <div class="toolbar">
+        <span id="wb-status" class="muted small">WB: načítám…</span>
+      </div>
+      <div class="toolbar">
+        <input id="wb-device" placeholder="Zařízení WB, např. 'Tableau TBW-100' nebo '/dev/sdb2'">
+        <select id="wb-vendor">
+          <option value="">auto-detekce</option>
+          <option value="tableau">Tableau Technology</option>
+          <option value="wiebtech">WiebeTech</option>
+          <option value="kroll_ontrack">Kroll Ontrack (Metalink)</option>
+        </select>
+        <button id="btn-wb-attach" class="primary small">Připojit WB</button>
+      </div>
       <pre id="src-result" class="muted hidden"></pre>
     </div>
     <h2>Artifacty podle typu</h2>
