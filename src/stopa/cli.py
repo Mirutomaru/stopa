@@ -2638,6 +2638,41 @@ def cmd_seal(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_compliance(args: argparse.Namespace) -> int:
+    """F5.2 — SWGDE/ISO 27037 compliance report (JSON + PDF, Ed25519 podpis)."""
+    json_mode = getattr(args, "json", False)
+    db = _open_db(args.case_id)
+    try:
+        from stopa.presentation.compliance_report import generate_compliance_report
+
+        out = generate_compliance_report(db, args.case_id, out_dir=args.out)
+    except KeyError as e:  # případ nenalezen
+        if json_mode:
+            _print_json({"ok": False, "error": str(e)})
+        else:
+            print(str(e), file=sys.stderr)
+        db.close()
+        return 1
+    if json_mode:
+        import json as _json
+
+        doc = _json.loads(out["json_path"].read_text(encoding="utf-8"))
+        _print_json({"ok": True, **doc})
+    else:
+        signed = "podpsán (Ed25519)" if out["signature_b64"] else "nepodepsaný (chybí cryptography)"
+        print(f"Compliance report (F5.2) — {args.case_id}, {signed}")
+        print(f"  JSON: {out['json_path']}")
+        pdf = out.get("pdf_path")
+        if pdf is not None:
+            print(f"  PDF:  {pdf}")
+        else:
+            print("  PDF:  chybí (balík weasyprint nenainstalován)", file=sys.stderr)
+        if out.get("digest"):
+            print(f"  Digest SHA-256: {out['digest']}")
+    db.close()
+    return 0
+
+
 def cmd_integrity(args: argparse.Namespace) -> int:
     """P0 Core C4 — Evidence Integrity 2.0: hash chaining + Ed25519 kontrolní body."""
     json_mode = getattr(args, "json", False)
@@ -3139,6 +3174,7 @@ _SUBCOMMAND_EXAMPLES = {
     "stats": "stopa stats case-abc",
     "verify": "stopa verify case-abc --limit 20",
     "seal": "stopa seal case-abc --reason 'před soudním předložením'",
+    "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
     "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
     "replay": "stopa replay case-abc op-123   # bez op = poslední extract",
     "benchmark": "stopa benchmark case-abc --suite all",
@@ -3283,6 +3319,14 @@ def build_parser() -> argparse.ArgumentParser:
                         help="důvod zamčení (např. 'před soudním předložením')")
     _add_json_flag(seal_p)
     seal_p.set_defaults(func=cmd_seal)
+
+    comp_p = _ex_sub(sub, "compliance",
+                     help="F5.2 — SWGDE/ISO 27037 compliance report (JSON+PDF, Ed25519 podpis)")
+    comp_p.add_argument("case_id")
+    comp_p.add_argument("--out", metavar="DIR", default=None,
+                        help="výstupní adresář (default: složka case DB)")
+    _add_json_flag(comp_p)
+    comp_p.set_defaults(func=cmd_compliance)
 
     int_p = _ex_sub(sub, "integrity", help="P0 C4 — Evidence Integrity 2.0 (hash chaining + Ed25519 kontrolní body)"
     )

@@ -492,6 +492,7 @@ async function renderReporting(cid) {
 
   document.getElementById("btn-report-html").onclick = () => window.open(`/api/cases/${Store.get("caseId")}/report?format=html`);
   document.getElementById("btn-report-pdf").onclick = () => window.open(`/api/cases/${Store.get("caseId")}/report?format=pdf`);
+  document.getElementById("btn-compliance-report").onclick = () => window.open(`/api/cases/${Store.get("caseId")}/compliance-report?format=pdf`);
 
   const tbody = document.querySelector("#marked-table tbody");
   if (tbody) tbody.addEventListener("click", (e) => {

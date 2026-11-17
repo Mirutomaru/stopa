@@ -1955,6 +1955,37 @@ def create_app(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
+    # ── F5.2 — SWGDE/ISO 27037 Compliance Report ────────────────
+    @app.get("/api/cases/{case_id}/compliance-report")
+    def compliance_report(case_id: str, format: str = "pdf"):
+        """Podepsaný compliance report (PDF nebo JSON) pro externího auditora."""
+        from fastapi import Response
+
+        from stopa.presentation.compliance_report import generate_compliance_report
+
+        db = open_db(case_id)
+        try:
+            out = generate_compliance_report(db, case_id)
+        except KeyError as e:
+            raise HTTPException(404, str(e)) from e
+        finally:
+            db.close()
+        filename = f"{case_id}_compliance.{format}"
+        if format == "json":
+            content = out["json_path"].read_text(encoding="utf-8").encode("utf-8")
+            return Response(
+                content=content,
+                media_type="application/json",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        if out.get("pdf_path") is None:
+            raise HTTPException(500, "PDF compliance report selhal (weasyprint chybí)")
+        return Response(
+            content=out["pdf_path"].read_bytes(),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     # ── STP-050 — Validation Center (C3 registry + C6 report) ──
     @app.get("/api/cases/{case_id}/validation")
     def validation_report(case_id: str) -> dict:

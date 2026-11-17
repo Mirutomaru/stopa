@@ -2,7 +2,7 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing)
+## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report)
 
 ### Added (FÁZE 5 Compliance & Court-Readiness, P0)
 - **Merkle doména** `domain/case_seal.py` (čistá logika bez I/O): kanonizace řádků (`json.dumps(..., ensure_ascii=False, sort_keys=True)`), leaf hash s doménovým tagem `stopa-case-seal/v1` + jménem tabulky (totéž datum v jiné tabulce ≠ stejný leaf), deterministický Merkle root — prázdný stav = konstantní `EMPTY_ROOT`, 1 řádek = identity; fixované globální pořadí leafů artifacts → timeline_events → audit_log.
@@ -14,6 +14,14 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 ### Changed
 - Schema v18 → **v19** (`case_seals`); stp041 wave3 testy aktualizovány (verze + tabulka). `db.py` 599 řádků (budget <600 — F5.1 orchestrace přesunuta z facade do `SealRepository`, facade = tenká delegace). Ruff clean; full suite viz commit message.
 - **Benchmark AK**: seal 1M artifactů = **8,9 s** (limit ROADMAP_V2: <60 s — rezerva ~6,7×; compute_roots 9,1 s + podpis; verify 9,1 s).
+
+### Added — F5.2 SWGDE / ISO 27037 automatizovaný compliance report
+- **Doména** `domain/compliance_report.py` (čistá logika bez I/O): kanonický JSON (`sort_keys=True, ensure_ascii=False, separators=(",",":")`) → SHA-256 digest (hex) podepsaný Ed25519 klíčem případu — stejná sémantika jako C4 kontrolní body a F5.1 Merkle pečeť; `verify_report()` pro nezávislou audit; deterministický HTML render se 7 sekcemi (nástroje+verze, validace algoritmů C3×C6, write-blocker logy, AI grounding report, chain of custody, integrity & Merkle seal F5.1, podpis dokumentu).
+- **Presentation** `presentation/compliance_report.py` (I/O): sběr podkladů z case DB — tools+versions (`tool_versions()`), algoritmy (C6 validation report `by_parser` + C3 registry → status validated/unknown per parser), WB logy (audit akce `wb_*` / details s write_blocker), AI grounding (agregace `ai_agent_action`/`nl_query` per tool), CoC, Merkle pečeť F5.1 (`seal_repo.verify_all()`). Výstupy `<case>_compliance_<stamp>.json` + `.pdf` (WeasyPrint); audit log `compliance_report_generated` s digestem a cestami.
+- **Graceful degradation**: bez `cryptography` → report nepodepsaný (`signature_b64=None`, audit `signed=false`); bez WeasyPrint → chybí jen PDF.
+- **CLI** `stopa compliance <case> [--out DIR] [--json]`; **web** endpoint `/api/cases/{id}/compliance-report?format=pdf|json` + tlačítko „🔏 Compliance (PDF)" v reportingu.
+- **Testy** `tests/test_f52_compliance_report.py` (+15): doména — determinismus kanonického JSON, stabilita digestu, Ed25519 sign/verify round-trip, tamper payloadu → FAIL, chybějící klíče → False, struktura payloadu, deterministický HTML render; presentation — WB logy z audit logu (prefix akce i details cesta), AI grounding agregace per tool, CoC, Merkle seal sekce po `seal_case`, generace podepsaného JSON+PDF s nezávislou verifikací podpisu ze souboru, graceful degradation bez cryptography.
+- **AK ✓**: PDF + JSON (WeasyPrint 70.0), Ed25519 podpis ověřený z napsaného souboru (`verify_report` True na reálných case DB), deterministický payload. Ruff clean; full suite viz commit message.
 
 ## [Unreleased] — 2026-11-07 (STP-055: oblast Q Interop ★ = UCO mapping)
 
