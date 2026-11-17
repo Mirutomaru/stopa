@@ -167,3 +167,35 @@ def to_uco_json(records: list[dict[str, Any]], dataset: str = "artifacts") -> st
         "objects": objects,
     }
     return json.dumps(doc, ensure_ascii=False, indent=2)
+
+
+def from_uco_json(text: str) -> list[dict[str, Any]]:
+    """UCO JSON dokument → zpět na STOPA záznamy (round-trip, F6.2).
+
+    Objekty s ``x-stopa`` obnoví všechna původní pole + ``id`` (z
+    ``x-stopa-id``; ``@type``/``name``/``time`` jsou odvozená metadata a
+    vynechávají se, pokud nejsou součástí x-stopa). Objekty bez ``x-stopa``
+    (cizí dokument) → minimální záznam s typem/názevem. Nevalidní JSON →
+    ValueError; neobjekt/něco jiného než UCO dokument → TypeError. Pořadí =
+    pořadí v objects listu; čistá funkce bez I/O.
+    """
+    try:
+        doc = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"nevalidní JSON dokument: {e}") from e
+    if not isinstance(doc, dict) or not isinstance(doc.get("objects"), list):
+        raise TypeError("očekáván UCO dokument (objects=list)")
+    records: list[dict[str, Any]] = []
+    for obj in doc["objects"]:
+        if not isinstance(obj, dict):
+            continue  # neobjekt v objects — ignorovat (defenzivně)
+        ext = obj.get("x-stopa")
+        if isinstance(ext, dict):
+            rec: dict[str, Any] = dict(ext)
+            stopa_id = obj.get("x-stopa-id")
+            if stopa_id is not None:
+                rec["id"] = str(stopa_id)
+        else:  # cizí dokument bez STOPA rozšíření — jen typ/název, žádné domýšlení
+            rec = {"uco_type": obj.get("@type"), "name": obj.get("name")}
+        records.append(rec)
+    return records

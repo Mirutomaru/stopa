@@ -2,7 +2,7 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack | FÁZE 6 = F6.1 Timesketch export & push)
+## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack | FÁZE 6 = F6.1 Timesketch export & push + F6.2 STIX 2.1/UCO plná implementace)
 
 ### Added (FÁZE 5 Compliance & Court-Readiness, P0)
 - **Merkle doména** `domain/case_seal.py` (čistá logika bez I/O): kanonizace řádků (`json.dumps(..., ensure_ascii=False, sort_keys=True)`), leaf hash s doménovým tagem `stopa-case-seal/v1` + jménem tabulky (totéž datum v jiné tabulce ≠ stejný leaf), deterministický Merkle root — prázdný stav = konstantní `EMPTY_ROOT`, 1 řádek = identity; fixované globální pořadí leafů artifacts → timeline_events → audit_log.
@@ -52,6 +52,15 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 - **Fixed**: `data/artifact_repository.py` — `add_timeline_event` explicitně commituje (latentní bug: standalone inserty se ztráceli při `close()` bez commitu; konzistence s ostatními write metodami).
 - **Testy** `tests/test_f61_timesketch.py` (+13) offline: 17-polí schema, determinismus, round-trip identita non-None polí (artifacts + timeline), fallback bez extra, chybová semantika; CLI E2E export + manifest; auto-push default OFF / ON s audit řádkem `auto=True` / selhání clientu nepadá ingest.
 - **AK ✓**: round-trip test identický (live E2E: reálný case, extrahovaný artefakt, 1:1 obnova + sdílená pole l2tcsv == timesketch). Ruff clean; full suite viz commit message.
+
+### Added — F6.2 STIX 2.1 / UCO plná implementace (FÁZE 6)
+- **STIX map** `domain/export.py`: explicitní `_STIX_OBJ_MAP` pokrývá všech **67/67 `KNOWN_ARTIFACT_TYPES`** + legacy aliasy ze STP-023 (dřív jen 6 typů, unknown → tichý `file`). Konzervativní politika: nativní STIX 2.1 objekt (`url`, `process`, `location`, `email-msg`, `file`, `message`, …) jen když je podstatou artefaktu ten observable; jinak explicitní `x-stopa-record` (bez fabricované interop sémantiky).
+- **Povinné schema vlastnosti**: `_stix_required_props()` vyplňuje povinná pole nativních typů z reálných dat — `url.value` z title (jen URL-like), `location.latitude/longitude` + `process.pid|command_line` z `details_json`; nepokryjí-li se → objekt degraduje na `x-stopa-record`. Helper `_stix_name()` sanitizuje názvy pro STIX (`[^A-Za-z0-9._-]` → `_`, max 250).
+- **Round-trip STIX**: `from_stix_bundle(text)` — objekty s `x-stopa` obnoví původní pole + id z nové extenze `stopa_id` (bez kolize s deterministickým STIX id); cizí objekty → minimální záznam; nevalidní JSON → ValueError, strukturální nesoulad → TypeError (F6.1 pattern).
+- **Round-trip UCO**: `domain/uco.py::from_uco_json(text)` — chybějící import u STP-055 exportu; id z `x-stopa-id`, odvozená metadata (`@type`/name/time) vynechána, pokud nejsou v `x-stopa`; stejná chybová sémantika.
+- **Validace stix2-validator**: `validate_stix_bundle(text)` — volitelná závislost `stix2>=3` jako extra `[stix]` (pyproject), lazy import + graceful degradation; **CLI** `stopa export --format stix --validate-stix`: bez stix2 exit 0 s upozorněním, nevalidní bundle → exit 1.
+- **Testy** `tests/test_f62_stix_uco.py` (+30) offline: coverage 100 % mapy (každý KNOWN typ má explicitní cíl), round-trip STIX i UCO identita non-None polí, stix2-validator s `pytest.importorskip` (validní bundle parseuje; nevalidní selže), povinné vlastnosti + downgrade, chybová sémantika; aktualizace `test_stp023.py` na nové chování mapy (`url`/`message`/`file`) + reálný URL title fixture.
+- **AK ✓**: 100 % mapováno (67/67 explicitně); stix2-validator (live E2E: `--validate-stix` → „validní STIX 2.1 bundle“ exit 0); round-trip test (live i offline, 0 rozdílných polí). Ruff clean; full suite viz commit message.
 
 ## [Unreleased] — 2026-11-07 (STP-055: oblast Q Interop ★ = UCO mapping)
 

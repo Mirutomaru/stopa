@@ -137,13 +137,16 @@ class TestStix:
         from stopa.domain.export import to_stix_bundle
 
         recs = [
-            {"id": "a", "artifact_type": "browser_history"},
+            # reálný browser_history má v titulu URL → native url s value
+            {"id": "a", "artifact_type": "browser_history", "title": "https://x.cz"},
             {"id": "b", "artifact_type": "email"},
             {"id": "c", "artifact_type": "neznamy_typ"},
         ]
         bundle = json.loads(to_stix_bundle(recs, dataset="artifacts"))
         types = [o["type"] for o in bundle["objects"]]
-        assert types == ["file", "message", "file"]  # neznámý → default file
+        # F6.2 — browser_history → url (plná mapa); "email" = legacy alias STP-023;
+        # neznámý typ (mimo registr) zůstává konzervativně default file.
+        assert types == ["url", "message", "file"]
 
     def test_deterministic_ids(self):
         from stopa.domain.export import to_stix_bundle
@@ -173,6 +176,8 @@ class TestStix:
         assert ext["dataset"] == "artifacts"
         assert ext["rel_path"] == "doc.pdf"
         assert ext["confidence"] == 0.9
+        # F6.2 — původní STOPA id pro round-trip (bez kolize s STIX objektem id)
+        assert ext["stopa_id"] == "art-1"
         # None hodnoty v rozšíření vynechané
         assert "anomaly_flags" not in ext
 

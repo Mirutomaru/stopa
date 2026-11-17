@@ -2445,6 +2445,16 @@ def cmd_export(args: argparse.Namespace) -> int:
     )
     # P0 Core C4: kontrolní bod po exportu.
     db.add_integrity_checkpoint("export")
+    # F6.2 — volitelná validace STIX bundle (stix2-validator); chybějící stix2
+    # = upozornění bez propadnutí exportu, skutečná schémová chyba → exit 1.
+    if getattr(args, "validate_stix", False) and args.format == "stix":
+        from stopa.domain.export import validate_stix_bundle
+
+        ok, detail = validate_stix_bundle(text)
+        print(f"STIX validace: {detail}")
+        db.close()
+        skipped = (not ok) and detail.startswith("stix2 není nainstalován")
+        return 0 if (ok or skipped) else 1
     db.close()
     return 0
 
@@ -3950,6 +3960,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="výstupní soubor (default: stdout)")
     exp_p.add_argument("--bundle", action="store_true",
                        help="STP-068 — ZIP bundle všech datasetů (manifest + SHA-256, deterministický)")
+    exp_p.add_argument("--validate-stix", action="store_true", dest="validate_stix",
+                       help="F6.2 — validovat STIX bundle stix2-validator (extras [stix]; "
+                            "bez nainstalovaného stix2 se export nepropadá jen upozorní)")
     exp_p.set_defaults(func=cmd_export)
 
     oc_p = _ex_sub(sub, "onchain",

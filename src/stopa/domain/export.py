@@ -240,18 +240,92 @@ def _stix_id(stype: str, key: Any) -> str:
     return f"{stype}--{uuid.uuid5(STIX_NAMESPACE, str(key))}"
 
 
-_STIX_OBJ_MAP = {  # artifact_type → stix_object_type (konzervativní mapa)
-    "browser_history": "file",
-    "email": "message",
+_STIX_OBJ_MAP = {  # F6.2 — plná mapa KNOWN_ARTIFACT_TYPES (67/67) → STIX 2.1 typy
+    # Politika: nativní STIX objekt jen když je podstatou artefaktu ten observable,
+    # jinak explicitní rozšíření x-stopa-record (konzervativní mapa — interop
+    # nevytváří fiktivní sémantiku). + legacy aliasy ze STP-023 pro staré case DB.
+    "app_execution": "process",
+    "autofill_entry": "x-stopa-record",
+    "browser_bookmark": "url",
+    "browser_cookie": "x-stopa-record",
+    "browser_history": "url",
+    "browser_search": "url",
+    "browser_setting": "x-stopa-record",
+    "browser_tab": "url",
+    "calendar_event": "x-stopa-record",
+    "call_log": "x-stopa-record",
+    "call_record": "x-stopa-record",
+    "chat_conversation": "message",
+    "chat_message": "message",
+    "clipboard_entry": "x-stopa-record",
+    "cloud_file": "file",
+    "cloud_instance": "device",
+    "contact": "x-stopa-record",
+    "credential": "x-stopa-record",
+    "document_metadata": "file",
+    "drive_activity": "x-stopa-record",
+    "email_attachment": "file",
+    "email_message": "email-msg",
+    "event_log_entry": "x-stopa-record",
+    "file_metadata": "file",
+    "google_account": "user-account",
+    "google_account_event": "x-stopa-record",
+    "google_activity": "x-stopa-record",
+    "google_device": "device",
+    "google_export_summary": "x-stopa-record",
+    "google_identity_session": "x-stopa-record",
+    "google_location": "location",
+    "google_login": "x-stopa-record",
+    "google_mail_info": "email-msg",
+    "google_maps_activity": "x-stopa-record",
+    "google_photo": "file",
+    "google_search": "url",
+    "imessage": "message",
+    "location": "location",
+    "location_data": "x-stopa-record",
+    "mem_connection": "x-stopa-record",
+    "mem_handle": "x-stopa-record",
+    "mem_hook": "x-stopa-record",
+    "mem_module": "x-stopa-record",
+    "mem_process": "process",
+    "memory_file": "file",
+    "memory_process": "process",
+    "messenger_message": "message",
+    "network_connection": "network-connection",
+    "plist_date": "x-stopa-record",
+    "property_list": "x-stopa-record",
+    "registry_hive": "windows-registry-key",
+    "scheduled_task": "x-stopa-record",
+    "shell_link": "file",
+    "sms_message": "message",
+    "sns_comment": "x-stopa-record",
+    "sns_post": "x-stopa-record",
+    "sqlite_database": "file",
+    "user_sid": "user-account",
+    "usn_record": "file",
+    "voice_recording": "x-stopa-record",
+    "voicemail": "x-stopa-record",
+    "web_page": "url",
+    "whatsapp_message": "message",
+    "wifi_profile": "x-stopa-record",
+    "win_driver": "file",
+    "win_jumplist": "x-stopa-record",
+    "win_prefetch": "x-stopa-record",
+    # legacy aliasy STP-023 (před F6.2; mohou se vyskytovat ve starých case DB)
+    "audio": "file",
     "document": "file",
+    "email": "message",
     "image": "file",
     "video": "file",
-    "audio": "file",
 }
 
 
 def _stix_object_type(artifact_type: str | None) -> str:
-    """Artifact typ → STIX object type (default: file)."""
+    """Artifact typ → STIX object type.
+
+    F6.2 — plná explicitní mapa nad KNOWN_ARTIFACT_TYPES; neznámý typ (mimo
+    registr a legacy aliasy) zůstává konzervativně ``file`` (STP-023).
+    """
     return _STIX_OBJ_MAP.get((artifact_type or "").lower(), "file")
 
 
@@ -266,13 +340,70 @@ def _stix_name(value: str | None) -> str:
     return name
 
 
+def _details_dict(rec: dict[str, Any]) -> dict[str, Any]:
+    """F6.2 — ``details_json`` záznamu → dict (None/nevalidní/ne-dict → {})."""
+    raw = rec.get("details_json")
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _stix_required_props(stype: str, rec: dict[str, Any]) -> dict[str, Any] | None:
+    """F6.2 — povinné vlastnosti nativního STIX objektu z REÁLNÝCH dat záznamu.
+
+    Žádné domýšlení (interop nevytváří fiktivní data): když se schémová
+    povinnost nedá pokrýt existujícím polem, vrací ``None`` a volající
+    downgrade na explicitní ``x-stopa-record``. Ostatní nativní typy z mapy
+    (file/message/email-msg/device/network-connection/user-account/
+    windows-registry-key) nevyžadují navíc nic — ověřeno stix2 3.x validátorem:
+
+    - ``url`` → ``value`` (title obsahující „://“; u browser_history je title = URL),
+    - ``location`` → ``latitude`` + ``longitude`` z details_json,
+    - ``process`` → ``pid`` nebo ``command_line`` z details_json.
+    """
+    if stype == "url":
+        title = rec.get("title")
+        if isinstance(title, str) and "://" in title:
+            return {"value": title[:500]}
+        return None
+    if stype == "location":
+        det = _details_dict(rec)
+        lat, lon = det.get("latitude"), det.get("longitude")
+
+        def _num(v: Any) -> bool:
+            return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+        if _num(lat) and _num(lon):
+            return {"latitude": float(lat), "longitude": float(lon)}  # type: ignore[arg-type]
+        return None
+    if stype == "process":
+        det = _details_dict(rec)
+        pid = det.get("pid")
+        if isinstance(pid, int) and not isinstance(pid, bool):
+            return {"pid": pid}
+        cmdline = det.get("cmdline")
+        if isinstance(cmdline, str) and cmdline.strip():
+            return {"command_line": cmdline[:300]}
+        return None
+    return {}  # ostatní nativní typy — žádné navíc povinné vlastnosti
+
+
 def to_stix_bundle(records: list[dict[str, Any]], dataset: str = "artifacts") -> str:
     """Záznamy → STIX 2.1 bundle (JSON).
 
-    - ``dataset="artifacts"`` → každý záznam = STIX objekt (file/message/…) s
-      atributy name/timestamps/confidence + x-stopa rozšíření (rel_path,
-      source_id, file_id, anomaly_flags, details),
+    - ``dataset="artifacts"`` → každý záznam = STIX objekt s atributy
+      name/timestamps/confidence + x-stopa rozšíření (rel_path, source_id,
+      file_id, anomaly_flags, details),
     - ostatní datasety (timeline/correlations) → objekty ``x-stopa-record``.
+
+    F6.2 — plná explicitní mapa typů; povinné schémové vlastnosti nativních
+    objektů (url.value / location.lat+lon / process.pid|command_line) se
+    dodávají z reálných dat záznamu a když se nedají pokrýt, objekt se
+    downgrade na explicitní ``x-stopa-record`` (žádné domýšlení).
 
     ID jsou deterministická UUIDv5 (namespace STOPA) — stejný vstup = stejné
     bundle (reprodukovatelnost C4). Výstup je validní STIX 2.1 bundle:
@@ -283,12 +414,18 @@ def to_stix_bundle(records: list[dict[str, Any]], dataset: str = "artifacts") ->
         key = rec.get("id") or json.dumps(rec, ensure_ascii=False, sort_keys=True)
         if dataset == "artifacts":
             stype = _stix_object_type(rec.get("artifact_type"))
+            # F6.2 — povinné vlastnosti z reálných dat; None → explicitní downgrade
+            required = _stix_required_props(stype, rec)
+            if required is None:
+                stype = "x-stopa-record"
             obj: dict[str, Any] = {
                 "type": stype,
                 "spec_version": "2.1",
                 "id": _stix_id(stype, key),
                 "name": _stix_name(rec.get("title") or rec.get("rel_path")),
             }
+            if required:
+                obj.update(required)
             if rec.get("timestamp_utc"):
                 obj["created"] = str(rec["timestamp_utc"])
                 obj["modified"] = str(rec["timestamp_utc"])
@@ -300,8 +437,11 @@ def to_stix_bundle(records: list[dict[str, Any]], dataset: str = "artifacts") ->
                 "id": _stix_id(stype, key),
                 "name": _stix_name(str(rec.get("title") or rec.get("id"))),
             }
-        # x-stopa rozšíření — původní plohé záznamy (bez ID duplikace)
+        # x-stopa rozšíření — původní plohé záznamy; stopa_id nese původní STOPA id
+        # pro round-trip (F6.2) bez kolize s deterministickým STIX objektem id.
         ext = {k: v for k, v in rec.items() if v is not None and k != "id"}
+        if rec.get("id") is not None:
+            ext["stopa_id"] = str(rec["id"])
         obj["x-stopa"] = {"dataset": dataset, **ext}
         objects.append(obj)
     bundle = {
@@ -310,6 +450,66 @@ def to_stix_bundle(records: list[dict[str, Any]], dataset: str = "artifacts") ->
         "objects": objects,
     }
     return json.dumps(bundle, ensure_ascii=False, indent=2)
+
+
+def from_stix_bundle(text: str) -> list[dict[str, Any]]:
+    """STIX 2.1 bundle → zpět na STOPA záznamy (round-trip, F6.2).
+
+    Objekty s ``x-stopa`` rozšířením obnoví všechna původní pole + ``id``
+    (z ``stopa_id``; klíč ``dataset`` se vynechává jako metadata). Objekty bez
+    ``x-stopa`` (cizí bundle) → minimální záznam s typem/názevem. Nevalidní
+    JSON → ValueError; neobjekt/něco jiného než bundle → TypeError. Pořadí =
+    pořadí v objects listu; čistá funkce bez I/O.
+    """
+    try:
+        doc = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"nevalidní JSON bundle: {e}") from e
+    if (
+        not isinstance(doc, dict)
+        or doc.get("type") != "bundle"
+        or not isinstance(doc.get("objects"), list)
+    ):
+        raise TypeError("očekáván STIX bundle (type=bundle, objects=list)")
+    records: list[dict[str, Any]] = []
+    for obj in doc["objects"]:
+        if not isinstance(obj, dict):
+            continue  # neobjekt v objects — ignorovat (defenzivně)
+        ext = obj.get("x-stopa")
+        if isinstance(ext, dict):
+            rec: dict[str, Any] = {k: v for k, v in ext.items() if k != "dataset"}
+            stopa_id = rec.pop("stopa_id", None)
+            if stopa_id is not None:
+                rec["id"] = stopa_id
+        else:  # cizí bundle bez STOPA rozšíření — jen typ/název, žádné domýšlení
+            rec = {"stix_type": obj.get("type"), "name": obj.get("name")}
+        records.append(rec)
+    return records
+
+
+def validate_stix_bundle(text: str) -> tuple[bool, str]:
+    """Validace bundle proti STIX 2.1 schematu (F6.2; stix2-validator).
+
+    Volitelná závislost ``stix2`` (extras ``[stix]``) — lazy import dle
+    integrity.py; bez ní graceful degradation ``(False, "stix2 není ...")``.
+    Nevalidní JSON se chytí před validátorem. Vrací ``(ok, detail)``; custom
+    extenze (x-stopa-record / x-stopa) se povolují přes ``allow_custom=True``.
+    """
+    try:
+        json.loads(text)
+    except json.JSONDecodeError as e:
+        return False, f"nevalidní JSON: {e}"
+    try:
+        # lazy — volitelná závislost (extras [stix]); bez ní graceful degradation
+        import stix2  # type: ignore[import-not-found, import-untyped]
+
+    except ImportError:
+        return False, "stix2 není nainstalován (pip install 'stopa[stix]') — validace přeskočena"
+    try:
+        stix2.parse(text, allow_custom=True)
+        return True, "validní STIX 2.1 bundle"
+    except Exception as e:  # noqa: BLE001 — stix2 hájí vlastní hierarchii (STIXError)
+        return False, f"{type(e).__name__}: {e}"
 
 
 # ── STP-054 — Plaso interop: l2tcsv (17 pevných polí log2timeline.pl) ────
