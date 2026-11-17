@@ -3314,6 +3314,7 @@ def cmd_plugin_run(args: argparse.Namespace) -> int:
     sandboxed = not plugin.verified
     try:
         if sandboxed:
+            # P0-3: workdir=None → sandbox_exec sám vytvoří izolovaný jednorázový workdir
             payload = sandbox_exec(
                 argv, limits=parse_sandbox_limits(settings.get("plugin_sandbox")), workdir=None
             )

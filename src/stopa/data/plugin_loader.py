@@ -23,8 +23,10 @@ import json
 import os
 import subprocess
 import sys
+import uuid
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -234,8 +236,14 @@ def resolve_ai_tools(
     return tuple(tools)
 
 
-def _rlimit_factory(max_mem_mb: int) -> Callable[[], None]:
-    """preexec_fn: strop paměti subprocessu (Linux RLIMIT_AS)."""
+def _rlimit_factory(
+    max_mem_mb: int, cpu_seconds: int | None = None, max_fds: int = 1024
+) -> Callable[[], None]:
+    """preexec_fn: stropy subprocessu (Linux RLIMIT_AS + P0-3: CPU, NOFILE).
+
+    RLIMIT_NOFILE chrání proti file-descriptor exhaust; na systémech bez práva
+    zvýšit limit se ticho ignoruje (limit může být i nižší než požadovaný).
+    """
 
     def factory() -> None:  # pragma: no cover - běží v dětském procesu
         if os.name != "posix":  # Windows nemá resource modul
@@ -244,8 +252,43 @@ def _rlimit_factory(max_mem_mb: int) -> Callable[[], None]:
 
         limit = max_mem_mb * 1024 * 1024
         resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+        if cpu_seconds is not None and cpu_seconds > 0:
+            resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (max_fds, max_fds))
+        except (ValueError, OSError):
+            pass
 
     return factory
+
+
+def _run_dir_root() -> Path:
+    """Kořen izolovaných plugin runů (env STOPA_PLUGIN_RUNS_DIR nebo ~/.stopa/plugin-runs)."""
+    env = os.environ.get("STOPA_PLUGIN_RUNS_DIR", "")
+    if env.strip():
+        return Path(env).expanduser()
+    return Path.home() / ".stopa" / "plugin-runs"
+
+
+def _isolated_workdir(plugin_name: str) -> Path:
+    """P0-3: jednorázový workdir per run — plugin nedědí host cwd (defect v 2.0 GA)."""
+    stamp = f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}"
+    wd = _run_dir_root() / f"{plugin_name}-{stamp}"
+    wd.mkdir(parents=True, exist_ok=True)
+    return wd
+
+
+def _unshare_net_available() -> bool:
+    """P0-3: probe zda ``unshare --net true`` funguje (Linux + práva/user ns)."""
+    if os.name != "posix" or not sys.platform.startswith("linux"):
+        return False
+    try:
+        proc = subprocess.run(
+            ["unshare", "--net", "true"], capture_output=True, timeout=10, check=False
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0
 
 
 def sandbox_exec(
@@ -257,11 +300,31 @@ def sandbox_exec(
 
     Výsledek = JSON stdout ({"ok": true, "result": ...}); timeout/paměť/
     ne-JSON → ValueError se srozumitelným důvodem (graceful degradation).
+
+    P0-3 hardening:
+    - ``workdir=None`` → izolovaný jednorázový workdir pod ``_run_dir_root()``
+      (úklid při úspěchu, zachování při chybě pro debug); explicitní workdir se neuklídí.
+    - RLIMIT_CPU + RLIMIT_NOFILE kromě stávajících RLIMIT_AS a wall-clock timeoutu;
+      překročení CPU limitu (SIGXCPU) → výrazná chyba, ne „nevrátil JSON“.
+    - strop velikosti stdout+stderr (``max_output_mb``).
+    - volitelná síťová izolace ``network_isolated`` přes obal ``unshare --net``
+      (Linux; při nedostupnosti probe → ValueError, host požadoval izolaci a nemohl ji dát).
     """
     lim = limits or sandbox_limits({})
     env = dict(os.environ)
     env.update(lim.extra_env)
     cmd = [sys.executable, "-m", "stopa.cli", "plugin-run", *argv]
+
+    if lim.network_isolated:
+        if not _unshare_net_available():
+            raise ValueError(
+                "sandbox síťová izolace nedostupná (unshare --net nefunguje na tomto systému)"
+            )
+        cmd = ["unshare", "--net"] + cmd
+
+    isolated = workdir is None
+    plugin_name = argv[0] if argv and isinstance(argv[0], str) else "plugin"
+    wd = Path(workdir) if not isolated else _isolated_workdir(plugin_name)
     try:
         proc = subprocess.run(
             cmd,
@@ -270,22 +333,45 @@ def sandbox_exec(
             text=True,
             timeout=lim.timeout_s,
             env=env,
-            cwd=str(workdir) if workdir else None,
-            preexec_fn=_rlimit_factory(lim.max_mem_mb) if os.name == "posix" else None,
+            cwd=str(wd),
+            preexec_fn=(
+                _rlimit_factory(lim.max_mem_mb, lim.cpu_seconds) if os.name == "posix" else None
+            ),
         )
     except subprocess.TimeoutExpired as exc:
-        raise ValueError(f"sandbox timeout po {lim.timeout_s} s") from exc
+        raise ValueError(
+            f"sandbox timeout po {lim.timeout_s} s (workdir pro debug: {wd})"
+        ) from exc
+
+    out_chars = len(proc.stdout or "") + len(proc.stderr or "")  # text mode: char ≈ byte
+    max_chars = lim.max_output_mb * 1024 * 1024
+    if out_chars > max_chars:
+        raise ValueError(
+            f"sandbox výstup příliš velký ({out_chars} B > limit {lim.max_output_mb} MB)"
+        )
+
+    import signal as _signal
+
+    if os.name == "posix" and proc.returncode in (-_signal.SIGXCPU, -24):
+        raise ValueError(
+            f"sandbox překročil CPU limit ({lim.cpu_seconds} s; workdir pro debug: {wd})"
+        )
     stdout = (proc.stdout or "").strip()
     try:
         payload = json.loads(stdout)
     except json.JSONDecodeError as exc:
         tail = (proc.stderr or "")[-300:]
         raise ValueError(
-            f"sandbox nevrátil JSON (exit {proc.exit_code}): {tail}"
+            f"sandbox nevrátil JSON (exit {proc.returncode}): {tail} (workdir pro debug: {wd})"
         ) from exc
     if not isinstance(payload, dict) or not payload.get("ok"):
         detail = payload.get("error", "neznámá chyba") if isinstance(payload, dict) else "?"
-        raise ValueError(f"sandbox selhal: {detail}")
+        raise ValueError(f"sandbox selhal: {detail} (workdir pro debug: {wd})")
+
+    if isolated:  # úspěch → uklidit jednorázový workdir
+        import shutil
+
+        shutil.rmtree(wd, ignore_errors=True)
     return payload
 
 

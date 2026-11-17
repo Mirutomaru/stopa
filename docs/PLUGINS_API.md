@@ -103,12 +103,22 @@ Sandbox limity (settings klíč `plugin_sandbox`, defaulty):
 | Pole | Default | Popis |
 |---|---|---|
 | `timeout_s` | 120 | wall-clock limit subprocessu |
-| `max_mem_mb` | 512 | RLIMIT_AS (Linux) — fyzická strop paměti |
+| `max_mem_mb` | 512 | RLIMIT_AS (Linux) — strop paměti |
+| `cpu_seconds` | 60 (`null` = bez limitu) | **P0-3** RLIMIT_CPU (Linux) — strop CPU času; překrok → výrazná chyba |
+| `max_output_mb` | 32 | **P0-3** strop stdout+stderr; překrok → ValueError (ne memory blowup) |
+| `network_isolated` | `false` | **P0-3** Linux: obal `unshare --net`; při nedostupnosti probe → ValueError |
 | `extra_env` | `{}` | dodatečné env pro sandbox proces |
 
 Sandbox běh izoluje: výjimky pluginu nepadají hlavní proces, paměťová
-exploze je omezená RLIMITem, únik času řeší timeout. Výsledek se vrací jako
-JSON (artefakty serializované přes `model_dump`).
+exploze je omezená RLIMITem, únik času řeší timeout. **P0-3 hardening:**
+neověřený plugin nedědí host cwd — běží v izolovaném jednorázovém workdiru
+(`~/.stopa/plugin-runs/<name>-<ts>/`, env `STOPA_PLUGIN_RUNS_DIR`; uklidí se
+při úspěchu, při chybě zůstane pro debug). Kromě RLIMIT_AS+timeout platí i
+RLIMIT_CPU a RLIMIT_NOFILE (ochrana proti file-descriptor exhaust) a strop
+velikosti výstupu. Síťová izolace je volitelná (`network_isolated`) —
+na systémech bez `unshare --net` pravomocí se host rozhodne explicitně
+(chyba, ne tichý fallback). Výsledek se vrací jako JSON (artefakty
+serializované přes `model_dump`).
 
 Správa allowlistu: `stopa plugin verify <name> --add / --remove`.
 

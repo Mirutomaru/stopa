@@ -92,10 +92,17 @@ class PluginManifest:
 
 @dataclass(frozen=True)
 class SandboxLimits:
-    """Limity pro sandbox běh neověřeného pluginu (subprocess)."""
+    """Limity pro sandbox běh neověřeného pluginu (subprocess).
 
-    timeout_s: int = 120
-    max_mem_mb: int = 512
+    P0-3 hardening: k RLIMIT_AS+wall-clock timeout přibyly CPU limit,
+    omezení velikosti výstupu a volitelná síťová izolace (Linux unshare --net).
+    """
+
+    timeout_s: int = 120          # wall-clock strop (s)
+    max_mem_mb: int = 512         # RLIMIT_AS — strop virtuální paměti (MB)
+    cpu_seconds: int | None = 60  # RLIMIT_CPU — strop CPU času; None = bez limitu
+    max_output_mb: int = 32       # strop stdout+stderr (MB); překrok → ValueError
+    network_isolated: bool = False  # Linux: obal `unshare --net` (vyžaduje práva/user ns)
     extra_env: dict[str, str] = field(default_factory=dict)
 
 
@@ -240,16 +247,38 @@ def validate_manifest(m: PluginManifest, stopa_version: str) -> list[str]:
 
 
 def sandbox_limits(data: object) -> SandboxLimits:
-    """Parse limitů sandboxu z settings slovníku (defaulty 120 s / 512 MB)."""
+    """Parse limitů sandboxu z settings slovníku (defaulty 120 s / 512 MB / 60 CPU s).
+
+    P0-3: nové klíče ``cpu_seconds`` (None = bez limitu), ``max_output_mb``,
+    ``network_isolated``. Typový nesoulad → TypeError, semantická chyba → ValueError
+    (konzistentní s F6.4 manifest sémantikou).
+    """
     if not isinstance(data, dict):
         data = {}
     timeout_s = int(data.get("timeout_s", 120))
     max_mem_mb = int(data.get("max_mem_mb", 512))
+    cpu_raw = data.get("cpu_seconds", 60)
+    if cpu_raw is not None:
+        if isinstance(cpu_raw, bool) or not isinstance(cpu_raw, int):
+            raise TypeError("sandbox.cpu_seconds musí být integer (nebo null)")
+        if cpu_raw <= 0:
+            raise ValueError("sandbox.cpu_seconds musí být kladné číslo")
+    max_output_mb = data.get("max_output_mb", 32)
+    if isinstance(max_output_mb, bool) or not isinstance(max_output_mb, int):
+        raise TypeError("sandbox.max_output_mb musí být integer")
+    if max_output_mb <= 0:
+        raise ValueError("sandbox.max_output_mb musí být kladné číslo")
+    net_raw = data.get("network_isolated", False)
+    if not isinstance(net_raw, bool):
+        raise TypeError("sandbox.network_isolated musí být boolean")
     extra_raw = data.get("extra_env", {})
     if not isinstance(extra_raw, dict):
         raise TypeError("sandbox.extra_env musí být objekt")
     return SandboxLimits(
         timeout_s=timeout_s,
         max_mem_mb=max_mem_mb,
+        cpu_seconds=cpu_raw,
+        max_output_mb=max_output_mb,
+        network_isolated=net_raw,
         extra_env={str(k): str(v) for k, v in extra_raw.items()},
     )
