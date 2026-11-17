@@ -533,12 +533,60 @@ async function renderReporting(cid) {
   document.getElementById("btn-compliance-report").onclick = () => window.open(`/api/cases/${Store.get("caseId")}/compliance-report?format=pdf`);
   // F5.5 — Daubert challenge preparedness pack (1-click JSON pro soud)
   document.getElementById("btn-daubert-pack").onclick = () => window.open(`/api/cases/${Store.get("caseId")}/daubert-pack`);
+  // F6.3 — MITRE ATT&CK heat-mapa (taktiky×techniky + STIX intrusion-set export)
+  const attackPanel = document.getElementById("attack-map-panel");
+  if (attackPanel) {
+    document.getElementById("btn-attack-map").onclick = async () => {
+      if (!attackPanel.classList.contains("hidden")) {
+        attackPanel.classList.add("hidden");
+        return;
+      }
+      attackPanel.innerHTML = '<div class="muted">Načítám ATT&amp;CK mapu…</div>';
+      const data = await api(`/api/cases/${cid}/attack-map`);
+      renderAttackMap(attackPanel, cid, data);
+    };
+  }
 
   const tbody = document.querySelector("#marked-table tbody");
   if (tbody) tbody.addEventListener("click", (e) => {
     const tr = e.target.closest("tr[data-fid]");
     if (tr && Store.get("caseId")) openInspector(tr.dataset.fid);
   });
+}
+
+/* ── F6.3: MITRE ATT&CK heat-mapa (render) ─────────────────── */
+function renderAttackMap(panel, cid, data) {
+  const s = data.summary || {};
+  const techs = data.techniques || [];
+  const maxCount = Math.max(1, ...techs.map((t) => t.count));
+  const byTactic = {};
+  for (const t of techs) (byTactic[t.tactic] ||= []).push(t);
+
+  let html = `<div class="attack-summary muted">Artefakty: ${s.artifacts_total ?? 0} ` +
+    `(mapováno ${s.mapped_artifacts ?? 0}, bez techniky ${s.unmapped_artifacts ?? 0}) · ` +
+    `techniky ${s.techniques_hit ?? 0} · coverage mapy ${s.coverage_pct ?? 0}%</div>`;
+  html += `<a href="/api/cases/${cid}/attack-map?format=stix" class="muted">⬇ STIX intrusion-set export (F6.3)</a><hr/>`;
+
+  for (const tac of data.tactics || []) {
+    const rows = byTactic[tac.id];
+    if (!rows) continue; // taktika bez hitů — řádek se nevykresluje
+    html += `<div class="attack-tactic"><strong>${esc(tac.name)}</strong> <span class="muted">(${tac.id})</span>`;
+    for (const t of [...rows].sort((a, b) => a.id.localeCompare(b.id))) {
+      // heat-mapa: intenzita barvy ∝ počet artefaktů na technice
+      const alpha = 0.15 + 0.75 * (t.count / maxCount);
+      const samples = ((data.cells || {})[t.id] || [])
+        .map((x) => esc(x.title || x.rel_path || ""))
+        .join("; ");
+      html += `<span class="attack-cell" style="background:rgba(239,68,68,${alpha.toFixed(2)})"` +
+        (samples ? ` title="${samples}"` : "") +
+        `>${esc(t.name)} <b>${t.count}</b></span>`;
+    }
+    html += "</div>";
+  }
+  if (!techs.length) html += '<div class="muted">Žádné mapované artefakty — heat-mapa je prázdná.</div>';
+
+  panel.innerHTML = html;
+  panel.classList.remove("hidden");
 }
 
 /* ── CORRELATION (E5): tabulka propojení + filtry + důkaz ─── */

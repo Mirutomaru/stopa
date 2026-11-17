@@ -1,0 +1,17 @@
+{
+  "name": "example-accesslog",
+  "version": "1.0.0",
+  "description": "Ukázkový plugin (F6.4): extractor web server access logů (Nginx/Apache combined) → event_log_entry artefakty.",
+  "author": "STOPA team",
+  "min_stopa_version": "2.0.0",
+  "extractors": [
+    {
+      "key": "accesslog",
+      "module": "example_accesslog_plugin",
+      "detect_fn": "is_access_log_file",
+      "extract_fn": "extract_artifacts",
+      "parser_version": "1.0.0",
+      "extensions": [".log"]
+    }
+  ]
+}

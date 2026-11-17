@@ -1952,6 +1952,61 @@ def create_app(
         finally:
             db.close()
 
+    # ── Pluginy (F6.4) ────────────────────────────────────────
+    @app.get("/api/plugins")
+    def plugins_list():
+        """F6.4 — detekované pluginy: manifest + stav ověření + kapacity."""
+        import stopa as _stopa_pkg
+        from stopa.data.plugin_loader import discover_plugins
+
+        settings = _load_settings()
+        found = discover_plugins(settings=settings, stopa_version=_stopa_pkg.__version__)
+        rows = sorted(found.values(), key=lambda x: x.name)
+        out = [
+            {
+                "name": p.name,
+                "version": p.version,
+                "description": p.description,
+                "author": p.author,
+                "min_stopa_version": p.min_stopa_version,
+                "verified": p.verified,
+                "capabilities": list(p.capabilities),
+                "issues": list(p.issues),
+                "path": str(p.path),
+            }
+            for p in rows
+        ]
+        return {"ok": True, "count": len(out), "plugins": out}
+
+    # ── MITRE ATT&CK map (F6.3) ──────────────────────────────
+    @app.get("/api/cases/{case_id}/attack-map")
+    def attack_map(case_id: str, format: str = "json"):
+        """F6.3 — heat-mapa taktik×technik; ``format=stix`` → intrusion-set bundle."""
+        from fastapi import Response
+
+        from stopa.domain.mitre_attack import build_attack_heatmap, to_stix_bundle_intrusion_set
+
+        db = open_db(case_id)
+        try:
+            case = db.get_case(case_id)  # type: ignore[call-arg]
+            if case is None:
+                raise HTTPException(404, f"case nenalezen: {case_id}")
+            arts = db.list_artifacts(limit=10_000)
+            hm = build_attack_heatmap(arts)
+        finally:
+            db.close()
+
+        if format == "stix":
+            payload = to_stix_bundle_intrusion_set(case_id, case_name=getattr(case, "name", None), heatmap=hm)
+            return Response(
+                content=payload.encode("utf-8"),
+                media_type="application/json",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{case_id}_attack-map.stix.json"'
+                },
+            )
+        return hm
+
     # ── report (FÁZE 7) ───────────────────────────────────────
     @app.get("/api/cases/{case_id}/report")
     def report(case_id: str, format: str = "html"):

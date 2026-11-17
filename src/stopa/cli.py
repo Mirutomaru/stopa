@@ -98,6 +98,25 @@ def _load_timesketch_auto_push() -> bool:
     return bool(data.get("timesketch_auto_push", False)) if isinstance(data, dict) else False
 
 
+def _load_settings_dict() -> dict:
+    """F6.4 — celý settings.json jako dict (pluginy: dirs/verified/sandbox). Chybí → {}."""
+    p = _db_dir() / "settings.json"
+    if not p.exists():
+        return {}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_settings_dict(data: dict) -> None:
+    """F6.4 — zápis settings.json (idempotentní, zachovává ostatní klíče)."""
+    p = _db_dir() / "settings.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def case_examiner(db: CaseDB, case_id: str) -> str | None:
     """Znalec případu — výchozí actor pro audit log operací."""
     case = db.get_case(case_id)
@@ -3047,6 +3066,288 @@ def cmd_daubert(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_attack_map(args: argparse.Namespace) -> int:
+    """F6.3 — MITRE ATT&CK mapping: heat-mapa taktik×technik + STIX intrusion-set."""
+    json_mode = getattr(args, "json", False)
+    db = _open_db(args.case_id)
+    try:
+        from stopa.domain.mitre_attack import (
+            ATTACK_TACTICS,
+            build_attack_heatmap,
+            to_stix_bundle_intrusion_set,
+        )
+
+        arts = db.list_artifacts(limit=10_000)
+        hm = build_attack_heatmap(arts)
+        case_name = None
+        case = db.get_case(args.case_id)  # type: ignore[call-arg]
+        if case is not None:
+            case_name = getattr(case, "name", None)
+
+        fmt = args.format
+        if fmt == "stix":
+            payload = to_stix_bundle_intrusion_set(
+                args.case_id, case_name=case_name, heatmap=hm
+            )
+        else:
+            import json as _json
+
+            payload = _json.dumps(hm, ensure_ascii=False, indent=2)
+
+        if args.out:
+            from pathlib import Path
+
+            out_path = Path(args.out).expanduser().resolve()
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(payload + "\n", encoding="utf-8")
+            target = str(out_path)
+        else:
+            target = None
+
+        s_ = hm["summary"]
+        if json_mode:
+            envelope: dict = {
+                "ok": True,
+                "format": fmt,
+                "case_id": args.case_id,
+                "out": target,
+                **s_,
+            }
+            if target is None:  # celý payload v JSON obálce (jediný dokument na stdout)
+                if fmt == "json":
+                    envelope["heatmap"] = hm
+                else:
+                    import json as _stix_json
+
+                    envelope["bundle"] = _stix_json.loads(payload)
+            _print_json(envelope)
+        else:
+            print(
+                f"ATT&CK map (F6.3) — {args.case_id}, formát {fmt}"
+                + (f", výstup {target}" if target else "")
+            )
+            print(
+                f"  Artefakty: {s_['artifacts_total']} "
+                f"(mapováno {s_['mapped_artifacts']}, techniky {s_['techniques_hit']})"
+            )
+            by_tactic: dict[str, list[dict]] = {}
+            for t in hm["techniques"]:
+                by_tactic.setdefault(t["tactic"], []).append(t)
+            for tid, tname in ATTACK_TACTICS:
+                rows = by_tactic.get(tid)
+                if not rows:
+                    continue
+                parts = ", ".join(
+                    f"{r['id']} {r['name']}" + (f" (×{r['count']})" if r["count"] > 1 else "")
+                    for r in sorted(rows, key=lambda x: x["id"])
+                )
+                print(f"  [{tid}] {tname}: {parts}")
+    finally:
+        db.close()
+    return 0
+
+
+# ── F6.4 — Plugin ecosystem ─────────────────────────────────────
+
+
+def _plugin_row(p) -> dict:
+    """LoadedPlugin → JSON-safe řádek (sdílené CLI + Web)."""
+    return {
+        "name": p.name,
+        "version": p.version,
+        "description": p.description,
+        "author": p.author,
+        "min_stopa_version": p.min_stopa_version,
+        "verified": p.verified,
+        "capabilities": list(p.capabilities),
+        "issues": list(p.issues),
+        "path": str(p.path),
+    }
+
+
+def _discover_plugin(args_name: str):
+    """Najde plugin podle jména; vrací (plugin|None, settings)."""
+    import stopa as _stopa_pkg
+    from stopa.data.plugin_loader import discover_plugins
+
+    settings = _load_settings_dict()
+    plugins = discover_plugins(settings=settings, stopa_version=_stopa_pkg.__version__)
+    return plugins.get(args_name), settings
+
+
+def _plugin_manifest(name_path: Path):
+    """Re-parse manifestu (data vrstva — spec pro rozřešení kapacit)."""
+    from stopa.domain.plugins import parse_manifest
+
+    return parse_manifest(json.loads((name_path / "plugin.json").read_text(encoding="utf-8")))
+
+
+def _plugin_exec_cap_in_process(plugin, cap: str, args) -> object:
+    """In-process běh jedné kapacity (ověřená cesta; sandbox = tenže kód v subprocessu)."""
+    from stopa.data.plugin_loader import (
+        profile_to_dict,
+        resolve_ai_tools,
+        resolve_extractors,
+        resolve_triage_profiles,
+    )
+
+    manifest = _plugin_manifest(plugin.path)
+    if cap == "extractor":
+        key = getattr(args, "key", None) or ""
+        spec = next((e for e in manifest.extractors if e.key == key), None)
+        if spec is None:
+            raise ValueError(f"extractor klíč {key!r} neexistuje v pluginu {plugin.name}")
+        resolved = resolve_extractors(plugin.path, plugin.name, (spec,))
+        out = []
+        for f in getattr(args, "files", []) or []:
+            arts = resolved[0].extract_fn(Path(f))
+            out.extend(a.model_dump() if hasattr(a, "model_dump") else dict(a) for a in arts)
+        return out
+    if cap == "triage_profile":
+        profiles = resolve_triage_profiles(plugin.path, plugin.name, manifest.triage_profiles)
+        return [profile_to_dict(pr) for pr in profiles]
+    if cap == "ai_tool":
+        tools = resolve_ai_tools(plugin.path, plugin.name, manifest.ai_tools)
+        want = getattr(args, "tool", None) or ""
+        tool = next((t for t in tools if t.name == want), tools[0] if len(tools) == 1 else None)
+        if tool is None:
+            avail = ", ".join(t.name for t in tools)
+            raise ValueError(f"AI tool {want!r} neexistuje (dostupné: {avail})")
+        params_raw = getattr(args, "params", "{}") or "{}"
+        params = json.loads(params_raw)
+        case_id = getattr(args, "case_id", None)
+        if not case_id:
+            raise ValueError("ai_tool vyžaduje --case-id")
+        db = _open_db(case_id)
+        try:
+            return tool.handler(db, case_id, params)
+        finally:
+            db.close()
+    raise ValueError(f"neznámá kapacita {cap!r}")  # pragma: no cover
+
+
+def cmd_plugin_list(args: argparse.Namespace) -> int:
+    """F6.4 — seznam detekovaných pluginů (manifest + stav ověření)."""
+    import stopa as _stopa_pkg
+    from stopa.data.plugin_loader import discover_plugins
+
+    settings = _load_settings_dict()
+    plugins = discover_plugins(settings=settings, stopa_version=_stopa_pkg.__version__)
+    rows = sorted(plugins.values(), key=lambda x: x.name)
+    if getattr(args, "json", False):
+        _print_json({"ok": True, "count": len(rows), "plugins": [_plugin_row(r) for r in rows]})
+        return 0
+    if not rows:
+        print("Žádné pluginy nenalezeny (settings plugins_dirs / STOPA_PLUGINS_DIR / ~/.stopa/plugins)")
+        return 0
+    for p in rows:
+        mark = "ověřený" if p.verified else "sandbox "
+        caps = ",".join(p.capabilities) or "-"
+        warn = f"  [{len(p.issues)} upozornění]" if p.issues else ""
+        print(f"{p.name} v{p.version}  ({mark})  [{caps}]  {p.description}{warn}")
+    return 0
+
+
+def cmd_plugin_info(args: argparse.Namespace) -> int:
+    """F6.4 — detail jednoho pluginu."""
+    plugin, _ = _discover_plugin(args.name)
+    if plugin is None:
+        print(f"Plugin nenalezen: {args.name}", file=sys.stderr)
+        return 1
+    row = _plugin_row(plugin)
+    if getattr(args, "json", False):
+        _print_json({"ok": True, "plugin": row})
+        return 0
+    print(f"{row['name']} v{row['version']} — {row['description'] or '(bez popisu)'}")
+    print(f"  autor:          {row['author'] or '-'}")
+    print(f"  min_stopa:      {row['min_stopa_version']}")
+    print(f"  stav:           {'ověřený (in-process)' if row['verified'] else 'neověřený (sandbox)'}")
+    print(f"  kapacity:       {', '.join(row['capabilities']) or '-'}")
+    print(f"  cesta:          {row['path']}")
+    for issue in row["issues"]:
+        print(f"  upozornění:     {issue}")
+    return 0
+
+
+def cmd_plugin_verify(args: argparse.Namespace) -> int:
+    """F6.4 — správa allowlistu ověřených pluginů (settings.json plugins_verified)."""
+    settings = _load_settings_dict()
+    raw = settings.get("plugins_verified")
+    names = {x for x in raw if isinstance(x, str)} if isinstance(raw, list) else set()
+    action = "přidán" if args.add else "odebrán"
+    if args.add:
+        names.add(args.name)
+    elif args.name not in names:
+        print(f"Plugin {args.name} nebyl v allowlistu (nic neodebráno)", file=sys.stderr)
+        return 1
+    else:
+        names.discard(args.name)
+    settings["plugins_verified"] = sorted(names)
+    _save_settings_dict(settings)
+    print(f"{action}: {args.name} → allowlist {sorted(names)}")
+    return 0
+
+
+def cmd_plugin_run(args: argparse.Namespace) -> int:
+    """F6.4 — běh kapacity pluginu; neověřený = sandbox subprocess s limity."""
+    import stopa as _stopa_pkg
+    from stopa.data.plugin_loader import discover_plugins, sandbox_exec
+    from stopa.domain.plugins import sandbox_limits as parse_sandbox_limits
+
+    settings = _load_settings_dict()
+    plugins = discover_plugins(settings=settings, stopa_version=_stopa_pkg.__version__)
+    plugin = plugins.get(args.name)
+    if plugin is None:
+        print(f"Plugin nenalezen: {args.name}", file=sys.stderr)
+        return 1
+
+    argv = [args.name, "--cap", args.cap]  # sandbox_exec doplní "plugin-run" sám
+    if args.cap == "extractor":
+        argv += ["--key", args.key or ""] + [f for x in (args.files or []) for f in ("--file", x)]
+    elif args.cap == "ai_tool":
+        if args.tool:
+            argv += ["--tool", args.tool]
+        if args.case_id:
+            argv += ["--case-id", args.case_id]
+        argv += ["--params", args.params or "{}"]
+
+    sandboxed = not plugin.verified
+    try:
+        if sandboxed:
+            payload = sandbox_exec(
+                argv, limits=parse_sandbox_limits(settings.get("plugin_sandbox")), workdir=None
+            )
+            result = payload.get("result")
+        else:
+            result = _plugin_exec_cap_in_process(plugin, args.cap, args)
+    except (ValueError, TypeError, ImportError) as exc:
+        print(f"Plugin běh selhal: {exc}", file=sys.stderr)
+        return 1
+    if getattr(args, "json", False):
+        _print_json({"ok": True, "name": plugin.name, "cap": args.cap, "sandboxed": sandboxed, "result": result})
+    else:
+        mode = "sandbox" if sandboxed else "in-process"
+        print(f"{plugin.name} / {args.cap} ({mode}):")
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_plugin_run_entry(args: argparse.Namespace) -> int:
+    """F6.4 — interní entry point sandbox subprocessu (přímý běh, JSON stdout)."""
+    plugin, _ = _discover_plugin(args.name)
+    if plugin is None:
+        print(json.dumps({"ok": False, "error": f"plugin nenalezen: {args.name}"}))
+        return 1
+    try:
+        result = _plugin_exec_cap_in_process(plugin, args.cap, args)
+        json.dumps(result, ensure_ascii=False)  # enforce JSON-safety dříve než tisk
+    except Exception as exc:  # noqa: BLE001 — sandbox hlásí cokoliv jako error envelope
+        print(json.dumps({"ok": False, "error": f"{type(exc).__name__}: {exc}"}))
+        return 1
+    print(json.dumps({"ok": True, "result": result}, ensure_ascii=False))
+    return 0
+
+
 def cmd_integrity(args: argparse.Namespace) -> int:
     """P0 Core C4 — Evidence Integrity 2.0: hash chaining + Ed25519 kontrolní body."""
     json_mode = getattr(args, "json", False)
@@ -3550,6 +3851,7 @@ _SUBCOMMAND_EXAMPLES = {
     "seal": "stopa seal case-abc --reason 'před soudním předložením'",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
     "daubert": "stopa daubert case-abc   # F5.5 — Daubert pack (peer-reviewed reference + error rates)",
+    "attack-map": "stopa attack-map case-abc --format stix --out ./map.json   # F6.3 — MITRE ATT&CK heat-mapa",
     "reparse": "stopa reparse case-abc --parser-version 2.4   # F5.3 — pinned verze + diff report",
     "wb": "stopa wb attach case-abc --device 'Tableau TBW-100'   # F5.4 — WB připojení + auto-detekce",
     "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
@@ -3714,6 +4016,60 @@ def build_parser() -> argparse.ArgumentParser:
                            help="výstupní adresář (default: složka case DB)")
     _add_json_flag(daubert_p)
     daubert_p.set_defaults(func=cmd_daubert)
+
+    attack_map_p = _ex_sub(
+        sub, "attack-map",
+        help="F6.3 — MITRE ATT&CK mapping: heat-mapa taktik×technik + STIX intrusion-set",
+    )
+    attack_map_p.add_argument("case_id")
+    attack_map_p.add_argument("--format", choices=["json", "stix"], default="json",
+                              help="json = heat-mapa (default); stix = intrusion-set bundle")
+    attack_map_p.add_argument("--out", metavar="FILE", default=None,
+                              help="výstupní soubor (default: stdout)")
+    _add_json_flag(attack_map_p)
+    attack_map_p.set_defaults(func=cmd_attack_map)
+
+    # F6.4 — Plugin ecosystem
+    plg_p = sub.add_parser("plugin", help="F6.4 — plugin ecosystem (list/info/verify/run)")
+    plg_sub = plg_p.add_subparsers(dest="plugin_cmd", required=True, metavar="<podprikaz>")
+    plg_list = plg_sub.add_parser("list", help="seznam detekovaných pluginů")
+    _add_json_flag(plg_list)
+    plg_list.set_defaults(func=cmd_plugin_list)
+    plg_info = plg_sub.add_parser("info", help="detail jednoho pluginu")
+    plg_info.add_argument("name")
+    _add_json_flag(plg_info)
+    plg_info.set_defaults(func=cmd_plugin_info)
+    plg_verify = plg_sub.add_parser(
+        "verify", help="správa allowlistu ověřených pluginů (settings.json plugins_verified)"
+    )
+    plg_verify.add_argument("name")
+    _plg_vgroup = plg_verify.add_mutually_exclusive_group(required=True)
+    _plg_vgroup.add_argument("--add", action="store_true", help="přidat do allowlistu (in-process)")
+    _plg_vgroup.add_argument("--remove", action="store_true", help="odebrat ze allowlistu (sandbox)")
+    plg_verify.set_defaults(func=cmd_plugin_verify)
+    plg_run = plg_sub.add_parser("run", help="běh kapacity pluginu (neověřený → sandbox)")
+    plg_run.add_argument("name")
+
+    def _plg_cap_args(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--cap", choices=["extractor", "triage_profile", "ai_tool"], required=True,
+                       help="kapacita k běhu")
+        p.add_argument("--key", default=None, help="klíč extractoru (pro --cap extractor)")
+        p.add_argument("--file", dest="files", action="append", default=[], metavar="FILE",
+                       help="soubor pro extractor (zopakovatelné; pro --cap extractor)")
+        p.add_argument("--tool", default=None, help="jméno AI toolu (pro --cap ai_tool)")
+        p.add_argument("--case-id", dest="case_id", default=None,
+                       help="case ID (vyžadováno pro --cap ai_tool)")
+        p.add_argument("--params", default="{}", help="JSON parametry AI toolu")
+
+    _plg_cap_args(plg_run)
+    _add_json_flag(plg_run)
+    plg_run.set_defaults(func=cmd_plugin_run)
+
+    # skrytý interní entry point pro sandbox subprocess (přímý běh, JSON stdout)
+    prun_p = sub.add_parser("plugin-run", help=argparse.SUPPRESS)
+    prun_p.add_argument("name")
+    _plg_cap_args(prun_p)
+    prun_p.set_defaults(func=cmd_plugin_run_entry)
 
     rp_p = _ex_sub(sub, "reparse",
                    help="F5.3 — re-run extrakce s deklarovánou verzí parseru + diff report")

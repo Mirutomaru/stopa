@@ -340,15 +340,26 @@ Kompletní mapping artifactů na STIX 2.1 objekty a UCO JSON-LD; validace proti 
 **Testy:** nové `tests/test_f62_stix_uco.py` (30 testů — coverage 100 %, round-trip STIX i UCO, stix2-validator s `pytest.importorskip`, povinné vlastnosti + downgrade); aktualizace `test_stp023.py` (nové chování mapy + reálný URL title fixture).
 **P1 | L | závislosti: —**
 
-### F6.3 — MITRE ATT&CK mapping `[ ]`
+### F6.3 — MITRE ATT&CK mapping `[x] ✅ 2026-11-17`
 Auto-mapování IoC a artifactů na tactics/techniques; heat-mapa vizualizace.
-**AK:** 80 % IoC mapováno; heat-mapa v UI; export do STIX (intrusion-set).
+**AK:** ≥ 80 % IoC mapováno ✓ (**83,6 %** — `ATTACK_MAP` pokrývá 56 z 67 `KNOWN_ARTIFACT_TYPES`, nejasné typy zůstávají v `ATTACK_UNMAPPED` se zdůvodněním); heat-mapa v UI ✓ (tlačítko 🎯 ATT&CK map, panel s matricí taktik×technik, intenzita podle počtu artefaktů + STIX export link); export do STIX intrusion-set ✓ (`to_stix_bundle_intrusion_set` — `intrusion-set` s `x-stopa` extenzí: case id/název, coverage, techniky i taktiky jako příbuzné objekty; validováno stix2-validator).
+**Implementace:** čistý doménový modul `domain/mitre_attack.py` (bez I/O) — deklarativní `ATTACK_MAP` (typ → konzervativní techniky), `ATTACK_TECHNIQUES`/`ATTACK_TACTICS` reference s oficiálními názvy; determinismus: jedna primární taktika na techniku, stabilní řazení (MITRE pořadí taktik, id technik), vzorky artefaktů omezené a prvotní N; `build_attack_heatmap(arts)` přijímá i slovníkové řádky. CLI `stopa attack-map case_id [--format json|stix] [--out FILE]` (json režim = jediný JSON dokument s plným heatmap payloadem); Web GET `/api/cases/{id}/attack-map[?format=stix]`.
+**Testy:** nové `tests/test_f63_mitre_attack.py` (**20 testů** — integrita mapy, AK coverage ≥ 80 %, heat-mapa počty/vzorky/determinismus, STIX struktura + deterministický bundle + stix2-validator, CLI E2E json/stix/--out, Web E2E JSON/STIX download/404).
 **P2 | M | závislosti: F1.3, F6.2**
 
-### F6.4 — Plugin ecosystem `[ ]`
+### F6.4 — Plugin ecosystem `[x] ✅ 2026-11-17`
 API pro třetí strany: vlastní extractory, triage profily, AI tools; plugin marketplace (stretch).
 **AK:** 3 ukázkové plugins; dokumentace API; sandbox execution neověřených plugins.
 **P2 | XL | závislosti: F4.1**
+
+**Implementace (F6.4):**
+- Čistá doménová vrstva `domain/plugins.py` — manifest model + validace (`parse_manifest`, `validate_manifest`, `SandboxLimits`); typový nesoulad = TypeError, semantické chyby = ValueError; max 50 kapacit na typ (guard).
+- Data vrstva `data/plugin_loader.py` — discovery ze settings `plugins_dirs` / env `STOPA_PLUGINS_DIR` / `~/.stopa/plugins`; importlib aliasing bez sys.path polluce; resolvers pro všechny 3 kapacity; poškozený manifest → `issues` záznam (ne crash skenu); **sandbox** = subprocess `stopa.cli plugin-run` s RLIMIT_AS + timeout a JSON envelope.
+- CLI: `stopa plugin list|info|verify|run` — verify spravuje allowlist `plugins_verified` v settings.json; neověřený plugin běží automaticky v sandboxu, ověřený in-process; zopakovatelná flag syntaxe `--file FILE`.
+- Web endpoint `GET /api/plugins` (manifest + stav ověření + kapacity).
+- **3 ukázkové pluginy** (`plugins/`): `example-accesslog` (extractor — Nginx/Apache log agregace, UTC konverze), `example-crypto-triage` (triage profil „Exfiltrace kryptomajetku“, 4 signály), `example-ai-tool` (AI tool `artifact_type_breakdown` pro F3.1 agent framework).
+- Dokumentace API: `docs/PLUGINS_API.md` (struktura, manifest schéma, kontrakt entry pointů, CLI příklady).
+- Testy: `tests/test_f64_plugins.py` — **41 testů** (doména, loader/discovery/sandbox subprocess, ukázkové pluginy přes reálné resolvers, CLI E2E, Web TestClient); všechny offline.
 
 ---
 
@@ -452,7 +463,7 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 **Metriky vs DoD:** (1) Test suite **3548/≥3500 = cíl poprvé splněn ✓ (101,4 %)** — o CK4 bylo 3039 (86,8 %); plně offline; coverage ≥ 85 % na CK úrovni neměřeno (per-test offline 100 %). (2) Parser versions **78/120+** (bez změny od CK3 — Fáze 4/5 = enterprise + compliance vrstva, ne parsery). (3) F4.x AK ✓: F4.1 SPA na `/spa` (Lighthouse/i18n/offline-first dle task AK), F4.2 latence < 200 ms ✓ (naměřeno 140 ms), F4.3 nelze obejít + report jen court-ready ✓, F4.4 fail-closed default + SSO OIDC ✓ (Keycloak/Okta = OIDC kompatibilní provideri; permission matrix 50 scénářů dle task AK). (4) F5.x AK ✓: viz Progress — všechny kvantitativní limity (seal < 60 s, min. 20 referencí, exit kódy) splněny a živě ověřeny; determinismus F5.1/F5.2/F5.5 = kanonický JSON → SHA-256 digest + Ed25519 podpis klíčem případu (stejná sémantika jako C4 kontrolní body).
 **Benchmark (CK5 run `stopa benchmark --suite all`, exit 0):** **80/80 workloads** — pipeline.core **1734,2 ms** / RAM peak 0,60 MB (CK4: 1646,9 ms; CK3: 1396,8 ms — variabilita běhu v řádu desítek %, ne regrese; determinismus F2.4/F2.5 garantován testy); core.rust **33,5 ms** (27 artefaktů; CK4: 31,7 ms — variabilita běhu); per-parser benchmarky beze změny (nejtěžší registry_hive 20,2 ms).
 **Rizika:** (1) **Unpushed commity vyřešeny** — F5.1–F5.5 (`7c03c7b`…`814378b`) pushnuty na origin/main (GitHub `Mirutomaru/stopa`, privátní repo); zbývá jen tento docs commit. (2) Checkpoint schedule „po Fázi 4: enterprise beta s 3 testery“ — **čeká lidský vstup** (výběr testerů; technicky ready: RBAC F4.4 + collab F4.5). (3) Checkpoint schedule „po Fázi 5: compliance audit externí firmou“ — interně ready (F5.2 report + F5.5 Daubert pack jako podklady); externí firma = rozhodnutí uživatele. (4) Fáze 6 obsahuje **F6.4 Plugin ecosystem P2/XL** (~3–4 cykly) — největší zbývající odhad; F6.1/F6.2 jsou P1.
-**Další:** CK5 podán → Fáze 6: **F6.1 Timesketch export & push [x]**, **F6.2 STIX 2.1/UCO plná implementace [x] ✅ 2026-11-17** → F6.3 MITRE ATT&CK mapping (P2/M) → F6.4 Plugin ecosystem (P2/XL); po Fázi 6 dle schedule = Release 2.0 GA.
+**Další:** CK5 podán → Fáze 6: **F6.1 Timesketch export & push [x]**, **F6.2 STIX 2.1/UCO plná implementace [x] ✅ 2026-11-17**, **F6.3 MITRE ATT&CK mapping [x] ✅ 2026-11-17**, **F6.4 Plugin ecosystem [x] ✅ 2026-11-17** → FÁZE 6 kompletní, po ní dle schedule = Release 2.0 GA.
 
 ## 🎯 OKAMŽITÉ AKCE (First 5)
 1. ~~R0.4 CLI UX audit~~ — **hotovo `[x]`** ✅ (commits `03d489f`, `921eae1`, `5c22b27`)

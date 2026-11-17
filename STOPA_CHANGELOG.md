@@ -2,7 +2,7 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack | FÁZE 6 = F6.1 Timesketch export & push + F6.2 STIX 2.1/UCO plná implementace)
+## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack | FÁZE 6 = F6.1 Timesketch export & push + F6.2 STIX 2.1/UCO plná implementace + F6.3 MITRE ATT&CK mapping + F6.4 Plugin ecosystem)
 
 ### Added (FÁZE 5 Compliance & Court-Readiness, P0)
 - **Merkle doména** `domain/case_seal.py` (čistá logika bez I/O): kanonizace řádků (`json.dumps(..., ensure_ascii=False, sort_keys=True)`), leaf hash s doménovým tagem `stopa-case-seal/v1` + jménem tabulky (totéž datum v jiné tabulce ≠ stejný leaf), deterministický Merkle root — prázdný stav = konstantní `EMPTY_ROOT`, 1 řádek = identity; fixované globální pořadí leafů artifacts → timeline_events → audit_log.
@@ -61,6 +61,26 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 - **Validace stix2-validator**: `validate_stix_bundle(text)` — volitelná závislost `stix2>=3` jako extra `[stix]` (pyproject), lazy import + graceful degradation; **CLI** `stopa export --format stix --validate-stix`: bez stix2 exit 0 s upozorněním, nevalidní bundle → exit 1.
 - **Testy** `tests/test_f62_stix_uco.py` (+30) offline: coverage 100 % mapy (každý KNOWN typ má explicitní cíl), round-trip STIX i UCO identita non-None polí, stix2-validator s `pytest.importorskip` (validní bundle parseuje; nevalidní selže), povinné vlastnosti + downgrade, chybová sémantika; aktualizace `test_stp023.py` na nové chování mapy (`url`/`message`/`file`) + reálný URL title fixture.
 - **AK ✓**: 100 % mapováno (67/67 explicitně); stix2-validator (live E2E: `--validate-stix` → „validní STIX 2.1 bundle“ exit 0); round-trip test (live i offline, 0 rozdílných polí). Ruff clean; full suite viz commit message.
+
+### Added — F6.3 MITRE ATT&CK mapping (FÁZE 6)
+- **Doména** `domain/mitre_attack.py` (čistá logika bez I/O): deklarativní `ATTACK_MAP` mapuje STOPA artifact typy na konzervativní techniky MITRE ATT&CK Enterprise — **56/67 KNOWN_ARTIFACT_TYPES = 83,6 % ≥ AK 80 %**; nejasné typy explicitně v `ATTACK_UNMAPPED` se zdůvodněním (bez fabricované sémantiky). Reference `ATTACK_TECHNIQUES`/`ATTACK_TACTICS` nesou oficiální názvy; determinismus: jedna primární taktika na techniku, stabilní řazení (MITRE pořadí taktik, id technik), vzorky artefaktů omezené na první N.
+- **Heat-mapa** `build_attack_heatmap(artifacts)` — matice taktiky×technik s počty zásahů + důkazními vzorky per buňka; přijímá i slovníkové řádky (CLI/Web/test); souhrn: artifacts_total/mapped/unmapped/techniques_hit/coverage_pct.
+- **STIX intrusion-set export** `to_stix_bundle_intrusion_set(case_id, case_name, heatmap)` — STIX 2.1 bundle s `intrusion-set` (x-stopa extenze: case id/název, coverage) + techniky i taktiky jako objekty; deterministická UUIDv5 ID ze STOPA namespace (F6.2 pattern); validováno stix2-validator.
+- **CLI** `stopa attack-map <case> [--format json|stix] [--out FILE]` — JSON režim = jediný dokument s plným heatmap payloadem; STIX = intrusion-set bundle.
+- **Web** `GET /api/cases/{id}/attack-map[?format=stix]`; **UI**: tlačítko „🎯 ATT&CK map“ v reportingu + heat-mapa panel (intenzita buňky podle počtu artefaktů) + přímý link na STIX export.
+- **Testy** `tests/test_f63_mitre_attack.py` (+20): integrita mapy vs KNOWN typy, AK coverage ≥ 80 %, heat-mapa počty/vzorky/determinismus, STIX struktura + deterministický bundle + stix2-validator (importorskip), CLI E2E json/stix/--out, Web E2E JSON/STIX download/404.
+- **AK ✓**: ≥ 80 % IoC mapováno (56/67 = 83,6 %); heat-mapa v UI; export do STIX intrusion-set (live E2E: stix2-validator OK). Ruff clean; full suite viz commit message.
+
+### Added — F6.4 Plugin ecosystem (FÁZE 6)
+- **Doména** `domain/plugins.py` (čistá logika bez I/O): manifest model + validace — `parse_manifest` (typový nesoulad = TypeError, semantické chyby = ValueError; jméno = lowercase slug `[a-z0-9][a-z0-9._-]{1,63}`), `validate_manifest(manifest, stopa_version)` (min_stopa_version issue s rc-suffix tolerantním srovnáním, warning bez kapacity), `SandboxLimits` (timeout_s=120 / max_mem_mb=512 defaulty); fix: volitelné tuple pole (`extensions`) se chybějící hodnotou už nepadá na defaultu.
+- **Loader** `data/plugin_loader.py`: discovery ze settings `plugins_dirs` → env `STOPA_PLUGINS_DIR` (os.pathsep) → `~/.stopa/plugins/`; první výhra při kolizi jména; poškozený manifest (JSON/schéma) → záznam s `issues`, ne crash celého skenu; import plugin modulů přes `importlib.util.spec_from_file_location` pod unikátním aliasem (bez sys.path polluce); resolvers pro všechny 3 kapacity (extractor/triage_profile/ai_tool) s TypeError na ne-callable entry point.
+- **Sandbox**: neověřený plugin neběží v hlavním procesu — `sandbox_exec()` spustí skrytý entry point `stopa.cli plugin-run` jako subprocess s RLIMIT_AS + timeout a JSON envelope (`{"ok": …, "result"|"error"}`); selhání = ValueError se detailem.
+- **CLI** `stopa plugin list|info|verify|run`: verify spravuje allowlist `plugins_verified` v settings.json (idempotentní zápis celého souboru, ostatní klíče zachovány); run: neověřený → sandbox automaticky, ověřený in-process; zopakovatelná flag syntaxe `--file FILE` (Python 3.11 nested-subparser quirk s pozičními files).
+- **Web** `GET /api/plugins` — detekované pluginy: manifest + stav ověření + kapacity, seřazeno podle jména.
+- **3 ukázkové pluginy** (`plugins/`, samostatné moduly bez relativních importů): `example-accesslog` (extractor — Nginx/Apache combined log agregace per (ip, method, path), MAX_GROUPS 500, locale-nezávislá UTC konverze časa), `example-crypto-triage` (triage profil „Exfiltrace kryptomajetku“ `crypto_exfiltration`, 4 signály — doplňuje vestavěný RANSOMWARE profil), `example-ai-tool` (AI tool `artifact_type_breakdown` pro F3.1 agent framework, deterministický by_type rozbor s validací limitu).
+- **Dokumentace API** `docs/PLUGINS_API.md`: struktura plugin adresáře, manifest schéma + omezení (max 50 kapacit na typ), kontrakt entry pointů, CLI příklady.
+- **Testy** `tests/test_f64_plugins.py` (+41): doména (parsing/validace/sandbox limity/error sémantika), loader (discovery/allowlist/kolize/poškozený manifest), ukázkové pluginy přes reálné resolvers (detekce+extrakce s UTC konverzí, MAX_GROUPS kapce, triage profil, AI tool handler + ToolError validace), sandbox subprocess E2E (triage/extractor/timeout/dět error envelope), CLI in-process main() E2E (list --json, verify add/remove, run extractor v sandboxu), Web TestClient `/api/plugins`; všechny offline.
+- **AK ✓**: 3 ukázkové pluginy; API dokumentace; sandbox execution neověřených plugins (live: `plugin run` → sandbox + reálné artefakty). Ruff clean; full suite viz commit message.
 
 ## [Unreleased] — 2026-11-07 (STP-055: oblast Q Interop ★ = UCO mapping)
 
