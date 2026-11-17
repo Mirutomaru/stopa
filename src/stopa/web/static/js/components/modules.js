@@ -531,6 +531,8 @@ async function renderReporting(cid) {
   document.getElementById("btn-report-html").onclick = () => window.open(`/api/cases/${Store.get("caseId")}/report?format=html`);
   document.getElementById("btn-report-pdf").onclick = () => window.open(`/api/cases/${Store.get("caseId")}/report?format=pdf`);
   document.getElementById("btn-compliance-report").onclick = () => window.open(`/api/cases/${Store.get("caseId")}/compliance-report?format=pdf`);
+  // F5.5 — Daubert challenge preparedness pack (1-click JSON pro soud)
+  document.getElementById("btn-daubert-pack").onclick = () => window.open(`/api/cases/${Store.get("caseId")}/daubert-pack`);
 
   const tbody = document.querySelector("#marked-table tbody");
   if (tbody) tbody.addEventListener("click", (e) => {

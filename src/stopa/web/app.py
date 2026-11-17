@@ -2018,6 +2018,30 @@ def create_app(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
+    # ── F5.5 — Daubert challenge preparedness pack (1-click JSON pro soud) ────
+    @app.get("/api/cases/{case_id}/daubert-pack")
+    def daubert_pack(case_id: str):
+        """Daubert balík: peer-reviewed reference, validační testy, error rates."""
+        from fastapi import Response
+
+        from stopa.presentation.daubert import generate_daubert_pack
+
+        db = open_db(case_id)
+        try:
+            out = generate_daubert_pack(db, case_id)
+        except KeyError as e:
+            raise HTTPException(404, str(e)) from e
+        finally:
+            db.close()
+        content = out["json_path"].read_text(encoding="utf-8").encode("utf-8")
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f'attachment; filename="{case_id}_daubert.json"'
+            },
+        )
+
     # ── F5.4 — Write-blocker integration API (status + attach/remove) ──────────
     @app.get("/api/cases/{case_id}/write-blocker")
     def wb_status(case_id: str) -> dict:

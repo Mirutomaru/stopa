@@ -2959,6 +2959,40 @@ def cmd_compliance(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_daubert(args: argparse.Namespace) -> int:
+    """F5.5 — Daubert challenge preparedness pack (1-click JSON balík pro soud)."""
+    json_mode = getattr(args, "json", False)
+    db = _open_db(args.case_id)
+    try:
+        from stopa.presentation.daubert import generate_daubert_pack
+
+        out = generate_daubert_pack(db, args.case_id, out_dir=args.out)
+    except KeyError as e:  # případ nenalezen
+        if json_mode:
+            _print_json({"ok": False, "error": str(e)})
+        else:
+            print(str(e), file=sys.stderr)
+        db.close()
+        return 1
+    if json_mode:
+        import json as _json
+
+        doc = _json.loads(out["json_path"].read_text(encoding="utf-8"))
+        _print_json({"ok": True, **doc})
+    else:
+        signed = "podepsán (Ed25519)" if out["signature_b64"] else "nepodepsaný (chybí cryptography)"
+        print(f"Daubert pack (F5.5) — {args.case_id}, {signed}")
+        print(f"  JSON: {out['json_path']}")
+        print(
+            f"  Reference: {out['references_total']} "
+            f"(parserů v případu: {out['case_parsers']})"
+        )
+        if out.get("digest"):
+            print(f"  Digest SHA-256: {out['digest']}")
+    db.close()
+    return 0
+
+
 def cmd_integrity(args: argparse.Namespace) -> int:
     """P0 Core C4 — Evidence Integrity 2.0: hash chaining + Ed25519 kontrolní body."""
     json_mode = getattr(args, "json", False)
@@ -3461,6 +3495,7 @@ _SUBCOMMAND_EXAMPLES = {
     "verify": "stopa verify case-abc --limit 20",
     "seal": "stopa seal case-abc --reason 'před soudním předložením'",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
+    "daubert": "stopa daubert case-abc   # F5.5 — Daubert pack (peer-reviewed reference + error rates)",
     "reparse": "stopa reparse case-abc --parser-version 2.4   # F5.3 — pinned verze + diff report",
     "wb": "stopa wb attach case-abc --device 'Tableau TBW-100'   # F5.4 — WB připojení + auto-detekce",
     "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
@@ -3615,6 +3650,16 @@ def build_parser() -> argparse.ArgumentParser:
                         help="výstupní adresář (default: složka case DB)")
     _add_json_flag(comp_p)
     comp_p.set_defaults(func=cmd_compliance)
+
+    daubert_p = _ex_sub(
+        sub, "daubert",
+        help="F5.5 — Daubert challenge preparedness pack (1-click JSON pro soud)",
+    )
+    daubert_p.add_argument("case_id")
+    daubert_p.add_argument("--out", metavar="DIR", default=None,
+                           help="výstupní adresář (default: složka case DB)")
+    _add_json_flag(daubert_p)
+    daubert_p.set_defaults(func=cmd_daubert)
 
     rp_p = _ex_sub(sub, "reparse",
                    help="F5.3 — re-run extrakce s deklarovánou verzí parseru + diff report")
