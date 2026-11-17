@@ -399,49 +399,114 @@ def _l2t_desc(rec: dict[str, Any], dataset: str) -> str:
     return "; ".join(parts)
 
 
+def _timesketch_row(
+    rec: dict[str, Any], dataset: str = "artifacts"
+) -> dict[str, str]:
+    """Record → 17 log2timeline polí jako plochý string-dict.
+
+    Sdílené jádro pro l2tcsv (:func:`to_l2tcsv`) i Timesketch JSONL
+    (:func:`to_timesketch_jsonl`): identická sémantika polí v obou formátech —
+    ``extra`` nese všechny non-None pole záznamu (sort_keys), takže interop je
+    bez ztráty dat. Deterministické (C4 manifest).
+    """
+    date, time_ = _l2t_datetime(rec.get("timestamp_utc") or rec.get("ts_utc"))
+    short_src = str(rec.get("title") or rec.get("rel_path") or rec.get("id") or "")[:100]
+    extra = {k: v for k, v in rec.items() if v is not None}
+    return {
+        "date": date,
+        "time": time_,
+        "timezone": "Z",
+        "MACB": "",
+        "source": _L2T_SOURCE,
+        "sourcetype": _l2t_sourcetype(rec, dataset),
+        "type": _L2T_TYPE.get(dataset, "Event Time"),
+        "user": "",
+        "host": "",
+        "short": short_src,
+        "desc": _l2t_desc(rec, dataset),
+        "version": "2",
+        "filename": str(rec.get("rel_path") or ""),
+        "inode": "",
+        "notes": _flags_str(rec.get("anomaly_flags")) or "",
+        "format": f"stopa.{dataset}",
+        "extra": json.dumps(extra, ensure_ascii=False, sort_keys=True),
+    }
+
+
 def to_l2tcsv(records: list[dict[str, Any]], dataset: str = "artifacts") -> str:
-    """Záznamy → l2tcsv text (Plaso interop; 17 pevných polí log2timeline.pl).
+    """Records → l2tcsv text (Plaso interop; 17 fixních polí z log2timeline.pl).
 
-    - ``date``/``time`` z ISO UTC timestampu (MM/DD/YYYY + HH:MM:SS);
-      neznámý čas → prázdná pole,
-    - ``source`` = STOPA, ``sourcetype`` = artifact_type/event_type/Correlation,
-    - ``short`` = title (nebo rel_path/id), oříznuto na 100 znaků,
-    - ``desc`` = deterministický popis záznamu, ``notes`` = anomaly flags,
-    - ``format`` = stopa.<dataset>, ``extra`` = JSON všech ne-None polí
-      (sort_keys → plná věrnost dat bez ztráty při interop),
-    - CSV escapování přes csv.writer (česky UTF-8, uvozování/escapování).
+    Deterministický výstup (C4 manifest) — soubor se dá rovnou spustit přes
+    ``log2timeline --csv`` a importovat do Timesketchu (STP-059). Polí: date, time,
+    timezone, MACB, source, sourcetype, type, user, host, short, desc, version,
+    filename, inode, notes, format, extra.
 
-    Výstup je deterministický — stejný vstup = stejný text (C4 manifest).
+    - ``date``/``time``: z ``timestamp_utc`` (fallback ``ts_utc``); None → epoch 0.
+    - ``extra``: JSON všech non-None polí záznamu (sort_keys) — plná věrnost dat
+      bez ztráty při interop.
     """
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=list(L2TCSV_COLUMNS))
     writer.writeheader()
     for rec in records:
-        date, time_ = _l2t_datetime(rec.get("timestamp_utc") or rec.get("ts_utc"))
-        short_src = (
-            str(rec.get("title") or rec.get("rel_path") or rec.get("id") or "")
-        )[:100]
-        extra = {k: v for k, v in rec.items() if v is not None}
-        writer.writerow({
-            "date": date,
-            "time": time_,
-            "timezone": "Z",
-            "MACB": "",
-            "source": _L2T_SOURCE,
-            "sourcetype": _l2t_sourcetype(rec, dataset),
-            "type": _L2T_TYPE.get(dataset, "Event Time"),
-            "user": "",
-            "host": "",
-            "short": short_src,
-            "desc": _l2t_desc(rec, dataset),
-            "version": "2",
-            "filename": str(rec.get("rel_path") or ""),
-            "inode": "",
-            "notes": _flags_str(rec.get("anomaly_flags")) or "",
-            "format": f"stopa.{dataset}",
-            "extra": json.dumps(extra, ensure_ascii=False, sort_keys=True),
-        })
+        writer.writerow(_timesketch_row(rec, dataset))
     return buf.getvalue()
+
+
+# ── F6.1 — Timesketch JSONL (oblast Q, interop round-trip) ───────────────
+
+def to_timesketch_jsonl(records: list[dict[str, Any]], dataset: str = "artifacts") -> str:
+    """Records → Timesketch JSONL text (jeden event na řádek).
+
+    Každý řádek je kanonický JSON objekt (sort_keys, ensure_ascii=False) se 17ti
+    log2timeline poli ve stejném významu jako l2tcsv — ``extra`` nese všechna
+    non-None pole záznamu, takže round-trip přes :func:`from_timesketch_jsonl` je
+    bez ztráty dat. Streamovatelný formát: konzument čte po řádcích; Timesketch
+    importuje CSV/JSONL timeline nativně (log2timeline). Prázdný vstup → prázdný
+    výstup. Výstup deterministický (C4 manifest).
+    """
+    return "".join(
+        json.dumps(_timesketch_row(rec, dataset), ensure_ascii=False, sort_keys=True) + "\n"
+        for rec in records
+    )
+
+
+def from_timesketch_jsonl(text: str) -> list[dict[str, Any]]:
+    """Timesketch JSONL → záznamy (round-trip import; inverze to_timesketch_jsonl).
+
+    Každý řádek se parsuje jako JSON objekt; záznam se obnoví z pole ``extra``
+    (JSON všech non-None polí — bez ztráty round-trip). Řádky bez validního extra
+    se rekonstruují minimálně ze 17 sloupců (jen co je v souboru, žádné dohady).
+    Prázdné řádky se přeskakují. Nevalidní JSON / extra → ValueError, neobjekt →
+    TypeError; vždy s číslem řádku. Čistá funkce bez I/O.
+    """
+    out: list[dict[str, Any]] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Timesketch JSONL řádek {lineno}: nevalidní JSON") from exc
+        if not isinstance(row, dict):
+            raise TypeError(f"Timesketch JSONL řádek {lineno}: očekáván objekt")
+        extra_raw = row.get("extra")
+        rec: dict[str, Any] | None = None
+        if isinstance(extra_raw, str) and extra_raw.strip():
+            try:
+                parsed_extra = json.loads(extra_raw)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Timesketch JSONL řádek {lineno}: nevalidní extra"
+                ) from exc
+            if isinstance(parsed_extra, dict):
+                rec = dict(parsed_extra)
+        elif isinstance(extra_raw, dict):
+            rec = dict(extra_raw)
+        if rec is None:  # cizí soubor bez extra — minimální rekonstrukce ze sloupců
+            rec = {k: v for k, v in row.items() if k != "extra" and v not in (None, "")}
+        out.append(rec)
+    return out
 
 
 # ── STP-068 — ZIP bundle všech datasetů (oblast Q ★★) ────────────────

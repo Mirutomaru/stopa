@@ -323,9 +323,14 @@ Detekce write-blockerů (Tableau, WiebeTech); log stavu do audit logu; varován�
 ---
 
 ## 🌐 FÁZE 6 — ECOSYSTEM & INTEGRATIONS · Odhad 2–3 týdny
-### F6.1 — Timesketch export & push `[ ]`
-Export timeline do Timesketch (JSONL); auto-push po analýze (opt-in); import z Timesketch (round-trip).
-**AK:** `stopa export --format timesketch`; round-trip test identický; dokumentace.
+### F6.1 — Timesketch export & push `[x]` ✅ 2026-11-17
+Export timeline/artifactů do Timesketch (JSONL); auto-push po ingestu (opt-in); import z Timesketch (round-trip bez ztráty dat).
+**AK:** `stopa export --format timesketch` ✓; round-trip test identický ✓; dokumentace + auto-push opt-in ✓.
+- **Doména `domain/export.py`** — sdílené jádro `_timesketch_row(rec, dataset)` extrahuje 17 log2timeline polí (date/time/timezone/MACB/source/sourcetype/type/user/host/short/desc/version/filename/inode/notes/format) a je společné pro `to_l2tcsv` i nový formát → oba exporty dávají identická sdílená pole; `to_timesketch_jsonl(records, dataset)` = jeden JSON objekt na řádek se stejnými 17 poli + pole **`extra`** (kanonický JSON všech non-None polí záznamu) pro round-trip bez ztráty dat; `from_timesketch_jsonl(text)` obnoví záznamy z `extra` (fallback: jen co je v souboru, žádné dohady); chybová semantika ValueError/TypeError s číslem řádku.
+- **CLI** — `stopa export --format timesketch` (přidáno k csv/json/jsonl/xml/stix/l2tcsv/uco) + manifest jako u ostatních formátů; **auto-push opt-in**: settings klíč `timesketch_auto_push` (default OFF, `_load_timesketch_auto_push()` robustní JSON/OSError), po úspěšném ingestu (`rc == 0`) v `cmd_add` pushuje dataset „timeline“ přes stávající STP-059 `push_to_timesketch(TimesketchClient(settings_from_env()), ...)`; selhání pushu nepadá ingest (try/except, stderr výpis); audit akce **`timesketch_pushed`** s detaily `{what: timeline, auto: True, …summary}`.
+- **Data `data/artifact_repository.py`** — oprava latentního bugu: `add_timeline_event` commitoval implicitní SQLite transakci teprve příslušnou operací; explicitní `conn.commit()` před return (konzistence se všemi ostatními write metodami v repo) → bez něj se standalone inserty ztratily při `close()`.
+- 13 testů tests/test_f61_timesketch.py offline: doména (17-polí schema, determinismus, round-trip identita non-None polí, fallback bez extra, chybová semantika), CLI E2E (`export --format timesketch` na reálném case DB + manifest), auto-push opt-in (default OFF = žádný push; ON = audit řádek `timesketch_pushed` s `auto=True`; selhání clientu nepadá ingest — exit 0).
+- Live E2E: reálný case s extrahovaným artefaktem (forensic profil, sqlite parser) → export 1 záznamu exit 0 + manifest; round-trip identický 1:1; sdílená 17 polí l2tcsv == timesketch.
 **P1 | M | závislosti: —**
 
 ### F6.2 — STIX 2.1 / UCO plná implementace `[ ]`
@@ -445,7 +450,7 @@ Formát: **`[YYYY-MM-DD] [ID úkolu]`** — popis rozhodnutí, proč, jaké alte
 **Metriky vs DoD:** (1) Test suite **3548/≥3500 = cíl poprvé splněn ✓ (101,4 %)** — o CK4 bylo 3039 (86,8 %); plně offline; coverage ≥ 85 % na CK úrovni neměřeno (per-test offline 100 %). (2) Parser versions **78/120+** (bez změny od CK3 — Fáze 4/5 = enterprise + compliance vrstva, ne parsery). (3) F4.x AK ✓: F4.1 SPA na `/spa` (Lighthouse/i18n/offline-first dle task AK), F4.2 latence < 200 ms ✓ (naměřeno 140 ms), F4.3 nelze obejít + report jen court-ready ✓, F4.4 fail-closed default + SSO OIDC ✓ (Keycloak/Okta = OIDC kompatibilní provideri; permission matrix 50 scénářů dle task AK). (4) F5.x AK ✓: viz Progress — všechny kvantitativní limity (seal < 60 s, min. 20 referencí, exit kódy) splněny a živě ověřeny; determinismus F5.1/F5.2/F5.5 = kanonický JSON → SHA-256 digest + Ed25519 podpis klíčem případu (stejná sémantika jako C4 kontrolní body).
 **Benchmark (CK5 run `stopa benchmark --suite all`, exit 0):** **80/80 workloads** — pipeline.core **1734,2 ms** / RAM peak 0,60 MB (CK4: 1646,9 ms; CK3: 1396,8 ms — variabilita běhu v řádu desítek %, ne regrese; determinismus F2.4/F2.5 garantován testy); core.rust **33,5 ms** (27 artefaktů; CK4: 31,7 ms — variabilita běhu); per-parser benchmarky beze změny (nejtěžší registry_hive 20,2 ms).
 **Rizika:** (1) **Unpushed commity vyřešeny** — F5.1–F5.5 (`7c03c7b`…`814378b`) pushnuty na origin/main (GitHub `Mirutomaru/stopa`, privátní repo); zbývá jen tento docs commit. (2) Checkpoint schedule „po Fázi 4: enterprise beta s 3 testery“ — **čeká lidský vstup** (výběr testerů; technicky ready: RBAC F4.4 + collab F4.5). (3) Checkpoint schedule „po Fázi 5: compliance audit externí firmou“ — interně ready (F5.2 report + F5.5 Daubert pack jako podklady); externí firma = rozhodnutí uživatele. (4) Fáze 6 obsahuje **F6.4 Plugin ecosystem P2/XL** (~3–4 cykly) — největší zbývající odhad; F6.1/F6.2 jsou P1.
-**Další:** CK5 podán → Fáze 6 začíná **F6.1 Timesketch export & push (P1/M)** → F6.2 STIX 2.1/UCO plná implementace (P1/L) → F6.3 MITRE ATT&CK mapping (P2/M) → F6.4 Plugin ecosystem (P2/XL); po Fázi 6 dle schedule = Release 2.0 GA.
+**Další:** CK5 podán → Fáze 6: **F6.1 Timesketch export & push [x]** → **F6.2 STIX 2.1/UCO plná implementace (P1/L)** → F6.3 MITRE ATT&CK mapping (P2/M) → F6.4 Plugin ecosystem (P2/XL); po Fázi 6 dle schedule = Release 2.0 GA.
 
 ## 🎯 OKAMŽITÉ AKCE (First 5)
 1. ~~R0.4 CLI UX audit~~ — **hotovo `[x]`** ✅ (commits `03d489f`, `921eae1`, `5c22b27`)

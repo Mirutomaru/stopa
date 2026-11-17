@@ -538,6 +538,9 @@ class ArtifactRepository:
                 json.dumps(list(subject_values)) if subject_values else None,
             ),
         )
+        # F6.1 — explicitní commit: bez něj se insert ztratí při close() bez commitu
+        # (Python sqlite3 implicit transaction; ostatní write metody v tomto repo commítují).
+        self.conn.commit()
         return event_id
 
     def list_timeline_events(

@@ -86,6 +86,18 @@ def _load_require_write_blocker() -> bool:
     return bool(data.get("require_write_blocker", False)) if isinstance(data, dict) else False
 
 
+def _load_timesketch_auto_push() -> bool:
+    """F6.1 — opt-in auto-push do Timesketch po úspěšném ingestu (settings.json, default OFF)."""
+    p = _db_dir() / "settings.json"
+    if not p.exists():
+        return False
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    return bool(data.get("timesketch_auto_push", False)) if isinstance(data, dict) else False
+
+
 def case_examiner(db: CaseDB, case_id: str) -> str | None:
     """Znalec případu — výchozí actor pro audit log operací."""
     case = db.get_case(case_id)
@@ -424,6 +436,34 @@ def cmd_add(args: argparse.Namespace) -> int:
     except Exception as exc:  # noqa: BLE001 — analytický bonus, ne pád ingestu
         if not json_mode:
             print(f"    ! timeline intel: {exc}", file=sys.stderr)
+    # F6.1 — opt-in auto-push do Timesketch po úspěšném ingestu (settings.json
+    # timesketch_auto_push, default OFF; graceful degradation — selhání nepadá ingest).
+    if rc == 0 and _load_timesketch_auto_push():
+        try:
+            from stopa.data.timesketch_client import TimesketchClient, settings_from_env
+            from stopa.domain.export import timeline_records as _ts_timeline_records
+            from stopa.domain.timesketch_push import push_to_timesketch
+
+            case = db.get_case(args.case_id)
+            ts_summary = push_to_timesketch(
+                TimesketchClient(settings_from_env()),
+                case.name if case else args.case_id,
+                "timeline",
+                _ts_timeline_records(db.list_timeline_events()),
+            )
+            db.log_operation(
+                "timesketch_pushed",
+                actor=case_examiner(db, args.case_id),
+                details={**ts_summary, "what": "timeline", "auto": True},
+            )
+            if not json_mode:
+                print(
+                    f"    timesketch auto-push: {ts_summary['records']} záznamů → "
+                    f"sketch {ts_summary['sketch_id']}"
+                )
+        except Exception as exc:  # noqa: BLE001 — opt-in bonus, ne pád ingestu
+            if not json_mode:
+                print(f"    ! timesketch auto-push: {exc}", file=sys.stderr)
     # P0 Core C4: kontrolní bod po ingestu (podpis hashu posledního audit řádku).
     db.add_integrity_checkpoint("ingest")
     db.close()
@@ -2324,6 +2364,7 @@ def cmd_export(args: argparse.Namespace) -> int:
         to_jsonl,
         to_l2tcsv,
         to_stix_bundle,
+        to_timesketch_jsonl,
         to_xml,
     )
     from stopa.domain.uco import to_uco_json
@@ -2380,6 +2421,9 @@ def cmd_export(args: argparse.Namespace) -> int:
         text = to_stix_bundle(records, dataset=args.what)
     elif args.format == "l2tcsv":
         text = to_l2tcsv(records, dataset=args.what)
+    elif args.format == "timesketch":
+        # F6.1 — Timesketch JSONL (jeden event na řádek; round-trip bez ztráty přes extra).
+        text = to_timesketch_jsonl(records, dataset=args.what)
     elif args.format == "uco":
         text = to_uco_json(records, dataset=args.what)
     else:  # json (default)
@@ -3898,8 +3942,8 @@ def build_parser() -> argparse.ArgumentParser:
     exp_p.add_argument("--what", choices=["artifacts", "timeline", "correlations"],
                        default="artifacts",
                        help="co exportovat (default: artifacts)")
-    exp_p.add_argument("--format", choices=["csv", "json", "jsonl", "xml", "stix", "l2tcsv", "uco"], default="csv",
-                       help="výstupní formát (default: csv; STP-023: jsonl/xml/stix; STP-054: l2tcsv; STP-055: uco)")
+    exp_p.add_argument("--format", choices=["csv", "json", "jsonl", "xml", "stix", "l2tcsv", "timesketch", "uco"], default="csv",
+                       help="výstupní formát (default: csv; STP-023: jsonl/xml/stix; STP-054: l2tcsv; F6.1: timesketch; STP-055: uco)")
     exp_p.add_argument("--limit", type=int, default=None,
                        help="max. počet záznamů (artifacts/timeline; default: vše)")
     exp_p.add_argument("--out", metavar="SOUBOR",

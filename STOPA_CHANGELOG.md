@@ -2,7 +2,7 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack)
+## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack | FÁZE 6 = F6.1 Timesketch export & push)
 
 ### Added (FÁZE 5 Compliance & Court-Readiness, P0)
 - **Merkle doména** `domain/case_seal.py` (čistá logika bez I/O): kanonizace řádků (`json.dumps(..., ensure_ascii=False, sort_keys=True)`), leaf hash s doménovým tagem `stopa-case-seal/v1` + jménem tabulky (totéž datum v jiné tabulce ≠ stejný leaf), deterministický Merkle root — prázdný stav = konstantní `EMPTY_ROOT`, 1 řádek = identity; fixované globální pořadí leafů artifacts → timeline_events → audit_log.
@@ -45,6 +45,13 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 - **CLI** `stopa daubert <case> [--out DIR] [--json]` (exit 0 = balík, 1 = případ nenalezen); **Web** `GET /api/cases/{id}/daubert-pack` → stahování podepsaného JSON + tlačítko „⚖️ Daubert pack“ v reportingu.
 - **Testy** `tests/test_f55_daubert.py` (+15) offline: AK invariant min. 20 referencí, well-formed citace, mapování všech registrovaných parserů bez stale ID, struktura core algoritmů, faktorová eval s poctivou error-rate politikou, coverage konzistence, determinismus kanonického JSON + digest; presentation E2E — podepsaný balík + audit řádek, **Ed25519 sign/verify round-trip z napsaného souboru**, graceful degradation; CLI E2E (JSON/human mód, exit kódy, --out); Web E2E (200 attachment + payload, 404).
 - **AK ✓**: min. 20 referencí (22), právně validováno (Daubert/ČK §2, 4 faktory). Live E2E na reálném case DB: podepsaný balík, `verify_report` True + digest match z napsaného souboru. Ruff clean; full suite viz commit message.
+
+### Added — F6.1 Timesketch export & push (FÁZE 6)
+- **Doména** `domain/export.py`: sdílené jádro `_timesketch_row(rec, dataset)` — 17 log2timeline polí společných pro `to_l2tcsv` i nový formát (oba exporty dávají identická sdílená pole); `to_timesketch_jsonl(records, dataset)` = Timesketch JSONL (jeden JSON objekt na řádek) se 17 poli + **`extra`** (kanonický JSON všech non-None polí záznamu → round-trip bez ztráty dat); `from_timesketch_jsonl(text)` — import/obnova z `extra`, fallback jen ze sloupců souboru; ValueError/TypeError s číslem řádku.
+- **CLI**: `stopa export --format timesketch` (nový formát vedle csv/json/jsonl/xml/stix/l2tcsv/uco) + manifest; **auto-push opt-in** — settings klíč `timesketch_auto_push` (default OFF): po úspěšném ingestu (`rc == 0`) push dataset „timeline“ přes stávající STP-059 `push_to_timesketch`; selhání pushu nepadá ingest (graceful degradation); audit akce **`timesketch_pushed`** s detaily `{what: timeline, auto: True}`.
+- **Fixed**: `data/artifact_repository.py` — `add_timeline_event` explicitně commituje (latentní bug: standalone inserty se ztráceli při `close()` bez commitu; konzistence s ostatními write metodami).
+- **Testy** `tests/test_f61_timesketch.py` (+13) offline: 17-polí schema, determinismus, round-trip identita non-None polí (artifacts + timeline), fallback bez extra, chybová semantika; CLI E2E export + manifest; auto-push default OFF / ON s audit řádkem `auto=True` / selhání clientu nepadá ingest.
+- **AK ✓**: round-trip test identický (live E2E: reálný case, extrahovaný artefakt, 1:1 obnova + sdílená pole l2tcsv == timesketch). Ruff clean; full suite viz commit message.
 
 ## [Unreleased] — 2026-11-07 (STP-055: oblast Q Interop ★ = UCO mapping)
 
