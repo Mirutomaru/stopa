@@ -2552,6 +2552,11 @@ def cmd_verify(args: argparse.Namespace) -> int:
             else:
                 ok += 1
 
+    # F5.1 — Merkle zamčení případu: DB-only ověření všech pečetí (nezávislé na
+    # E1 re-hashování; nový audit řádek pečeť neruší — snapshot s předponou).
+    seal_reports = db.seal_repo.verify_all()
+    seals_valid = sum(1 for r in seal_reports if r["ok"])
+
     db.log_operation(
         "hash_verified",
         actor=case_examiner(db, args.case_id),
@@ -2560,6 +2565,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
             "mismatched": mismatched,
             "missing": missing,
             "skipped": skipped,
+            "seals_total": len(seal_reports),
+            "seals_valid": seals_valid,
         },
     )
     if json_mode:
@@ -2567,6 +2574,11 @@ def cmd_verify(args: argparse.Namespace) -> int:
             "ok": ok, "mismatched": mismatched, "missing": missing,
             "skipped": skipped, "problems": problems[: args.limit],
             "sources": len(sources),
+            "merkle_seal": {
+                "total": len(seal_reports),
+                "valid": seals_valid,
+                "seals": seal_reports,
+            },
         })
     else:
         print(f"Integrita: {ok} OK, {mismatched} rozdílů, {missing} chybí, {skipped} nečitelných")
@@ -2574,8 +2586,56 @@ def cmd_verify(args: argparse.Namespace) -> int:
             print(f"  ! {p}")
         if len(problems) > args.limit:
             print(f"  … a dalších {len(problems) - args.limit}")
+        if seal_reports:
+            print(f"Merkle zamčení (F5.1): {len(seal_reports)} pečetí — {seals_valid} platných")
+            for r in seal_reports:
+                if r["ok"]:
+                    status = "root OK, podpis OK"
+                else:
+                    changed = ", ".join(r["changed_tables"]) or "—"
+                    status = (f"root {'OK' if r['root_ok'] else 'ROZDÍL'} ({changed}), "
+                              f"podpis {'OK' if r['sig_ok'] else 'NEPLATNÝ'}")
+                print(f"  [{'✓' if r['ok'] else '✗'}] #{r['id']} {r['ts']} — {status}")
+        else:
+            print("Merkle zamčení (F5.1): žádné pečetě (stopa seal <case_id>)")
     db.close()
-    return 1 if (mismatched or missing) else 0
+    return 1 if (mismatched or missing or seals_valid != len(seal_reports)) else 0
+
+
+def cmd_seal(args: argparse.Namespace) -> int:
+    """F5.1 — Merkle zamčení případu: snapshot stavu zamčený podepsaným kořenem."""
+    json_mode = getattr(args, "json", False)
+    db = _open_db(args.case_id)
+    actor = case_examiner(db, args.case_id)
+    try:
+        seal = db.seal_case(reason=args.reason, actor=actor)
+    except RuntimeError as e:  # chybí volitelný balík cryptography
+        if not json_mode:
+            print(f"Ed25519 nedostupné ({e})", file=sys.stderr)
+        db.close()
+        return 2
+    if seal is None:
+        msg = "Ed25519 klíč případu nevygenerován (vyžaduje balík cryptography)"
+        if json_mode:
+            _print_json({"ok": 0, "seal_id": None, "reason": "no_key"})
+        else:
+            print(msg, file=sys.stderr)
+        db.close()
+        return 2
+    if json_mode:
+        _print_json(seal)
+    else:
+        print(f"Případ zamčen (F5.1): pečeť #{seal['id']}")
+        print(f"  Root: {seal['root_hash']}")
+        print(
+            f"  Rozsah: artifacts={seal['artifacts']}, "
+            f"timeline_events={seal['timeline_events']}, audit_log={seal['audit_log']} řádků"
+        )
+        who = seal["sealed_by"] or "—"
+        why = f" — {seal['reason']}" if seal["reason"] else ""
+        print(f"  Zamčeno: {who} ({seal['ts']}){why}")
+    db.close()
+    return 0
 
 
 def cmd_integrity(args: argparse.Namespace) -> int:
@@ -3078,6 +3138,7 @@ _SUBCOMMAND_EXAMPLES = {
     "search": 'stopa search case-abc "invoice OR *.pdf" --source src-1',
     "stats": "stopa stats case-abc",
     "verify": "stopa verify case-abc --limit 20",
+    "seal": "stopa seal case-abc --reason 'před soudním předložením'",
     "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
     "replay": "stopa replay case-abc op-123   # bez op = poslední extract",
     "benchmark": "stopa benchmark case-abc --suite all",
@@ -3214,6 +3275,14 @@ def build_parser() -> argparse.ArgumentParser:
                        help="max. počet zobrazených problémů (default: 20)")
     _add_json_flag(ver_p)
     ver_p.set_defaults(func=cmd_verify)
+
+    seal_p = _ex_sub(sub, "seal",
+                     help="F5.1 — Merkle zamčení případu (snapshot stavu zamčený podepsaným kořenem)")
+    seal_p.add_argument("case_id")
+    seal_p.add_argument("--reason", metavar="DUVOD", default=None,
+                        help="důvod zamčení (např. 'před soudním předložením')")
+    _add_json_flag(seal_p)
+    seal_p.set_defaults(func=cmd_seal)
 
     int_p = _ex_sub(sub, "integrity", help="P0 C4 — Evidence Integrity 2.0 (hash chaining + Ed25519 kontrolní body)"
     )

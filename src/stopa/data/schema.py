@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -332,7 +332,27 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(username, read);
 """
 
-SCHEMA = _SCHEMA_CORE + MULTITENANT_DDL + COLLAB_DDL + """
+#: F5.1 — Merkle Tree Case Sealing DDL (case DB). Pečeť = snapshot stavu případu
+# (první N řádků artifacts/timeline_events v pořadí vložení + audit prefix do
+# audit_row_id) zamknutý jedním Merkle kořenem podepsaným Ed25519 klíčem případu.
+# Sub-rooty per tabulka ve meta_json = diagnostika „která tabulka se změnila".
+CASE_SEALS_DDL = """
+CREATE TABLE IF NOT EXISTS case_seals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,                 -- UTC ISO čas zamčení
+    sealed_by TEXT,                   -- znalec/actor v okamžiku pečetě
+    reason TEXT,                      -- manual | before_court | export | …
+    artifacts_count INTEGER NOT NULL,  -- fixovaný počet řádků artifacts (první v pořadí vložení)
+    timeline_count INTEGER NOT NULL,   -- fixovaný počet řádků timeline_events
+    audit_row_id INTEGER NOT NULL,     -- poslední audit_log id zahrnutý v pečetí (předpona)
+    root_hash TEXT NOT NULL,           -- hex Merkle kořen (64 znaků, SHA-256)
+    signature_b64 TEXT NOT NULL,       -- Ed25519 podpis root_hash (base64)
+    public_key_b64 TEXT NOT NULL,      -- snapshot veřejného klíče v okamžiku pečetě
+    meta_json TEXT NOT NULL DEFAULT '{}'  -- formát verze, sub-rooty per tabulka, columns_hash
+);
+"""
+
+SCHEMA = _SCHEMA_CORE + MULTITENANT_DDL + COLLAB_DDL + CASE_SEALS_DDL + """
 -- P0 Core C5: Reproducibility Engine — záznamy analytických operací.
 -- Každá operace nese vstupní soubory + hashe, verze parserů/STOPA, hash konfigurace,
 -- deterministický souhrn výstupů a prostředí → opakovatelnost + porovnání výsledků.

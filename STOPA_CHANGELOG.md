@@ -2,6 +2,19 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing)
+
+### Added (FÁZE 5 Compliance & Court-Readiness, P0)
+- **Merkle doména** `domain/case_seal.py` (čistá logika bez I/O): kanonizace řádků (`json.dumps(..., ensure_ascii=False, sort_keys=True)`), leaf hash s doménovým tagem `stopa-case-seal/v1` + jménem tabulky (totéž datum v jiné tabulce ≠ stejný leaf), deterministický Merkle root — prázdný stav = konstantní `EMPTY_ROOT`, 1 řádek = identity; fixované globální pořadí leafů artifacts → timeline_events → audit_log.
+- **Data vrstva** `data/seal_repository.py` (`SealRepository`): tabulka `case_seals` (schema v19, idempotentní migrace ze všech ≤v18); **prefix snapshot semantika** — pečeť fixuje první N řádků každé tabulky v pořadí vložení; pozdní append pečeť neruší, změna/smazání fixovaného řádku ano (report uvádí `changed_tables`); sub-rooty per tabulka ve `meta_json` jako diagnostika. Ed25519 signatura/verifikace zůstává v existující vrstvě `domain/integrity.py` (lazy import + graceful degradation bez volitelného balíku cryptography — pečeť se vrátí jako `None`).
+- **CLI**: nový příkaz `stopa seal <case> [--reason DUVOD]` (explicitní zamčení, audit záznam `case_sealed`, actor = explicitní > case examiner > NULL); `stopa verify <case>` rozšířeno o Merkle pečetě — JSON sekce `merkle_seal {total, valid, seals}` a status per pečeť (root OK/ROZDÍL + Ed25519 podpis), textový výstup + `hash_verified` audit detaily (`seals_total`, `seals_valid`).
+- **Web**: audit-center endpoint vrací navíc `seals` + `seal_checks` pro soudní report.
+- **Testy** `tests/test_f51_case_seal.py` (+23): doména — determinismus rootu (pořadí leafů mění root), cross-table tag, 1-bit flip mění root, prázdný kořen = konstanta; DB integrace — seal/verify cyklus s uloženým Ed25519 klíčem, tampering per tabulka (drop triggeru + UPDATE → `changed_tables`), prefix semantika (pozdní append nezkazí starou pečeť; druhá pečeť = jiný root), actor resolution (explicitní > case examiner > NULL), graceful degradation bez cryptography.
+
+### Changed
+- Schema v18 → **v19** (`case_seals`); stp041 wave3 testy aktualizovány (verze + tabulka). `db.py` 599 řádků (budget <600 — F5.1 orchestrace přesunuta z facade do `SealRepository`, facade = tenká delegace). Ruff clean; full suite viz commit message.
+- **Benchmark AK**: seal 1M artifactů = **8,9 s** (limit ROADMAP_V2: <60 s — rezerva ~6,7×; compute_roots 9,1 s + podpis; verify 9,1 s).
+
 ## [Unreleased] — 2026-11-07 (STP-055: oblast Q Interop ★ = UCO mapping)
 
 ### Added (oblast Q, P3 — STP-055)

@@ -9,7 +9,13 @@ from __future__ import annotations
 
 import sqlite3
 
-from stopa.data.schema import COLLAB_DDL, MULTITENANT_DDL, SCHEMA_VERSION, _schema_version
+from stopa.data.schema import (
+    CASE_SEALS_DDL,
+    COLLAB_DDL,
+    MULTITENANT_DDL,
+    SCHEMA_VERSION,
+    _schema_version,
+)
 from stopa.domain.integrity import GENESIS, compute_audit_hash
 
 
@@ -113,6 +119,11 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     # tabulek. Idempotentní; FK artifact_comments → artifacts existuje jen v case DB.
     if not {"artifact_comments", "notifications"} <= existing_tables:
         conn.executescript(COLLAB_DDL)
+        conn.commit()
+    # F5.1 Merkle Tree Case Sealing — stará case DB (≤ v18) bez tabulky case_seals.
+    # Idempotentní; FK žádné (pečeť referuje stav dat, ne řádky).
+    if "case_seals" not in existing_tables:
+        conn.executescript(CASE_SEALS_DDL)
         conn.commit()
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).

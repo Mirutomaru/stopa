@@ -55,6 +55,8 @@ EXPECTED_TABLES = {
     # F4.5 — case sharing & collaboration: komentáře na artefaktech + inbox
     "artifact_comments",
     "notifications",
+    # F5.1 — Compliance & Court-Readiness: Merkle zamčení stavu případu
+    "case_seals",
 }
 
 EXPECTED_AUDIT_TRIGGERS = {"audit_no_update", "audit_no_delete"}
@@ -76,9 +78,9 @@ def _trigger_names(conn: sqlite3.Connection) -> set[str]:
 
 
 class TestSchemaModule:
-    def test_schema_version_is_18(self):
-        """F4.5: v18 přidává kolaborační tabulky (artifact_comments/notifications)."""
-        assert SCHEMA_VERSION == 18
+    def test_schema_version_is_19(self):
+        """F5.1: v19 přidává tabulku case_seals (Merkle zamčení případu)."""
+        assert SCHEMA_VERSION == 19
 
     def test_schema_version_fallback_on_empty_db(self, tmp_path: Path):
         """Bez meta řádku vrací 1 (staré DB bez verze)."""

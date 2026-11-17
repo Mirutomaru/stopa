@@ -23,6 +23,7 @@ from stopa.data.hypothesis_repository import HypothesisRepository  # F3.5
 from stopa.data.migrations import apply_legacy_migrations  # ETAPA C vlna 3
 from stopa.data.query_cache import PROCESS_CACHE  # F2.5 — cache vrstva
 from stopa.data.schema import SCHEMA, SCHEMA_VERSION, _schema_version  # noqa: F401 — SCHEMA_VERSION backward compat (testy)
+from stopa.data.seal_repository import SealRepository  # F5.1 — Merkle case sealing
 from stopa.data.user_repository import UserRepository  # F4.4 — multi-tenant RBAC
 from stopa.domain.evidence_model import Finding
 from stopa.domain.lineage import LineageEvent
@@ -56,8 +57,8 @@ class CaseDB:
         self.hypothesis_repo = HypothesisRepository(self.conn)  # F3.5
         self.user_repo = UserRepository(self.conn)  # F4.4 — multi-tenant RBAC
         self.collab_repo = CollabRepository(self.conn)  # F4.5 — comments + notifications
-        # F4.2 — live event hook (volitelný; nastaví web vrstva pro WebSocket push).
-        self.on_event: Callable[[str, dict], None] | None = None
+        self.seal_repo = SealRepository(self.conn, self.audit_repo)  # F5.1 — Merkle case sealing
+        self.on_event: Callable[[str, dict], None] | None = None  # F4.2 — live event hook (WS push)
 
     def _emit_web_event(self, event_type: str, payload: dict) -> None:
         """F4.2 — volá ``on_event`` defenzivně (hook nesmí rozbít pipeline)."""
@@ -109,6 +110,10 @@ class CaseDB:
     def verify_integrity_checkpoints(self) -> list[dict]:
         """Ověří kontrolní body veřejným klíčem (nezávislá kontrola)."""
         return self.audit_repo.verify_integrity_checkpoints()
+
+    def seal_case(self, reason: str | None = None, actor: str | None = None) -> dict | None:
+        """F5.1 — zamkne stav případu (Merkle root + Ed25519); None bez cryptography."""
+        return self.seal_repo.seal_case(case_id=self.path.stem, actor=actor, reason=reason)
 
     # ── cases ────────────────────────────────────────────────
     def add_case(self, case: Case) -> None:
@@ -288,7 +293,6 @@ class CaseDB:
     def stats(self, source_id: str | None = None) -> dict[str, int]:
         return self.file_repo.stats(source_id)
 
-    # ── artifacts (AXIOM-style) ──────────────────────────────
     # ── P0 Core C1: Unified Evidence Model — artifacts (ETAPA C vlna 2 → ArtifactRepository) ──
     def upsert_artifact(self, art: Artifact) -> None:
         """Idempotentní upsert artifactu podle (source_id, artifact_type, rel_path).
@@ -494,8 +498,7 @@ class CaseDB:
         self._emit_web_event("timeline.event", {
             "event_id": event_id, "source_id": source_id, "title": title,
             "ts_utc": ts_utc.isoformat() if hasattr(ts_utc, "isoformat") else str(ts_utc),
-            "event_type": event_type, "anomaly_flags": list(anomaly_flags),
-        })
+            "event_type": event_type, "anomaly_flags": list(anomaly_flags)})
         return event_id
 
     def list_timeline_events(
@@ -520,9 +523,7 @@ class CaseDB:
         )
 
     def set_timeline_intel_groups(
-        self,
-        contradiction: dict[str, str],  # event_id → group_id (jen události v rozporu)
-        duplicates: dict[str, str],     # event_id → dup_group_id (jen duplikáty napříč zdroji)
+        self, contradiction: dict[str, str], duplicates: dict[str, str]  # event_id → group/dup_group id
     ) -> int:
         """STP-018 — zápis analytických skupin do materializované timeline."""
         return self.artifact_repo.set_timeline_intel_groups(contradiction, duplicates)
@@ -595,5 +596,4 @@ class CaseDB:
     def close(self) -> None:
         self.conn.close()
 
-# ETAPA C vlna 1: _FTS5_OPS + _fts_query přesunuty do file_repository.py
-# (import nahoře; backward compat pro `from stopa.data.db import _fts_query`).
+# ETAPA C vlna 1: _FTS5_OPS + _fts_query → file_repository.py (import nahoře; backward compat).

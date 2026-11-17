@@ -2001,7 +2001,9 @@ def create_app(
         Agreguje (čistá čtení nad DB):
         - ``chain`` — výsledek ověření hash řetězce audit logu (C4),
         - ``entries`` — nejnovější záznamy audit trailu (limit, default 100),
-        - ``checkpoints`` — Ed25519 kontrolní body + nezávislé ověření podpisů.
+        - ``checkpoints`` — Ed25519 kontrolní body + nezávislé ověření podpisů,
+        - ``seals`` / ``seal_checks`` — F5.1 Merkle pečetě případu + jejich
+          ověření (root shoda + Ed25519 podpis) pro soudní report.
 
         Selhání degraduje na 500 s logem (defenzivní obal).
         """
@@ -2011,6 +2013,8 @@ def create_app(
             entries = db.list_audit_log(limit=max(1, min(int(limit), 1000)), actor=actor)
             checkpoints = db.list_integrity_checkpoints()
             checkpoint_checks = db.verify_integrity_checkpoints()
+            seals = db.seal_repo.list_seals()
+            seal_checks = db.seal_repo.verify_all()
             return {
                 "chain": {
                     "ok": report.ok,
@@ -2023,6 +2027,8 @@ def create_app(
                 "public_key": db.integrity_public_key(),
                 "checkpoints": checkpoints,
                 "checkpoint_checks": checkpoint_checks,
+                "seals": seals,
+                "seal_checks": seal_checks,
             }
         except Exception as e:  # doplňková vrstva — log + degradace
             log.warning("audit center selhal pro %s: %s", case_id, e)
