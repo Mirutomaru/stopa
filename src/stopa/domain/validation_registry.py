@@ -544,7 +544,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "date_added = µs od Windows epochy 1601; rekurzivní walk přes roots",
             "limit MAX_BOOKMARKS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w7_parsers.py",),
+        test_files=(
+            "tests/test_w7_parsers.py",
+            "tests/test_p11_quality_chrome_skype.py",
+        ),
     ),
     "chrome_history_wr": ParserValidation(
         parser_id="chrome_history_wr",
@@ -557,7 +560,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "visit_time = µs od Windows epochy 1601; artifact_type=browser_history",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w7_parsers.py",),
+        test_files=(
+            "tests/test_w7_parsers.py",
+            "tests/test_p11_quality_chrome_skype.py",
+        ),
     ),
     "contacts_wr": ParserValidation(
         parser_id="contacts_wr",
@@ -570,7 +576,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "Takeout formát = pole stringů pro jména; People API tolerantně",
             "limit MAX_CONTACTS_PER_FILE=10000 záznamů",
         ),
-        test_files=("tests/test_w7_parsers.py",),
+        test_files=(
+            "tests/test_w7_parsers.py",
+            "tests/test_p11_quality_chrome_skype.py",
+        ),
     ),
     "chrome_autofill": ParserValidation(
         parser_id="chrome_autofill",
@@ -583,7 +592,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "prázdné záznamy (bez jména i e-mailu) se vynechávají",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w7_parsers.py",),
+        test_files=(
+            "tests/test_w7_parsers.py",
+            "tests/test_p11_quality_chrome_skype.py",
+        ),
     ),
     "skype_warrant": ParserValidation(
         parser_id="skype_warrant",
@@ -596,7 +608,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "auto-detekce subtypu podle obsahu; chat→messenger_message, contacts→contact",
             "čas ISO 8601 / epoch s/ms tolerantně; limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w7_parsers.py",),
+        test_files=(
+            "tests/test_w7_parsers.py",
+            "tests/test_p11_quality_chrome_skype.py",
+        ),
     ),
     # ── ETAPA B vlna 8 — AXIOM port: Chrome prefs/sync + cloud drive soubory + Google Voice WR + drivers ──
     "chrome_preferences": ParserValidation(
