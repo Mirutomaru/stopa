@@ -53,7 +53,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "časové epochy se liší dle databáze — detekce podle schématu",
             "smazané řádky vyžadují sqlite_recover (samostatný parser)",
         ),
-        test_files=("tests/test_sqlite_extract.py",),
+        test_files=("tests/test_sqlite_extract.py", "tests/test_p11_quality_sqlite.py"),
     ),
     "registry_hive": ParserValidation(
         parser_id="registry_hive",
@@ -157,7 +157,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "Date parsování přes email.utils — neplatné datum → None",
             "Body se truncuje na MAX_BODY_LEN pro detaily",
         ),
-        test_files=("tests/test_email_mbox.py",),
+        test_files=("tests/test_email_mbox.py", "tests/test_p11_quality_email_mbox.py"),
     ),
     "wifi_wlan": ParserValidation(
         parser_id="wifi_wlan",

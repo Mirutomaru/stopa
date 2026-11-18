@@ -2,7 +2,16 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-1 evidence provenance engine + P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model)
+## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-1 evidence provenance engine + P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model; P1-1 parser quality framework jádro)
+
+### Added — STOPA 2.1 · P1-1 Parser Quality Framework (jádro + pilotní sady)
+- **Doména** `domain/parser_quality.py` (čistá logika bez I/O): 8 standardních kategorií (`positive/negative/boundary/corrupted/tz/encoding/locale/size`) v kanonickém pořadí; konvence markru — řádek `# quality: <kategorie...>` v testovacím souboru deklaruje pokrytí (fail-fast `ValueError` na neznámé kategorii, `TypeError` na špatném typu); pokrytí parseru = unie markerů všech deklarovaných test files; chybějící kategorie = viditelný dluh v reportu.
+- **Data** `data/synthetic_factory.py`: deterministické anonymizované generátory (stejné seed → identické bajty): Chrome/Edge history DB (µs od Win epochy, každých 17. visita s `visit_time=0`), Firefox places (ms od Unix epochy), iMessage chat.db (CFAbsoluteTime od 2001) a mbox (Date hlavičky v různých offsetech + RFC 2047 B64/Q předměty + Unicode tělo).
+- **Data** `data/parser_quality_service.py`: report přes C3 registry s cachem sdílených testovacích souborů (pattern P0-4); chybějící deklarovaný soubor = tolerance (∅ markerů), ne výjimka.
+- **CLI**: `stopa parser-quality [--format text|json] [--fail-below PCT]` — exit 0 OK / 1 chyba / 2 coverage pod prahem (opt-in CI gate); aktuálně **2/78** parserů kompletních (coverage 2.6 %).
+- **Pilotní quality sady (všech 8 kategorií)**: `tests/test_p11_quality_sqlite.py` + `tests/test_p11_quality_email_mbox.py` — tz asercce exaktními nezávislými výpočty (µs/ms/CFAbsoluteTime → UTC, Date hlavičky +0200/−0530/+0000), RFC 2047 dekódování, Unicode roundtrip, corrupted truncation, limitní velikosti; registry `validation_registry.py` rozšířeno o obě sady.
+- **Testy** `tests/test_p11_parser_quality.py`: doména (markry, profily, report kontrakt + determinismus), factory (determinismus per seed, validace parametrů), service (78 parserů, tolerance chybějících souborů), CLI (JSON/text/CI gate). **44/44 green** + Ruff clean.
+- **Fixed**: stale asercce `SCHEMA_VERSION == 20` v `tests/test_p02_seal_keys.py` → 21 (po P0-1) — jediné selhání full regression suite13 (3732p/1s; benchmark tentokrát green).
 
 ### Added — STOPA 2.1 · P0-1 Evidence Provenance Engine (hardening C1/C2/C5)
 - **Schema v20 → v21** (`schema.py`): aditivní sloupce bez ztráty dat, staré řádky = NULL (legacy): `files.hashed_at` (čas vyhasování), `custody_items.acquisition_tool / tool_version / verified_hash` (metadata nabytí per zdroj), `artifacts.parent_artifact_id` self-FK `ON DELETE SET NULL` (odvozený artefakt). Idempotentní migrace `apply_provenance_metadata_migration()` (`PRAGMA table_info` + `ALTER TABLE ADD COLUMN`) pro case DB ≤ v20; na novém schématu no-op.

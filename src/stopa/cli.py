@@ -2902,6 +2902,44 @@ def cmd_provenance(args: argparse.Namespace) -> int:
     return 0 if report["complete"] else 2
 
 
+def cmd_parser_quality(args: argparse.Namespace) -> int:
+    """P1-1 parser quality framework — per-parser pokrytí 8 quality kategorií.
+
+    Pokrytí = unie ``# quality:`` markerů všech testovacích souborů deklarovaných
+    pro parser v C3 registry. Nevyžaduje case DB (registry level).
+    Exit: 0 = OK; 1 = chyba; 2 = --fail-below a coverage_pct pod prahem (CI gate).
+    """
+    json_mode = getattr(args, "json", False) or getattr(args, "format", None) == "json"
+
+    from stopa.data.parser_quality_service import build_parser_quality_report
+
+    try:
+        report = build_parser_quality_report()
+    except Exception as e:  # noqa: BLE001 — CLI hrana (log + exit kód)
+        if json_mode:
+            print(json.dumps({"error": str(e)}, ensure_ascii=False))
+        else:
+            print(f"Chyba stavby quality reportu: {e}")
+        return 1
+
+    threshold = getattr(args, "fail_below", None)
+    if not json_mode:
+        print(
+            f"P1-1 parser quality — {report['quality_complete']}/{report['count']} "
+            f"parserů kompletních (coverage {report['coverage_pct']} %)"
+        )
+        for row in report["parsers"]:
+            mark = "✓" if not row["missing"] else "·"
+            missing = ",".join(row["missing"]) or "—"
+            print(f"{mark} {row['parser_id']:<28} chybí: {missing}")
+    else:
+        print(json.dumps(report, ensure_ascii=False))
+
+    if threshold is not None and report["coverage_pct"] < float(threshold):
+        return 2
+    return 0
+
+
 def cmd_parser_status(args: argparse.Namespace) -> int:
     """P0-4 validation lab — per-parser validační status (registry level).
 
@@ -4063,6 +4101,7 @@ _SUBCOMMAND_EXAMPLES = {
     "integrity-keys": "stopa integrity-keys case-abc --json",
     "rotate-key": "stopa rotate-key case-abc --reason 'legace v týmu'",
     "parser-status": "stopa parser-status --format json",
+    "parser-quality": "stopa parser-quality --json",
     "provenance": "stopa provenance case-abc art-123 --json",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
     "daubert": "stopa daubert case-abc   # F5.5 — Daubert pack (peer-reviewed reference + error rates)",
@@ -4227,6 +4266,15 @@ def build_parser() -> argparse.ArgumentParser:
                       help="důvod rotace (ukládá se do rotačního kontrolního bodu)")
     _add_json_flag(rk_p)
     rk_p.set_defaults(func=cmd_rotate_key)
+
+    q_p = _ex_sub(sub, "parser-quality",
+                  help="P1-1 — per-parser quality coverage (8 kategorií; exit 2 = pod --fail-below)")
+    q_p.add_argument("--format", choices=["text", "json"], default="text",
+                     help="formát výstupu (default: textová tabulka)")
+    _add_json_flag(q_p)
+    q_p.add_argument("--fail-below", type=float, metavar="PCT",
+                     help="CI gate: exit 2, pokud coverage_pct < PCT (např. 100)")
+    q_p.set_defaults(func=cmd_parser_quality)
 
     ps_p = _ex_sub(sub, "parser-status",
                    help="P0-4 validation lab — per-parser validační status (C3 registry + testy)")
