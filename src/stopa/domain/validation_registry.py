@@ -392,6 +392,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w5_parsers.py",
             "tests/test_p11_quality_google_takeout.py",
+            "tests/test_p11_quality_google_rest.py",
         ),
     ),
     "google_identity_sessions": ParserValidation(
@@ -408,6 +409,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w5_parsers.py",
             "tests/test_p11_quality_google_takeout.py",
+            "tests/test_p11_quality_google_rest.py",
         ),
     ),
     "google_maps_activity": ParserValidation(
@@ -424,6 +426,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w5_parsers.py",
             "tests/test_p11_quality_google_takeout.py",
+            "tests/test_p11_quality_google_rest.py",
         ),
     ),
     "google_chat_family": ParserValidation(
@@ -440,6 +443,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w5_parsers.py",
             "tests/test_p11_quality_google_takeout.py",
+            "tests/test_p11_quality_google_rest.py",
         ),
     ),
     "google_account_change_history": ParserValidation(
@@ -456,6 +460,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w5_parsers.py",
             "tests/test_p11_quality_google_takeout.py",
+            "tests/test_p11_quality_google_rest.py",
         ),
     ),
     "google_linked_devices": ParserValidation(
@@ -472,6 +477,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w5_parsers.py",
             "tests/test_p11_quality_google_takeout.py",
+            "tests/test_p11_quality_google_rest.py",
         ),
     ),
     "google_export_summary": ParserValidation(
@@ -487,6 +493,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w5_parsers.py",
             "tests/test_p11_quality_google_takeout.py",
+            "tests/test_p11_quality_google_rest.py",
         ),
     ),
     "drive_activity": ParserValidation(
@@ -517,7 +524,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "souřadnice E7 (×1e-7) → stupně; ISO 8601 / epoch s/ms konverze",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w6_parsers.py",),
+        test_files=("tests/test_w6_parsers.py", "tests/test_p11_quality_google_rest.py"),
     ),
     "google_mail_info": ParserValidation(
         parser_id="google_mail_info",
@@ -530,7 +537,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "internalDate = µs od Unix epochy; tolerantně i ISO 8601 / s / ms",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w6_parsers.py",),
+        test_files=("tests/test_w6_parsers.py", "tests/test_p11_quality_google_rest.py",),
     ),
     # ── ETAPA B vlna 7 — AXIOM port: Chrome Bookmarks/History/Autofill + Contacts + Skype WR ──
     "chrome_bookmarks": ParserValidation(
@@ -1055,6 +1062,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w14_parsers.py",
             "tests/test_p11_quality_cloud_warrant.py",
+            "tests/test_p11_quality_google_rest.py",
         ),
     ),
     "whatsapp_cloud": ParserValidation(
