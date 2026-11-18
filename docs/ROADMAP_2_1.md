@@ -111,6 +111,9 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 
 ## P2 — Rozšíření
 
+> **Návrhy + priority + AK (2026-11-18):** `docs/P2_DESIGNS.md` — doporučené pořadí:
+> P2-4 → P2-3 → P2-6 → P2-5 → P2-2 → P2-7 → P2-1.
+
 | # | Položka | Pozn. |
 |---|---|---|
 | P2-1 | Distribuované zpracování | fronty úloh, workeři, kapacitní řízení; offline single-machine režim zůstane |

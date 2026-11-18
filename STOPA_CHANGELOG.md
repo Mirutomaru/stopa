@@ -4,6 +4,9 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-1 evidence provenance engine + P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model; P1-1 parser quality framework uzavřeno — jádro + vlny 1–17 markerů/sad (category coverage 100 %, 624/624, 78/78 parserů plně); **P1-2 AI orchestrátor hotov** — jádro + case wiring + eval sada + CLI ai-run + Web endpoity (74 testů offline); **P1-3 Evidence Graph hotov** — čistá doména + schema v22 graph_edges + CLI `stopa graph` + Web endpoint (43 testů offline); SW cache fix; fáze 1/15 dokumentace)
 
+### Added — Post-release 2.1: P2 návrhy k schválení (2026-11-18)
+- **`docs/P2_DESIGNS.md`** — všech 7 P2 položek s návrhem + prioritou + AK podle pravidla v ROADMAP; doporučené pořadí **P2-4 → P2-3 → P2-6 → P2-5 → P2-2 → P2-7 → P2-1** (nejprve rychlé workflow výhry, tenancy-citlivá korelace před škálováním, marketplace po stabilních cross-case základech). Každá položka = samostatná releasable jednotka; aditivní migrace od schématu v23.
+
 ### Added — STOPA 2.1 · Etapa G Validace a release (uzavřeno)
 - **Full regression suite25**: `4278 passed / 1 skipped` (~22 min), exit 0; Ruff clean repo-wide; rozpočet `db.py` 599 < 600 ř.
 - **CI benchmark vs baseline**: `79/80 položek OK`; výjimka `pipeline.core` = **stale baseline** (STP-046, naměřeno před sandbox izolací parserů STP-047) — doloženo párovým měřením: warm single-shot i na původním commitu `de18452` ≈ 810 ms (ne 37.5 ms), origin/main ≈ HEAD v šumu ±15 % (běhy se kříží) → vlny P1-4 nepřidávají měřitelnou přirážku; **baseline regenerována**:
