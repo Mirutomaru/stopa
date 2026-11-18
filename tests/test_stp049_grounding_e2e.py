@@ -92,10 +92,9 @@ class _FakeAiClient:
 
 
 def _patch_ai(monkeypatch: pytest.MonkeyPatch, response: str) -> None:
-    import stopa.web.app as app_mod
 
     fake = type("Fake", (_FakeAiClient,), {"response": response})
-    monkeypatch.setattr(app_mod, "LmStudioClient", fake)
+    monkeypatch.setattr("stopa.web.routers.ai.LmStudioClient", fake)
 
 
 def _query(client: TestClient, payload: dict) -> dict:

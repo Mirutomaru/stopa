@@ -230,10 +230,9 @@ class _RecordingAiClient:
 
 
 def _patch_ai(monkeypatch: pytest.MonkeyPatch, response: str):
-    import stopa.web.app as app_mod
 
     fake = type("Fake", (_RecordingAiClient,), {"response": response})
-    monkeypatch.setattr(app_mod, "LmStudioClient", fake)
+    monkeypatch.setattr("stopa.web.routers.ai.LmStudioClient", fake)
     return fake
 
 

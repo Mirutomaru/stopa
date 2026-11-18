@@ -432,13 +432,12 @@ def test_web_graph_lifecycle(client):
 
 def test_web_generate_ai_unavailable_503(client, monkeypatch):
     """use_ai=True bez LM Studio → 503 (jasná diagnóza pro uživatele)."""
-    import stopa.web.app as app_mod
 
     class _FakeClient:
         def health(self) -> dict:
             return {"available": False, "model": None}
 
-    monkeypatch.setattr(app_mod, "LmStudioClient", _FakeClient)
+    monkeypatch.setattr("stopa.web.routers.ai.LmStudioClient", _FakeClient)
     r = client.post(f"/api/cases/{CASE_ID}/hypotheses/generate", json={"use_ai": True})
     assert r.status_code == 503
     assert "LM Studio" in r.json()["detail"]

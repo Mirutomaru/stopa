@@ -441,18 +441,16 @@ class TestTimesketchPushWeb:
         assert r.status_code == 400
 
     def test_unavailable_503(self, client, monkeypatch):
-        import stopa.web.app as app_mod
 
-        monkeypatch.setattr(app_mod, "TimesketchClient", _DownTsClient)
+        monkeypatch.setattr("stopa.web.routers.system.TimesketchClient", _DownTsClient)
         cid = _make_case(client)["id"]
         r = client.post(f"/api/cases/{cid}/timesketch-push", json={"what": "artifacts"})
         assert r.status_code == 503
         assert "nedostupná" in r.json()["detail"].lower()
 
     def test_push_success_audit_and_checkpoint(self, client, evidence, monkeypatch):
-        import stopa.web.app as app_mod
 
-        monkeypatch.setattr(app_mod, "TimesketchClient", _OkTsClient)
+        monkeypatch.setattr("stopa.web.routers.system.TimesketchClient", _OkTsClient)
         cid = _make_case(client)["id"]
         r = client.post(
             f"/api/cases/{cid}/sources", json={"path": str(evidence)}
@@ -485,9 +483,8 @@ class TestTimesketchPushWeb:
             con.close()
 
     def test_push_failure_502(self, client, evidence, monkeypatch):
-        import stopa.web.app as app_mod
 
-        monkeypatch.setattr(app_mod, "TimesketchClient", _FailingTsClient)
+        monkeypatch.setattr("stopa.web.routers.system.TimesketchClient", _FailingTsClient)
         cid = _make_case(client)["id"]
         r = client.post(
             f"/api/cases/{cid}/sources", json={"path": str(evidence)}

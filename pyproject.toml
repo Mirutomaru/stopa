@@ -47,8 +47,10 @@ target-version = "py310"
 # test_tsk_py.py — dostupnostní probe (py_available / tsk_bin_dir) chytá široce,
 # protože ověřuje „je backend vůbec dostupný“ bez předpokladu konkrétní výjimky.
 "tests/test_tsk_py.py" = ["BLE001", "S110"]
-# app.py — FastAPI Query() v argument defaults je standardní idiom (B008).
-"src/stopa/web/app.py" = ["B008"]
+# web/app.py + routery — FastAPI Query()/File() v argument defaults je standardní idiom (B008);
+# BLE001 = defenzivní catch ve vláknech pozadí (ingest), kde by širší hierarchie rozbila robustnost.
+"src/stopa/web/app.py" = ["B008", "BLE001"]
+"src/stopa/web/routers/*.py" = ["B008", "BLE001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

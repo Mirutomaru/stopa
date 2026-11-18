@@ -185,9 +185,8 @@ class _OkTsClient:
 
 class TestTimesketchPushLimitWeb:
     def test_push_with_limit_summary_and_audit(self, client, evidence, monkeypatch):
-        import stopa.web.app as app_mod
 
-        monkeypatch.setattr(app_mod, "TimesketchClient", _OkTsClient)
+        monkeypatch.setattr("stopa.web.routers.system.TimesketchClient", _OkTsClient)
         c, tmp = client
         cid = _make_case(c)["id"]
         _add_source(c, cid, evidence)
@@ -219,9 +218,8 @@ class TestTimesketchPushLimitWeb:
 
     def test_push_without_limit_backward_compat(self, client, evidence, monkeypatch):
         """Bez limitu v body → pushne vše (backward kompatibilita se STP-059)."""
-        import stopa.web.app as app_mod
 
-        monkeypatch.setattr(app_mod, "TimesketchClient", _OkTsClient)
+        monkeypatch.setattr("stopa.web.routers.system.TimesketchClient", _OkTsClient)
         c, tmp = client
         cid = _make_case(c)["id"]
         _add_source(c, cid, evidence)

@@ -239,18 +239,16 @@ class TestStatusEndpoint:
         assert r.status_code == 404
 
     def test_unavailable_503(self, client, tmp_path, monkeypatch):
-        import stopa.web.app as app_mod
 
-        monkeypatch.setattr(app_mod, "TimesketchClient", _DownStatusClient)
+        monkeypatch.setattr("stopa.web.routers.system.TimesketchClient", _DownStatusClient)
         cid = _make_case(client)["id"]
         _seed_push_audit(tmp_path / f"{cid}.db")
         r = client.get(f"/api/cases/{cid}/timesketch-status")
         assert r.status_code == 503
 
     def test_status_ok(self, client, tmp_path, monkeypatch):
-        import stopa.web.app as app_mod
 
-        monkeypatch.setattr(app_mod, "TimesketchClient", _OkStatusClient)
+        monkeypatch.setattr("stopa.web.routers.system.TimesketchClient", _OkStatusClient)
         cid = _make_case(client)["id"]
         _seed_push_audit(tmp_path / f"{cid}.db")
         r = client.get(f"/api/cases/{cid}/timesketch-status")
@@ -260,9 +258,8 @@ class TestStatusEndpoint:
         assert body["status"] == "ready"
 
     def test_status_failure_502(self, client, tmp_path, monkeypatch):
-        import stopa.web.app as app_mod
 
-        monkeypatch.setattr(app_mod, "TimesketchClient", _FailingStatusClient)
+        monkeypatch.setattr("stopa.web.routers.system.TimesketchClient", _FailingStatusClient)
         cid = _make_case(client)["id"]
         _seed_push_audit(tmp_path / f"{cid}.db")
         r = client.get(f"/api/cases/{cid}/timesketch-status")
