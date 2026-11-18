@@ -94,7 +94,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "LZXPRESS Huffman dekomprese (MS-XCA §2.2.4)",
             "starší klasické .pf formáty (pre-MAM) nepodporovány",
         ),
-        test_files=("tests/test_e6.py",),
+        test_files=("tests/test_e6.py", "tests/test_p11_quality_windows.py"),
     ),
     "evtx": ParserValidation(
         parser_id="evtx",
@@ -130,7 +130,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "empiricky ověřeno na 16 reálných souborech z Win11 image",
             "detekce name-based — kontejner nemá spolehlivou magic",
         ),
-        test_files=("tests/test_e6.py",),
+        test_files=("tests/test_e6.py", "tests/test_p11_quality_windows.py"),
     ),
     "win_usn": ParserValidation(
         parser_id="win_usn",
@@ -141,7 +141,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         limitations=(
             "detekce name-based (header verze 2 kontextově ověřen parserem)",
         ),
-        test_files=("tests/test_e7.py",),
+        test_files=("tests/test_e7.py", "tests/test_p11_quality_windows.py"),
     ),
     # ── ETAPA B vlna 1 — AXIOM port: email / WiFi / Scheduled Tasks / netstat ──
     "email_mbox": ParserValidation(
@@ -181,7 +181,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (*.xml s Task root elementem)",
             "Trigger/Action/Principal z <Triggers>/<Actions>/<Principal>",
         ),
-        test_files=("tests/test_win_schedtask.py",),
+        test_files=("tests/test_win_schedtask.py", "tests/test_p11_quality_windows.py"),
     ),
     "net_connections": ParserValidation(
         parser_id="net_connections",
@@ -664,7 +664,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "adresa normalizována na hex; nesignovaný driver → anomaly flag unsigned_driver",
             "snapshot paměti bez času — timestamp=None; limit MAX_DRIVERS_PER_FILE=2000 záznamů",
         ),
-        test_files=("tests/test_w8_parsers.py",),
+        test_files=("tests/test_w8_parsers.py", "tests/test_p11_quality_windows.py"),
     ),
     "mem_processes": ParserValidation(
         parser_id="mem_processes",
