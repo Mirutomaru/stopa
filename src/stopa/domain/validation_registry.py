@@ -974,7 +974,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (apple/icloud marker) — pre-pass PŘED basename chainem",
             "podtyp = contact|keychain|mail|photo|backup (auto-detekce); limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w14_parsers.py",),
+        test_files=(
+            "tests/test_w14_parsers.py",
+            "tests/test_p11_quality_cloud_warrant.py",
+        ),
     ),
     "google_2025_wr": ParserValidation(
         parser_id="google_2025_wr",
@@ -986,7 +989,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (accesslog/targetassoc/google+call) — pre-pass PŘED basename chainem",
             "podtyp = access_log|target_assoc|call (auto-detekce); limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w14_parsers.py",),
+        test_files=(
+            "tests/test_w14_parsers.py",
+            "tests/test_p11_quality_cloud_warrant.py",
+        ),
     ),
     "whatsapp_cloud": ParserValidation(
         parser_id="whatsapp_cloud",
@@ -998,7 +1004,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (whatsapp marker) — pre-pass PŘED basename chainem",
             "podtyp = chat|backup (auto-detekce); limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w14_parsers.py",),
+        test_files=(
+            "tests/test_w14_parsers.py",
+            "tests/test_p11_quality_cloud_warrant.py",
+        ),
     ),
     "cloud_generic": ParserValidation(
         parser_id="cloud_generic",
@@ -1010,7 +1019,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (cloud marker + klíčové slovo) — pre-pass POSLEDNÍ (nejobecnější)",
             "podtyp = accounts|apps|devices|timeline|passwords|android_backup|azure_vm; limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w14_parsers.py",),
+        test_files=(
+            "tests/test_w14_parsers.py",
+            "tests/test_p11_quality_cloud_warrant.py",
+        ),
     ),
     "gmail_messages": ParserValidation(
         parser_id="gmail_messages",
@@ -1022,7 +1034,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (gmail marker) — pre-pass PŘED basename chainem",
             "zpráva = email_message; limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w14_parsers.py",),
+        test_files=(
+            "tests/test_w14_parsers.py",
+            "tests/test_p11_quality_cloud_warrant.py",
+        ),
     ),
     "maps_labeled_places": ParserValidation(
         parser_id="maps_labeled_places",
@@ -1034,7 +1049,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (maps marker + labeled/place) — pre-pass PŘED basename chainem",
             "místo = location_point (label + lat/lon); limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w14_parsers.py",),
+        test_files=(
+            "tests/test_w14_parsers.py",
+            "tests/test_p11_quality_cloud_warrant.py",
+        ),
     ),
     # ── ETAPA B vlna 15 — AXIOM port: SIM TPDU phonebook (F1.6) ──
     "sim_tpdu": ParserValidation(
