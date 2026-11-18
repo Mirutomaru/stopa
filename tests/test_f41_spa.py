@@ -41,7 +41,18 @@ class TestSpaMount:
         r = client.get("/spa/sw.js")
         assert r.status_code == 200
         assert "javascript" in r.headers["content-type"]
-        assert "stopa-spa-v1" in r.text
+        # audit 2026-11: cache bump v2 (starší v1 se při activate() vyčistí)
+        assert "stopa-spa-v2" in r.text
+
+    def test_sw_cache_semantics(self, client: TestClient) -> None:
+        """Audit 2026-11 — SW cache sémantika (live E2E potvrzené problémy):
+
+        - navigace /spa/ = network-first → bez zastaralého index.html po deployu;
+        - API GET se cache jen při res.ok → jednorázové 4xx/5xx netrvají v cache.
+        """
+        r = client.get("/spa/sw.js")
+        assert 'req.mode === "navigate"' in r.text
+        assert "res.ok" in r.text
 
     def test_build_assets_served(self, client: TestClient) -> None:
         """Všechny artefakty buildu v /spa/assets/* se servírují (200)."""
