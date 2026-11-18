@@ -389,7 +389,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "timestamp z ISO 8601; neplatné → None",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w5_parsers.py",),
+        test_files=(
+            "tests/test_w5_parsers.py",
+            "tests/test_p11_quality_google_takeout.py",
+        ),
     ),
     "google_identity_sessions": ParserValidation(
         parser_id="google_identity_sessions",
@@ -402,7 +405,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "timestamp z ISO 8601; neplatné → None",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w5_parsers.py",),
+        test_files=(
+            "tests/test_w5_parsers.py",
+            "tests/test_p11_quality_google_takeout.py",
+        ),
     ),
     "google_maps_activity": ParserValidation(
         parser_id="google_maps_activity",
@@ -415,7 +421,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "souřadnice E7 (×1e-7) → stupně; epoch ms/s konverze",
             "limit MAX_POINTS_PER_FILE=5000 bodů",
         ),
-        test_files=("tests/test_w5_parsers.py",),
+        test_files=(
+            "tests/test_w5_parsers.py",
+            "tests/test_p11_quality_google_takeout.py",
+        ),
     ),
     "google_chat_family": ParserValidation(
         parser_id="google_chat_family",
@@ -428,7 +437,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "timestamp = webkit µs od epochy → s; text zpojený ze segmentů (type TEXT)",
             "limit MAX_MESSAGES_PER_FILE=5000 zpráv",
         ),
-        test_files=("tests/test_w5_parsers.py",),
+        test_files=(
+            "tests/test_w5_parsers.py",
+            "tests/test_p11_quality_google_takeout.py",
+        ),
     ),
     "google_account_change_history": ParserValidation(
         parser_id="google_account_change_history",
@@ -441,7 +453,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "timestamp z ISO 8601 / epoch s/ms; neplatné → None",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w5_parsers.py",),
+        test_files=(
+            "tests/test_w5_parsers.py",
+            "tests/test_p11_quality_google_takeout.py",
+        ),
     ),
     "google_linked_devices": ParserValidation(
         parser_id="google_linked_devices",
@@ -454,7 +469,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "timestamp z ISO 8601 / epoch s/ms; neplatné → None",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w5_parsers.py",),
+        test_files=(
+            "tests/test_w5_parsers.py",
+            "tests/test_p11_quality_google_takeout.py",
+        ),
     ),
     "google_export_summary": ParserValidation(
         parser_id="google_export_summary",
@@ -466,7 +484,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (export_summary) + content check (JSON objekt)",
             "jeden snapshot = jeden artifact; timestamp z createdTime",
         ),
-        test_files=("tests/test_w5_parsers.py",),
+        test_files=(
+            "tests/test_w5_parsers.py",
+            "tests/test_p11_quality_google_takeout.py",
+        ),
     ),
     "drive_activity": ParserValidation(
         parser_id="drive_activity",
@@ -479,7 +500,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "timestamp z ISO 8601 / epoch s/ms; neplatné → None",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w5_parsers.py",),
+        test_files=(
+            "tests/test_w5_parsers.py",
+            "tests/test_p11_quality_google_takeout.py",
+        ),
     ),
     # ── ETAPA B vlna 6 — AXIOM port: Google Photos + Mail Message Information (WarrantReturn) ──
     "google_photos": ParserValidation(
