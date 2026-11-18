@@ -130,7 +130,8 @@ def test_f24_backpressure_window(tmp_path, monkeypatch):
             with lock:
                 state["active"] -= 1
 
-    monkeypatch.setattr(P, "_process_file_worker", spy)
+    # P1-4 vlna D: thread cesta odesílá workera z globálů core → patch na místě spotřebitele
+    monkeypatch.setattr("stopa.pipeline.core._process_file_worker", spy)
     r = _run(db, sid, root, pool="threads", max_workers=8, max_inflight=2)
 
     assert r.files_total == 12

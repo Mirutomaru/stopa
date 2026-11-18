@@ -99,8 +99,8 @@ def test_hanging_parser_full_pipeline_parser_error_in_db(tmp_path: Path, monkeyp
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))
     # hangující parser pod signaturou sqlite (corrupt header ho spustí)
     monkeypatch.setitem(P.ARTIFACT_EXTRACTORS, "sqlite", (mod.hang, "9.9"))
-    # krátký timeout → deterministický (bez čekání 30 s)
-    monkeypatch.setattr(P, "SANDBOX_CONFIG", P.SandboxConfig(timeout_s=1.5))
+    # krátký timeout → deterministický (bez čekání 30 s); P1-4 vlna D: patch na místě spotřebitele
+    monkeypatch.setattr("stopa.pipeline.extractors.SANDBOX_CONFIG", P.SandboxConfig(timeout_s=1.5))
 
     root = tmp_path / "evidence"
     root.mkdir()

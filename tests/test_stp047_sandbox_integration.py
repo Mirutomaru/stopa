@@ -85,7 +85,8 @@ def test_run_extractor_sandbox_empty_result(tmp_path: Path):
 
 def test_run_extractor_disabled_falls_back_to_direct(tmp_path: Path, monkeypatch):
     """``SANDBOX_ENABLED=False`` → přímé volání extraktoru (původní chování)."""
-    monkeypatch.setattr(P, "SANDBOX_ENABLED", False)
+    # P1-4 vlna D: patch na místě spotřebitele (extractors čte vlastní globály)
+    monkeypatch.setattr("stopa.pipeline.extractors.SANDBOX_ENABLED", False)
     db = _real_sqlite_db(tmp_path)
     arts = P._run_extractor(P._extract_sqlite_all, db, "1.0")
     assert len(arts) >= 1
@@ -123,8 +124,8 @@ def test_run_extractor_timeout_returns_parser_error(tmp_path: Path, monkeypatch)
         'import time\n\ndef hang(path):\n    time.sleep(5)\n    return []\n',
     )
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))
-    # krátký timeout → deterministický (bez čekání 30 s)
-    monkeypatch.setattr(P, "SANDBOX_CONFIG", P.SandboxConfig(timeout_s=1.5))
+    # krátký timeout → deterministický (bez čekání 30 s); P1-4 vlna D: patch na místě spotřebitele
+    monkeypatch.setattr("stopa.pipeline.extractors.SANDBOX_CONFIG", P.SandboxConfig(timeout_s=1.5))
     t0 = time.monotonic()
     arts = P._run_extractor(mod.hang, tmp_path / "x.db", "9.9")
     elapsed = time.monotonic() - t0
