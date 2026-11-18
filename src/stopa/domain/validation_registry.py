@@ -741,7 +741,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (instagram marker + message/direct) — SNS pre-pass PŘED basename chainem",
             "konverzační i plošný formát; limit MAX_MESSAGES_PER_FILE=20000 záznamů",
         ),
-        test_files=("tests/test_w10_parsers.py",),
+        test_files=(
+            "tests/test_w10_parsers.py",
+            "tests/test_p11_quality_instagram_snapchat.py",
+        ),
     ),
     "instagram_posts": ParserValidation(
         parser_id="instagram_posts",
@@ -753,7 +756,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (instagram marker + post/media/photo/story/comment) — SNS pre-pass",
             "příspěvek = sns_post, komentář = sns_comment; limit MAX_POSTS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w10_parsers.py",),
+        test_files=(
+            "tests/test_w10_parsers.py",
+            "tests/test_p11_quality_instagram_snapchat.py",
+        ),
     ),
     "instagram_account": ParserValidation(
         parser_id="instagram_account",
@@ -766,7 +772,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "akce = event_log_entry, follower/following = contact (mimetype sns:instagram)",
             "limit MAX_EVENTS_PER_FILE=20000 záznamů",
         ),
-        test_files=("tests/test_w10_parsers.py",),
+        test_files=(
+            "tests/test_w10_parsers.py",
+            "tests/test_p11_quality_instagram_snapchat.py",
+        ),
     ),
     "snapchat_wr": ParserValidation(
         parser_id="snapchat_wr",
@@ -779,7 +788,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "auto-detekce sekcí podle struktury payloadu; zprávy = chat_message, přátelé = contact,",
             "geolokace = location_data, IP historie = network_connection",
         ),
-        test_files=("tests/test_w10_parsers.py",),
+        test_files=(
+            "tests/test_w10_parsers.py",
+            "tests/test_p11_quality_instagram_snapchat.py",
+        ),
     ),
     # ── ETAPA B vlna 11 — cloud SNS rodina Twitter/X + Facebook ──────────────
     "twitter_posts": ParserValidation(
