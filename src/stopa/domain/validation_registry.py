@@ -340,7 +340,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "typ záznamu (chat/kontakt/skupina) určen podle formátu řádků",
             "limit MAX_MESSAGES_PER_FILE=5000 / MAX_CONTACTS_PER_FILE=10000",
         ),
-        test_files=("tests/test_mailru_agent.py",),
+        test_files=("tests/test_mailru_agent.py", "tests/test_p11_quality_capstone.py"),
     ),
     "limewire_p2p": ParserValidation(
         parser_id="limewire_p2p",
@@ -368,7 +368,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "snapshot seznamu bez času — timestamp=None",
             "limit MAX_DOMAINS_PER_FILE=5000; dedupe domén",
         ),
-        test_files=("tests/test_w4_parsers.py",),
+        test_files=("tests/test_w4_parsers.py", "tests/test_p11_quality_capstone.py"),
     ),
     "openoffice_base": ParserValidation(
         parser_id="openoffice_base",
@@ -381,7 +381,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "metadata z ODF hlavičky; samotné tabulky DB se neparsují",
             "poškozený ZIP → prázdný výsledek, ne výjimka",
         ),
-        test_files=("tests/test_w4_parsers.py",),
+        test_files=("tests/test_w4_parsers.py", "tests/test_p11_quality_capstone.py"),
     ),
     # ── ETAPA B vlna 5 — AXIOM port: Google Takeout rodina + Drive activity ──
     "google_aggregated_activities": ParserValidation(
@@ -516,6 +516,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w5_parsers.py",
             "tests/test_p11_quality_google_takeout.py",
+            "tests/test_p11_quality_capstone.py",
         ),
     ),
     # ── ETAPA B vlna 6 — AXIOM port: Google Photos + Mail Message Information (WarrantReturn) ──
@@ -1074,6 +1075,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w14_parsers.py",
             "tests/test_p11_quality_cloud_warrant.py",
+            "tests/test_p11_quality_capstone.py",
         ),
     ),
     "google_2025_wr": ParserValidation(
@@ -1105,6 +1107,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w14_parsers.py",
             "tests/test_p11_quality_cloud_warrant.py",
+            "tests/test_p11_quality_capstone.py",
         ),
     ),
     "cloud_generic": ParserValidation(
@@ -1136,6 +1139,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w14_parsers.py",
             "tests/test_p11_quality_cloud_warrant.py",
+            "tests/test_p11_quality_capstone.py",
         ),
     ),
     "maps_labeled_places": ParserValidation(
@@ -1151,6 +1155,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w14_parsers.py",
             "tests/test_p11_quality_cloud_warrant.py",
+            "tests/test_p11_quality_capstone.py",
         ),
     ),
     # ── ETAPA B vlna 15 — AXIOM port: SIM TPDU phonebook (F1.6) ──
@@ -1164,7 +1169,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (*.tpdu, *.cpbr, *.simdump, .csv + content check)",
             "kontakt = contact; dedup podle normalizovaného čísla; limit MAX_CONTACTS=500",
         ),
-        test_files=("tests/test_sim_tpdu.py",),
+        test_files=("tests/test_sim_tpdu.py", "tests/test_p11_quality_capstone.py"),
     ),
     # K2 — crypto forensics (wallets, exchange CSV, content scan)
     "crypto_extract": ParserValidation(
