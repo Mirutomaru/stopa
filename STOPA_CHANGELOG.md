@@ -2,7 +2,17 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-1 evidence provenance engine + P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model; P1-1 parser quality framework jádro)
+## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-1 evidence provenance engine + P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model; P1-1 parser quality framework jádro + vlna 1 markerů; P1-2 AI orchestrátor jádro; fáze 1/15 dokumentace)
+
+### Added — STOPA 2.1 · P1-2 AI Orchestrátor (jádro)
+- **Doména** `domain/ai_orchestrator.py` (čistá logika bez I/O): 8 agent rolí s minimálními oprávněními (`ROLE_IDS`, read-only nástroje per role — QA smí jen `.read/.query/.search`), token limity a system prompty; retry policy `RetryPolicy` + `backoff_delay()` s jitterem (deterministická přes injektovaný RNG); `TokenBudget` (session limit, `consume` → ValueError při překročení); validace strukturovaných výstupů `ROLE_OUTPUT_SCHEMA` + `validate_role_output()`; prompt-injection ochrana — `sanitize_evidence_text()` (C0 control znaky neutralizovány, `[art:` tokeny chráněné ZWSP před divokým matchem) a evidence bloky v delimitorech `<<<STOPA-EVIDENCE>>>` / `<<<END-STOPA-EVIDENCE>>>`.
+- **Data** `data/ai_orchestrator_service.py` (tenká I/O vrstva): `call_role()` = build zpráv per role → volání LM Studio (max_tokens per role) → retry+backoff+jitter → consume token budgetu → extrakce JSON + validace výstupu; audit přes injektovatelný callback `audit_sink` (`ai_role_call`, konvence prefixu F4.2) — služba se nezavádí na CaseDB (db.py drží rozpočet řádků).
+- **Testy**: 38 testů (doména + I/O služba), plně offline a deterministické (fake klient, injektovaný RNG/sleep); Ruff clean.
+
+### Added — STOPA 2.1 · Fáze 1/15 dokumentace
+- `docs/ARCHITECTURE_AUDIT.md` — audit vrstev s reálnými LOC metrikami a nálezy A-1..A-7 (P0/P1/P2) dle Fáze 1 master promptu.
+- `docs/SECURITY_HARDENING.md` — souhrn zpevnění P0-2/P0-3/P1-2, zbývající rizika a deployment profily.
+- `docs/FORENSIC_VALIDATION.md` — pětivrstvá hierarchie forenzní validace s ověřenými milníky (GA baseline 3652p, P1-1, P0-1 E2E exit codes).
 
 ### Added — STOPA 2.1 · P1-1 Parser Quality Framework (jádro + pilotní sady)
 - **Doména** `domain/parser_quality.py` (čistá logika bez I/O): 8 standardních kategorií (`positive/negative/boundary/corrupted/tz/encoding/locale/size`) v kanonickém pořadí; konvence markru — řádek `# quality: <kategorie...>` v testovacím souboru deklaruje pokrytí (fail-fast `ValueError` na neznámé kategorii, `TypeError` na špatném typu); pokrytí parseru = unie markerů všech deklarovaných test files; chybějící kategorie = viditelný dluh v reportu.

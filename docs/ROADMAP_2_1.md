@@ -100,7 +100,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 | # | Položka | Obsah (STOPA-specific) | Velikost |
 |---|---|---|---|
 | P1-1 | Parser Quality Framework — ✅ **jádro + vlna 1 hotovo** (framework, pilotní sady sqlite/email_mbox, bázisové markry pro všechny parsery; category coverage 37.8 %) | testovací sada per parser (pozitivní/negativní/hraniční/poškozené vstupy, časové pásmo/kódování/locale, limitní velikosti); regresní sada; syntetická anonymizovaná data | L |
-| P1-2 | AI orchestrátor 2.0 + audit AI výstupů | role agentů (Evidence/Timeline/Network/Memory/Intelligence/Hypothesis/Report/QA) s minimálními oprávněními; retry+backoff+jitter; token limity; validace strukturovaných výstupů; prompt-injection ochrana; eval sada; AI záznamy do audit_log | L |
+| P1-2 | AI orchestrátor 2.0 + audit AI výstupů — ✅ **jádro hotovo** (doména rolí + I/O služba, 38 testů; zbývá eval sada a CLI/Web integrace) | role agentů (Evidence/Timeline/Network/Memory/Intelligence/Hypothesis/Report/QA) s minimálními oprávněními; retry+backoff+jitter; token limity; validace strukturovaných výstupů; prompt-injection ochrana; eval sada; AI záznamy do audit_log | L |
 | P1-3 | Evidence Graph | rozšíření F3.5 hypothesis graph + entities/correlations na plný graf důkazů↔entity↔události↔zjištění; každá hrana s vysvětlením proč vznikla; podpůrné i protichůdné vazby | M |
 | P1-4 | Postupný refactoring god-files | characterization tests nejdřív; extrakce: `cli.py`→`cli/commands/*.py` (argparse subcommand registry); `web/app.py`→routery per doméně; `pipeline.py`+`validation_registry.py` rozklad po odpovědnostech; kompatibilní importy + CLI/API | L |
 | P1-5 | Cross-platform CI matrix | Linux+Windows; core min instalace / plná / web / Rust ext / volitelné extras jako samostatné joby; ověření že fallbacky nezakrývají chyby (testy „bez X“) | M |
@@ -133,7 +133,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 | **B — Plán** | technický plán po malých krocích; u každé změny přínos/riziko/závislosti/testy; změny vyžadující souhlas uživatele (migrace v20, plugin API SemVer, schéma ledgeru) | ✅ P0 sekce nahoře (AK + velikosti) |
 | **C — Kritická bezpečnost a integrita** | P0-1..P0-5; izolované změny + testy po každé | ✅ **P0-1 + P0-2 + P0-3 + P0-4 + P0-5 hotové** (P0-1: provenance engine — schema v21 + idempotentní migrace, čistá doména + repository, CLI `provenance` exit 0/1/2 + Web endpoint, testy 41/41 + živý E2E; P0-2: AES-GCM obal klíče + rotace-safe checkpoints, 77/77 testů + E2E; P0-3: sandbox hardening 60/60; P0-4: parser-status CLI+Web 78/78 validováno + differential design doc; P0-5: `SECURITY_THREAT_MODEL.md` T-1..T-10) |
 | **D — Kvalita parserů a architektura** | P1-1, P1-4, P0-6 migrace po schváleném plánu | 🟡 P0-6 ✅ (dokument) + P1-1 jádro+vlna 1 hotové (37.8 %); zbývá: per-parser fixture pro chybějící kategorie (tz/encoding/locale/size) u 76 parserů + P1-4 |
-| **E — AI** | P1-2 | ⏳ |
+| **E — AI** | P1-2 | 🟡 jádro hotové (doména rolí + I/O služba, 38 testů offline); zbývá: eval sada + CLI/Web integrace |
 | **F — Nové funkce** | jen schválené a odůvodněné; po malých releasovatelných celcích | ⏳ |
 | **G — Validace a release** | kompletní testy + benchmarky + bezpečnostní kontroly + release notes + známé limity | ⏳ |
 
