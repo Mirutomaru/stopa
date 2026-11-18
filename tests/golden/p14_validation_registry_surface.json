@@ -1,0 +1,1449 @@
+{
+ "own_defs": [
+  "ParserValidation",
+  "RegistryError",
+  "build_registry",
+  "registry_report"
+ ],
+ "own_consts": [
+  "PARSER_VALIDATIONS"
+ ],
+ "compat_names": [
+  "PARSER_VALIDATIONS",
+  "ParserValidation",
+  "RegistryError",
+  "build_registry",
+  "registry_report"
+ ],
+ "signatures": {
+  "build_registry": "(versions: 'dict[str, str] | None' = None) -> 'dict[str, ParserValidation]'",
+  "registry_report": "(registry: 'dict[str, ParserValidation] | None' = None) -> 'list[dict]'"
+ },
+ "parser_order": [
+  "sqlite",
+  "registry_hive",
+  "plist",
+  "lnk",
+  "win_prefetch",
+  "evtx",
+  "icloud_messages",
+  "win_jumplist",
+  "win_usn",
+  "email_mbox",
+  "wifi_wlan",
+  "win_schedtask",
+  "net_connections",
+  "google_search_history",
+  "google_location_history",
+  "google_login_history",
+  "google_account_info",
+  "mem_scan",
+  "ddg_current_tabs",
+  "msn_messenger",
+  "bebo_chat",
+  "chatroulette",
+  "mailru_agent",
+  "limewire_p2p",
+  "allowlisted_websites",
+  "openoffice_base",
+  "google_aggregated_activities",
+  "google_identity_sessions",
+  "google_maps_activity",
+  "google_chat_family",
+  "google_account_change_history",
+  "google_linked_devices",
+  "google_export_summary",
+  "drive_activity",
+  "google_photos",
+  "google_mail_info",
+  "chrome_bookmarks",
+  "chrome_history_wr",
+  "contacts_wr",
+  "chrome_autofill",
+  "skype_warrant",
+  "chrome_preferences",
+  "cloud_drive_files",
+  "google_voice_wr",
+  "win_drivers",
+  "mem_processes",
+  "mem_network",
+  "mem_handles",
+  "mem_modules",
+  "mem_hooks",
+  "instagram_messages",
+  "instagram_posts",
+  "instagram_account",
+  "snapchat_wr",
+  "twitter_posts",
+  "twitter_messages",
+  "twitter_users",
+  "facebook_wr",
+  "ms_contacts",
+  "ms_mail_pst",
+  "ms_teams_conversations",
+  "ms_teams_teams",
+  "ms_outlook_calendar",
+  "sharepoint_wr",
+  "amazon_cloudtrail",
+  "amazon_ec2_s3",
+  "google_calendar_events",
+  "google_keep_tasks",
+  "box_cloud",
+  "dropbox_mega",
+  "apple_cloud",
+  "google_2025_wr",
+  "whatsapp_cloud",
+  "cloud_generic",
+  "gmail_messages",
+  "maps_labeled_places",
+  "sim_tpdu",
+  "crypto_extract"
+ ],
+ "data": {
+  "sqlite": {
+   "version": "",
+   "formats": [
+    "Chrome/Edge/Opera (urls+visits, \u00b5s od Win epochy)",
+    "Firefox (moz_places, ms od Unix epochy)",
+    "Apple iMessage chat.db (CFAbsoluteTime od 2001)",
+    "Android mmssms.db / calllog.db (unix ms)",
+    "DuckDuckGo cookies \u2014 Chromium `cookies` sch\u00e9ma (ETAPA B vlna 4)",
+    "iOS voicemail.db (`voicemail`, unix s + CFAbsoluteTime) (ETAPA B vlna 4)",
+    "iOS Local.sqlite parked car locations (`ZRTVEHICLEEVENTMO`) (ETAPA B vlna 4)",
+    "Samsung Voice Recording (voice_recorder DB, epoch ms) (ETAPA B vlna 5)",
+    "Chrome/Edge search_terms \u2014 omnibox dotazy z li\u0161ty (GoogleBarArtifact) (ETAPA B vlna 6)"
+   ],
+   "limitations": [
+    "\u010dasov\u00e9 epochy se li\u0161\u00ed dle datab\u00e1ze \u2014 detekce podle sch\u00e9matu",
+    "smazan\u00e9 \u0159\u00e1dky vy\u017eaduj\u00ed sqlite_recover (samostatn\u00fd parser)"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_sqlite_extract.py",
+    "tests/test_p11_quality_sqlite.py"
+   ],
+   "expected_results": {}
+  },
+  "registry_hive": {
+   "version": "",
+   "formats": [
+    "Windows registry hive (.regf) \u2014 Run/RunOnce, MountedDevices, identita",
+    "UserAssist MRU (NTUSER.DAT \u2014 spu\u0161t\u011bn\u00e9 aplikace / dokumenty) (ETAPA B vlna 4)"
+   ],
+   "limitations": [
+    "b\u011b\u017e\u00ed generic + Amcache + ShimCache + Clipboard + SID + UserAssist (sd\u00edlen\u00e1 regf magic)",
+    "z\u00e1vislost na regipy pro dekompozici kl\u00ed\u010d\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_registry_extract.py",
+    "tests/test_p11_quality_syscore.py"
+   ],
+   "expected_results": {}
+  },
+  "plist": {
+   "version": "",
+   "formats": "Apple property list \u2014 bin\u00e1rn\u00ed bplist00 i XML",
+   "limitations": [
+    "datetime listy \u2192 artifact plist_date; top-level struktura jen triage"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_plist_extract.py",
+    "tests/test_p11_quality_syscore.py"
+   ],
+   "expected_results": {}
+  },
+  "lnk": {
+   "version": "",
+   "formats": "MS-LNK [MS-LNK] \u2014 hlavi\u010dka 76 B + voliteln\u00e9 bloky podle flags",
+   "limitations": [
+    "bloky se \u010dtou jen v kanonick\u00e9m po\u0159ad\u00ed dle specifikace"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_e6.py",
+    "tests/test_p11_quality_syscore.py"
+   ],
+   "expected_results": {}
+  },
+  "win_prefetch": {
+   "version": "",
+   "formats": "MS-PREFETCH (MAM) \u2014 verze 30-variant-2 / 31, LZXPRESS payload",
+   "limitations": [
+    "LZXPRESS Huffman dekomprese (MS-XCA \u00a72.2.4)",
+    "star\u0161\u00ed klasick\u00e9 .pf form\u00e1ty (pre-MAM) nepodporov\u00e1ny"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_e6.py",
+    "tests/test_p11_quality_windows.py"
+   ],
+   "expected_results": {}
+  },
+  "evtx": {
+   "version": "",
+   "formats": [
+    "EVTX \u2014 file magic EVTX, chunk magic CHUN (BinXML payload)",
+    "ElfFile varianta \u2014 magic ElfFile\\0 / ElfChnk\\0 (ground-truth disk)"
+   ],
+   "limitations": "chunked struktura s BinXML \u2014 po\u0161kozen\u00fd chunk = ztr\u00e1ta ud\u00e1lost\u00ed",
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_e7.py",
+    "tests/test_p11_quality_syscore.py"
+   ],
+   "expected_results": {}
+  },
+  "icloud_messages": {
+   "version": "",
+   "formats": [
+    "iCloud Messages export (MessagesInICloud.csv \u2014 ve skute\u010dnosti XLSX nebo delimited text)"
+   ],
+   "limitations": [
+    "detekce podle N\u00c1ZVU souboru (AXIOM Hunter) \u2014 magic bytes nesta\u010d\u00ed"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_imessage_cloud.py",
+    "tests/test_p11_quality_cloud_exports.py"
+   ],
+   "expected_results": {}
+  },
+  "win_jumplist": {
+   "version": "",
+   "formats": [
+    ".customDestinations-ms kontejnery (u32 version=2) s vlo\u017een\u00fdmi MS-LNK"
+   ],
+   "limitations": [
+    "empiricky ov\u011b\u0159eno na 16 re\u00e1ln\u00fdch souborech z Win11 image",
+    "detekce name-based \u2014 kontejner nem\u00e1 spolehlivou magic"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_e6.py",
+    "tests/test_p11_quality_windows.py"
+   ],
+   "expected_results": {}
+  },
+  "win_usn": {
+   "version": "",
+   "formats": [
+    "NTFS USN Journal ($Extend\\$UsnJrnl) \u2014 z\u00e1znamy o zm\u011bn\u00e1ch FS"
+   ],
+   "limitations": [
+    "detekce name-based (header verze 2 kontextov\u011b ov\u011b\u0159en parserem)"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_e7.py",
+    "tests/test_p11_quality_windows.py"
+   ],
+   "expected_results": {}
+  },
+  "email_mbox": {
+   "version": "",
+   "formats": [
+    "mbox (Unix mailbox) \u2014 v\u00edce zpr\u00e1v, odd\u011blen\u00e9 From \u0159\u00e1dky",
+    "EML/MSG \u2014 jednotliv\u00e9 zpr\u00e1vy (RFC 822)",
+    "MIME/RFC822 p\u0159\u00edlohy \u2192 email_attachment artifacty (AttachmentExtractor bonus) (ETAPA B vlna 6)"
+   ],
+   "limitations": [
+    "detekce name-based (.eml/.mbox) + content check (From header)",
+    "Date parsov\u00e1n\u00ed p\u0159es email.utils \u2014 neplatn\u00e9 datum \u2192 None",
+    "Body se truncuje na MAX_BODY_LEN pro detaily"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_email_mbox.py",
+    "tests/test_p11_quality_email_mbox.py"
+   ],
+   "expected_results": {}
+  },
+  "wifi_wlan": {
+   "version": "",
+   "formats": [
+    "Windows WLAN profile XML (C:\\ProgramData\\Microsoft\\WLAN\\Profile)"
+   ],
+   "limitations": [
+    "detekce name-based (*.xml s WLANProfile root elementem)",
+    "SSID/autentizace z <network><SSIDConfig> a <authentication>"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_win_wlan.py",
+    "tests/test_p11_quality_chat_net.py"
+   ],
+   "expected_results": {}
+  },
+  "win_schedtask": {
+   "version": "",
+   "formats": [
+    "Windows Task Scheduler XML (C:\\Windows\\System32\\Tasks\\*.xml)"
+   ],
+   "limitations": [
+    "detekce name-based (*.xml s Task root elementem)",
+    "Trigger/Action/Principal z <Triggers>/<Actions>/<Principal>"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_win_schedtask.py",
+    "tests/test_p11_quality_windows.py"
+   ],
+   "expected_results": {}
+  },
+  "net_connections": {
+   "version": "",
+   "formats": [
+    "Windows netstat -ano textov\u00fd v\u00fdstup",
+    "Unix ss/netstat -an textov\u00fd v\u00fdstup"
+   ],
+   "limitations": [
+    "detekce name-based (netstat/connections/sockets) + content check (hlavi\u010dka)",
+    "snapshot bez \u010dasov\u00e9ho raz\u00edtka \u2014 timestamp=None",
+    "limit MAX_CONNECTIONS_PER_FILE=5000 spojen\u00ed"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_net_connections.py",
+    "tests/test_p11_quality_chat_net.py"
+   ],
+   "expected_results": {}
+  },
+  "google_search_history": {
+   "version": "",
+   "formats": [
+    "Google Search History JSON (My Activity / Takeout)"
+   ],
+   "limitations": [
+    "detekce name-based (my activity/search_history) + content check (JSON pole)",
+    "timestamp z time.timestamp (epoch s); neplatn\u00e9 \u2192 None",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_google_search_history.py",
+    "tests/test_p11_quality_google_full.py"
+   ],
+   "expected_results": {}
+  },
+  "google_location_history": {
+   "version": "",
+   "formats": [
+    "Google Location History JSON Takeout (latitudeE7/longitudeE7)",
+    "Warrant return CSV (Timestamp,Latitude,Longitude,...)"
+   ],
+   "limitations": [
+    "detekce name-based (location_history) + content check (JSON/CSV hlavi\u010dka)",
+    "sou\u0159adnice E7 (\u00d71e-7) \u2192 stupn\u011b; epoch ms/s konverze",
+    "limit MAX_POINTS_PER_FILE=5000 bod\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_google_location_history.py",
+    "tests/test_p11_quality_google_full.py"
+   ],
+   "expected_results": {}
+  },
+  "google_login_history": {
+   "version": "",
+   "formats": [
+    "Google Login/Sign-in History JSON Takeout (sign-ins.json)",
+    "Warrant return CSV (Time,Device Name,IP Address,...)"
+   ],
+   "limitations": [
+    "detekce name-based (sign-in/login_history) + content check",
+    "epoch s/ms konverze; ISO text \u2192 display_time bez timestampu",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_google_login_history.py",
+    "tests/test_p11_quality_google_full.py"
+   ],
+   "expected_results": {}
+  },
+  "google_account_info": {
+   "version": "",
+   "formats": [
+    "Google Account Info JSON (account_info.json / profile)"
+   ],
+   "limitations": [
+    "detekce name-based (account_info) + content check (JSON objekt s name/email/phone)",
+    "snapshot profilu bez \u010dasu \u2014 timestamp=None",
+    "nezn\u00e1m\u00e1 pole do details.extra"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_google_account_info.py",
+    "tests/test_p11_quality_google_full.py"
+   ],
+   "expected_results": {}
+  },
+  "mem_scan": {
+   "version": "",
+   "formats": [
+    "CmdScan textov\u00fd v\u00fdstup (pam\u011b\u0165ov\u00e9 procesy: offset + process + cmdline)",
+    "FileScan textov\u00fd v\u00fdstup (soubory v pam\u011bti: cesty)"
+   ],
+   "limitations": [
+    "detekce name-based (cmdscan/filescan) + content check (hlavi\u010dka tabulky)",
+    "pam\u011b\u0165ov\u00fd snapshot bez \u010dasu \u2014 timestamp=None",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f; dedupe cest v filescan"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_mem_scan.py",
+    "tests/test_p11_quality_memory.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "ddg_current_tabs": {
+   "version": "",
+   "formats": [
+    "DuckDuckGo Current Tabs JSON (pole z\u00e1lo\u017eek url/title)",
+    "Textov\u00fd export \u2014 jeden URL na \u0159\u00e1dek"
+   ],
+   "limitations": [
+    "detekce name-based (current_tabs/ddg/tabs.json) + content check",
+    "snapshot otev\u0159en\u00fdch z\u00e1lo\u017eek bez \u010dasu \u2014 timestamp=None",
+    "limit MAX_TABS_PER_FILE=2000; dedupe URL v textov\u00e9m form\u00e1tu"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_ddg_current_tabs.py",
+    "tests/test_p11_quality_crypto_misc.py"
+   ],
+   "expected_results": {}
+  },
+  "msn_messenger": {
+   "version": "",
+   "formats": [
+    "MSN/Windows Live Messenger chat log text (.txt export)"
+   ],
+   "limitations": [
+    "detekce name-based (msn/messenger/chatlog) + content check (nadpis s verz\u00ed)",
+    "per-message \u010das chyb\u00ed \u2014 timestamp=None (jen \u201eChat started on\u201c v hlavi\u010dce)",
+    "limit MAX_MESSAGES_PER_FILE=5000 zpr\u00e1v"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_msn_messenger.py",
+    "tests/test_p11_quality_crypto_misc.py"
+   ],
+   "expected_results": {}
+  },
+  "bebo_chat": {
+   "version": "",
+   "formats": [
+    "Bebo Live Chat carving text/JSON (Type + Content)"
+   ],
+   "limitations": [
+    "detekce name-based (bebo) + content check (chat/markery z\u00e1znam\u016f)",
+    "carved obsah bez spolehliv\u00e9ho \u010dasu \u2014 timestamp=None",
+    "limit MAX_MESSAGES_PER_FILE=5000 zpr\u00e1v"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_bebo_chat.py",
+    "tests/test_p11_quality_chat_net.py"
+   ],
+   "expected_results": {}
+  },
+  "chatroulette": {
+   "version": "",
+   "formats": [
+    "Chatroulette video chat carving text ([ts] user said: text / user: text)",
+    "JSON pole z\u00e1znam\u016f (partner/message/timestamp)"
+   ],
+   "limitations": [
+    "detekce name-based (chatroulette/cr_chat) + content check",
+    "carved obsah \u2014 \u010das jen pokud je v \u0159\u00e1dku; jinak timestamp=None",
+    "limit MAX_MESSAGES_PER_FILE=5000 zpr\u00e1v"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_chatroulette.py",
+    "tests/test_p11_quality_chat_net.py"
+   ],
+   "expected_results": {}
+  },
+  "mailru_agent": {
+   "version": "",
+   "formats": [
+    "Mail.Ru Agent desktop IM \u2014 chat log text (zpr\u00e1vy)",
+    "Kontakty/knihovna kontakt\u016f text (jm\u00e9no + identifik\u00e1tor)",
+    "Skupinov\u00e9 konverzace text (skupina + zpr\u00e1vy)"
+   ],
+   "limitations": [
+    "detekce name-based (mail.ru/mailru/agent) + content check",
+    "typ z\u00e1znamu (chat/kontakt/skupina) ur\u010den podle form\u00e1tu \u0159\u00e1dk\u016f",
+    "limit MAX_MESSAGES_PER_FILE=5000 / MAX_CONTACTS_PER_FILE=10000"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_mailru_agent.py",
+    "tests/test_p11_quality_capstone.py"
+   ],
+   "expected_results": {}
+  },
+  "limewire_p2p": {
+   "version": "",
+   "formats": [
+    "LimeWire/Limerunner/Luckywire P2P shared files \u2014 JSON pole z\u00e1znam\u016f",
+    "Pipe-delimited text (name|size|path|hash[|modified][|accessed])"
+   ],
+   "limitations": [
+    "detekce name-based (limewire/limerunner/luckywire) + content check; rodina podle prvn\u00edho markeru (Limerunner m\u00e1 prioritu)",
+    "transfer metadata (downloaded/uploaded by/from/to/on) jen pokud jsou ve vstupu",
+    "limit MAX_FILES_PER_FILE=20000 soubor\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_limewire_p2p.py",
+    "tests/test_p11_quality_chat_net.py"
+   ],
+   "expected_results": {}
+  },
+  "allowlisted_websites": {
+   "version": "",
+   "formats": [
+    "DuckDuckGo Allowlisted Websites JSON (seznam povolen\u00fdch dom\u00e9n / tracker exceptions)"
+   ],
+   "limitations": [
+    "detekce name-based (allowlist/allowlisted/tracker_exceptions) + content check (JSON pole/stringy)",
+    "snapshot seznamu bez \u010dasu \u2014 timestamp=None",
+    "limit MAX_DOMAINS_PER_FILE=5000; dedupe dom\u00e9n"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w4_parsers.py",
+    "tests/test_p11_quality_capstone.py"
+   ],
+   "expected_results": {}
+  },
+  "openoffice_base": {
+   "version": "",
+   "formats": [
+    "OpenOffice/LibreOffice Base (.odb) \u2014 OpenDocument ZIP kontejner s metadata (content.xml/mimetype)"
+   ],
+   "limitations": [
+    "detekce name-based (*.odb) + content check (ZIP magic + mimetype/content.xml)",
+    "metadata z ODF hlavi\u010dky; samotn\u00e9 tabulky DB se neparsuj\u00ed",
+    "po\u0161kozen\u00fd ZIP \u2192 pr\u00e1zdn\u00fd v\u00fdsledek, ne v\u00fdjimka"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w4_parsers.py",
+    "tests/test_p11_quality_capstone.py"
+   ],
+   "expected_results": {}
+  },
+  "google_aggregated_activities": {
+   "version": "",
+   "formats": [
+    "Google Aggregated Activities JSON (My Activity / Takeout, denn\u00ed agregace)"
+   ],
+   "limitations": [
+    "detekce name-based (aggregated_activities) + content check (JSON pole)",
+    "timestamp z ISO 8601; neplatn\u00e9 \u2192 None",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w5_parsers.py",
+    "tests/test_p11_quality_google_takeout.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "google_identity_sessions": {
+   "version": "",
+   "formats": [
+    "Google Identity Sessions JSON (Takeout, p\u0159ihla\u0161ovac\u00ed seance)"
+   ],
+   "limitations": [
+    "detekce name-based (identity_sessions) + content check (JSON pole)",
+    "timestamp z ISO 8601; neplatn\u00e9 \u2192 None",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w5_parsers.py",
+    "tests/test_p11_quality_google_takeout.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "google_maps_activity": {
+   "version": "",
+   "formats": [
+    "Google Maps Activity / semantic location history JSON (placeVisit + activitySegment)"
+   ],
+   "limitations": [
+    "detekce name-based (maps_activity/location_history_semantic) + content check (JSON objekt)",
+    "sou\u0159adnice E7 (\u00d71e-7) \u2192 stupn\u011b; epoch ms/s konverze",
+    "limit MAX_POINTS_PER_FILE=5000 bod\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w5_parsers.py",
+    "tests/test_p11_quality_google_takeout.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "google_chat_family": {
+   "version": "",
+   "formats": [
+    "Google IM chat rodina (Chat/Hangouts/Plus/Talk) \u2014 Takeout Hangouts JSON"
+   ],
+   "limitations": [
+    "detekce name-based (hangouts/google_chat/plus_chat/talk) + content check (JSON s conversations)",
+    "timestamp = webkit \u00b5s od epochy \u2192 s; text zpojen\u00fd ze segment\u016f (type TEXT)",
+    "limit MAX_MESSAGES_PER_FILE=5000 zpr\u00e1v"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w5_parsers.py",
+    "tests/test_p11_quality_google_takeout.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "google_account_change_history": {
+   "version": "",
+   "formats": [
+    "Google Account Change History JSON (ud\u00e1losti zm\u011bny \u00fa\u010dtu)"
+   ],
+   "limitations": [
+    "detekce name-based (account_change_history) + content check (JSON pole)",
+    "timestamp z ISO 8601 / epoch s/ms; neplatn\u00e9 \u2192 None",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w5_parsers.py",
+    "tests/test_p11_quality_google_takeout.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "google_linked_devices": {
+   "version": "",
+   "formats": [
+    "Google Linked Devices JSON (propojen\u00e1 za\u0159\u00edzen\u00ed)"
+   ],
+   "limitations": [
+    "detekce name-based (devices/linked_devices) + content check (JSON pole)",
+    "timestamp z ISO 8601 / epoch s/ms; neplatn\u00e9 \u2192 None",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w5_parsers.py",
+    "tests/test_p11_quality_google_takeout.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "google_export_summary": {
+   "version": "",
+   "formats": [
+    "Google Takeout Export Summary JSON (metadata exportu)"
+   ],
+   "limitations": [
+    "detekce name-based (export_summary) + content check (JSON objekt)",
+    "jeden snapshot = jeden artifact; timestamp z createdTime"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w5_parsers.py",
+    "tests/test_p11_quality_google_takeout.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "drive_activity": {
+   "version": "",
+   "formats": [
+    "Google Drive Activity JSON (log aktivit soubor\u016f)"
+   ],
+   "limitations": [
+    "detekce name-based (drive_activity/google_drive) + content check (JSON pole)",
+    "timestamp z ISO 8601 / epoch s/ms; neplatn\u00e9 \u2192 None",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w5_parsers.py",
+    "tests/test_p11_quality_google_takeout.py",
+    "tests/test_p11_quality_capstone.py"
+   ],
+   "expected_results": {}
+  },
+  "google_photos": {
+   "version": "",
+   "formats": [
+    "Google Photos metadata JSON (Takeout / warrant return sidecar, photoTakenTime/geoData)"
+   ],
+   "limitations": [
+    "detekce name-based (photos/google_photos) + content check (JSON s photo kl\u00ed\u010di)",
+    "sou\u0159adnice E7 (\u00d71e-7) \u2192 stupn\u011b; ISO 8601 / epoch s/ms konverze",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w6_parsers.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "google_mail_info": {
+   "version": "",
+   "formats": [
+    "Google Mail Message Information JSON (Gmail Takeout / warrant return, threadId/internalDate \u00b5s)"
+   ],
+   "limitations": [
+    "detekce name-based (gmail/mail_message_information/messages.json) + content check (JSON s mail kl\u00ed\u010di)",
+    "internalDate = \u00b5s od Unix epochy; tolerantn\u011b i ISO 8601 / s / ms",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w6_parsers.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "chrome_bookmarks": {
+   "version": "",
+   "formats": [
+    "Chrome Bookmarks JSON (Takeout / warrant return, roots/date_added \u00b5s od 1601)"
+   ],
+   "limitations": [
+    "detekce name-based (bookmark/chrome_bookmark) + content check (JSON s roots/bookmark_bar)",
+    "date_added = \u00b5s od Windows epochy 1601; rekurzivn\u00ed walk p\u0159es roots",
+    "limit MAX_BOOKMARKS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w7_parsers.py",
+    "tests/test_p11_quality_chrome_skype.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "chrome_history_wr": {
+   "version": "",
+   "formats": [
+    "Chrome History warrant return JSON (pole n\u00e1v\u0161t\u011bv, visit_time \u00b5s od 1601)"
+   ],
+   "limitations": [
+    "detekce name-based (chrome_history/history) + content check (JSON s visit_time/url)",
+    "visit_time = \u00b5s od Windows epochy 1601; artifact_type=browser_history",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w7_parsers.py",
+    "tests/test_p11_quality_chrome_skype.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "contacts_wr": {
+   "version": "",
+   "formats": [
+    "Google Contacts Takeout / warrant return JSON (name/emails/phoneNumbers)"
+   ],
+   "limitations": [
+    "detekce name-based (contact/google_contact) + content check (JSON s givenName/emails)",
+    "Takeout form\u00e1t = pole string\u016f pro jm\u00e9na; People API tolerantn\u011b",
+    "limit MAX_CONTACTS_PER_FILE=10000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w7_parsers.py",
+    "tests/test_p11_quality_chrome_skype.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "chrome_autofill": {
+   "version": "",
+   "formats": [
+    "Chrome Autofill / Contact Info warrant return JSON (name/email/phoneNumber/address)"
+   ],
+   "limitations": [
+    "detekce name-based (autofill/contact_info) + content check (JSON s autofill kl\u00ed\u010di)",
+    "pr\u00e1zdn\u00e9 z\u00e1znamy (bez jm\u00e9na i e-mailu) se vynech\u00e1vaj\u00ed",
+    "limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w7_parsers.py",
+    "tests/test_p11_quality_chrome_skype.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "skype_warrant": {
+   "version": "",
+   "formats": [
+    "Skype warrant return JSON (AccountDetails/ChatHistory/ConnectionHistory/Contacts)"
+   ],
+   "limitations": [
+    "detekce name-based (skype) + content check (msnId/conversationId/composetime)",
+    "auto-detekce subtypu podle obsahu; chat\u2192messenger_message, contacts\u2192contact",
+    "\u010das ISO 8601 / epoch s/ms tolerantn\u011b; limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w7_parsers.py",
+    "tests/test_p11_quality_chrome_skype.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "chrome_preferences": {
+   "version": "",
+   "formats": [
+    "Chrome Preferences JSON (profilov\u00fd export \u2014 extensions.settings, default_search_provider_data, sync)"
+   ],
+   "limitations": [
+    "detekce name-based (preferences/chrome_prefs/secure_pref) + content check (extensions/account_info/sync)",
+    "extensions\u2192browser_extension; search provider + sync settings\u2192browser_setting",
+    "snapshot konfigurace bez \u010dasu \u2014 timestamp=None; limit MAX_EXTENSIONS_PER_FILE=2000"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w8_parsers.py",
+    "tests/test_p11_quality_syscore.py"
+   ],
+   "expected_results": {}
+  },
+  "cloud_drive_files": {
+   "version": "",
+   "formats": [
+    "Cloud Drive soubory JSON (Google Drive / OneDrive / Apple Drive \u2014 warrant return / Takeout)"
+   ],
+   "limitations": [
+    "detekce name-based (drive/onedrive/apple_drive) + content check; PO drive_activity (specifick\u00fd)",
+    "provider auto-detekov\u00e1n podle marker\u016f; verze souboru do details.versions",
+    "\u010das ISO 8601 / epoch s/ms tolerantn\u011b; limit MAX_FILES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w8_parsers.py",
+    "tests/test_p11_quality_cloud_exports.py"
+   ],
+   "expected_results": {}
+  },
+  "google_voice_wr": {
+   "version": "",
+   "formats": [
+    "Google Voice warrant return JSON (Texts/Voicemail/ContactsMetadata/SubscriberInformation)"
+   ],
+   "limitations": [
+    "detekce name-based (voice/voicemail/gvoice) + content check; PO ios_voicemail (.db) a samsung recording",
+    "auto-detekce subtypu: sms\u2192sms_message, voicemail\u2192voicemail, contacts\u2192contact, subscriber\u2192google_account",
+    "\u010das epoch ms/s tolerantn\u011b; limit MAX_ENTRIES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w8_parsers.py",
+    "tests/test_p11_quality_google_full.py"
+   ],
+   "expected_results": {}
+  },
+  "win_drivers": {
+   "version": "",
+   "formats": [
+    "Windows drivers JSON (live forensics / pam\u011b\u0165ov\u00fd dump \u2014 na\u010dten\u00e9 ovlada\u010de)"
+   ],
+   "limitations": [
+    "detekce name-based (driver/drivers) + content check (baseAddress/driverName)",
+    "adresa normalizov\u00e1na na hex; nesignovan\u00fd driver \u2192 anomaly flag unsigned_driver",
+    "snapshot pam\u011bti bez \u010dasu \u2014 timestamp=None; limit MAX_DRIVERS_PER_FILE=2000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w8_parsers.py",
+    "tests/test_p11_quality_windows.py"
+   ],
+   "expected_results": {}
+  },
+  "mem_processes": {
+   "version": "",
+   "formats": [
+    "Memory processes JSON (live forensics / pam\u011b\u0165ov\u00fd dump \u2014 ProcessList/Processes/ProcessScan/PsxView)"
+   ],
+   "limitations": [
+    "detekce name-based (processlist/psxview/mem_process) + content check; P\u0158ED netstatem",
+    "pid/name/commandline tolerantn\u011b; snapshot pam\u011bti bez \u010dasu \u2014 timestamp=None",
+    "limit MAX_PROCESSES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w9_parsers.py",
+    "tests/test_p11_quality_memory.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "mem_network": {
+   "version": "",
+   "formats": [
+    "Memory network connections JSON (live forensics / pam\u011b\u0165ov\u00fd dump \u2014 Sockets/OpenConnections/NetworkConnections)"
+   ],
+   "limitations": [
+    "detekce name-based (open_connections/network_connections/connscan/sockets) + content check; P\u0158ED netstatem",
+    "pid/localAddress/remoteAddress/state tolerantn\u011b; snapshot pam\u011bti bez \u010dasu \u2014 timestamp=None",
+    "limit MAX_CONNECTIONS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w9_parsers.py",
+    "tests/test_p11_quality_memory.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "mem_handles": {
+   "version": "",
+   "formats": [
+    "Memory handles JSON (live forensics / pam\u011b\u0165ov\u00fd dump \u2014 Handles/OpenHandles)"
+   ],
+   "limitations": [
+    "detekce name-based (open_handles/handles) + content check; P\u0158ED netstatem a mem_processes",
+    "handle value normalizov\u00e1n na hex string; snapshot pam\u011bti bez \u010dasu \u2014 timestamp=None",
+    "limit MAX_HANDLES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w9_parsers.py",
+    "tests/test_p11_quality_memory.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "mem_modules": {
+   "version": "",
+   "formats": [
+    "Memory modules JSON (live forensics / pam\u011b\u0165ov\u00fd dump \u2014 ModScan/Malfind)"
+   ],
+   "limitations": [
+    "detekce name-based (modscan/malfind/mem_module) + content check; P\u0158ED netstatem a mem_processes",
+    "adresa normalizov\u00e1na na hex; inLdrList=false \u2192 anomaly flag hidden_module (DLL injection)",
+    "snapshot pam\u011bti bez \u010dasu \u2014 timestamp=None; limit MAX_MODULES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w9_parsers.py",
+    "tests/test_p11_quality_memory.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "mem_hooks": {
+   "version": "",
+   "formats": [
+    "Memory API hooks/callbacks JSON (live forensics / pam\u011b\u0165ov\u00fd dump \u2014 ApiHooks/Callbacks/ExecutiveObjectCallbacks)"
+   ],
+   "limitations": [
+    "detekce name-based (api_hooks/apishot/callbacks/executive_callbacks/mem_hook) + content check; P\u0158ED netstatem",
+    "callbackAddress normalizov\u00e1n na hex; snapshot pam\u011bti bez \u010dasu \u2014 timestamp=None",
+    "limit MAX_HOOKS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w9_parsers.py",
+    "tests/test_p11_quality_memory.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "instagram_messages": {
+   "version": "",
+   "formats": [
+    "Instagram Direct Messages JSON (cloud export / warrant return \u2014 DM konverzace)"
+   ],
+   "limitations": [
+    "detekce name-based (instagram marker + message/direct) \u2014 SNS pre-pass P\u0158ED basename chainem",
+    "konverza\u010dn\u00ed i plo\u0161n\u00fd form\u00e1t; limit MAX_MESSAGES_PER_FILE=20000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w10_parsers.py",
+    "tests/test_p11_quality_instagram_snapchat.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "instagram_posts": {
+   "version": "",
+   "formats": [
+    "Instagram Posts/Media/Photos/Stories/Comments JSON (cloud export \u2014 obsah \u00fa\u010dtu)"
+   ],
+   "limitations": [
+    "detekce name-based (instagram marker + post/media/photo/story/comment) \u2014 SNS pre-pass",
+    "p\u0159\u00edsp\u011bvek = sns_post, koment\u00e1\u0159 = sns_comment; limit MAX_POSTS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w10_parsers.py",
+    "tests/test_p11_quality_instagram_snapchat.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "instagram_account": {
+   "version": "",
+   "formats": [
+    "Instagram Account Actions/History/Followers JSON (cloud export \u2014 akce \u00fa\u010dtu + soci\u00e1ln\u00ed graf)"
+   ],
+   "limitations": [
+    "detekce name-based (instagram marker + account/follower) \u2014 SNS pre-pass",
+    "akce = event_log_entry, follower/following = contact (mimetype sns:instagram)",
+    "limit MAX_EVENTS_PER_FILE=20000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w10_parsers.py",
+    "tests/test_p11_quality_instagram_snapchat.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "snapchat_wr": {
+   "version": "",
+   "formats": [
+    "Snapchat Warrant Return JSON (cloud export \u2014 zpr\u00e1vy/p\u0159\u00e1tel\u00e9/geolokace/IP historie/\u00fa\u010det)"
+   ],
+   "limitations": [
+    "detekce name-based (snapchat marker) \u2014 SNS pre-pass P\u0158ED basename chainem",
+    "auto-detekce sekc\u00ed podle struktury payloadu; zpr\u00e1vy = chat_message, p\u0159\u00e1tel\u00e9 = contact,",
+    "geolokace = location_data, IP historie = network_connection"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w10_parsers.py",
+    "tests/test_p11_quality_instagram_snapchat.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "twitter_posts": {
+   "version": "",
+   "formats": [
+    "Twitter/X Posts JSON (cloud export / warrant return \u2014 ve\u0159ejn\u00e9 i soukrom\u00e9 p\u0159\u00edsp\u011bvky)"
+   ],
+   "limitations": [
+    "detekce name-based (twitter marker + post/tweet/status) \u2014 SNS pre-pass P\u0158ED basename chainem",
+    "p\u0159\u00edsp\u011bvek = sns_post; retweety/odpov\u011bdi nesou post_type; limit MAX_POSTS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w11_parsers.py",
+    "tests/test_p11_quality_sns.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "twitter_messages": {
+   "version": "",
+   "formats": [
+    "Twitter/X Direct Messages JSON (cloud export / warrant return \u2014 DM konverzace)"
+   ],
+   "limitations": [
+    "detekce name-based (twitter marker + message/direct) \u2014 SNS pre-pass P\u0158ED basename chainem",
+    "konverza\u010dn\u00ed i plo\u0161n\u00fd form\u00e1t; limit MAX_MESSAGES_PER_FILE=20000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w11_parsers.py",
+    "tests/test_p11_quality_sns.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "twitter_users": {
+   "version": "",
+   "formats": [
+    "Twitter/X Users JSON (cloud export / warrant return \u2014 \u00fa\u010det + soci\u00e1ln\u00ed graf)"
+   ],
+   "limitations": [
+    "detekce name-based (twitter marker + user/follower) \u2014 SNS pre-pass P\u0158ED basename chainem",
+    "u\u017eivatel = contact (mimetype sns:twitter); limit MAX_USERS_PER_FILE=20000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w11_parsers.py",
+    "tests/test_p11_quality_sns.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "facebook_wr": {
+   "version": "",
+   "formats": [
+    "Facebook Warrant Return JSON (cloud export \u2014 Messenger/p\u0159\u00e1tel\u00e9/timeline/profil)"
+   ],
+   "limitations": [
+    "detekce name-based (facebook marker) \u2014 SNS pre-pass P\u0158ED basename chainem",
+    "auto-detekce sekc\u00ed podle struktury payloadu; zpr\u00e1vy = chat_message, p\u0159\u00e1tel\u00e9/profil = contact,",
+    "timeline = sns_post"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w11_parsers.py",
+    "tests/test_p11_quality_sns.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "ms_contacts": {
+   "version": "",
+   "formats": [
+    "Microsoft Contacts JSON (cloud export / warrant return \u2014 kontakty \u00fa\u010dtu)"
+   ],
+   "limitations": [
+    "detekce name-based (microsoft/outlook marker + contact) \u2014 pre-pass P\u0158ED basename chainem",
+    "kontakt = contact (mimetype ms:contacts); limit MAX_CONTACTS_PER_FILE=20000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w12_parsers.py",
+    "tests/test_p11_quality_ms_amazon.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "ms_mail_pst": {
+   "version": "",
+   "formats": [
+    "Microsoft Mail/PST JSON (cloud export / warrant return \u2014 e-mailov\u00e9 zpr\u00e1vy)"
+   ],
+   "limitations": [
+    "detekce name-based (microsoft/outlook marker + mail/pst/message/email) \u2014 pre-pass P\u0158ED basename chainem",
+    "zpr\u00e1va = email_message (mimetype ms:mail); limit MAX_MESSAGES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w12_parsers.py",
+    "tests/test_p11_quality_ms_amazon.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "ms_teams_conversations": {
+   "version": "",
+   "formats": [
+    "Microsoft Teams Conversations JSON (cloud export \u2014 konverzace/zpr\u00e1vy)"
+   ],
+   "limitations": [
+    "detekce name-based (microsoft/teams marker + conversation/message/chat) \u2014 pre-pass P\u0158ED basename chainem",
+    "zpr\u00e1va = chat_message (mimetype ms:teams); limit MAX_MESSAGES_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w12_parsers.py",
+    "tests/test_p11_quality_ms_amazon.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "ms_teams_teams": {
+   "version": "",
+   "formats": [
+    "Microsoft Teams Teams JSON (cloud export \u2014 t\u00fdmy + \u010dlenstv\u00ed)"
+   ],
+   "limitations": [
+    "detekce name-based (teams.json / ms_teams.json, nebo team + microsoft/teams v cest\u011b) \u2014 pre-pass P\u0158ED basename chainem",
+    "t\u00fdm = contact s rol\u00ed team_member; \u010dlenstv\u00ed se agreguje do details"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w12_parsers.py",
+    "tests/test_p11_quality_ms_amazon.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "ms_outlook_calendar": {
+   "version": "",
+   "formats": [
+    "Microsoft Outlook Calendar JSON (cloud export \u2014 ud\u00e1losti/kalend\u00e1\u0159)"
+   ],
+   "limitations": [
+    "detekce name-based (microsoft/outlook marker + calendar/event/appointment) \u2014 pre-pass P\u0158ED basename chainem",
+    "ud\u00e1lost = calendar_event (mimetype ms:calendar); limit MAX_EVENTS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w12_parsers.py",
+    "tests/test_p11_quality_ms_amazon.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "sharepoint_wr": {
+   "version": "",
+   "formats": [
+    "SharePoint JSON (cloud export / warrant return \u2014 obsah/dokumenty/site pages)"
+   ],
+   "limitations": [
+    "detekce name-based (sharepoint marker) \u2014 pre-pass P\u0158ED basename chainem",
+    "dokument = cloud_file, site page = web_page; limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w12_parsers.py",
+    "tests/test_p11_quality_ms_amazon.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "amazon_cloudtrail": {
+   "version": "",
+   "formats": [
+    "Amazon CloudTrail JSON (cloud export \u2014 auditn\u00ed ud\u00e1losti + Insights anom\u00e1lie)"
+   ],
+   "limitations": [
+    "detekce name-based (cloudtrail marker) \u2014 pre-pass P\u0158ED basename chainem",
+    "ud\u00e1lost = event_log_entry (mimetype aws:cloudtrail); limit MAX_EVENTS_PER_FILE=20000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w12_parsers.py",
+    "tests/test_p11_quality_ms_amazon.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "amazon_ec2_s3": {
+   "version": "",
+   "formats": [
+    "Amazon EC2/S3 JSON (cloud export \u2014 instance + S3 objekty, auto-detekce form\u00e1tu)"
+   ],
+   "limitations": [
+    "detekce name-based (amazon/aws marker + ec2/s3/instance/bucket) \u2014 pre-pass P\u0158ED basename chainem",
+    "instance = cloud_instance (aws:ec2), S3 objekt = cloud_file (aws:s3); limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w12_parsers.py",
+    "tests/test_p11_quality_ms_amazon.py",
+    "tests/test_p11_quality_locale.py"
+   ],
+   "expected_results": {}
+  },
+  "google_calendar_events": {
+   "version": "",
+   "formats": [
+    "Google Calendar Events JSON (Takeout / warrant return \u2014 ud\u00e1losti s start/end, organiz\u00e1torem a \u00fa\u010dastn\u00edky)"
+   ],
+   "limitations": [
+    "detekce name-based (google/takeout marker + calendar/event) \u2014 pre-pass P\u0158ED basename chainem",
+    "ud\u00e1lost = calendar_event; limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w13_parsers.py",
+    "tests/test_p11_quality_google_full.py"
+   ],
+   "expected_results": {}
+  },
+  "google_keep_tasks": {
+   "version": "",
+   "formats": [
+    "Google Keep Notes + Tasks JSON (Takeout / warrant return \u2014 pozn\u00e1mky a \u00fakoly)"
+   ],
+   "limitations": [
+    "detekce name-based (google/takeout marker + keep/task/note) \u2014 pre-pass P\u0158ED basename chainem",
+    "pozn\u00e1mka/\u00fakol = document_metadata (kind=keep_note|task); limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w13_parsers.py",
+    "tests/test_p11_quality_google_full.py"
+   ],
+   "expected_results": {}
+  },
+  "box_cloud": {
+   "version": "",
+   "formats": [
+    "Box Cloud JSON (cloud export \u2014 soubory, slo\u017eky a audit/enterprise eventy)"
+   ],
+   "limitations": [
+    "detekce name-based (box marker + file/folder/event) \u2014 pre-pass P\u0158ED basename chainem",
+    "soubor/slo\u017eka = document_metadata (kind=file|folder), event = kind=event s akc\u00ed; limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w13_parsers.py",
+    "tests/test_p11_quality_cloud_exports.py"
+   ],
+   "expected_results": {}
+  },
+  "dropbox_mega": {
+   "version": "",
+   "formats": [
+    "Dropbox + Mega Cloud JSON (cloud export \u2014 soubory a slo\u017eky, auto-detekce provideru)"
+   ],
+   "limitations": [
+    "detekce name-based (dropbox/mega marker) \u2014 pre-pass P\u0158ED basename chainem",
+    "soubor/slo\u017eka = document_metadata (provider=dropbox|mega); limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w13_parsers.py",
+    "tests/test_p11_quality_cloud_exports.py"
+   ],
+   "expected_results": {}
+  },
+  "apple_cloud": {
+   "version": "",
+   "formats": [
+    "Apple Cloud JSON (cloud export \u2014 kontakty, keychain, e-mail, fotky a z\u00e1lohy; auto-detekce podtypu)"
+   ],
+   "limitations": [
+    "detekce name-based (apple/icloud marker) \u2014 pre-pass P\u0158ED basename chainem",
+    "podtyp = contact|keychain|mail|photo|backup (auto-detekce); limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w14_parsers.py",
+    "tests/test_p11_quality_cloud_warrant.py",
+    "tests/test_p11_quality_capstone.py"
+   ],
+   "expected_results": {}
+  },
+  "google_2025_wr": {
+   "version": "",
+   "formats": [
+    "Google 2025 Warrant Return JSON (AccessLogDevices + AccountTargetAssociation + Calls)"
+   ],
+   "limitations": [
+    "detekce name-based (accesslog/targetassoc/google+call) \u2014 pre-pass P\u0158ED basename chainem",
+    "podtyp = access_log|target_assoc|call (auto-detekce); limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w14_parsers.py",
+    "tests/test_p11_quality_cloud_warrant.py",
+    "tests/test_p11_quality_google_rest.py"
+   ],
+   "expected_results": {}
+  },
+  "whatsapp_cloud": {
+   "version": "",
+   "formats": [
+    "WhatsApp Cloud JSON (cloud export \u2014 chaty a z\u00e1lohy; auto-detekce podtypu)"
+   ],
+   "limitations": [
+    "detekce name-based (whatsapp marker) \u2014 pre-pass P\u0158ED basename chainem",
+    "podtyp = chat|backup (auto-detekce); limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w14_parsers.py",
+    "tests/test_p11_quality_cloud_warrant.py",
+    "tests/test_p11_quality_capstone.py"
+   ],
+   "expected_results": {}
+  },
+  "cloud_generic": {
+   "version": "",
+   "formats": [
+    "Generic Cloud Metadata JSON (AccountsInfo + ConnectedApps + RecentDevices + Timeline + Passwords + AndroidBackups + AzureVM)"
+   ],
+   "limitations": [
+    "detekce name-based (cloud marker + kl\u00ed\u010dov\u00e9 slovo) \u2014 pre-pass POSLEDN\u00cd (nejobecn\u011bj\u0161\u00ed)",
+    "podtyp = accounts|apps|devices|timeline|passwords|android_backup|azure_vm; limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w14_parsers.py",
+    "tests/test_p11_quality_cloud_warrant.py",
+    "tests/test_p11_quality_cloud_exports.py"
+   ],
+   "expected_results": {}
+  },
+  "gmail_messages": {
+   "version": "",
+   "formats": [
+    "Gmail Messages JSON (cloud export \u2014 e-mailov\u00e9 zpr\u00e1vy s odes\u00edlatelem/p\u0159\u00edjemcem/t\u00e9matem)"
+   ],
+   "limitations": [
+    "detekce name-based (gmail marker) \u2014 pre-pass P\u0158ED basename chainem",
+    "zpr\u00e1va = email_message; limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w14_parsers.py",
+    "tests/test_p11_quality_cloud_warrant.py",
+    "tests/test_p11_quality_capstone.py"
+   ],
+   "expected_results": {}
+  },
+  "maps_labeled_places": {
+   "version": "",
+   "formats": [
+    "Google Maps Labeled Places Warrant Return JSON (ozna\u010den\u00e1 m\u00edsta s label + sou\u0159adnicemi)"
+   ],
+   "limitations": [
+    "detekce name-based (maps marker + labeled/place) \u2014 pre-pass P\u0158ED basename chainem",
+    "m\u00edsto = location_point (label + lat/lon); limit MAX_ITEMS_PER_FILE=5000 z\u00e1znam\u016f"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_w14_parsers.py",
+    "tests/test_p11_quality_cloud_warrant.py",
+    "tests/test_p11_quality_capstone.py"
+   ],
+   "expected_results": {}
+  },
+  "sim_tpdu": {
+   "version": "",
+   "formats": [
+    "SIM TPDU phonebook textov\u00fd export (AT+CPBR dump / CSV) \u2014 kontakty z SIM karty"
+   ],
+   "limitations": [
+    "detekce name-based (*.tpdu, *.cpbr, *.simdump, .csv + content check)",
+    "kontakt = contact; dedup podle normalizovan\u00e9ho \u010d\u00edsla; limit MAX_CONTACTS=500"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_sim_tpdu.py",
+    "tests/test_p11_quality_capstone.py"
+   ],
+   "expected_results": {}
+  },
+  "crypto_extract": {
+   "version": "",
+   "formats": [
+    "Electrum wallet JSON (3.x/4.x keystore + legacy \u22642.x)",
+    "MetaMask vault JSON (AES-128-CTR, scrypt/pbkdf2-sha256 KDF)",
+    "exchange CSV exporty (Binance deposits/withdrawals/trades, Coinbase transactions/balance, Kraken trades/funds)",
+    "K1 content scan \u2014 vest\u011bn\u00e9 kl\u00ed\u010de/seedy/adresy/transak\u010dn\u00ed refy v libovoln\u00e9m textu"
+   ],
+   "limitations": [
+    "PII guard: seed slova a priv\u00e1tn\u00ed kl\u00ed\u010de jen jako SHA-256 fingerprint (spec \u00a77)",
+    "MetaMask bez hesla \u2192 struktura (decrypted=False), \u00fa\u010dty a\u017e s heslem",
+    "K1 content scan: text do 4 MiB; exchange z\u00e1znamy strop 20 000/soubor",
+    "wallet.dat (Berkeley DB) odlo\u017een \u2014 K2.1 deferred dle specu"
+   ],
+   "reference_dataset": null,
+   "test_files": [
+    "tests/test_k2_crypto_wallets.py",
+    "tests/test_k2_exchange_csv.py",
+    "tests/test_k2_pipeline_integration.py",
+    "tests/test_p11_quality_crypto_misc.py"
+   ],
+   "expected_results": {}
+  }
+ }
+}
