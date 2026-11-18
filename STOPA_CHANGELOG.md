@@ -6,7 +6,9 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
 ### Added — STOPA 2.1 · Etapa G Validace a release (uzavřeno)
 - **Full regression suite25**: `4278 passed / 1 skipped` (~22 min), exit 0; Ruff clean repo-wide; rozpočet `db.py` 599 < 600 ř.
-- **CI benchmark vs baseline**: `79/80 položek OK`; výjimka `pipeline.core` = **stale baseline** (STP-046, naměřeno před sandbox izolací parserů STP-047) — doloženo párovým měřením: warm single-shot i na původním commitu `de18452` ≈ 810 ms (ne 37.5 ms), origin/main ≈ HEAD v šumu ±15 % (běhy se kříží) → vlny P1-4 nepřidávají měřitelnou přirážku; oprava baseline čeká na schválení (verzený artefakt).
+- **CI benchmark vs baseline**: `79/80 položek OK`; výjimka `pipeline.core` = **stale baseline** (STP-046, naměřeno před sandbox izolací parserů STP-047) — doloženo párovým měřením: warm single-shot i na původním commitu `de18452` ≈ 810 ms (ne 37.5 ms), origin/main ≈ HEAD v šumu ±15 % (běhy se kříží) → vlny P1-4 nepřidávají měřitelnou přirážku; **baseline regenerována**:
+  `pipeline.core` 37.476 → 1726.838 ms + doplněna chybějící položka
+  `core.rust` (F21), verifikační běh **80/80 bez regresí**.
 - **Release notes + známé limity**: `docs/RELEASE_NOTES_2_1.md`; ROADMAP Etapa G ✅.
 
 ### Changed — STOPA 2.1 · P1-4 god-files refactoring (vlny E1/E2: rozklad `validation_registry.py`)

@@ -91,23 +91,22 @@ EXIF), `net` (scapy PCAP/reassembly), `analytics` (DuckDB OLAP).
 | Full regression suite25 (`pytest tests/ -q`, ~22 min) | **4278 passed / 1 skipped**, exit 0 |
 | Ruff (repo-wide, line length 100) | clean |
 | Golden povrchy P1-4 | CLI 60 příkazů + R0.4 epilogy 14/14; Web 94 rout byte-přesné; pipeline surface 3/3; validation_registry surface 5/5 (datový kontrakt 78 parserů) |
-| CI benchmark vs `benchmarks/baseline.json` (práh +20 %, noise guard ≥0.5 ms) | **79/80 položek OK** — výjimka viz níže |
+| CI benchmark vs `benchmarks/baseline.json` (práh +20 %, noise guard ≥0.5 ms) | **80/80 položek OK** — baseline regenerována v tomto release, viz „Známé limity“ |
 | Rozpočet `src/stopa/data/db.py` | 599 < 600 ř. |
 | Offline/determinismus | testy bez síťových služeb (LM Studio/stix2/WeasyPrint fake nebo `importorskip`) |
 
 ## Známé limity
 
-1. **Benchmark baseline `pipeline.core` je zastaralá** — versionovaný údaj
-   37.476 ms (STP-046) vznikl *před* zařazením sandbox izolace parserů do
-   pipeline (STP-047, subprocess per extraktor). Na vývojovém stroji není
-   reprodukovatelná v žádném stavu: warm single-shot i na původním commitu
-   `de18452` ≈ 810 ms; aktuálně ~1.2–1.7 s (5-iter průměr). CI job
-   `benchmark` je proto proti baseline červený už od STP-047 (maskováno
-   `continue-on-error`). Párové měření origin/main vs HEAD ukazuje, že vlny
-   P1-4 nepřidávají měřitelnou přirážku (obě hodnoty v šumu ±15 %, běhy se
-   kříží). Oprava: regenerace baseline (`ci_benchmark.py --update-baseline`)
-   nebo běh CI benchmarku s `STOPA_SANDBOX=0` — vyžaduje schválení (verzený
-   artefakt).
+1. **Benchmark baseline `pipeline.core` regenerována (dříve zastaralá)** —
+   původní versionovaný údaj 37.476 ms (STP-046) vznikl *před* zařazením
+   sandbox izolace parserů do pipeline (STP-047, subprocess per extraktor) a
+   nebyl na vývojovém stroji reprodukovatelný (warm single-shot i na původním
+   commitu `de18452` ≈ 810 ms). Párové měření origin/main vs HEAD prokázalo,
+   že vlny P1-4 nepřidávají měřitelnou přirážku (běhy se kříží v šumu ±15 %).
+   Baseline proto regenerována: `pipeline.core` = 1726.838 ms + doplněna
+   chybějící položka `core.rust` (F21); verifikační běh proti nové baseline
+   **80/80 bez regresí**. Pozor: při vysoké zátěži stroje může tato položka
+   být na pokraji 20 % prahu — CI job to maskuje `continue-on-error`.
 2. **P2 položky neimplementovány** (každá vlastní návrh + priorita + AK před
    implementací): timeline v2, plugin marketplace, multi-user kolaborace apod.
    — viz `docs/ROADMAP_2_1.md`.
