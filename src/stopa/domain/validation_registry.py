@@ -66,7 +66,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "běží generic + Amcache + ShimCache + Clipboard + SID + UserAssist (sdílená regf magic)",
             "závislost na regipy pro dekompozici klíčů",
         ),
-        test_files=("tests/test_registry_extract.py",),
+        test_files=("tests/test_registry_extract.py", "tests/test_p11_quality_syscore.py"),
     ),
     "plist": ParserValidation(
         parser_id="plist",
@@ -75,7 +75,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         limitations=(
             "datetime listy → artifact plist_date; top-level struktura jen triage",
         ),
-        test_files=("tests/test_plist_extract.py",),
+        test_files=("tests/test_plist_extract.py", "tests/test_p11_quality_syscore.py"),
     ),
     "lnk": ParserValidation(
         parser_id="lnk",
@@ -84,7 +84,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         limitations=(
             "bloky se čtou jen v kanonickém pořadí dle specifikace",
         ),
-        test_files=("tests/test_e6.py",),
+        test_files=("tests/test_e6.py", "tests/test_p11_quality_syscore.py"),
     ),
     "win_prefetch": ParserValidation(
         parser_id="win_prefetch",
@@ -104,7 +104,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "ElfFile varianta — magic ElfFile\\0 / ElfChnk\\0 (ground-truth disk)",
         ),
         limitations=("chunked struktura s BinXML — poškozený chunk = ztráta událostí"),
-        test_files=("tests/test_e7.py",),
+        test_files=("tests/test_e7.py", "tests/test_p11_quality_syscore.py"),
     ),
     "icloud_messages": ParserValidation(
         parser_id="icloud_messages",
@@ -638,7 +638,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "extensions→browser_extension; search provider + sync settings→browser_setting",
             "snapshot konfigurace bez času — timestamp=None; limit MAX_EXTENSIONS_PER_FILE=2000",
         ),
-        test_files=("tests/test_w8_parsers.py",),
+        test_files=("tests/test_w8_parsers.py", "tests/test_p11_quality_syscore.py"),
     ),
     "cloud_drive_files": ParserValidation(
         parser_id="cloud_drive_files",
