@@ -169,7 +169,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (*.xml s WLANProfile root elementem)",
             "SSID/autentizace z <network><SSIDConfig> a <authentication>",
         ),
-        test_files=("tests/test_win_wlan.py",),
+        test_files=("tests/test_win_wlan.py", "tests/test_p11_quality_chat_net.py"),
     ),
     "win_schedtask": ParserValidation(
         parser_id="win_schedtask",
@@ -195,7 +195,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "snapshot bez časového razítka — timestamp=None",
             "limit MAX_CONNECTIONS_PER_FILE=5000 spojení",
         ),
-        test_files=("tests/test_net_connections.py",),
+        test_files=("tests/test_net_connections.py", "tests/test_p11_quality_chat_net.py"),
     ),
     # ETAPA B vlna 2 — AXIOM port: Google lokální profily + scan outputy + CurrentTabs + MSN
     "google_search_history": ParserValidation(
@@ -311,7 +311,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "carved obsah bez spolehlivého času — timestamp=None",
             "limit MAX_MESSAGES_PER_FILE=5000 zpráv",
         ),
-        test_files=("tests/test_bebo_chat.py",),
+        test_files=("tests/test_bebo_chat.py", "tests/test_p11_quality_chat_net.py"),
     ),
     "chatroulette": ParserValidation(
         parser_id="chatroulette",
@@ -325,7 +325,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "carved obsah — čas jen pokud je v řádku; jinak timestamp=None",
             "limit MAX_MESSAGES_PER_FILE=5000 zpráv",
         ),
-        test_files=("tests/test_chatroulette.py",),
+        test_files=("tests/test_chatroulette.py", "tests/test_p11_quality_chat_net.py"),
     ),
     "mailru_agent": ParserValidation(
         parser_id="mailru_agent",
@@ -354,7 +354,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "transfer metadata (downloaded/uploaded by/from/to/on) jen pokud jsou ve vstupu",
             "limit MAX_FILES_PER_FILE=20000 souborů",
         ),
-        test_files=("tests/test_limewire_p2p.py",),
+        test_files=("tests/test_limewire_p2p.py", "tests/test_p11_quality_chat_net.py"),
     ),
     # ── ETAPA B vlna 4 — AXIOM port: portable-local typy (DDG allowlist, OpenOffice Base) ──
     "allowlisted_websites": ParserValidation(
