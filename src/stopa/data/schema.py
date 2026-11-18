@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS files (
     size_bytes INTEGER NOT NULL,
     mtime TEXT, ctime TEXT, atime TEXT,
     sha256 TEXT, md5 TEXT, sha512 TEXT,  -- STP-022: SHA-512 (forensic profil)
+    hashed_at TEXT,  -- P0-1 provenance: čas vyhasování (ISO UTC; NULL = legacy řádek před v21)
     signature_type TEXT, extension TEXT,
     bad_extension INTEGER NOT NULL DEFAULT 0,
     is_duplicate_of TEXT,
@@ -74,7 +75,8 @@ CREATE TABLE IF NOT EXISTS artifacts (
     provenance_json TEXT NOT NULL DEFAULT '[]',
     validation_status TEXT NOT NULL DEFAULT 'extracted',  -- extracted|validated|needs_validation
     review_state TEXT NOT NULL DEFAULT 'draft'            -- F4.3 peer-review: draft→reviewed→approved→court_ready
-        CHECK (review_state IN ('draft','reviewed','approved','court_ready'))
+        CHECK (review_state IN ('draft','reviewed','approved','court_ready')),
+    parent_artifact_id TEXT REFERENCES artifacts(id) ON DELETE SET NULL  -- P0-1 provenance: odvozený artefakt (NULL = kořenový)
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_source ON artifacts(source_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_ts ON artifacts(timestamp);
@@ -381,7 +383,9 @@ CREATE TABLE IF NOT EXISTS custody_items (
     acquired_at TEXT NOT NULL,
     method TEXT,
     custodian TEXT,
-    notes TEXT
+    notes TEXT,
+    -- P0-1 provenance: acquisition metadata (aditivní; NULL = legacy řádek před v21)
+    acquisition_tool TEXT, tool_version TEXT, verified_hash TEXT
 );
 
 -- FÁZE 3: full-text search (FTS5) — external content nad `files` + sync triggery.

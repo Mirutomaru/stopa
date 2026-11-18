@@ -31,6 +31,7 @@
 ## P0 — Kritické základy (nejprve; podle master promptu upraveno o reálná zjištění)
 
 ### P0-1 · Evidence Provenance Engine — hardening existujícího C1/C2/C5
+**Stav:** ✅ **hotové (jádro)** — schema **v21** (aditivní `files.hashed_at`, `custody_items.acquisition_tool/tool_version/verified_hash`, `artifacts.parent_artifact_id` self-FK) + idempotentní migrace pro case DB ≤ v20; čistá doména `domain/provenance_chain.py` (gaps vs. warnings, deterministické chronologické řazení); `data/provenance_repository.py`; CLI `stopa provenance <case> <artifact>` (exit **0** kompletní / **1** neznámý artefakt / **2** mezery) + Web `/api/cases/{id}/artifacts/{aid}/provenance`; testy **41/41 green** + živý CLI E2E.
 **Přínos:** dohledatelný řetězec ZDROJ → AKVIZE → OVĚŘENÍ → PARSER → ARTEFAKT → ANALÝZA → REPORT.
 **Změny (additive, zpětná kompatibilita):**
 1. `files` +kolumna `hashed_at TEXT` (+ metadata: kdy se hash počítal) — additive s defaultem NULL = staré řádky nezměněny
@@ -129,7 +130,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 |---|---|---|
 | **A — Audit** | git status/commit; mapa repo; testy se skutečnými výsledky; bezpečnostní rizika; seznam priorit | ✅ tento commit (ROADMAP_2_1.md + EXECUTIVE_SUMMARY.md) |
 | **B — Plán** | technický plán po malých krocích; u každé změny přínos/riziko/závislosti/testy; změny vyžadující souhlas uživatele (migrace v20, plugin API SemVer, schéma ledgeru) | ✅ P0 sekce nahoře (AK + velikosti) |
-| **C — Kritická bezpečnost a integrita** | P0-1..P0-5; izolované změny + testy po každé | 🔄 **✅ P0-2 + P0-3 + P0-4 + P0-5 hotové** (P0-2: AES-GCM obal klíče + rotace-safe checkpoints, 77/77 testů + E2E; P0-3: sandbox hardening 60/60; P0-4: parser-status CLI+Web 78/78 validováno + differential design doc; P0-5: `SECURITY_THREAT_MODEL.md` T-1..T-10); dále: **P0-1 provenance** (migrace **v21** — v20 obsadil P0-2) |
+| **C — Kritická bezpečnost a integrita** | P0-1..P0-5; izolované změny + testy po každé | ✅ **P0-1 + P0-2 + P0-3 + P0-4 + P0-5 hotové** (P0-1: provenance engine — schema v21 + idempotentní migrace, čistá doména + repository, CLI `provenance` exit 0/1/2 + Web endpoint, testy 41/41 + živý E2E; P0-2: AES-GCM obal klíče + rotace-safe checkpoints, 77/77 testů + E2E; P0-3: sandbox hardening 60/60; P0-4: parser-status CLI+Web 78/78 validováno + differential design doc; P0-5: `SECURITY_THREAT_MODEL.md` T-1..T-10) |
 | **D — Kvalita parserů a architektura** | P1-1, P1-4, P0-6 migrace po schváleném plánu | ⏳ |
 | **E — AI** | P1-2 | ⏳ |
 | **F — Nové funkce** | jen schválené a odůvodněné; po malých releasovatelných celcích | ⏳ |

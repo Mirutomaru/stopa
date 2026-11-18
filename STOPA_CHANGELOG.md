@@ -2,7 +2,16 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model)
+## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-1 evidence provenance engine + P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model)
+
+### Added — STOPA 2.1 · P0-1 Evidence Provenance Engine (hardening C1/C2/C5)
+- **Schema v20 → v21** (`schema.py`): aditivní sloupce bez ztráty dat, staré řádky = NULL (legacy): `files.hashed_at` (čas vyhasování), `custody_items.acquisition_tool / tool_version / verified_hash` (metadata nabytí per zdroj), `artifacts.parent_artifact_id` self-FK `ON DELETE SET NULL` (odvozený artefakt). Idempotentní migrace `apply_provenance_metadata_migration()` (`PRAGMA table_info` + `ALTER TABLE ADD COLUMN`) pro case DB ≤ v20; na novém schématu no-op.
+- **Doména** `domain/provenance_chain.py` (čistá logika bez I/O): `build_provenance(...)` z normalizovaného kontextu — kroky nabytí zdroje → vyhasování souboru → extrakční operace → lineage události → volitelný parent link; **gaps** = tvrdé mezery (řetězec neúplný: missing_source / missing_file_hash / no_extraction_in_lineage / broken_parent_link), **warnings** = měkké mezery legacy řádků (hash bez timestampu, chybějící akvizační metadata); deterministické chronologické řazení se stabilitou při stejném razítku (priorita acquisition → file_hash → operation → lineage → parent_link) — nezávislé na pořadí vstupních řádek; `provenance_report()` = JSON-serializovatelný kontrakt.
+- **Data** `data/provenance_repository.py`: normalizace řádek (files/sources/custody_items/analysis_operations/lineage_events) pro `build_provenance(**ctx)`; `_ref_ids()` tolerantní parser JSON refů (string i `{id}` objekty).
+- **CLI**: `stopa provenance <case_id> <artifact_id> [--json]` — exit **0** = kompletní řetězec, **2** = mezery (gaps), **1** = chyba/neznámý artefakt; textový i JSON výstup.
+- **Web**: `GET /api/cases/{case_id}/artifacts/{artifact_id}/provenance` (404 = neexistující artefakt).
+- **Testy** `tests/test_p01_provenance.py` (+23): doména — kompletní řetězec bez mezer, determinismus při shuffle vstupů, gaps per typ, warnings legacy, parent link OK/broken, TypeError na špatném id, report kontrakt + JSON serializace; migrace — aditivní sloupce na legacy v20 DB, idempotence + zachování dat, no-op na v21; CLI E2E (exit 0/1/2, JSON+text); Web endpoint přes TestClient. **41/41 green** (vč. wave3) + živý subprocess E2E (`stopa provenance` exit 0/2/1).
+- `db.py` facade nedotčená → rozpočet 599/600 drží. Ruff clean na všech změněných souborech.
 
 ### Added — STOPA 2.1 · P0-2 Klíčová správa a rotace Ed25519 integrity klíče
 - **Doména** `domain/integrity.py`: nové `wrap_private_key()` / `unwrap_private_key()` — AES-GCM (AES-256) obal soukromého klíče pod 32B master secret; formát JSON `{v:1, nonce, ct}`; **legacy plaintext b64 prochází beze změny** (backward compat); chybové sémantika konzistentní s P0-3 (typ = `TypeError`, sémantika = `ValueError` s kontextem).
@@ -31,7 +40,8 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 - **Dokument** `docs/SECURITY_THREAT_MODEL.md` (STRIDE-lite, T-1..T-10) s důkazy v kódu: bootstrap okno bez prvního uživatele, lokální login, `session_secret` uuid4 + default perms 0644 (fix P0-2/P0-4), bind adresa bez TLS na LAN, plugin sandbox = zdrojová izolace nikoli souborová; residual ověření předáno do P0-4 validation lab.
 
 ### Changed
-- `docs/ROADMAP_2_1.md`: etapa C — **P0-2 + P0-3 + P0-4 + P0-5 hotové**; dále P0-1 provenance (migrace v21, v20 obsadil P0-2).
+- **Schema v20 → v21** (`data/schema.py` + `data/migrations.py`): aditivní provenance sloupce (P0-1); `tests/test_stp041_wave3_schema_migrations.py` — assertion `SCHEMA_VERSION` aktualizováno 20→21.
+- `docs/ROADMAP_2_1.md`: etapa C — **P0-1 + P0-2 + P0-3 + P0-4 + P0-5 hotové**.
 
 ## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack | FÁZE 6 = F6.1 Timesketch export & push + F6.2 STIX 2.1/UCO plná implementace + F6.3 MITRE ATT&CK mapping + F6.4 Plugin ecosystem)
 

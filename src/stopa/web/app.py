@@ -889,6 +889,27 @@ def create_app(
         finally:
             db.close()
 
+    @app.get("/api/cases/{case_id}/artifacts/{artifact_id}/provenance")
+    def artifact_provenance(case_id: str, artifact_id: str) -> dict:
+        """P0-1 — řetězec provenience artefaktu (kroky + mezery + upozornění).
+
+        404 = artefakt neexistuje. Kroky jsou chronologické a deterministické;
+        ``gaps`` = tvrdé mezery (řetězec neúplný), ``warnings`` = měkké mezery
+        (např. legacy hash bez timestampu).
+        """
+        from stopa.data.provenance_repository import ProvenanceRepository
+
+        db = open_db(case_id)
+        try:
+            ctx = ProvenanceRepository(db.conn).get_artifact_context(artifact_id)
+        finally:
+            db.close()
+        if ctx is None:
+            raise HTTPException(404, f"Artefakt {artifact_id} neexistuje")
+        from stopa.domain.provenance_chain import build_provenance, provenance_report
+
+        return provenance_report(build_provenance(**ctx))
+
     @app.post("/api/cases/{case_id}/artifacts/{artifact_id}/review", status_code=201)
     def artifact_review(case_id: str, artifact_id: str, body: ReviewStateIn) -> dict:
         """Přechod review stavu (draft→reviewed→approved→court_ready).

@@ -128,6 +128,10 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     # P0-2 Seal key management — stará case DB (≤ v19) bez sloupce public_key_b64
     # u integrity_checkpoints (rotace-safe ověření kontrolních bodů).
     apply_integrity_rotation_migration(conn)
+    # P0-1 Evidence Provenance Engine — staré case DB (≤ v20) bez aditivních
+    # provenance sloupců (files.hashed_at, custody_items acquisition metadata,
+    # artifacts.parent_artifact_id). Idempotentní; nová DB mají vše ze SCHEMA.
+    apply_provenance_metadata_migration(conn)
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).
     if _schema_version(conn) < SCHEMA_VERSION:
@@ -355,4 +359,34 @@ def apply_integrity_rotation_migration(conn: sqlite3.Connection) -> None:
     }
     if "public_key_b64" not in cp_cols:
         conn.execute("ALTER TABLE integrity_checkpoints ADD COLUMN public_key_b64 TEXT")
+        conn.commit()
+
+
+def apply_provenance_metadata_migration(conn: sqlite3.Connection) -> None:
+    """P0-1 Evidence Provenance Engine — stará case DB (schéma ≤ v20).
+
+    Idempotentní, bez ztráty dat; aditivní sloupce pro řetězec provenience:
+
+    - ``files.hashed_at`` — čas vyhasování (NULL = legacy řádek před v21),
+    - ``custody_items.acquisition_tool / tool_version / verified_hash`` —
+      metadata nabytí důkazu per zdroj,
+    - ``artifacts.parent_artifact_id`` — odkaz na odvozený artefakt (self-FK).
+
+    Nové DB mají vše přímo ze SCHEMA — migrace je no-op.
+    """
+    file_cols = {r["name"] for r in conn.execute("PRAGMA table_info(files)").fetchall()}
+    if "hashed_at" not in file_cols:
+        conn.execute("ALTER TABLE files ADD COLUMN hashed_at TEXT")
+        conn.commit()
+    custody_cols = {
+        r["name"] for r in conn.execute("PRAGMA table_info(custody_items)").fetchall()
+    }
+    for col in ("acquisition_tool", "tool_version", "verified_hash"):
+        if col not in custody_cols:
+            conn.execute(f"ALTER TABLE custody_items ADD COLUMN {col} TEXT")
+            conn.commit()
+    art_cols = {r["name"] for r in conn.execute("PRAGMA table_info(artifacts)").fetchall()}
+    if "parent_artifact_id" not in art_cols:
+        # bez inline FK (staré DB): logická self-referenc, ON DELETE SET NULL v DDL pro nová DB
+        conn.execute("ALTER TABLE artifacts ADD COLUMN parent_artifact_id TEXT")
         conn.commit()

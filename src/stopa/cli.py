@@ -2861,6 +2861,47 @@ def cmd_rotate_key(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_provenance(args: argparse.Namespace) -> int:
+    """P0-1 — řetězec provenience artefaktu (kroky + mezery; JSON report).
+
+    Exit 0 = kompletní řetězec; 2 = neúplný (existují gaps); 1 = chyba /
+    neznámý artefakt. Zpráva zahrnuje kroky chronologicky, tvrdé mezery
+    (gaps) a měkká upozornění (warnings, např. legacy hash bez timestampu).
+    """
+    json_mode = getattr(args, "json", False) or getattr(args, "format", None) == "json"
+    db = _open_db(args.case_id)
+    try:
+        from stopa.data.provenance_repository import ProvenanceRepository
+
+        ctx = ProvenanceRepository(db.conn).get_artifact_context(args.artifact_id)
+    finally:
+        db.close()
+    if ctx is None:
+        if json_mode:
+            print(json.dumps({"artifact_id": args.artifact_id, "error": "not_found"}, ensure_ascii=False))
+        else:
+            print(f"Artefakt '{args.artifact_id}' v případu neexistuje")
+        return 1
+
+    from stopa.domain.provenance_chain import build_provenance, provenance_report
+
+    report = provenance_report(build_provenance(**ctx))
+    if json_mode:
+        print(json.dumps(report, ensure_ascii=False, default=str))
+        return 0 if report["complete"] else 2
+    state = "COMPLETE" if report["complete"] else "INCOMPLETE"
+    print(f"Provenance chain {report['artifact_id']} [{state}]")
+    for s in report["steps"]:
+        ts = s.get("timestamp") or "?"
+        extra = f" cfg={s['config_hash'][:12]}…" if s.get("config_hash") else ""
+        print(f"  {ts}  {s['kind']:<14} — {s['description']}{extra}")
+    for g in report["gaps"]:
+        print(f"  gap: {g}")
+    for w in report["warnings"]:
+        print(f"  warning: {w}")
+    return 0 if report["complete"] else 2
+
+
 def cmd_parser_status(args: argparse.Namespace) -> int:
     """P0-4 validation lab — per-parser validační status (registry level).
 
@@ -4022,6 +4063,7 @@ _SUBCOMMAND_EXAMPLES = {
     "integrity-keys": "stopa integrity-keys case-abc --json",
     "rotate-key": "stopa rotate-key case-abc --reason 'legace v týmu'",
     "parser-status": "stopa parser-status --format json",
+    "provenance": "stopa provenance case-abc art-123 --json",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
     "daubert": "stopa daubert case-abc   # F5.5 — Daubert pack (peer-reviewed reference + error rates)",
     "attack-map": "stopa attack-map case-abc --format stix --out ./map.json   # F6.3 — MITRE ATT&CK heat-mapa",
@@ -4194,6 +4236,13 @@ def build_parser() -> argparse.ArgumentParser:
     ps_p.add_argument("--fail-on-unvalidated", action="store_true",
                       help="CI gate: exit 2, pokud existují unvalidované parserty")
     ps_p.set_defaults(func=cmd_parser_status)
+
+    prov_p = _ex_sub(sub, "provenance",
+                     help="P0-1 — řetězec provenience artefaktu (kroky + mezery; exit 2 = neúplný)")
+    prov_p.add_argument("case_id")
+    prov_p.add_argument("artifact_id")
+    _add_json_flag(prov_p)
+    prov_p.set_defaults(func=cmd_provenance)
 
     comp_p = _ex_sub(sub, "compliance",
                      help="F5.2 — SWGDE/ISO 27037 compliance report (JSON+PDF, Ed25519 podpis)")
