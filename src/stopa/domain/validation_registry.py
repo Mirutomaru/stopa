@@ -264,7 +264,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "paměťový snapshot bez času — timestamp=None",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů; dedupe cest v filescan",
         ),
-        test_files=("tests/test_mem_scan.py", "tests/test_p11_quality_memory.py"),
+        test_files=("tests/test_mem_scan.py", "tests/test_p11_quality_memory.py", "tests/test_p11_quality_locale.py"),
     ),
     "ddg_current_tabs": ParserValidation(
         parser_id="ddg_current_tabs",
@@ -560,6 +560,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w7_parsers.py",
             "tests/test_p11_quality_chrome_skype.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "chrome_history_wr": ParserValidation(
@@ -576,6 +577,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w7_parsers.py",
             "tests/test_p11_quality_chrome_skype.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "contacts_wr": ParserValidation(
@@ -592,6 +594,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w7_parsers.py",
             "tests/test_p11_quality_chrome_skype.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "chrome_autofill": ParserValidation(
@@ -608,6 +611,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w7_parsers.py",
             "tests/test_p11_quality_chrome_skype.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "skype_warrant": ParserValidation(
@@ -624,6 +628,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w7_parsers.py",
             "tests/test_p11_quality_chrome_skype.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     # ── ETAPA B vlna 8 — AXIOM port: Chrome prefs/sync + cloud drive soubory + Google Voice WR + drivers ──
@@ -690,7 +695,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "pid/name/commandline tolerantně; snapshot paměti bez času — timestamp=None",
             "limit MAX_PROCESSES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py", "tests/test_p11_quality_locale.py"),
     ),
     "mem_network": ParserValidation(
         parser_id="mem_network",
@@ -703,7 +708,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "pid/localAddress/remoteAddress/state tolerantně; snapshot paměti bez času — timestamp=None",
             "limit MAX_CONNECTIONS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py", "tests/test_p11_quality_locale.py"),
     ),
     "mem_handles": ParserValidation(
         parser_id="mem_handles",
@@ -716,7 +721,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "handle value normalizován na hex string; snapshot paměti bez času — timestamp=None",
             "limit MAX_HANDLES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py", "tests/test_p11_quality_locale.py"),
     ),
     "mem_modules": ParserValidation(
         parser_id="mem_modules",
@@ -729,7 +734,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "adresa normalizována na hex; inLdrList=false → anomaly flag hidden_module (DLL injection)",
             "snapshot paměti bez času — timestamp=None; limit MAX_MODULES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py", "tests/test_p11_quality_locale.py"),
     ),
     "mem_hooks": ParserValidation(
         parser_id="mem_hooks",
@@ -742,7 +747,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "callbackAddress normalizován na hex; snapshot paměti bez času — timestamp=None",
             "limit MAX_HOOKS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py", "tests/test_p11_quality_locale.py"),
     ),
     "instagram_messages": ParserValidation(
         parser_id="instagram_messages",
@@ -757,6 +762,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w10_parsers.py",
             "tests/test_p11_quality_instagram_snapchat.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "instagram_posts": ParserValidation(
@@ -772,6 +778,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w10_parsers.py",
             "tests/test_p11_quality_instagram_snapchat.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "instagram_account": ParserValidation(
@@ -788,6 +795,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w10_parsers.py",
             "tests/test_p11_quality_instagram_snapchat.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "snapchat_wr": ParserValidation(
@@ -804,6 +812,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w10_parsers.py",
             "tests/test_p11_quality_instagram_snapchat.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     # ── ETAPA B vlna 11 — cloud SNS rodina Twitter/X + Facebook ──────────────
@@ -820,6 +829,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w11_parsers.py",
             "tests/test_p11_quality_sns.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "twitter_messages": ParserValidation(
@@ -835,6 +845,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w11_parsers.py",
             "tests/test_p11_quality_sns.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "twitter_users": ParserValidation(
@@ -850,6 +861,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w11_parsers.py",
             "tests/test_p11_quality_sns.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "facebook_wr": ParserValidation(
@@ -866,6 +878,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w11_parsers.py",
             "tests/test_p11_quality_sns.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     # ── ETAPA B vlna 12 — cloud-export rodina Microsoft + Amazon ─────────────
@@ -882,6 +895,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w12_parsers.py",
             "tests/test_p11_quality_ms_amazon.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "ms_mail_pst": ParserValidation(
@@ -897,6 +911,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w12_parsers.py",
             "tests/test_p11_quality_ms_amazon.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "ms_teams_conversations": ParserValidation(
@@ -912,6 +927,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w12_parsers.py",
             "tests/test_p11_quality_ms_amazon.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "ms_teams_teams": ParserValidation(
@@ -927,6 +943,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w12_parsers.py",
             "tests/test_p11_quality_ms_amazon.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "ms_outlook_calendar": ParserValidation(
@@ -942,6 +959,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w12_parsers.py",
             "tests/test_p11_quality_ms_amazon.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "sharepoint_wr": ParserValidation(
@@ -957,6 +975,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w12_parsers.py",
             "tests/test_p11_quality_ms_amazon.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "amazon_cloudtrail": ParserValidation(
@@ -972,6 +991,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w12_parsers.py",
             "tests/test_p11_quality_ms_amazon.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     "amazon_ec2_s3": ParserValidation(
@@ -987,6 +1007,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w12_parsers.py",
             "tests/test_p11_quality_ms_amazon.py",
+            "tests/test_p11_quality_locale.py",
         ),
     ),
     # ETAPA B vlna 13 — cloud-export rodina Google II + Box/Dropbox/Mega
