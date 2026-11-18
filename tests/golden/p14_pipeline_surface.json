@@ -1,0 +1,60 @@
+{
+ "own_defs": [
+  "_FileWork",
+  "_case_id_for_source",
+  "_extract_artifacts_for",
+  "_extract_registry_all",
+  "_extract_sqlite_all",
+  "_maybe_auto_export",
+  "_name_based_match",
+  "_parser_error_artifact",
+  "_pool_init",
+  "_process_file_task",
+  "_process_file_worker",
+  "_read_head",
+  "_run_extractor",
+  "_sns_prepass",
+  "load_hash_sets",
+  "parser_versions",
+  "process_source",
+  "replay_extract",
+  "run_timeline_intel",
+  "summarize_outputs"
+ ],
+ "own_consts": [
+  "ARTIFACT_EXTRACTORS",
+  "NAME_BASED_EXTRACTORS",
+  "SANDBOX_CONFIG",
+  "SANDBOX_ENABLED",
+  "SIGNATURE_HEAD_BYTES",
+  "_POOL_PROFILE",
+  "_POOL_SETS",
+  "log"
+ ],
+ "compat_names": [
+  "ARTIFACT_EXTRACTORS",
+  "Artifact",
+  "SANDBOX_ENABLED",
+  "SandboxConfig",
+  "_extract_artifacts_for",
+  "_extract_sqlite_all",
+  "_parser_error_artifact",
+  "_process_file_worker",
+  "_run_extractor",
+  "_sns_prepass",
+  "load_hash_sets",
+  "parser_versions",
+  "process_source",
+  "replay_extract",
+  "run_timeline_intel",
+  "summarize_outputs"
+ ],
+ "signatures": {
+  "process_source": "(db: 'CaseDB', source_id: 'str', root: 'Path', profile_name: 'str' = 'forensic', hash_sets: 'dict[str, set[str]] | None' = None, progress: 'Callable[[int, int], None] | None' = None, resume: 'bool' = False, max_workers: 'int | None' = None, pool: 'str' = 'auto', commit_every: 'int' = 256, stop_event: 'threading.Event | None' = None, max_inflight: 'int | None' = None, pinned_parser_version: 'str | None' = None) -> 'ProcessResult'",
+  "replay_extract": "(op: 'AnalysisOperation', root: 'Path', workdir: 'Path | None' = None) -> 'ReplayResult'",
+  "run_timeline_intel": "(db: 'CaseDB', window_seconds: 'float' = 60.0) -> 'dict[str, int]'",
+  "load_hash_sets": "(paths: 'list[Path]') -> 'dict[str, set[str]]'",
+  "summarize_outputs": "(result: 'ProcessResult') -> 'dict'",
+  "parser_versions": "() -> 'dict[str, str]'"
+ }
+}
