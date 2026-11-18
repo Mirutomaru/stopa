@@ -528,5 +528,91 @@
       "--json",
       "-h"
     ]
+  },
+  "workspace": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "workspace/hypo-rev": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "workspace/hypo-rev/add": {
+    "opts": [
+      "--author",
+      "--claim",
+      "--help",
+      "--hypothesis",
+      "--json",
+      "-h"
+    ]
+  },
+  "workspace/hypo-rev/list": {
+    "opts": [
+      "--check-chain",
+      "--help",
+      "--hypothesis",
+      "--json",
+      "-h"
+    ]
+  },
+  "workspace/note": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "workspace/note/add": {
+    "opts": [
+      "--author",
+      "--help",
+      "--json",
+      "--ref",
+      "--text",
+      "-h"
+    ]
+  },
+  "workspace/note/list": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "workspace/task": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "workspace/task/add": {
+    "opts": [
+      "--assignee",
+      "--due",
+      "--help",
+      "--json",
+      "--title",
+      "-h"
+    ]
+  },
+  "workspace/task/list": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "workspace/task/set-status": {
+    "opts": [
+      "--help",
+      "--json",
+      "--status",
+      "--task",
+      "-h"
+    ]
   }
 }

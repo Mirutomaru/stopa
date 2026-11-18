@@ -28,6 +28,7 @@ import sys
 
 _log = logging.getLogger("stopa.cli")
 
+from stopa.domain.investigation_workspace import TASK_STATUSES  # P2-4 — workspace task stavy
 from stopa.domain.mem_forensics import DEFAULT_PLUGINS as _VOL_DEFAULT_PLUGINS
 from stopa.domain.profiles import PROFILES
 from stopa.domain.write_blocker import known_vendor_ids  # F5.4 — write-blocker API
@@ -128,6 +129,17 @@ from .commands.wb import (
     cmd_wb_attach,
     cmd_wb_remove,
     cmd_wb_status,
+)
+
+# P2-4 — Investigation Workspace přesunut do cli/commands/workspace.py
+from .commands.workspace import (
+    cmd_workspace_hypo_rev_add,
+    cmd_workspace_hypo_rev_list,
+    cmd_workspace_note_add,
+    cmd_workspace_note_list,
+    cmd_workspace_task_add,
+    cmd_workspace_task_list,
+    cmd_workspace_task_set_status,
 )
 
 # R0.4 — příklady pro --help (AK: každý subpříkaz ukazuje reálný příklad)
@@ -370,6 +382,91 @@ def build_parser() -> argparse.ArgumentParser:
     graph_p.add_argument("case_id")
     _add_json_flag(graph_p)
     graph_p.set_defaults(func=cmd_graph)
+
+    # P2-4 — Investigation Workspace: poznámky / úkoly / revize hypotéz (hash chain)
+    ws_p = sub.add_parser(
+        "workspace", help="P2-4 — investigation workspace (note/task/hypo-rev)"
+    )
+    ws_sub = ws_p.add_subparsers(dest="workspace_cmd", required=True, metavar="<podprikaz>")
+
+    # note — poznámky ukotvené na reference (druh:id)
+    ws_note_p = ws_sub.add_parser("note", help="Poznámky ukotvené na artefakt/entity/událost")
+    ws_note_sub = ws_note_p.add_subparsers(dest="note_cmd", required=True, metavar="<akce>")
+    wna_p = _ex_sub(
+        ws_note_sub, "add",
+        help="přidat poznámku (reference druh:id)",
+        example='stopa workspace note add case-abc --ref artifact:art-123 --text "poznamka" --author M.Matúš',
+    )
+    wna_p.add_argument("case_id")
+    wna_p.add_argument("--ref", required=True, metavar="DRUH:ID",
+                       help="ukotvení: artifact|entity|timeline_event : ID objektu")
+    wna_p.add_argument("--text", required=True, help="text poznámky")
+    wna_p.add_argument("--author", default=None, help="autor (volitelné)")
+    _add_json_flag(wna_p)
+    wna_p.set_defaults(func=cmd_workspace_note_add)
+    wnl_p = _ex_sub(
+        ws_note_sub, "list", help="seznam poznámek případu",
+        example="stopa workspace note list case-abc --json",
+    )
+    wnl_p.add_argument("case_id")
+    _add_json_flag(wnl_p)
+    wnl_p.set_defaults(func=cmd_workspace_note_list)
+
+    # task — úkoly se stavovým automatem open → in_progress → done
+    ws_task_p = ws_sub.add_parser("task", help="Úkoly (open/in_progress/done)")
+    ws_task_sub = ws_task_p.add_subparsers(dest="task_cmd", required=True, metavar="<akce>")
+    wta_p = _ex_sub(
+        ws_task_sub, "add", help="přidat úkol",
+        example='stopa workspace task add case-abc --title "ověřit hash" --assignee M.Matúš --due 2026-12-31T23:59:59',
+    )
+    wta_p.add_argument("case_id")
+    wta_p.add_argument("--title", required=True, help="název úkolu")
+    wta_p.add_argument("--assignee", default=None, help="přidělený (volitelné)")
+    wta_p.add_argument("--due", default=None, metavar="ISO", help="datum splatnosti ISO (volitelné)")
+    _add_json_flag(wta_p)
+    wta_p.set_defaults(func=cmd_workspace_task_add)
+    wts_p = _ex_sub(
+        ws_task_sub, "set-status", help="přepsat stav úkolu",
+        example="stopa workspace task set-status case-abc --task 12 --status done",
+    )
+    wts_p.add_argument("case_id")
+    wts_p.add_argument("--task", required=True, type=int, dest="task_id", metavar="ID", help="ID úkolu")
+    wts_p.add_argument("--status", required=True, choices=TASK_STATUSES, help="nový stav")
+    _add_json_flag(wts_p)
+    wts_p.set_defaults(func=cmd_workspace_task_set_status)
+    wtl_p = _ex_sub(
+        ws_task_sub, "list", help="seznam úkolů případu",
+        example="stopa workspace task list case-abc --json",
+    )
+    wtl_p.add_argument("case_id")
+    _add_json_flag(wtl_p)
+    wtl_p.set_defaults(func=cmd_workspace_task_list)
+
+    # hypo-rev — revize hypotéz jako append-only hash chain
+    ws_hr_p = ws_sub.add_parser(
+        "hypo-rev", help="Revize hypotéz (append-only hash chain, tamper detekce)"
+    )
+    ws_hr_sub = ws_hr_p.add_subparsers(dest="hyporev_cmd", required=True, metavar="<akce>")
+    wha_p = _ex_sub(
+        ws_hr_sub, "add", help="přidat příští revizi hypotézy (claim → deterministický hash)",
+        example='stopa workspace hypo-rev add case-abc --hypothesis hyp-1 --claim "uživatel online v 10:00" --author M.Matúš',
+    )
+    wha_p.add_argument("case_id")
+    wha_p.add_argument("--hypothesis", required=True, metavar="ID", help="ID hypotézy")
+    wha_p.add_argument("--claim", required=True, help="obsah revize (tvrzení)")
+    wha_p.add_argument("--author", default=None, help="autor (volitelné)")
+    _add_json_flag(wha_p)
+    wha_p.set_defaults(func=cmd_workspace_hypo_rev_add)
+    whl_p = _ex_sub(
+        ws_hr_sub, "list", help="seznam revizí; --check-chain ověří hash chain (exit 2 = porušení)",
+        example="stopa workspace hypo-rev list case-abc --hypothesis hyp-1 --check-chain",
+    )
+    whl_p.add_argument("case_id")
+    whl_p.add_argument("--hypothesis", default=None, metavar="ID", help="filtr na jednu hypotézu (volitelné)")
+    whl_p.add_argument("--check-chain", action="store_true",
+                       help="ověřit append-only hash chain; exit 2 = porušený řetězec")
+    _add_json_flag(whl_p)
+    whl_p.set_defaults(func=cmd_workspace_hypo_rev_list)
 
     comp_p = _ex_sub(sub, "compliance",
                      help="F5.2 — SWGDE/ISO 27037 compliance report (JSON+PDF, Ed25519 podpis)")

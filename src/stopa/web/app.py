@@ -788,7 +788,7 @@ def create_app(
         app.mount("/spa", StaticFiles(directory=spa_dir, html=True), name="spa")
 
     # P1-4 vlna C — routery domén (povrch byte-přesný: tests/golden/p14_web_surface.json)
-    from .routers import ai, analysis, cases, collab, files, reports, system
+    from .routers import ai, analysis, cases, collab, files, investigation, reports, system
 
     ctx = {
         "base": base,
@@ -825,6 +825,7 @@ def create_app(
     ai.register(app, ctx)
     reports.register(app, ctx)
     collab.register(app, ctx)
+    investigation.register(app, ctx)  # P2-4 — investigation workspace
     system.register(app, ctx)
 
     @app.get("/")

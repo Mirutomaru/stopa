@@ -172,6 +172,21 @@
   [
     "http",
     "GET",
+    "/api/cases/{case_id}/inv/hypo-revisions"
+  ],
+  [
+    "http",
+    "GET",
+    "/api/cases/{case_id}/inv/notes"
+  ],
+  [
+    "http",
+    "GET",
+    "/api/cases/{case_id}/inv/tasks"
+  ],
+  [
+    "http",
+    "GET",
     "/api/cases/{case_id}/l2tcsv-preview"
   ],
   [
@@ -322,6 +337,11 @@
   [
     "http",
     "PATCH",
+    "/api/cases/{case_id}/inv/tasks/{task_id}"
+  ],
+  [
+    "http",
+    "PATCH",
     "/api/users/{user_id}"
   ],
   [
@@ -373,6 +393,21 @@
     "http",
     "POST",
     "/api/cases/{case_id}/hypotheses/{hyp_id}/status"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/cases/{case_id}/inv/hypo-revisions"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/cases/{case_id}/inv/notes"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/cases/{case_id}/inv/tasks"
   ],
   [
     "http",
