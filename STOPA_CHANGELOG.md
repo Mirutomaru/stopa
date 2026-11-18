@@ -2,7 +2,7 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
-## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-5 security threat model)
+## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model)
 
 ### Added — STOPA 2.1 · P0-2 Klíčová správa a rotace Ed25519 integrity klíče
 - **Doména** `domain/integrity.py`: nové `wrap_private_key()` / `unwrap_private_key()` — AES-GCM (AES-256) obal soukromého klíče pod 32B master secret; formát JSON `{v:1, nonce, ct}`; **legacy plaintext b64 prochází beze změny** (backward compat); chybové sémantika konzistentní s P0-3 (typ = `TypeError`, sémantika = `ValueError` s kontextem).
@@ -18,11 +18,20 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 - **Dokumentace** `docs/PLUGINS_API.md`: tabulka SandboxLimits + deployment profily (izolovaná vs. plná síť).
 - **Testy** `tests/test_p03_sandbox_hardening.py` (+19): CPU/output limit, workdir izolace a cleanup, host cwd čistota, unshare sel → ValueError; kombinovaná suite s F6.4: 60/60 green.
 
+### Added — STOPA 2.1 · P0-4 Forensic Verification Lab (Parser Quality Framework jádro)
+- **Doména** `domain/parser_status.py` (čistá logika bez I/O): per-parser validační stav z C3 registry + testovacích souborů — `validated` ⟺ ≥1 deklarovaný testový soubor existuje a obsahuje ≥1 testovací funkci; `direct_tests` = spolehlivá atribuce (tělo testu odkazuje na parser_id), `total_tests` = kontextový součet sdílených souborů (sdílený soubor se parší jen jednou — cache hit+miss); volitelný injektovaný `stamp_loader` → `last_validated_ts` (ISO UTC) drží doménu bez fs metadata.
+- **Data** `data/parser_status_service.py`: repo anchor + file loader + mtime→ISO UTC stamp; report kontrakt `{count, validated, unvalidated[], dataset_coverage_pct, parsers[]}`.
+- **CLI**: `stopa parser-status [--format json] [--fail-on-unvalidated]` — exit 0 = OK, 1 = chyba, 2 = CI gate (existuje nevalidovaný parser).
+- **Web/UI**: endpoint `/api/parser-status` + sloupce „Stav (P0-4)" a „Testy" v Validation Center (legacy static UI) + souhrnný řádek (počet/validováno/úspěšnost/regrese); graceful degradation při selhání endpointu.
+- **Design doc** `docs/DIFFERENTIAL_TESTING.md`: referenční nástroje per formátové rodině, normalizační vrstva (epoch→UTC, NFKC, join keys s fail-fast), komparační engine s reportem rozdílných polí (missing_in_ref/extra_in_stopa/field_differs), verdiktová sémantika „ani STOPA ani reference automaticky nemají pravdu" (5 stavů adjudikace + zlatá pravda jako most k P1-1), schválený 8-krokový workflow, pilotní vlny.
+- **Testy** `tests/test_p04_parser_status.py` (+15): doména (status pravidla, direct/total počty, cache sdílených souborů, stamp_loader), data service na reálné registry, CLI text/JSON/fail-gate exit 2, Web endpoint přes TestClient; živý běh **78/78 parserů validováno**, reference datasety 0.0 % (poctivě).
+- **Fixed**: `tests/test_stp041_wave3_schema_migrations.py` — assertion `SCHEMA_VERSION` aktualizováno 19→20 (P0-2 migrace obsadila v20; stale test z GA).
+
 ### Added — STOPA 2.1 · P0-5 Security threat model
 - **Dokument** `docs/SECURITY_THREAT_MODEL.md` (STRIDE-lite, T-1..T-10) s důkazy v kódu: bootstrap okno bez prvního uživatele, lokální login, `session_secret` uuid4 + default perms 0644 (fix P0-2/P0-4), bind adresa bez TLS na LAN, plugin sandbox = zdrojová izolace nikoli souborová; residual ověření předáno do P0-4 validation lab.
 
 ### Changed
-- `docs/ROADMAP_2_1.md`: etapy C — **P0-2 + P0-3 + P0-5 hotové**; dále P0-4 validation lab → P0-1 provenance (migrace v21, v20 obsadil P0-2).
+- `docs/ROADMAP_2_1.md`: etapa C — **P0-2 + P0-3 + P0-4 + P0-5 hotové**; dále P0-1 provenance (migrace v21, v20 obsadil P0-2).
 
 ## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack | FÁZE 6 = F6.1 Timesketch export & push + F6.2 STIX 2.1/UCO plná implementace + F6.3 MITRE ATT&CK mapping + F6.4 Plugin ecosystem)
 

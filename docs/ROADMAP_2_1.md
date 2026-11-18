@@ -67,6 +67,7 @@
 **Velikost:** M · **Závislosti:** —
 
 ### P0-4 · Forensic Validation Lab (Parser Quality Framework jádro)
+**Stav:** ✅ **hotové (jádro)** — `domain/parser_status.py` + `data/parser_status_service.py`, CLI `stopa parser-status [--format json] [--fail-on-unvalidated]` (exit 0/1/2), Web `/api/parser-status` + UI sloupce Stav/Testy v Validation Center, design doc [`DIFFERENTIAL_TESTING.md`](./DIFFERENTIAL_TESTING.md); živý běh **78/78 parserů validováno**, test suite green.
 **Přínos:** transparentní stav validace každého parseru — počet typů ≠ prokázaná ekvivalence s komerčními nástroji.
 1. Per-parser záznam: validovaný/nevalidovaný, poslední úspěšná validace (ts), testovací pokrytí (počet testů), známé limity — v `validation_registry.py` jako data + CLI `stopa parser-status [--format json]`
 2. Parser Validation Lab: Web přehled (počet parserů / validovaných / úspěšnost / regrese)
@@ -128,7 +129,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 |---|---|---|
 | **A — Audit** | git status/commit; mapa repo; testy se skutečnými výsledky; bezpečnostní rizika; seznam priorit | ✅ tento commit (ROADMAP_2_1.md + EXECUTIVE_SUMMARY.md) |
 | **B — Plán** | technický plán po malých krocích; u každé změny přínos/riziko/závislosti/testy; změny vyžadující souhlas uživatele (migrace v20, plugin API SemVer, schéma ledgeru) | ✅ P0 sekce nahoře (AK + velikosti) |
-| **C — Kritická bezpečnost a integrita** | P0-1..P0-5; izolované změny + testy po každé | 🔄 **✅ P0-2 + P0-3 + P0-5 hotové** (P0-2: AES-GCM obal klíče + rotace-safe checkpoints, 77/77 testů + E2E; P0-3: sandbox hardening 60/60; P0-5: `SECURITY_THREAT_MODEL.md` T-1..T-10); dále: P0-4 validation lab → P0-1 provenance (migrace **v21** — v20 obsadil P0-2) |
+| **C — Kritická bezpečnost a integrita** | P0-1..P0-5; izolované změny + testy po každé | 🔄 **✅ P0-2 + P0-3 + P0-4 + P0-5 hotové** (P0-2: AES-GCM obal klíče + rotace-safe checkpoints, 77/77 testů + E2E; P0-3: sandbox hardening 60/60; P0-4: parser-status CLI+Web 78/78 validováno + differential design doc; P0-5: `SECURITY_THREAT_MODEL.md` T-1..T-10); dále: **P0-1 provenance** (migrace **v21** — v20 obsadil P0-2) |
 | **D — Kvalita parserů a architektura** | P1-1, P1-4, P0-6 migrace po schváleném plánu | ⏳ |
 | **E — AI** | P1-2 | ⏳ |
 | **F — Nové funkce** | jen schválené a odůvodněné; po malých releasovatelných celcích | ⏳ |

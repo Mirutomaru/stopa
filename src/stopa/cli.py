@@ -2861,6 +2861,53 @@ def cmd_rotate_key(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_parser_status(args: argparse.Namespace) -> int:
+    """P0-4 validation lab — per-parser validační status (registry level).
+
+    Staví na C3 registry (`domain.validation_registry`): pro každý registrovaný
+    parser vypíše validační status, pokrytí testy a reference dataset. Nevyžaduje
+    case DB — jde o stav registrace parserové sady, ne jednotlivého případu.
+
+    Exit: 0 = OK (případně --fail-on-unvalidated a vše validované);
+          1 = chyba;
+          2 = --fail-on-unvalidated a existují unvalidované parserty (CI gate).
+    """
+    json_mode = getattr(args, "json", False) or getattr(args, "format", None) == "json"
+    fail_on_unvalidated = getattr(args, "fail_on_unvalidated", False)
+
+    from stopa.data.parser_status_service import load_parser_status
+
+    try:
+        report = load_parser_status()
+    except Exception as e:  # noqa: BLE001 — CLI obal: libovolná chyba → čitelný výstup
+        if json_mode:
+            print(json.dumps({"error": str(e)}, ensure_ascii=False))
+        else:
+            print(f"parser status selhal: {e}", file=sys.stderr)
+        return 1
+
+    if json_mode:
+        print(json.dumps(report, ensure_ascii=False, default=str))
+    else:
+        print(
+            f"Parser status (C3 registry + P0-4): "
+            f"{report['validated']}/{report['count']} validováno, "
+            f"reference datasety {report['dataset_coverage_pct']} %"
+        )
+        for r in report["parsers"]:
+            ds = "✓" if r["reference_dataset"] else "-"
+            lim = f", {r['limitations_count']} limitací" if r["limitations_count"] else ""
+            print(
+                f"{r['validation_status']:<12} {r['parser_id']:<34} "
+                f"v{r['version']}  formáty={r['formats_count']}  "
+                f"testy={r['direct_tests']}/{r['total_tests']}  dataset={ds}{lim}"
+            )
+        if report["unvalidated"]:
+            print(f"\nUnvalidované parserty: {', '.join(report['unvalidated'])}")
+
+    return (2 if fail_on_unvalidated and report["unvalidated"] else 0)
+
+
 def cmd_reparse(args: argparse.Namespace) -> int:
     """F5.3 — re-run extrakce s deklarovánou verzí parseru + diff report.
 
@@ -3974,6 +4021,7 @@ _SUBCOMMAND_EXAMPLES = {
     "seal": "stopa seal case-abc --reason 'před soudním předložením'",
     "integrity-keys": "stopa integrity-keys case-abc --json",
     "rotate-key": "stopa rotate-key case-abc --reason 'legace v týmu'",
+    "parser-status": "stopa parser-status --format json",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
     "daubert": "stopa daubert case-abc   # F5.5 — Daubert pack (peer-reviewed reference + error rates)",
     "attack-map": "stopa attack-map case-abc --format stix --out ./map.json   # F6.3 — MITRE ATT&CK heat-mapa",
@@ -4137,6 +4185,15 @@ def build_parser() -> argparse.ArgumentParser:
                       help="důvod rotace (ukládá se do rotačního kontrolního bodu)")
     _add_json_flag(rk_p)
     rk_p.set_defaults(func=cmd_rotate_key)
+
+    ps_p = _ex_sub(sub, "parser-status",
+                   help="P0-4 validation lab — per-parser validační status (C3 registry + testy)")
+    ps_p.add_argument("--format", choices=["text", "json"], default="text",
+                      help="formát výstupu (default: textová tabulka)")
+    _add_json_flag(ps_p)
+    ps_p.add_argument("--fail-on-unvalidated", action="store_true",
+                      help="CI gate: exit 2, pokud existují unvalidované parserty")
+    ps_p.set_defaults(func=cmd_parser_status)
 
     comp_p = _ex_sub(sub, "compliance",
                      help="F5.2 — SWGDE/ISO 27037 compliance report (JSON+PDF, Ed25519 podpis)")

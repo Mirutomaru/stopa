@@ -2196,6 +2196,23 @@ def create_app(
             raise HTTPException(500, f"parser registry selhal: {e}") from e
         return {"count": len(rows), "parsers": rows}
 
+    # ── P0-4 — validation lab (per-parser status + test coverage) ────────────
+    @app.get("/api/parser-status")
+    def parser_status() -> dict:
+        """P0-4 validation lab — per-parser validační status s pokrytím testy.
+
+        Registry level (ne case): stav C3 registry + AST počítání testovacích
+        funkcí v deklarovaných test souborech. Souhrn: count/validated/
+        unvalidated/dataset_coverage_pct; detail = seznam parserů.
+        """
+        from stopa.data.parser_status_service import load_parser_status
+
+        try:
+            return load_parser_status()
+        except Exception as e:  # doplňková vrstva — log + degradace
+            log.warning("parser status selhal: %s", e)
+            raise HTTPException(500, f"parser status selhal: {e}") from e
+
     # ── STP-052 — Audit Center (oblast O) ─────────────────────
     @app.get("/api/cases/{case_id}/audit")
     def audit_center(

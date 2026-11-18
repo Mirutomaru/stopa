@@ -78,9 +78,9 @@ def _trigger_names(conn: sqlite3.Connection) -> set[str]:
 
 
 class TestSchemaModule:
-    def test_schema_version_is_19(self):
-        """F5.1: v19 přidává tabulku case_seals (Merkle zamčení případu)."""
-        assert SCHEMA_VERSION == 19
+    def test_schema_version_is_20(self):
+        """F5.1: v19 přidává tabulku case_seals; P0-2: v20 integrity_checkpoints.public_key_b64."""
+        assert SCHEMA_VERSION == 20
 
     def test_schema_version_fallback_on_empty_db(self, tmp_path: Path):
         """Bez meta řádku vrací 1 (staré DB bez verze)."""

@@ -16,9 +16,11 @@ function valStatusBadge(status) {
 
 /* ── hlavní renderer modulu ───────────────────────────────── */
 async function renderValidationCenter(cid) {
-  const [rep, reg] = await Promise.all([
+  const [rep, reg, ps] = await Promise.all([
     api(`/api/cases/${cid}/validation`),
     api("/api/validation/registry"),
+    // P0-4 — per-parser validační status (graceful degradation: selže → prázdná mapa)
+    api("/api/parser-status").catch(() => null),
   ]);
 
   // ── statistické karty + celková coverage bar ───────────────
@@ -73,18 +75,40 @@ async function renderValidationCenter(cid) {
       </tr>`).join("")
     : '<tr><td colspan="6" class="muted">Žádné artifacty v případě.</td></tr>';
 
-  // ── Parser Validation Registry (C3) ────────────────────────
+  // ── Parser Validation Registry (C3) + P0-4 validační status ────────────────
   const parsers = reg.parsers || [];
-  document.getElementById("val-registry").innerHTML = parsers.length
+  // P0-4 — mapa parser_id → {validation_status, direct_tests, total_tests}
+  const psMap = {};
+  if (ps && Array.isArray(ps.parsers)) {
+    for (const r of ps.parsers) psMap[r.parser_id] = r;
+  }
+  // P0-4 — souhrn: počet parserů / validovaných / úspěšnost (+ regrese = unvalidované)
+  const psSummary = ps
+    ? `<div class="small" style="margin-bottom:6px">
+         <strong>P0-4 validation lab:</strong> ${ps.validated}/${ps.count} parserů validováno
+         · úspěšnost ${Math.round((100 * ps.validated) / Math.max(1, ps.count))} %${
+           ps.unvalidated && ps.unvalidated.length
+             ? ` · regrese/unvalidované: <span class="mono">${esc(ps.unvalidated.join(", "))}</span>`
+             : ""
+         }
+       </div>`
+    : "";
+  document.getElementById("val-registry").innerHTML = psSummary + (parsers.length
     ? `<table class="kv-table"><thead><tr>
-         <th>Parser</th><th>Verze</th><th>Formáty</th><th>Omezení</th><th>Referenční dataset</th>
+         <th>Parser</th><th>Verze</th><th>Formáty</th><th>Omezení</th><th>Referenční dataset</th><th>Stav (P0-4)</th><th>Testy</th>
        </tr></thead><tbody>` +
-      parsers.map((p) => `<tr>
+      parsers.map((p) => {
+        const st = psMap[p.parser_id];
+        const ok = st && st.validation_status === "validated";
+        return `<tr>
         <td class="mono">${esc(p.parser_id)}</td>
         <td class="mono small">${esc(p.version || "—")}</td>
         <td class="small" title="${esc((p.formats || []).join("\n"))}">${esc((p.formats || [])[0] || "—")}${(p.formats || []).length > 1 ? ` (+${p.formats.length - 1})` : ""}</td>
         <td class="small muted" title="${esc((p.limitations || []).join("\n"))}">${esc((p.limitations || [])[0] || "—")}${(p.limitations || []).length > 1 ? ` (+${p.limitations.length - 1})` : ""}</td>
         <td class="mono small">${esc(p.reference_dataset || "—")}</td>
-      </tr>`).join("") + `</tbody></table>`
-    : "Registry je prázdné.";
+        <td>${st ? `<span class="conf-badge ${ok ? "verified" : "inferred"}">${ok ? "✓ validován" : "✗ unvalidovaný"}</span>` : '<span class="muted">—</span>'}</td>
+        <td class="mono small" title="přímé testy / celkem v deklarovaných souborech">${st ? `${st.direct_tests}/${st.total_tests}` : "—"}</td>
+      </tr>`;
+      }).join("") + `</tbody></table>`
+    : "Registry je prázdné.");
 }
