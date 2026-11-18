@@ -118,7 +118,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         limitations=(
             "detekce podle NÁZVU souboru (AXIOM Hunter) — magic bytes nestačí",
         ),
-        test_files=("tests/test_imessage_cloud.py",),
+        test_files=("tests/test_imessage_cloud.py", "tests/test_p11_quality_cloud_exports.py"),
     ),
     "win_jumplist": ParserValidation(
         parser_id="win_jumplist",
@@ -645,7 +645,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "provider auto-detekován podle markerů; verze souboru do details.versions",
             "čas ISO 8601 / epoch s/ms tolerantně; limit MAX_FILES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w8_parsers.py",),
+        test_files=("tests/test_w8_parsers.py", "tests/test_p11_quality_cloud_exports.py"),
     ),
     "google_voice_wr": ParserValidation(
         parser_id="google_voice_wr",
@@ -1018,7 +1018,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (box marker + file/folder/event) — pre-pass PŘED basename chainem",
             "soubor/složka = document_metadata (kind=file|folder), event = kind=event s akcí; limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w13_parsers.py",),
+        test_files=("tests/test_w13_parsers.py", "tests/test_p11_quality_cloud_exports.py"),
     ),
     "dropbox_mega": ParserValidation(
         parser_id="dropbox_mega",
@@ -1030,7 +1030,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (dropbox/mega marker) — pre-pass PŘED basename chainem",
             "soubor/složka = document_metadata (provider=dropbox|mega); limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w13_parsers.py",),
+        test_files=("tests/test_w13_parsers.py", "tests/test_p11_quality_cloud_exports.py"),
     ),
     # ETAPA B vlna 14 — dokončení cloud-export: Apple rodina + Google 2025 WR + WhatsApp
     # + generic cloud metadata + Gmail Messages + Maps Labeled Places
@@ -1093,6 +1093,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
         test_files=(
             "tests/test_w14_parsers.py",
             "tests/test_p11_quality_cloud_warrant.py",
+            "tests/test_p11_quality_cloud_exports.py",
         ),
     ),
     "gmail_messages": ParserValidation(
