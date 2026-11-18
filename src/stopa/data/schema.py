@@ -9,8 +9,8 @@ from __future__ import annotations
 import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
-# ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 22
+# ale verzi umožňuje detekci starých case DB a zálohu před destruktivní změnou.
+SCHEMA_VERSION = 23
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -377,6 +377,48 @@ CREATE TABLE IF NOT EXISTS graph_edges (
 CREATE INDEX IF NOT EXISTS idx_graph_edges_case ON graph_edges(case_id);
 """
 
+# P2-4 Investigation Workspace — poznámky, úkoly a revize hypotéz (aditivní).
+# Poznámka je ukotvena na artefakt/entity/timeline event; revize hypotézy =
+# append-only řetězec s hash chain (tamper detekce bez LLM).
+INVESTIGATION_DDL = """
+CREATE TABLE IF NOT EXISTS inv_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    ref_kind TEXT NOT NULL CHECK (ref_kind IN ('artifact', 'entity', 'timeline_event')),
+    ref_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    author TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_inv_notes_case ON inv_notes(case_id);
+
+CREATE TABLE IF NOT EXISTS inv_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'done')),
+    assignee TEXT,
+    due TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_inv_tasks_case ON inv_tasks(case_id);
+
+CREATE TABLE IF NOT EXISTS hypothesis_revisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    hypothesis_id TEXT NOT NULL REFERENCES hypotheses(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL,
+    content_json TEXT NOT NULL,
+    author TEXT,
+    prev_hash TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (hypothesis_id, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_hyprev_case ON hypothesis_revisions(case_id);
+"""
+
 SCHEMA = _SCHEMA_CORE + MULTITENANT_DDL + COLLAB_DDL + CASE_SEALS_DDL + """
 -- P0 Core C5: Reproducibility Engine — záznamy analytických operací.
 -- Každá operace nese vstupní soubory + hashe, verze parserů/STOPA, hash konfigurace,
@@ -452,4 +494,4 @@ CREATE TRIGGER IF NOT EXISTS artifacts_au AFTER UPDATE ON artifacts BEGIN
     INSERT INTO artifacts_fts(rowid, artifact_type, title, details_json)
     VALUES (new.rowid, new.artifact_type, new.title, new.details_json);
 END;
-""" + GRAPH_EDGES_DDL  # P1-3 Evidence Graph — ruční/AI hrany (aditivní)
+""" + GRAPH_EDGES_DDL + INVESTIGATION_DDL  # P1-3 hrany / P2-4 investigation workspace (aditivní)

@@ -57,6 +57,10 @@ EXPECTED_TABLES = {
     "notifications",
     # F5.1 — Compliance & Court-Readiness: Merkle zamčení stavu případu
     "case_seals",
+    # P2-4 — Investigation Workspace: poznámky, úkoly, revize hypotéz (hash chain)
+    "inv_notes",
+    "inv_tasks",
+    "hypothesis_revisions",
 }
 
 EXPECTED_AUDIT_TRIGGERS = {"audit_no_update", "audit_no_delete"}
@@ -78,9 +82,10 @@ def _trigger_names(conn: sqlite3.Connection) -> set[str]:
 
 
 class TestSchemaModule:
-    def test_schema_version_is_22(self):
-        """F5.1 v19; P0-2 v20 public_key_b64; P0-1 v21 provenance; P1-3 v22 graph_edges."""
-        assert SCHEMA_VERSION == 22
+    def test_schema_version_is_23(self):
+        """F5.1 v19; P0-2 v20 public_key_b64; P0-1 v21 provenance; P1-3 v22 graph_edges;
+        P2-4 v23 investigation workspace."""
+        assert SCHEMA_VERSION == 23
 
     def test_schema_version_fallback_on_empty_db(self, tmp_path: Path):
         """Bez meta řádku vrací 1 (staré DB bez verze)."""
