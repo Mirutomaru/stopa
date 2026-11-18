@@ -121,7 +121,8 @@ class TestService:
         # pilotní sady P1-1: sqlite + email_mbox pokrývají všech 8 kategorií
         assert not by_id["sqlite"]["missing"]
         assert not by_id["email_mbox"]["missing"]
-        assert 0 < rep["coverage_pct"] < 100.0
+        # P1-1 uzavřeno vlnou 17 — registry dosáhlo plného pokrytí (nový parser musí přijít s kompletní sadou)
+        assert rep["coverage_pct"] == 100.0
 
     def test_missing_files_are_tolerated(self, tmp_path):
         from stopa.data.parser_quality_service import build_parser_quality_report
@@ -155,7 +156,10 @@ class TestCli:
         assert "parser quality" in out and "sqlite" in out
 
     def test_fail_below_ci_gate(self):
+        # registry je po vlně 17 na plných 100 % → prah nad 100 sepnou, práh == 100 ne (gate: pct < PCT)
+        rc, _ = self._run("parser-quality", "--fail-below", "100.01")
+        assert rc == 2  # coverage (100) < 100.01 → gate sepně
         rc, _ = self._run("parser-quality", "--fail-below", "100")
-        assert rc == 2  # coverage < 100 → gate sepně
+        assert rc == 0  # hranice: 100 není pod 100
         rc, _ = self._run("parser-quality", "--fail-below", "0")
         assert rc == 0
