@@ -39,9 +39,12 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 ### Added — STOPA 2.1 · P0-5 Security threat model
 - **Dokument** `docs/SECURITY_THREAT_MODEL.md` (STRIDE-lite, T-1..T-10) s důkazy v kódu: bootstrap okno bez prvního uživatele, lokální login, `session_secret` uuid4 + default perms 0644 (fix P0-2/P0-4), bind adresa bez TLS na LAN, plugin sandbox = zdrojová izolace nikoli souborová; residual ověření předáno do P0-4 validation lab.
 
+### Added — STOPA 2.1 · P0-6 Frontend sjednocení (parity mapa)
+- **Dokument** `docs/FRONTEND_MIGRATION.md`: feature parity mapa všech **19/19 legacy modulů** (✅ 3 / 🟡 6 / ❌ 10 → migrační kroky S1–S10), pořadí dle master promptu s AK per krok (ATT&CK+threat intel → Daubert/validation → reporty/exporty → evidence management → timeline → artifact viewer → pluginy → case mgmt → AI workspace → administrace); každý krok = samostatný releasovatelný celek + rebuild SPA bundle; plán deprecace legacy UI (`?ui=legacy` flag po dosažení parity).
+
 ### Changed
 - **Schema v20 → v21** (`data/schema.py` + `data/migrations.py`): aditivní provenance sloupce (P0-1); `tests/test_stp041_wave3_schema_migrations.py` — assertion `SCHEMA_VERSION` aktualizováno 20→21.
-- `docs/ROADMAP_2_1.md`: etapa C — **P0-1 + P0-2 + P0-3 + P0-4 + P0-5 hotové**.
+- `docs/ROADMAP_2_1.md`: etapa C — **P0-1 + P0-2 + P0-3 + P0-4 + P0-5 hotové**; P0-6 parity mapa hotová (`FRONTEND_MIGRATION.md`, kroky S1–S10).
 
 ## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack | FÁZE 6 = F6.1 Timesketch export & push + F6.2 STIX 2.1/UCO plná implementace + F6.3 MITRE ATT&CK mapping + F6.4 Plugin ecosystem)
 

@@ -83,7 +83,8 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 **AK:** dokument se strukturovanými hrozbami (aktivní entita → hrozba → kontrola → zbytkové riziko); každá P0 položka odkazuje na svůj Threat ID.
 **Velikost:** S · **Závislosti:** —
 
-### P0-6 · Frontend sjednocení — strategie a parity mapa (FRONTEND_MIGRATION.md)
+### P0-6 · Frontend sjednocení — strategie a parity mapa (`FRONTEND_MIGRATION.md`)
+**Stav:** ✅ **hotové (dokument)** — parity mapa **19/19 legacy modulů** (✅ 3 / 🟡 6 / ❌ 10 → kroky S1–S10), migrační pořadí dle master promptu s AK per krok (každý = releasovatelný celek + rebuild SPA bundle), plán deprecace legacy UI. Implementační kroky S1–S10 = obsah etapy D/F.
 **Přínos:** jedno kanonické UI; konec dvojího údržbářského režimu.
 1. Feature parity mapa: každá funkce legacy UI → ekvivalent v React SPA (existuje/chybí/částečný) — **ověřený deficit:** ATT&CK heat-mapa + Daubert tlačítka jsou dnes jen v legacy
 2. Migrační pořadí (z master promptu): 1. ATT&CK+threat intel → 2. Daubert/validace → 3. reporty/exporty → 4. evidence management → 5. timeline → 6. artifact viewer → 7. pluginy → 8. case mgmt → 9. AI workspace → 10. administrace
