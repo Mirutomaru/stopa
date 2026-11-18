@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -355,6 +355,28 @@ CREATE TABLE IF NOT EXISTS case_seals (
 );
 """
 
+# P1-3 Evidence Graph — ruční/AI hrany unifikovaného grafu důkazů.
+# Každá hrana nese vztah, polaritu (podpůrná/protichůdná), důvod vzniku a confidence.
+# Derived hrany (korelace/hypotézy/události/findings) se počítají na letě
+# z existujících tabulek — tady se ukládají jen explicitní ruční/AI vztahy.
+GRAPH_EDGES_DDL = """
+CREATE TABLE IF NOT EXISTS graph_edges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    src_type TEXT NOT NULL CHECK (src_type IN ('artifact','entity','event','finding','hypothesis')),
+    src_id TEXT NOT NULL,
+    dst_type TEXT NOT NULL CHECK (dst_type IN ('artifact','entity','event','finding','hypothesis')),
+    dst_id TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    polarity TEXT NOT NULL DEFAULT 'neutral' CHECK (polarity IN ('supports','contradicts','neutral')),
+    reason TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.5 CHECK (confidence >= 0 AND confidence <= 1),
+    created_at TEXT NOT NULL,
+    UNIQUE (case_id, src_type, src_id, dst_type, dst_id, relation)
+);
+CREATE INDEX IF NOT EXISTS idx_graph_edges_case ON graph_edges(case_id);
+"""
+
 SCHEMA = _SCHEMA_CORE + MULTITENANT_DDL + COLLAB_DDL + CASE_SEALS_DDL + """
 -- P0 Core C5: Reproducibility Engine — záznamy analytických operací.
 -- Každá operace nese vstupní soubory + hashe, verze parserů/STOPA, hash konfigurace,
@@ -430,4 +452,4 @@ CREATE TRIGGER IF NOT EXISTS artifacts_au AFTER UPDATE ON artifacts BEGIN
     INSERT INTO artifacts_fts(rowid, artifact_type, title, details_json)
     VALUES (new.rowid, new.artifact_type, new.title, new.details_json);
 END;
-"""
+""" + GRAPH_EDGES_DDL  # P1-3 Evidence Graph — ruční/AI hrany (aditivní)

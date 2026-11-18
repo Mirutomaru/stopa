@@ -918,6 +918,54 @@ def create_app(
 
         return provenance_report(build_provenance(**ctx))
 
+    @app.get("/api/cases/{case_id}/evidence-graph")
+    def evidence_graph(case_id: str) -> dict:
+        """P1-3 — unifikovaný Evidence Graph (uzly + hrany s důvodem a polaritou).
+
+        Spojí korelace entit, hypotézy s důkazy pro/proti, timeline události
+        (subjekty + rozporné skupiny), findings a ruční/AI hrany z ``graph_edges``.
+        Explicitní hrana se stejným klíčem má přednost před odvozenou.
+        """
+        from stopa.data.graph_repository import GraphRepository
+
+        db = open_db(case_id)
+        try:
+            repo = GraphRepository(db.conn)
+            correlations = db.list_correlations(case_id)
+            hypotheses = db.hypothesis_repo.list_by_case(case_id)
+            events = db.list_timeline_events()
+            manual_rows = repo.list_edges(case_id)
+            findings = [
+                {
+                    "id": f.id,
+                    "kind": f.kind,
+                    "details_json": dict(f.details_json or {}),
+                    "provenance_json": [p.model_dump(mode="json") for p in (f.provenance or [])],
+                }
+                for f in db.list_findings(case_id)
+            ]
+            # Provenance odkazuje kanonicky na FileRecord.id → teprve přes mapu na artefakt
+            file_to_artifacts = {a.file_id: a.id for a in db.list_artifacts() if a.file_id}
+        finally:
+            db.close()
+
+        from stopa.domain.evidence_graph import EvidenceGraph, build_evidence_graph
+
+        manual = EvidenceGraph()
+        for row in manual_rows:  # explicitní hrany mají přednost
+            manual.add_edge(
+                src_type=row["src_type"], src_id=row["src_id"],
+                dst_type=row["dst_type"], dst_id=row["dst_id"],
+                relation=row["relation"], polarity=row.get("polarity") or "neutral",
+                confidence=float(row.get("confidence") or 0.5), reason=row["reason"],
+                origin="manual",
+            )
+        graph = build_evidence_graph(
+            base=manual, correlations=correlations, hypotheses=hypotheses,
+            findings=findings, events=events, file_to_artifacts=file_to_artifacts,
+        )
+        return graph.to_dict()
+
     @app.get("/api/ai/orchestrator-status")
     def ai_orchestrator_status() -> dict:
         """P1-2 — stav AI orchestrátoru (LM Studio dostupnost + registry rolí).

@@ -2902,6 +2902,78 @@ def cmd_provenance(args: argparse.Namespace) -> int:
     return 0 if report["complete"] else 2
 
 
+def cmd_graph(args: argparse.Namespace) -> int:
+    """P1-3 — unifikovaný Evidence Graph (důkaz↔entita↔událost↔zjištění).
+
+    Graf spojuje korelace entit, hypotézy s důkazy pro/proti, timeline události
+    (subjekty + rozporné skupiny) a findings; každá hrana nese důvod vzniku a
+    polaritu (podpůrná/protichůdná). Ruční/AI hrany z ``graph_edges`` mají
+    přednost před odvozenými se stejným klíčem.
+
+    Exit: 0 = graf sestaven; 1 = neznámý případ / chyba.
+    """
+    json_mode = getattr(args, "json", False) or getattr(args, "format", None) == "json"
+    db = _open_db(args.case_id)
+    try:
+        from stopa.data.graph_repository import GraphRepository
+
+        repo = GraphRepository(db.conn)
+        correlations = db.entity_repo.list_correlations(args.case_id)
+        hypotheses = db.hypothesis_repo.list_by_case(args.case_id)
+        events = db.list_timeline_events()
+        manual_rows = repo.list_edges(args.case_id)
+        # C1 findings (pydantic) → plain dicty pro čistou doménu.
+        findings = [
+            {
+                "id": f.id,
+                "kind": f.kind,
+                "details_json": dict(f.details_json or {}),
+                "provenance_json": [p.model_dump(mode="json") for p in (f.provenance or [])],
+            }
+            for f in db.list_findings(args.case_id)
+        ]
+        # Provenance odkazuje kanonicky na FileRecord.id → teprve přes mapu na artefakt
+        file_to_artifacts = {a.file_id: a.id for a in db.list_artifacts() if a.file_id}
+    finally:
+        db.close()
+
+    from stopa.domain.evidence_graph import EvidenceGraph, build_evidence_graph
+
+    # explicitní ruční/AI hrany mají přednost (derived s tímto klíčem se přeskočí)
+    manual = EvidenceGraph()
+    for row in manual_rows:
+        manual.add_edge(
+            src_type=row["src_type"], src_id=row["src_id"],
+            dst_type=row["dst_type"], dst_id=row["dst_id"],
+            relation=row["relation"], polarity=row.get("polarity") or "neutral",
+            confidence=float(row.get("confidence") or 0.5), reason=row["reason"],
+            origin="manual",
+        )
+    graph = build_evidence_graph(
+        base=manual, correlations=correlations, hypotheses=hypotheses,
+        findings=findings, events=events, file_to_artifacts=file_to_artifacts,
+    )
+
+    if json_mode:
+        print(json.dumps(graph.to_dict(), ensure_ascii=False, default=str))
+        return 0
+
+    s = graph.summary()
+    n = s["nodes"]
+    e = s["edges"]
+    print(f"Evidence graph {args.case_id}")
+    print(
+        f"  nodes: artifact={n['artifact']} entity={n['entity']} event={n['event']}"
+        f" finding={n['finding']} hypothesis={n['hypothesis']}"
+    )
+    bp = e["by_polarity"]
+    print(f"  edges: total={e['total']} supports={bp.get('supports', 0)}"
+          f" contradicts={bp.get('contradicts', 0)} neutral={bp.get('neutral', 0)}")
+    for rel in sorted(e["by_relation"]):
+        print(f"    {rel}: {e['by_relation'][rel]}")
+    return 0
+
+
 def cmd_parser_quality(args: argparse.Namespace) -> int:
     """P1-1 parser quality framework — per-parser pokrytí 8 quality kategorií.
 
@@ -4154,6 +4226,7 @@ _SUBCOMMAND_EXAMPLES = {
     "parser-quality": "stopa parser-quality --json",
     "ai-run": "stopa ai-run <case_id> --role evidence --artifact art-1 --json",
     "provenance": "stopa provenance case-abc art-123 --json",
+    "graph": "stopa graph case-abc --json   # P1-3 — Evidence Graph (hrany s důvodem a polaritou)",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
     "daubert": "stopa daubert case-abc   # F5.5 — Daubert pack (peer-reviewed reference + error rates)",
     "attack-map": "stopa attack-map case-abc --format stix --out ./map.json   # F6.3 — MITRE ATT&CK heat-mapa",
@@ -4357,6 +4430,12 @@ def build_parser() -> argparse.ArgumentParser:
     prov_p.add_argument("artifact_id")
     _add_json_flag(prov_p)
     prov_p.set_defaults(func=cmd_provenance)
+
+    graph_p = _ex_sub(sub, "graph",
+                      help="P1-3 — unifikovaný Evidence Graph (důkaz↔entita↔událost↔zjištění)")
+    graph_p.add_argument("case_id")
+    _add_json_flag(graph_p)
+    graph_p.set_defaults(func=cmd_graph)
 
     comp_p = _ex_sub(sub, "compliance",
                      help="F5.2 — SWGDE/ISO 27037 compliance report (JSON+PDF, Ed25519 podpis)")

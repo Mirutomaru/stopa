@@ -78,9 +78,9 @@ def _trigger_names(conn: sqlite3.Connection) -> set[str]:
 
 
 class TestSchemaModule:
-    def test_schema_version_is_21(self):
-        """F5.1 v19 case_seals; P0-2 v20 public_key_b64; P0-1 v21 provenance metadata."""
-        assert SCHEMA_VERSION == 21
+    def test_schema_version_is_22(self):
+        """F5.1 v19; P0-2 v20 public_key_b64; P0-1 v21 provenance; P1-3 v22 graph_edges."""
+        assert SCHEMA_VERSION == 22
 
     def test_schema_version_fallback_on_empty_db(self, tmp_path: Path):
         """Bez meta řádku vrací 1 (staré DB bez verze)."""
