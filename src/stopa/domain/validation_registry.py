@@ -278,7 +278,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "snapshot otevřených záložek bez času — timestamp=None",
             "limit MAX_TABS_PER_FILE=2000; dedupe URL v textovém formátu",
         ),
-        test_files=("tests/test_ddg_current_tabs.py",),
+        test_files=(
+            "tests/test_ddg_current_tabs.py",
+            "tests/test_p11_quality_crypto_misc.py",
+        ),
     ),
     "msn_messenger": ParserValidation(
         parser_id="msn_messenger",
@@ -291,7 +294,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "per-message čas chybí — timestamp=None (jen „Chat started on“ v hlavičce)",
             "limit MAX_MESSAGES_PER_FILE=5000 zpráv",
         ),
-        test_files=("tests/test_msn_messenger.py",),
+        test_files=(
+            "tests/test_msn_messenger.py",
+            "tests/test_p11_quality_crypto_misc.py",
+        ),
     ),
     # ── ETAPA B vlna 3 — AXIOM port: legacy mobile/messenger (Kik, Mail.ru, Bebo, Chatroulette, P2P) ──
     "bebo_chat": ParserValidation(
@@ -1159,6 +1165,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "tests/test_k2_crypto_wallets.py",
             "tests/test_k2_exchange_csv.py",
             "tests/test_k2_pipeline_integration.py",
+            "tests/test_p11_quality_crypto_misc.py",
         ),
     ),
 }
