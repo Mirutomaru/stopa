@@ -213,6 +213,14 @@ class ReviewStateIn(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class AiRunIn(BaseModel):
+    """Tělo POST .../ai/run — P1-2 AI role agenta nad důkazy případu."""
+
+    role: str  # evidence|timeline|network|memory|intelligence|hypothesis|report|qa
+    question: str = ""
+    artifact_ids: list[str] | None = None  # None = implicitně poslední 5 artefaktů
+
+
 class TimesketchPushIn(BaseModel):
     """STP-059 — push datasetu případu do Timesketch sketchu."""
 
@@ -909,6 +917,57 @@ def create_app(
         from stopa.domain.provenance_chain import build_provenance, provenance_report
 
         return provenance_report(build_provenance(**ctx))
+
+    @app.get("/api/ai/orchestrator-status")
+    def ai_orchestrator_status() -> dict:
+        """P1-2 — stav AI orchestrátoru (LM Studio dostupnost + registry rolí).
+
+        Oddělené od E11 ``/api/ai/status`` (ten zůstává pro GUI kompatibilitu).
+        """
+        from stopa.data.lmstudio_client import LmStudioClient, settings_from_env
+        from stopa.domain.ai_orchestrator import ROLE_IDS, build_role_registry
+
+        roles = build_role_registry()
+        return {
+            "lmstudio": LmStudioClient(settings_from_env()).health(),
+            "roles": [
+                {"id": rid, "title": roles[rid].title, "max_tokens": roles[rid].max_tokens}
+                for rid in ROLE_IDS
+            ],
+        }
+
+    @app.post("/api/cases/{case_id}/ai/run")
+    def ai_run(case_id: str, body: AiRunIn) -> dict:
+        """P1-2 — spustí AI roli nad důkazy případu (audit → case audit_log).
+
+        422 = neznámá role; 503 = LM Studio nedostupný po retrych;
+        404 = artefakt nenalezen / prázdný case. ``validated=False`` = výstup
+        nesplnil schema role (payload=None, QA signál).
+        """
+        from stopa.data.ai_orchestrator_service import AiOrchestrationError, run_role_on_case
+        from stopa.domain.ai_orchestrator import ROLE_IDS
+
+        if body.role not in ROLE_IDS:
+            raise HTTPException(422, f"neznámá AI role {body.role!r} (očekáván jeden z {ROLE_IDS})")
+        db = open_db(case_id)
+        try:
+            call, used_ids = run_role_on_case(db, body.role, question=body.question,
+                                              artifact_ids=body.artifact_ids)
+        except ValueError as e:
+            raise HTTPException(404, str(e)) from e
+        except AiOrchestrationError as e:
+            raise HTTPException(503, str(e)) from e
+        finally:
+            db.close()
+        return {
+            "role": call.role_id,
+            "validated": call.payload is not None,
+            "payload": call.payload,
+            "text": call.text,
+            "tokens_out": call.tokens_out,
+            "attempts": call.attempts,
+            "evidence": used_ids,
+        }
 
     @app.post("/api/cases/{case_id}/artifacts/{artifact_id}/review", status_code=201)
     def artifact_review(case_id: str, artifact_id: str, body: ReviewStateIn) -> dict:

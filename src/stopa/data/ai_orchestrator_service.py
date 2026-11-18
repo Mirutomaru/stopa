@@ -56,6 +56,76 @@ def estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+# ── case-level wiring (CLI/Web sdílená cesta) ───────────────────────────────
+
+#: Počet nejnovějších artefaktů jako implicitní důkaz (bez explicitních ID).
+DEFAULT_EVIDENCE_LIMIT = 5
+
+
+def artifact_to_evidence(art: Any) -> dict[str, Any]:
+    """Jeden ``Artifact`` → evidence item pro prompt ``{"id","title","text"}``.
+
+    Text důkazu = JSON ``details`` (nebo ``title``, pokud details prázdné);
+    délku omezuje ``sanitize_evidence_text`` v ``build_role_messages``.
+    """
+    from stopa.models import Artifact  # lazy — vyhnout se cyklu při startu
+
+    if not isinstance(art, Artifact):
+        raise TypeError(f"očekáván Artifact, got {type(art).__name__}")
+    text = json.dumps(art.details, ensure_ascii=False) if art.details else (art.title or "")
+    return {"id": art.id, "title": art.title or "", "text": text}
+
+
+def run_role_on_case(
+    db: Any,
+    role_id: str,
+    question: str = "",
+    artifact_ids: Sequence[str] | None = None,
+    *,
+    client: ChatClient | None = None,
+    budget_limit: int = 20_000,
+) -> tuple[OrchestratedCall, list[str]]:
+    """Spustí AI roli nad důkazy case DB; audit jde do ``db.log_operation``.
+
+    Důkazní sada: explicitní ``artifact_ids`` (každé musí existovat →
+    ``ValueError``) nebo implicitně posledních ``DEFAULT_EVIDENCE_LIMIT``
+    artefaktů chronologicky. Neznámá role / prázdný case → ``ValueError``;
+    nedostupný klient po retrych → ``AiOrchestrationError``.
+
+    Vrací ``(call, used_artifact_ids)`` — auditní záznamy nesmí ztratit
+    kontext, který důkaz byl modelu podán.
+    """
+    roles = build_role_registry()
+    if role_id not in roles:  # doménová ValueError (stejná jako v call_role)
+        raise ValueError(f"neznámá AI role {role_id!r}")
+
+    if artifact_ids is None:
+        # chronologicky vzestupně (repo ORDER BY timestamp ASC) → ocas = nejnovější
+        arts = list(db.list_artifacts())[-DEFAULT_EVIDENCE_LIMIT:]
+        if not arts:
+            raise ValueError("case nemá žádné artefakty (zadej explicitní --artifact)")
+    else:
+        arts = []
+        missing = [aid for aid in artifact_ids if db.get_artifact(aid) is None]
+        if missing:
+            raise ValueError(f"artefakty nenalezeny v případě: {', '.join(missing)}")
+        arts = [db.get_artifact(aid) for aid in artifact_ids]
+
+    evidence = [artifact_to_evidence(art) for art in arts]
+    used_ids = [art.id for art in arts]
+    budget = TokenBudget(session_limit=budget_limit)
+
+    def audit_sink(action: str, payload: dict[str, Any]) -> None:
+        db.log_operation(
+            action, actor="ai_orchestrator", details={**payload, "evidence": used_ids}
+        )
+
+    call = call_role(
+        role_id, question, evidence, client=client, budget=budget, audit_sink=audit_sink
+    )
+    return call, used_ids
+
+
 def _extract_json(text: str) -> Any | None:
     """První JSON objekt v odpovědi (model obaluje JSON do prose/markdown)."""
     start = text.find("{")

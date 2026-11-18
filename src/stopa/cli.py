@@ -2941,6 +2941,55 @@ def cmd_parser_quality(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ai_run(args: argparse.Namespace) -> int:
+    """P1-2 — AI role agenta nad důkazy případu (LM Studio orchestrátor).
+
+    Důkaz = explicitní ``--artifact`` ID, nebo implicitně poslední 5 artefaktů.
+    Auditní záznamy ``ai_role_call`` jdou do case audit_log (+ WS push F4.2).
+    Exit: 0 = validovaný strukturovaný výstup; 2 = volání OK, ale výstup
+    nesplnil schema role (payload=None — QA signál); 1 = chyba (role/artefakt/
+    nedostupný klient/překročený budget).
+    """
+    json_mode = getattr(args, "json", False)
+
+    from stopa.data.ai_orchestrator_service import AiOrchestrationError, run_role_on_case
+
+    db = _open_db(args.case_id)
+    try:
+        call, used_ids = run_role_on_case(
+            db, args.role, question=args.question or "", artifact_ids=args.artifact
+        )
+    except (ValueError, AiOrchestrationError) as e:  # CLI hrana — obojí semantické chyby
+        if json_mode:
+            print(json.dumps({"error": str(e)}, ensure_ascii=False))
+        else:
+            print(f"Chyba AI role {args.role!r}: {e}", file=sys.stderr)
+        return 1
+    finally:
+        db.close()
+
+    result = {
+        "role": call.role_id,
+        "validated": call.payload is not None,
+        "payload": call.payload,
+        "text": call.text,
+        "tokens_out": call.tokens_out,
+        "attempts": call.attempts,
+        "evidence": used_ids,
+    }
+    if json_mode:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        print(f"AI role {call.role_id} — pokusů {call.attempts}, tokenů(out) {call.tokens_out}")
+        print(f"Důkaz: {', '.join(used_ids)}")
+        if call.payload is not None:
+            print(json.dumps(call.payload, ensure_ascii=False, indent=2))
+        else:
+            print("Výstup nesplnil schema role (payload=None) — QA signál:")
+            print(f"  {call.text[:400]}")
+    return 0 if call.payload is not None else 2
+
+
 def cmd_parser_status(args: argparse.Namespace) -> int:
     """P0-4 validation lab — per-parser validační status (registry level).
 
@@ -4103,6 +4152,7 @@ _SUBCOMMAND_EXAMPLES = {
     "rotate-key": "stopa rotate-key case-abc --reason 'legace v týmu'",
     "parser-status": "stopa parser-status --format json",
     "parser-quality": "stopa parser-quality --json",
+    "ai-run": "stopa ai-run <case_id> --role evidence --artifact art-1 --json",
     "provenance": "stopa provenance case-abc art-123 --json",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
     "daubert": "stopa daubert case-abc   # F5.5 — Daubert pack (peer-reviewed reference + error rates)",
@@ -4276,6 +4326,21 @@ def build_parser() -> argparse.ArgumentParser:
     q_p.add_argument("--fail-below", type=float, metavar="PCT",
                      help="CI gate: exit 2, pokud category_coverage_pct < PCT (např. 60)")
     q_p.set_defaults(func=cmd_parser_quality)
+
+    from stopa.domain.ai_orchestrator import ROLE_IDS as _AI_ROLE_IDS
+
+    ai_p = _ex_sub(sub, "ai-run",
+                   help="P1-2 — AI role agenta nad důkazy případu (LM Studio; exit 2 = výstup bez validace)")
+    ai_p.add_argument("case_id")
+    ai_p.add_argument("--role", required=True, choices=_AI_ROLE_IDS,
+                      help="AI role (minimální oprávnění per doména)")
+    ai_p.add_argument("--question", metavar="OTAZKA", default="",
+                      help="otázka pro roli (volitelné; implicitní = analyzuj důkaz)")
+    ai_p.add_argument("--artifact", action="append", metavar="ID",
+                      help="explicitní artefakt jako důkaz (opakovatelné; "
+                           "default = poslední 5 artefaktů chronologicky)")
+    _add_json_flag(ai_p)
+    ai_p.set_defaults(func=cmd_ai_run)
 
     ps_p = _ex_sub(sub, "parser-status",
                    help="P0-4 validation lab — per-parser validační status (C3 registry + testy)")
