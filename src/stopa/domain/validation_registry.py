@@ -209,7 +209,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "timestamp z time.timestamp (epoch s); neplatné → None",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_google_search_history.py",),
+        test_files=("tests/test_google_search_history.py","tests/test_p11_quality_google_full.py", ),
     ),
     "google_location_history": ParserValidation(
         parser_id="google_location_history",
@@ -223,7 +223,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "souřadnice E7 (×1e-7) → stupně; epoch ms/s konverze",
             "limit MAX_POINTS_PER_FILE=5000 bodů",
         ),
-        test_files=("tests/test_google_location_history.py",),
+        test_files=("tests/test_google_location_history.py","tests/test_p11_quality_google_full.py", ),
     ),
     "google_login_history": ParserValidation(
         parser_id="google_login_history",
@@ -237,7 +237,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "epoch s/ms konverze; ISO text → display_time bez timestampu",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_google_login_history.py",),
+        test_files=("tests/test_google_login_history.py","tests/test_p11_quality_google_full.py", ),
     ),
     "google_account_info": ParserValidation(
         parser_id="google_account_info",
@@ -250,7 +250,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "snapshot profilu bez času — timestamp=None",
             "neznámá pole do details.extra",
         ),
-        test_files=("tests/test_google_account_info.py",),
+        test_files=("tests/test_google_account_info.py","tests/test_p11_quality_google_full.py", ),
     ),
     "mem_scan": ParserValidation(
         parser_id="mem_scan",
@@ -651,7 +651,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "auto-detekce subtypu: sms→sms_message, voicemail→voicemail, contacts→contact, subscriber→google_account",
             "čas epoch ms/s tolerantně; limit MAX_ENTRIES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w8_parsers.py",),
+        test_files=("tests/test_w8_parsers.py","tests/test_p11_quality_google_full.py", ),
     ),
     "win_drivers": ParserValidation(
         parser_id="win_drivers",
@@ -987,7 +987,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (google/takeout marker + calendar/event) — pre-pass PŘED basename chainem",
             "událost = calendar_event; limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w13_parsers.py",),
+        test_files=("tests/test_w13_parsers.py","tests/test_p11_quality_google_full.py", ),
     ),
     "google_keep_tasks": ParserValidation(
         parser_id="google_keep_tasks",
@@ -999,7 +999,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (google/takeout marker + keep/task/note) — pre-pass PŘED basename chainem",
             "poznámka/úkol = document_metadata (kind=keep_note|task); limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w13_parsers.py",),
+        test_files=("tests/test_w13_parsers.py","tests/test_p11_quality_google_full.py", ),
     ),
     "box_cloud": ParserValidation(
         parser_id="box_cloud",
