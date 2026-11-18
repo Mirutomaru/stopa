@@ -827,7 +827,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (microsoft/outlook marker + contact) — pre-pass PŘED basename chainem",
             "kontakt = contact (mimetype ms:contacts); limit MAX_CONTACTS_PER_FILE=20000 záznamů",
         ),
-        test_files=("tests/test_w12_parsers.py",),
+        test_files=(
+            "tests/test_w12_parsers.py",
+            "tests/test_p11_quality_ms_amazon.py",
+        ),
     ),
     "ms_mail_pst": ParserValidation(
         parser_id="ms_mail_pst",
@@ -839,7 +842,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (microsoft/outlook marker + mail/pst/message/email) — pre-pass PŘED basename chainem",
             "zpráva = email_message (mimetype ms:mail); limit MAX_MESSAGES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w12_parsers.py",),
+        test_files=(
+            "tests/test_w12_parsers.py",
+            "tests/test_p11_quality_ms_amazon.py",
+        ),
     ),
     "ms_teams_conversations": ParserValidation(
         parser_id="ms_teams_conversations",
@@ -851,7 +857,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (microsoft/teams marker + conversation/message/chat) — pre-pass PŘED basename chainem",
             "zpráva = chat_message (mimetype ms:teams); limit MAX_MESSAGES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w12_parsers.py",),
+        test_files=(
+            "tests/test_w12_parsers.py",
+            "tests/test_p11_quality_ms_amazon.py",
+        ),
     ),
     "ms_teams_teams": ParserValidation(
         parser_id="ms_teams_teams",
@@ -863,7 +872,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (teams.json / ms_teams.json, nebo team + microsoft/teams v cestě) — pre-pass PŘED basename chainem",
             "tým = contact s rolí team_member; členství se agreguje do details",
         ),
-        test_files=("tests/test_w12_parsers.py",),
+        test_files=(
+            "tests/test_w12_parsers.py",
+            "tests/test_p11_quality_ms_amazon.py",
+        ),
     ),
     "ms_outlook_calendar": ParserValidation(
         parser_id="ms_outlook_calendar",
@@ -875,7 +887,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (microsoft/outlook marker + calendar/event/appointment) — pre-pass PŘED basename chainem",
             "událost = calendar_event (mimetype ms:calendar); limit MAX_EVENTS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w12_parsers.py",),
+        test_files=(
+            "tests/test_w12_parsers.py",
+            "tests/test_p11_quality_ms_amazon.py",
+        ),
     ),
     "sharepoint_wr": ParserValidation(
         parser_id="sharepoint_wr",
@@ -887,7 +902,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (sharepoint marker) — pre-pass PŘED basename chainem",
             "dokument = cloud_file, site page = web_page; limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w12_parsers.py",),
+        test_files=(
+            "tests/test_w12_parsers.py",
+            "tests/test_p11_quality_ms_amazon.py",
+        ),
     ),
     "amazon_cloudtrail": ParserValidation(
         parser_id="amazon_cloudtrail",
@@ -899,7 +917,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (cloudtrail marker) — pre-pass PŘED basename chainem",
             "událost = event_log_entry (mimetype aws:cloudtrail); limit MAX_EVENTS_PER_FILE=20000 záznamů",
         ),
-        test_files=("tests/test_w12_parsers.py",),
+        test_files=(
+            "tests/test_w12_parsers.py",
+            "tests/test_p11_quality_ms_amazon.py",
+        ),
     ),
     "amazon_ec2_s3": ParserValidation(
         parser_id="amazon_ec2_s3",
@@ -911,7 +932,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (amazon/aws marker + ec2/s3/instance/bucket) — pre-pass PŘED basename chainem",
             "instance = cloud_instance (aws:ec2), S3 objekt = cloud_file (aws:s3); limit MAX_ITEMS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w12_parsers.py",),
+        test_files=(
+            "tests/test_w12_parsers.py",
+            "tests/test_p11_quality_ms_amazon.py",
+        ),
     ),
     # ETAPA B vlna 13 — cloud-export rodina Google II + Box/Dropbox/Mega
     "google_calendar_events": ParserValidation(
