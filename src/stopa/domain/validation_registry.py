@@ -264,7 +264,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "paměťový snapshot bez času — timestamp=None",
             "limit MAX_ENTRIES_PER_FILE=5000 záznamů; dedupe cest v filescan",
         ),
-        test_files=("tests/test_mem_scan.py",),
+        test_files=("tests/test_mem_scan.py", "tests/test_p11_quality_memory.py"),
     ),
     "ddg_current_tabs": ParserValidation(
         parser_id="ddg_current_tabs",
@@ -677,7 +677,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "pid/name/commandline tolerantně; snapshot paměti bez času — timestamp=None",
             "limit MAX_PROCESSES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py",),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
     ),
     "mem_network": ParserValidation(
         parser_id="mem_network",
@@ -690,7 +690,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "pid/localAddress/remoteAddress/state tolerantně; snapshot paměti bez času — timestamp=None",
             "limit MAX_CONNECTIONS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py",),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
     ),
     "mem_handles": ParserValidation(
         parser_id="mem_handles",
@@ -703,7 +703,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "handle value normalizován na hex string; snapshot paměti bez času — timestamp=None",
             "limit MAX_HANDLES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py",),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
     ),
     "mem_modules": ParserValidation(
         parser_id="mem_modules",
@@ -716,7 +716,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "adresa normalizována na hex; inLdrList=false → anomaly flag hidden_module (DLL injection)",
             "snapshot paměti bez času — timestamp=None; limit MAX_MODULES_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py",),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
     ),
     "mem_hooks": ParserValidation(
         parser_id="mem_hooks",
@@ -729,7 +729,7 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "callbackAddress normalizován na hex; snapshot paměti bez času — timestamp=None",
             "limit MAX_HOOKS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w9_parsers.py",),
+        test_files=("tests/test_w9_parsers.py", "tests/test_p11_quality_memory.py"),
     ),
     "instagram_messages": ParserValidation(
         parser_id="instagram_messages",
