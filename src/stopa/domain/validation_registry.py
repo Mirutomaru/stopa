@@ -792,7 +792,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (twitter marker + post/tweet/status) — SNS pre-pass PŘED basename chainem",
             "příspěvek = sns_post; retweety/odpovědi nesou post_type; limit MAX_POSTS_PER_FILE=5000 záznamů",
         ),
-        test_files=("tests/test_w11_parsers.py",),
+        test_files=(
+            "tests/test_w11_parsers.py",
+            "tests/test_p11_quality_sns.py",
+        ),
     ),
     "twitter_messages": ParserValidation(
         parser_id="twitter_messages",
@@ -804,7 +807,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (twitter marker + message/direct) — SNS pre-pass PŘED basename chainem",
             "konverzační i plošný formát; limit MAX_MESSAGES_PER_FILE=20000 záznamů",
         ),
-        test_files=("tests/test_w11_parsers.py",),
+        test_files=(
+            "tests/test_w11_parsers.py",
+            "tests/test_p11_quality_sns.py",
+        ),
     ),
     "twitter_users": ParserValidation(
         parser_id="twitter_users",
@@ -816,7 +822,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "detekce name-based (twitter marker + user/follower) — SNS pre-pass PŘED basename chainem",
             "uživatel = contact (mimetype sns:twitter); limit MAX_USERS_PER_FILE=20000 záznamů",
         ),
-        test_files=("tests/test_w11_parsers.py",),
+        test_files=(
+            "tests/test_w11_parsers.py",
+            "tests/test_p11_quality_sns.py",
+        ),
     ),
     "facebook_wr": ParserValidation(
         parser_id="facebook_wr",
@@ -829,7 +838,10 @@ PARSER_VALIDATIONS: dict[str, ParserValidation] = {
             "auto-detekce sekcí podle struktury payloadu; zprávy = chat_message, přátelé/profil = contact,",
             "timeline = sns_post",
         ),
-        test_files=("tests/test_w11_parsers.py",),
+        test_files=(
+            "tests/test_w11_parsers.py",
+            "tests/test_p11_quality_sns.py",
+        ),
     ),
     # ── ETAPA B vlna 12 — cloud-export rodina Microsoft + Amazon ─────────────
     "ms_contacts": ParserValidation(
