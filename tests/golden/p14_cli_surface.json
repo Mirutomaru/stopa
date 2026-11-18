@@ -1,0 +1,532 @@
+{
+  "<root>": {
+    "opts": [
+      "--help",
+      "--version",
+      "-h"
+    ]
+  },
+  "add": {
+    "opts": [
+      "--custodian",
+      "--hash-set",
+      "--help",
+      "--json",
+      "--method",
+      "--pool",
+      "--profile",
+      "--resume",
+      "--workers",
+      "-h"
+    ]
+  },
+  "advanced": {
+    "opts": [
+      "--file",
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "ai-run": {
+    "opts": [
+      "--artifact",
+      "--help",
+      "--json",
+      "--question",
+      "--role",
+      "-h"
+    ]
+  },
+  "analytics": {
+    "opts": [
+      "--dedupe",
+      "--from-ts",
+      "--help",
+      "--json",
+      "--limit",
+      "--to-ts",
+      "--type",
+      "-h"
+    ]
+  },
+  "analyze": {
+    "opts": [
+      "--agent",
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "antiforensics-scan": {
+    "opts": [
+      "--help",
+      "--image",
+      "--json",
+      "-h"
+    ]
+  },
+  "attack-map": {
+    "opts": [
+      "--format",
+      "--help",
+      "--json",
+      "--out",
+      "-h"
+    ]
+  },
+  "audit": {
+    "opts": [
+      "--help",
+      "--json",
+      "--limit",
+      "--offset",
+      "--verbose",
+      "-h",
+      "-v"
+    ]
+  },
+  "backup": {
+    "opts": [
+      "--help",
+      "--json",
+      "--out",
+      "-h"
+    ]
+  },
+  "benchmark": {
+    "opts": [
+      "--help",
+      "--json",
+      "--suite",
+      "-h"
+    ]
+  },
+  "case": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "case/auto-export": {
+    "opts": [
+      "--help",
+      "--interval",
+      "--json",
+      "-h"
+    ]
+  },
+  "case/auto-interval": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "case/new": {
+    "opts": [
+      "--examiner",
+      "--help",
+      "--json",
+      "--notes",
+      "-h"
+    ]
+  },
+  "compliance": {
+    "opts": [
+      "--help",
+      "--json",
+      "--out",
+      "-h"
+    ]
+  },
+  "correlate": {
+    "opts": [
+      "--help",
+      "--json",
+      "--verbose",
+      "-h",
+      "-v"
+    ]
+  },
+  "crypto-report": {
+    "opts": [
+      "--format",
+      "--help",
+      "--json",
+      "--out",
+      "-h"
+    ]
+  },
+  "darkweb": {
+    "opts": [
+      "--file",
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "daubert": {
+    "opts": [
+      "--help",
+      "--json",
+      "--out",
+      "-h"
+    ]
+  },
+  "decrypt": {
+    "opts": [
+      "--help",
+      "--json",
+      "--out",
+      "--password",
+      "--recovery-key",
+      "--type",
+      "-h"
+    ]
+  },
+  "export": {
+    "opts": [
+      "--bundle",
+      "--format",
+      "--help",
+      "--limit",
+      "--out",
+      "--validate-stix",
+      "--what",
+      "-h"
+    ]
+  },
+  "files": {
+    "opts": [
+      "--bad-ext",
+      "--dups",
+      "--family",
+      "--help",
+      "--json",
+      "--limit",
+      "-h"
+    ]
+  },
+  "graph": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "image": {
+    "opts": [
+      "--help",
+      "--json",
+      "--no-carve",
+      "--profile",
+      "-h"
+    ]
+  },
+  "import-mobile": {
+    "opts": [
+      "--help",
+      "--json",
+      "--source",
+      "-h"
+    ]
+  },
+  "install": {
+    "opts": [
+      "--dry-run",
+      "--help",
+      "--json",
+      "--skip-system",
+      "-h"
+    ]
+  },
+  "integrity": {
+    "opts": [
+      "--checkpoint",
+      "--help",
+      "--init-key",
+      "--json",
+      "-h"
+    ]
+  },
+  "integrity-keys": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "memory-analyze": {
+    "opts": [
+      "--help",
+      "--json",
+      "--plugin",
+      "--timeout",
+      "--with-defaults",
+      "-h"
+    ]
+  },
+  "mobile": {
+    "opts": [
+      "--fde-type",
+      "--help",
+      "--json",
+      "--keyfile",
+      "--no-carve",
+      "--password",
+      "--profile",
+      "--recovery-key",
+      "-h"
+    ]
+  },
+  "onchain": {
+    "opts": [
+      "--api-key",
+      "--depth",
+      "--etherscan-key",
+      "--help",
+      "--json",
+      "--no-network",
+      "-h"
+    ]
+  },
+  "parser-quality": {
+    "opts": [
+      "--fail-below",
+      "--format",
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "parser-status": {
+    "opts": [
+      "--fail-on-unvalidated",
+      "--format",
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "pcap-analyze": {
+    "opts": [
+      "--help",
+      "--json",
+      "--max-packets",
+      "-h"
+    ]
+  },
+  "plaso-import": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "plugin": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "plugin/info": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "plugin/list": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "plugin/run": {
+    "opts": [
+      "--cap",
+      "--case-id",
+      "--file",
+      "--help",
+      "--json",
+      "--key",
+      "--params",
+      "--tool",
+      "-h"
+    ]
+  },
+  "plugin/verify": {
+    "opts": [
+      "--add",
+      "--help",
+      "--remove",
+      "-h"
+    ]
+  },
+  "plugin-run": {
+    "opts": [
+      "--cap",
+      "--case-id",
+      "--file",
+      "--help",
+      "--key",
+      "--params",
+      "--tool",
+      "-h"
+    ]
+  },
+  "profiles": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "provenance": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "reparse": {
+    "opts": [
+      "--help",
+      "--json",
+      "--parser-version",
+      "--source-id",
+      "--workdir",
+      "-h"
+    ]
+  },
+  "replay": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "report": {
+    "opts": [
+      "--format",
+      "--help",
+      "--json",
+      "--lang",
+      "--out",
+      "-h"
+    ]
+  },
+  "rotate-key": {
+    "opts": [
+      "--help",
+      "--json",
+      "--reason",
+      "-h"
+    ]
+  },
+  "seal": {
+    "opts": [
+      "--help",
+      "--json",
+      "--reason",
+      "-h"
+    ]
+  },
+  "search": {
+    "opts": [
+      "--help",
+      "--json",
+      "--limit",
+      "--source",
+      "-h"
+    ]
+  },
+  "serve": {
+    "opts": [
+      "--help",
+      "--host",
+      "--port",
+      "-h"
+    ]
+  },
+  "stats": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "timeline": {
+    "opts": [
+      "--help",
+      "--intel",
+      "--json",
+      "--limit",
+      "--path",
+      "--source",
+      "--type",
+      "--verbose",
+      "--window",
+      "-h",
+      "-v"
+    ]
+  },
+  "timesketch-push": {
+    "opts": [
+      "--help",
+      "--json",
+      "--limit",
+      "--what",
+      "-h"
+    ]
+  },
+  "validate": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "verify": {
+    "opts": [
+      "--help",
+      "--json",
+      "--limit",
+      "-h"
+    ]
+  },
+  "wb": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "wb/attach": {
+    "opts": [
+      "--device",
+      "--help",
+      "--json",
+      "--notes",
+      "--product",
+      "--vendor",
+      "-h"
+    ]
+  },
+  "wb/remove": {
+    "opts": [
+      "--help",
+      "--json",
+      "--reason",
+      "-h"
+    ]
+  },
+  "wb/status": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  }
+}

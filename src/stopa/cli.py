@@ -4241,6 +4241,7 @@ _SUBCOMMAND_EXAMPLES = {
     "backup": "stopa backup case-abc --out /mnt/backup",
     "timeline": "stopa timeline case-abc --type browser_history --intel",
     "correlate": "stopa correlate case-abc -v",
+    "analytics": "stopa analytics case-abc --from-ts 2026-01-01T00:00:00Z --to-ts 2026-02-01T00:00:00Z",
     "image": "stopa image case-abc /path/disk.img --no-carve",
     "mobile": "stopa mobile case-abc /path/phone.img --password HESLO",
     "memory-analyze": "stopa memory-analyze case-abc /evidence/mem.raw --plugin windows.pslist",
@@ -4251,15 +4252,27 @@ _SUBCOMMAND_EXAMPLES = {
     "export": "stopa export case-abc --what timeline --format stix --bundle",
     "plaso-import": "stopa plaso-import case-abc /path/l2tcsv.txt",
     "timesketch-push": "stopa timesketch-push case-abc --what timeline --limit 1000",
+    "advanced": "stopa advanced case-abc --file /tmp/tx.json",
+    "decrypt": "stopa decrypt /path/vhd --type bitlocker --recovery-key KLIC",
+    "import-mobile": "stopa import-mobile case-abc /tmp/export.zip --source adb",
+    "onchain": "stopa onchain case-abc --etherscan-key KEY --depth 2",
+    "darkweb": "stopa darkweb case-abc --file /tmp/tx.json",
+    "crypto-report": "stopa crypto-report case-abc --format html",
     "serve": "stopa serve --port 8473",
     "install": "stopa install --dry-run   # nebo: stopa install (bez --dry-run)",
 }
 
 
-def _ex_sub(subparsers, name: str, *args, **kwargs) -> argparse.ArgumentParser:
-    """add_parser + epilog s příkladem (R0.4); bez záznamu vrací parser beze změny."""
+def _ex_sub(subparsers, name: str, *args, example=None, **kwargs) -> argparse.ArgumentParser:
+    """add_parser + epilog s příkladem (R0.4).
+
+    Explicitní ``example`` má přednost před záznamem v tabulce podle jména
+    (podřízené subpříkazy sdílejí holá jména napříč skupinami); bez příkladu
+    vrací parser beze změny.
+    """
     p = subparsers.add_parser(name, *args, **kwargs)
-    example = _SUBCOMMAND_EXAMPLES.get(name)
+    if example is None:
+        example = _SUBCOMMAND_EXAMPLES.get(name)
     if example:
         p.formatter_class = argparse.RawDescriptionHelpFormatter
         p.epilog = f"Příklad:\n  {example}"
@@ -4470,22 +4483,34 @@ def build_parser() -> argparse.ArgumentParser:
     # F6.4 — Plugin ecosystem
     plg_p = sub.add_parser("plugin", help="F6.4 — plugin ecosystem (list/info/verify/run)")
     plg_sub = plg_p.add_subparsers(dest="plugin_cmd", required=True, metavar="<podprikaz>")
-    plg_list = plg_sub.add_parser("list", help="seznam detekovaných pluginů")
+    plg_list = _ex_sub(
+        plg_sub, "list", help="seznam detekovaných pluginů", example="stopa plugin list --json"
+    )
     _add_json_flag(plg_list)
     plg_list.set_defaults(func=cmd_plugin_list)
-    plg_info = plg_sub.add_parser("info", help="detail jednoho pluginu")
+    plg_info = _ex_sub(
+        plg_sub, "info", help="detail jednoho pluginu", example="stopa plugin info myplug --json"
+    )
     plg_info.add_argument("name")
     _add_json_flag(plg_info)
     plg_info.set_defaults(func=cmd_plugin_info)
-    plg_verify = plg_sub.add_parser(
-        "verify", help="správa allowlistu ověřených pluginů (settings.json plugins_verified)"
+    plg_verify = _ex_sub(
+        plg_sub,
+        "verify",
+        help="správa allowlistu ověřených pluginů (settings.json plugins_verified)",
+        example="stopa plugin verify myplug --add",
     )
     plg_verify.add_argument("name")
     _plg_vgroup = plg_verify.add_mutually_exclusive_group(required=True)
     _plg_vgroup.add_argument("--add", action="store_true", help="přidat do allowlistu (in-process)")
     _plg_vgroup.add_argument("--remove", action="store_true", help="odebrat ze allowlistu (sandbox)")
     plg_verify.set_defaults(func=cmd_plugin_verify)
-    plg_run = plg_sub.add_parser("run", help="běh kapacity pluginu (neověřený → sandbox)")
+    plg_run = _ex_sub(
+        plg_sub,
+        "run",
+        help="běh kapacity pluginu (neověřený → sandbox)",
+        example="stopa plugin run myplug --cap extractor --key K1 --file /tmp/f.txt",
+    )
     plg_run.add_argument("name")
 
     def _plg_cap_args(p: argparse.ArgumentParser) -> None:
@@ -4524,14 +4549,16 @@ def build_parser() -> argparse.ArgumentParser:
     # F5.4 — write-blocker integration API (status/attach/remove + ingest gate)
     wb_p = _ex_sub(sub, "wb", help="F5.4 — write-blocker: status/attach/remove")
     wb_sub = wb_p.add_subparsers(dest="wb_cmd", required=True)
-    wbs_p = wb_sub.add_parser(
-        "status", help="aktuální WB stav + rozhodnutí brány (exit 2 = blokováno)"
+    wbs_p = _ex_sub(
+        wb_sub, "status", help="aktuální WB stav + rozhodnutí brány (exit 2 = blokováno)",
+        example="stopa wb status case-abc --json",
     )
     wbs_p.add_argument("case_id")
     _add_json_flag(wbs_p)
     wbs_p.set_defaults(func=cmd_wb_status)
-    wba_p = wb_sub.add_parser(
-        "attach", help="zaznamenat připojení WB (auto-detekce vendoru z --device)"
+    wba_p = _ex_sub(
+        wb_sub, "attach", help="zaznamenat připojení WB (auto-detekce vendoru z --device)",
+        example="stopa wb attach case-abc --device 'Tableau TBW-100'",
     )
     wba_p.add_argument("case_id")
     wba_p.add_argument("--device", default=None, metavar="DEV",
@@ -4544,7 +4571,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="volný text poznámky")
     _add_json_flag(wba_p)
     wba_p.set_defaults(func=cmd_wb_attach)
-    wbm_p = wb_sub.add_parser("remove", help="zaznamenat odebrání WB")
+    wbm_p = _ex_sub(
+        wb_sub, "remove", help="zaznamenat odebrání WB", example="stopa wb remove case-abc"
+    )
     wbm_p.add_argument("case_id")
     wbm_p.add_argument("--reason", default=None, metavar="R",
                        help="důvod odebrání (volitelné)")
