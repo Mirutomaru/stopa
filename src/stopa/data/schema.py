@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verze umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -239,7 +239,8 @@ CREATE TABLE IF NOT EXISTS integrity_checkpoints (
     audit_row_id INTEGER NOT NULL,  -- ID posledního audit řádku v okamžiku podpisu
     last_hash TEXT NOT NULL,        -- hash posledního audit řádku (podepsaný)
     signature_b64 TEXT NOT NULL,    -- Ed25519 podpis last_hash (base64)
-    reason TEXT                     -- ingest | correlate | export | manual | …
+    reason TEXT,                    -- ingest | correlate | export | manual | key_rotation
+    public_key_b64 TEXT             -- P0-2: klíč, kterým byl bod podepsán (rotace-safe ověření; NULL = legacy → meta fallback)
 );
 
 -- F4.3 — Peer-Review Workflow: auditní stopa review akcí u artefaktů.

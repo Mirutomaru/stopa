@@ -2739,6 +2739,128 @@ def cmd_seal(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ed25519_fingerprint(public_b64: str) -> str:
+    """P0-2: krátký otisk veřejného klíče (SHA-256 raw klíče, první 8 B hex)."""
+    import base64 as _b64
+    import hashlib
+
+    return hashlib.sha256(_b64.b64decode(public_b64)).hexdigest()[:16]
+
+
+def _rotate_err(e: RuntimeError, json_mode: bool) -> None:
+    """P0-2: jednotná chyba `rotate-key` (chybí cryptography)."""
+    if json_mode:
+        _print_json({"ok": False, "error": str(e)})
+    else:
+        print(f"Ed25519 nedostupné ({e})", file=sys.stderr)
+
+
+def cmd_integrity_keys(args: argparse.Namespace) -> int:
+    """P0-2 — export veřejného integrity klíče případu (nezávislá verifikace).
+
+    Třetí strana drží pouze tento výstup + kontrolní body a může ověřit,
+    že audit trail nebyl upraven od posledního kontrolního bodu. Exit 0 =
+    klíč existuje; 2 = nevygenerován (použij `stopa integrity --init-key`).
+    """
+    json_mode = getattr(args, "json", False)
+    db = _open_db(args.case_id)
+    try:
+        pub = db.integrity_public_key()
+        if pub is None:
+            msg = "Ed25519 klíč nevygenerován (použij `stopa integrity --init-key`)"
+            if json_mode:
+                _print_json({"ok": False, "error": "no_key"})
+            else:
+                print(msg, file=sys.stderr)
+            return 2
+        out = {
+            "case_id": args.case_id,
+            "public_key_b64": pub,
+            "fingerprint_sha256_8b": _ed25519_fingerprint(pub),
+            # P0-2: každý kontrolní bod nesne i klíč podpisu (rotace-safe);
+            # export obsahuje historii generací pro nezávislou verifikaci.
+            "key_generations": [
+                {
+                    "checkpoint_id": cp["id"],
+                    "ts": cp["ts"],
+                    "reason": cp["reason"],
+                    "public_key_b64": cp["public_key_b64"] or pub,
+                    "fingerprint_sha256_8b": _ed25519_fingerprint(
+                        cp["public_key_b64"] or pub
+                    ),
+                }
+                for cp in db.list_integrity_checkpoints()
+            ],
+        }
+        if json_mode:
+            _print_json(out)
+        else:
+            print(f"Ed25519 veřejný klíč případu {args.case_id}:")
+            print(f"  b64:       {pub}")
+            print(f"  otisk:     {_ed25519_fingerprint(pub)} (SHA-256, první 8 B)")
+            gens = out["key_generations"]
+            if gens:
+                print(f"  kontrolních bodů: {len(gens)}")
+    finally:
+        db.close()
+    return 0
+
+
+def cmd_rotate_key(args: argparse.Namespace) -> int:
+    """P0-2 — rotace Ed25519 integrity klíče případu.
+
+    Staré kontrolní body zůstávají ověřitelné (drží vlastní public key);
+    nová generace je ukotvena rotačním bodem podepsaným NOVÝM klíčem.
+    Exit 0 = rotace provedena; 2 = chybí cryptography / klíč nevygenerován.
+    """
+    json_mode = getattr(args, "json", False)
+    db = _open_db(args.case_id)
+    try:
+        if db.integrity_public_key() is None:
+            # first-time init — zachováme staré chování `integrity --init-key`
+            try:
+                priv_raw, pub = db.ensure_integrity_key()  # RuntimeError bez crypto
+            except RuntimeError as e:
+                _rotate_err(e, json_mode)
+                return 2
+            del priv_raw
+            out = {
+                "rotated": False,
+                "initialized": True,
+                "public_key_b64": pub,
+                "fingerprint_sha256_8b": _ed25519_fingerprint(pub),
+            }
+        else:
+            try:
+                out = db.audit_repo.rotate_integrity_key(reason=args.reason)
+                if out is None:  # prakticky nedosažitelné (klíč existuje)
+                    raise RuntimeError("rotace se nepodařila")
+                out["fingerprint_sha256_8b"] = _ed25519_fingerprint(
+                    out["public_key_b64"]
+                )
+            except RuntimeError as e:  # chybí volitelný balík cryptography
+                _rotate_err(e, json_mode)
+                return 2
+        if json_mode:
+            _print_json({"ok": True, **out})
+        else:
+            verb = "inicializován" if out.get("initialized") else "rotace provedena"
+            print(f"P0-2 Ed25519 klíč {verb}:")
+            old = out.get("old_public_key")
+            if old:
+                print(f"  starý otisk: {_ed25519_fingerprint(old)}")
+            print(
+                f"  nový otisk:  {out['fingerprint_sha256_8b']} "
+                f"(SHA-256, první 8 B)"
+            )
+            cp_id = out.get("checkpoint_id")
+            if cp_id is not None:
+                print(f"  rotační kontrolní bod: #{cp_id} ({out.get('reason') or 'key_rotation'})")
+    finally:
+        db.close()
+    return 0
+
+
 def cmd_reparse(args: argparse.Namespace) -> int:
     """F5.3 — re-run extrakce s deklarovánou verzí parseru + diff report.
 
@@ -3850,6 +3972,8 @@ _SUBCOMMAND_EXAMPLES = {
     "stats": "stopa stats case-abc",
     "verify": "stopa verify case-abc --limit 20",
     "seal": "stopa seal case-abc --reason 'před soudním předložením'",
+    "integrity-keys": "stopa integrity-keys case-abc --json",
+    "rotate-key": "stopa rotate-key case-abc --reason 'legace v týmu'",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
     "daubert": "stopa daubert case-abc   # F5.5 — Daubert pack (peer-reviewed reference + error rates)",
     "attack-map": "stopa attack-map case-abc --format stix --out ./map.json   # F6.3 — MITRE ATT&CK heat-mapa",
@@ -3999,6 +4123,20 @@ def build_parser() -> argparse.ArgumentParser:
                         help="důvod zamčení (např. 'před soudním předložením')")
     _add_json_flag(seal_p)
     seal_p.set_defaults(func=cmd_seal)
+
+    ik_p = _ex_sub(sub, "integrity-keys",
+                   help="P0-2 — export Ed25519 integrity klíče případu (nezávislá verifikace)")
+    ik_p.add_argument("case_id")
+    _add_json_flag(ik_p)
+    ik_p.set_defaults(func=cmd_integrity_keys)
+
+    rk_p = _ex_sub(sub, "rotate-key",
+                   help="P0-2 — rotace Ed25519 integrity klíče (staré body zůstávají ověřitelné)")
+    rk_p.add_argument("case_id")
+    rk_p.add_argument("--reason", metavar="DUVOD", default=None,
+                      help="důvod rotace (ukládá se do rotačního kontrolního bodu)")
+    _add_json_flag(rk_p)
+    rk_p.set_defaults(func=cmd_rotate_key)
 
     comp_p = _ex_sub(sub, "compliance",
                      help="F5.2 — SWGDE/ISO 27037 compliance report (JSON+PDF, Ed25519 podpis)")

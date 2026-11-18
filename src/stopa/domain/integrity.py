@@ -24,6 +24,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os as _os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -182,6 +183,70 @@ def verify_signature(public_b64: str, digest: str, signature_b64: str) -> bool:
         return True
     except Exception:  # noqa: BLE001 — InvalidSignature a podobné → neplatný podpis
         return False
+
+
+# ── P0-2: obalování soukromého klíče (AES-GCM pod master secret) ───────────────
+
+_WRAPPED_FORMAT_VERSION = 1
+
+
+def wrap_private_key(private_b64: str, master_secret: bytes) -> str:
+    """P0-2: AES-GCM obal soukromého klíče master secretem.
+
+    Vrací JSON ``{"v":1,"nonce":b64,"ct":b64}``. Master secret musí mít 32 B
+    (AES-256); jinak ValueError. Vyžaduje balík ``cryptography``.
+    """
+    if len(master_secret) != 32:
+        raise ValueError(f"master secret musí mít 32 bajtů, má {len(master_secret)}")
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore[import-untyped]
+
+    nonce = _os.urandom(12)
+    ct = AESGCM(master_secret).encrypt(nonce, base64.b64decode(private_b64), None)
+    return json.dumps(
+        {
+            "v": _WRAPPED_FORMAT_VERSION,
+            "nonce": base64.b64encode(nonce).decode("ascii"),
+            "ct": base64.b64encode(ct).decode("ascii"),
+        },
+        sort_keys=True,
+    )
+
+
+def unwrap_private_key(stored: str, master_secret: bytes | None = None) -> str:
+    """P0-2: dekoduje uložený soukromý klíč (obalený JSON nebo legacy plaintext).
+
+    Legacy (ne-JSON base64) → vrací se bez změny, ``master_secret`` se nepoužije
+    (backward compat s DB před P0-2). Obalený formát vyžaduje 32B secret;
+    chybějící secret / poškozený obal → ValueError. Typový nesoulad struktury
+    → TypeError.
+    """
+    # Base64 abeceda neobsahuje "{" ani "[" → oba znaky znamenají JSON obal.
+    if stored[0] not in "{[":
+        return stored  # legacy plaintext b64
+    try:
+        obj = json.loads(stored)
+    except json.JSONDecodeError as e:
+        raise ValueError("obalený klíč: poškozené JSON") from e
+    if not isinstance(obj, dict):
+        raise TypeError(f"obalený klíč: očekáván objekt, dostal {type(obj).__name__}")
+    if obj.get("v") != _WRAPPED_FORMAT_VERSION:
+        raise ValueError(f"neznámá verze obalu: {obj.get('v')!r}")
+    if master_secret is None:
+        raise ValueError(
+            "klíč je obalený, ale chybí STOPA_INTEGRITY_MASTER_KEY (32 B base64)"
+        )
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore[import-untyped]
+
+        nonce = base64.b64decode(obj["nonce"])
+        ct = base64.b64decode(obj["ct"])
+    except (KeyError, TypeError) as e:
+        raise ValueError(f"obalený klíč: chybí pole ({e})") from e
+    try:
+        raw = AESGCM(master_secret).decrypt(nonce, ct, None)
+    except Exception as e:  # InvalidTag apod. → špatný secret/ct
+        raise ValueError("obalený klíč: dešifrování selhalo (špatný master secret?)") from e
+    return base64.b64encode(raw).decode("ascii")
 
 
 # ── Export manifesty (deterministický hash + podpis) ───────────────────────

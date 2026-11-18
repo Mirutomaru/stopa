@@ -9,7 +9,9 @@ v doménové vrstvě :mod:`stopa.domain.integrity` / :mod:`stopa.domain.rbac`.
 
 from __future__ import annotations
 
+import base64
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 
@@ -19,7 +21,9 @@ from stopa.domain.integrity import (
     compute_audit_hash,
     generate_keypair,
     sign_hash,
+    unwrap_private_key,
     verify_chain,
+    wrap_private_key,
 )
 from stopa.domain.rbac import ActorError, resolve_actor  # STP-022 — RBAC minimální
 
@@ -183,25 +187,59 @@ class AuditRepository:
             for r in rows
         ]
 
-    # ── Ed25519 kontrolní body (P0 Core C4) ───────────────────
+    # ── Ed25519 kontrolní body (P0 Core C4) + P0-2 správa klíčů ────
+    def _integrity_master_secret(self) -> bytes | None:
+        """P0-2: master secret z ``STOPA_INTEGRITY_MASTER_KEY`` (base64, 32 B).
+
+        Není nastaven → ``None`` (klíč se ukládá jako legacy plaintext b64).
+        Nesprávné base64 / špatná délka → ValueError (fail-fast při otevření).
+        """
+        raw = os.environ.get("STOPA_INTEGRITY_MASTER_KEY", "").strip()
+        if not raw:
+            return None
+        try:
+            secret = base64.b64decode(raw)
+        except ValueError as e:  # binascii.Error ⊂ ValueError
+            raise ValueError(f"STOPA_INTEGRITY_MASTER_KEY: neplatné base64 ({e})") from e
+        if len(secret) != 32:
+            raise ValueError(
+                f"STOPA_INTEGRITY_MASTER_KEY musí být 32 bajtů (base64), má {len(secret)}"
+            )
+        return secret
+
+    def _get_priv_raw(self) -> str | None:
+        """P0-2: soukromý klíč z meta — dekoduje obal, legacy b64 vrací bez změny."""
+        row = self.conn.execute(
+            "SELECT value FROM meta WHERE key = 'integrity_priv'"
+        ).fetchone()
+        if row is None or not row["value"]:
+            return None
+        try:
+            return unwrap_private_key(row["value"], self._integrity_master_secret())
+        except ValueError as e:
+            raise ValueError(f"dekódování soukromého klíče integrity selhalo: {e}") from e
+
     def ensure_integrity_key(self) -> tuple[str, str]:
         """Vygeneruje Ed25519 klíčový pár případu (idempotentní).
 
         Soukromý klíč v meta (case DB), veřejný do reportu. Vrací
-        ``(private_b64, public_b64)``. Vyžaduje balík ``cryptography``.
+        ``(private_b64_raw, public_b64)`` — raw b64 pro podpisování konzumenty
+        (daubert/compliance/crypto_report). P0-2: s nastaveným master secretem se
+        soukromý klíč ukládá AES-GCM obalený, bez něj legacy plaintext.
+        Vyžaduje balík ``cryptography``.
         """
         row = self.conn.execute(
             "SELECT value FROM meta WHERE key = 'integrity_pub'"
         ).fetchone()
         if row is not None:
-            priv_row = self.conn.execute(
-                "SELECT value FROM meta WHERE key = 'integrity_priv'"
-            ).fetchone()
-            return (priv_row["value"] if priv_row else "", row["value"])
-        priv_b64, pub_b64 = generate_keypair()
+            priv_raw = self._get_priv_raw()
+            return (priv_raw or "", row["value"])
+        priv_b64, pub_b64 = generate_keypair()  # RuntimeError bez cryptography
+        secret = self._integrity_master_secret()
+        stored_priv = wrap_private_key(priv_b64, secret) if secret else priv_b64
         self.conn.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_priv', ?)",
-            (priv_b64,),
+            (stored_priv,),
         )
         self.conn.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_pub', ?)",
@@ -209,6 +247,36 @@ class AuditRepository:
         )
         self.conn.commit()
         return priv_b64, pub_b64
+
+    def rotate_integrity_key(self, reason: str = "key_rotation") -> dict | None:
+        """P0-2: rotace Ed25519 páry — nová generace klíče s historií.
+
+        Staré kontrolní body zůstávají ověřitelné (drží vlastní public key);
+        kontinuitu ér ukazuje rotační bod podepsaný NOVÝM klíčem na stejném
+        last_hash. Vrací ``{"old_public_key", "public_key_b64", "checkpoint_id"}``;
+        ``None`` pokud ještě žádná pára neexistuje (volat ensure nejdřív).
+        Bez cryptography → RuntimeError z generate_keypair.
+        """
+        old_pub = self.integrity_public_key()
+        if old_pub is None:
+            return None
+        priv_b64, pub_b64 = generate_keypair()  # RuntimeError bez cryptography
+        secret = self._integrity_master_secret()
+        stored_priv = wrap_private_key(priv_b64, secret) if secret else priv_b64
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_priv', ?)",
+            (stored_priv,),
+        )
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_pub', ?)",
+            (pub_b64,),
+        )
+        cp_id = self.add_integrity_checkpoint(reason or "key_rotation")
+        return {
+            "old_public_key": old_pub,
+            "public_key_b64": pub_b64,
+            "checkpoint_id": cp_id,
+        }
 
     def integrity_public_key(self) -> str | None:
         """Veřejný Ed25519 klíč případu (base64), pokud byl vygenerován."""
@@ -221,31 +289,42 @@ class AuditRepository:
         """Podpisne hash posledního audit řádku a uloží kontrolní bod.
 
         Vrací ID kontrolního bodu; ``None`` pokud klíč nebyl vygenerován
-        (graceful degradation — bez balíku ``cryptography``).
+        (graceful degradation — bez balíku ``cryptography``). P0-2: bod si
+        ukládá i public key, kterým byl podepsán (rotace-safe ověření).
         """
         pub = self.integrity_public_key()
         if pub is None:
             return None
-        row = self.conn.execute(
-            "SELECT value FROM meta WHERE key = 'integrity_priv'"
-        ).fetchone()
-        if row is None or not row["value"]:
+        priv_raw = self._get_priv_raw()
+        if priv_raw is None:
             return None
         audit_id, last_hash = self._last_audit_row()
-        sig_b64 = sign_hash(row["value"], last_hash)
+        sig_b64 = sign_hash(priv_raw, last_hash)
         cur = self.conn.execute(
-            "INSERT INTO integrity_checkpoints (ts, audit_row_id, last_hash, signature_b64, reason)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (datetime.now(timezone.utc).isoformat(), audit_id or 0, last_hash, sig_b64, reason),
+            "INSERT INTO integrity_checkpoints"
+            " (ts, audit_row_id, last_hash, signature_b64, reason, public_key_b64)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                datetime.now(timezone.utc).isoformat(),
+                audit_id or 0,
+                last_hash,
+                sig_b64,
+                reason,
+                pub,
+            ),
         )
         self.conn.commit()
         return int(cur.lastrowid)
 
     def list_integrity_checkpoints(self) -> list[dict]:
-        """Kontrolní body (chronologicky) — pro report / nezávislou kontrolu."""
+        """Kontrolní body (chronologicky) — pro report / nezávislou kontrolu.
+
+        P0-2: každý bod nese ``public_key_b64`` (klíč podpisu); ``None`` u
+        legacy řádků z éry před rotací (ověření pak s fallbackem na meta klíč).
+        """
         rows = self.conn.execute(
-            "SELECT id, ts, audit_row_id, last_hash, signature_b64, reason"
-            " FROM integrity_checkpoints ORDER BY id ASC"
+            "SELECT id, ts, audit_row_id, last_hash, signature_b64, reason,"
+            " public_key_b64 FROM integrity_checkpoints ORDER BY id ASC"
         ).fetchall()
         return [
             {
@@ -255,23 +334,35 @@ class AuditRepository:
                 "last_hash": r["last_hash"],
                 "signature_b64": r["signature_b64"],
                 "reason": r["reason"],
+                "public_key_b64": r["public_key_b64"],
             }
             for r in rows
         ]
 
     def verify_integrity_checkpoints(self) -> list[dict]:
-        """Ověří kontrolní body veřejným klíčem (nezávislá kontrola).
+        """Ověří kontrolní body (nezávislá kontrola).
 
-        Každý bod: ``verify_signature(pub, last_hash, signature_b64)``. Vrací
-        seznam s ``ok`` per bod + souhrn.
+        P0-2: každý bod se ověřuje klíčem, který je drží (``public_key_b64``);
+        legacy řádky bez klíče fallback na aktuální meta public key (staré
+        chování) a dostanou ``key_source="meta_fallback"``. Vrací seznam
+        ``{"id", "ok"}`` per bod (stejné pořadí jako list_integrity_checkpoints).
         """
-        pub = self.integrity_public_key()
         from stopa.domain.integrity import verify_signature
 
-        out: list[dict] = []
-        if pub is None:
+        fallback_pub = self.integrity_public_key()
+        cps = self.list_integrity_checkpoints()
+        # Backward compat (před P0-2): žádný klíč nikde → legacy souhrnný záznam.
+        if fallback_pub is None and not any(cp["public_key_b64"] for cp in cps):
             return [{"ok": False, "reason": "veřejný klíč nebyl vygenerován"}]
-        for cp in self.list_integrity_checkpoints():
+        out: list[dict] = []
+        for cp in cps:
+            pub = cp["public_key_b64"] or fallback_pub
+            if pub is None:
+                out.append({"id": cp["id"], "ok": False})
+                continue
             ok = verify_signature(pub, cp["last_hash"], cp["signature_b64"])
-            out.append({"id": cp["id"], "ok": ok})
+            item: dict = {"id": cp["id"], "ok": ok}
+            if not cp["public_key_b64"] and fallback_pub is not None:
+                item["key_source"] = "meta_fallback"  # legacy řádek (před P0-2)
+            out.append(item)
         return out

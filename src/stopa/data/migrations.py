@@ -125,6 +125,9 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     if "case_seals" not in existing_tables:
         conn.executescript(CASE_SEALS_DDL)
         conn.commit()
+    # P0-2 Seal key management — stará case DB (≤ v19) bez sloupce public_key_b64
+    # u integrity_checkpoints (rotace-safe ověření kontrolních bodů).
+    apply_integrity_rotation_migration(conn)
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).
     if _schema_version(conn) < SCHEMA_VERSION:
@@ -335,4 +338,21 @@ def apply_auto_export_schedule_migration(conn: sqlite3.Connection) -> None:
         conn.commit()
     if "last_auto_export_at" not in case_cols:
         conn.execute("ALTER TABLE cases ADD COLUMN last_auto_export_at TEXT")
+        conn.commit()
+
+
+def apply_integrity_rotation_migration(conn: sqlite3.Connection) -> None:
+    """P0-2 Seal key management — stará case DB (schéma ≤ v19).
+
+    Idempotentní, bez ztráty dat: přidá sloupec ``public_key_b64`` do tabulky
+    ``integrity_checkpoints``. Každý kontrolní bod si od P0-2 drží klíč,
+    kterým byl podepsán → po rotaci klíče zůstávají staré body ověřitelné.
+    Legacy řádky (NULL) ověří fallback na aktuální meta klíč (staré chování).
+    Nové DB mají sloupec přímo ze SCHEMA — migrace je no-op.
+    """
+    cp_cols = {
+        r["name"] for r in conn.execute("PRAGMA table_info(integrity_checkpoints)").fetchall()
+    }
+    if "public_key_b64" not in cp_cols:
+        conn.execute("ALTER TABLE integrity_checkpoints ADD COLUMN public_key_b64 TEXT")
         conn.commit()

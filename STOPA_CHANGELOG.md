@@ -2,6 +2,28 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-5 security threat model)
+
+### Added — STOPA 2.1 · P0-2 Klíčová správa a rotace Ed25519 integrity klíče
+- **Doména** `domain/integrity.py`: nové `wrap_private_key()` / `unwrap_private_key()` — AES-GCM (AES-256) obal soukromého klíče pod 32B master secret; formát JSON `{v:1, nonce, ct}`; **legacy plaintext b64 prochází beze změny** (backward compat); chybové sémantika konzistentní s P0-3 (typ = `TypeError`, sémantika = `ValueError` s kontextem).
+- **Schema v19 → v20**: tabulka `integrity_checkpoints` +sloupec `public_key_b64` — každý kontrolní bod si nese klíč, kterým byl podepsán → **rotace-safe ověření** (staré body zůstávají ověřitelné i po rotaci; NULL = legacy řádek → fallback na meta klíč s poznatkem `key_source="meta_fallback"`). Idempotentní migrace `apply_integrity_rotation_migration()` bez ztráty dat.
+- **Data** `audit_repository.py`: `_integrity_master_secret()` (env **`STOPA_INTEGRITY_MASTER_KEY`**, base64 → přesně 32 B, fail-fast `ValueError`), `ensure_integrity_key()` ukládá obalený klíč a vrací raw b64 pro stávající konzumenty (daubert/compliance bez změny API); nová **`rotate_integrity_key(reason)`** — nová generace + rotační kontrolní bod podepsaný NOVÝM klíčem; `verify_integrity_checkpoints()` ověřuje každý bod vlastním klíčem (backward-compat souhrnný záznam zachován, když klíč chybí všude).
+- **CLI**: `stopa integrity-keys <case> [--json]` — export veřejného klíče + SHA-256 otisk (8 B hex) + historie generací (exit 0 = klíč existuje, 2 = nevygenerován); `stopa rotate-key <case> [--reason DUVOD] [--json]` — rotace s důvodem v rotačním bodě (první volba bez klíče = init jako `integrity --init-key`). `db.py` facade nedotčená → rozpočet 599/600 drží.
+- **Testy** `tests/test_p02_seal_keys.py` (+26): wrap/unwrap roundtrip + skrytí plaintextu + chybové cesty (špatná délka secretu, base64, neznámá verze, poškozené JSON, špatný secret), legacy passthrough, obalené uložení v meta + idempotence, checkpoint nese public key, **plný rotací cyklus** (starý bod starým klíčem, rotační bod novým; vše ověřitelné bez fallbacku), tamper detekce po rotaci, NULL řádek → meta fallback, migrace v19→v20 idempotence, CLI E2E (integrity-keys JSON/no-key exit 2, rotate+verify celého cyklu, first-time init).
+- **AK ✓**: živý E2E přes reálné CLI — gen1 (fp `49c516a2…`) → rotace s master secret → gen2 (fp `e982f371…`), oba kontrolní body po rotaci ověřitelné; case bez env = legacy b64, case s env = AES-GCM JSON. Cílená suite 77/77 green + Ruff clean.
+
+### Added — STOPA 2.1 · P0-3 Plugin sandbox hardening
+- **Doména** `domain/plugins.py`: `SandboxLimits` rozšířena o `cpu_seconds` (RLIMIT_CPU), `max_output_mb` (strop stdout+stderr, překrok → `ValueError`), `network_isolated` (Linux `unshare --net`, při nedostupnosti výrazná chyba místo tichého fallbacku).
+- **Data** `plugin_loader.py`: `_rlimit_factory()` (+RLIMIT_NOFILE ochrana), `_run_dir_root()` / `_isolated_workdir()` — neověřený plugin běží v jednorázovém izolovaném workdiru per run (`~/.stopa/plugin-runs/` nebo **`STOPA_PLUGIN_RUNS_DIR`**), host cwd se nedědí; úspěšný run uklizen, chybný zůstane pro debug. Opraven latentní bug `.exitcode` → `.returncode`.
+- **Dokumentace** `docs/PLUGINS_API.md`: tabulka SandboxLimits + deployment profily (izolovaná vs. plná síť).
+- **Testy** `tests/test_p03_sandbox_hardening.py` (+19): CPU/output limit, workdir izolace a cleanup, host cwd čistota, unshare sel → ValueError; kombinovaná suite s F6.4: 60/60 green.
+
+### Added — STOPA 2.1 · P0-5 Security threat model
+- **Dokument** `docs/SECURITY_THREAT_MODEL.md` (STRIDE-lite, T-1..T-10) s důkazy v kódu: bootstrap okno bez prvního uživatele, lokální login, `session_secret` uuid4 + default perms 0644 (fix P0-2/P0-4), bind adresa bez TLS na LAN, plugin sandbox = zdrojová izolace nikoli souborová; residual ověření předáno do P0-4 validation lab.
+
+### Changed
+- `docs/ROADMAP_2_1.md`: etapy C — **P0-2 + P0-3 + P0-5 hotové**; dále P0-4 validation lab → P0-1 provenance (migrace v21, v20 obsadil P0-2).
+
 ## [Unreleased] — 2026-11-17 (FÁZE 5 ★ = F5.1 Merkle Tree Case Sealing + F5.2 SWGDE/ISO 27037 report + F5.3 Parser versioning & reproducibility + F5.4 Write-blocker integration API + F5.5 Daubert challenge pack | FÁZE 6 = F6.1 Timesketch export & push + F6.2 STIX 2.1/UCO plná implementace + F6.3 MITRE ATT&CK mapping + F6.4 Plugin ecosystem)
 
 ### Added (FÁZE 5 Compliance & Court-Readiness, P0)
