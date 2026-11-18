@@ -2907,7 +2907,7 @@ def cmd_parser_quality(args: argparse.Namespace) -> int:
 
     Pokrytí = unie ``# quality:`` markerů všech testovacích souborů deklarovaných
     pro parser v C3 registry. Nevyžaduje case DB (registry level).
-    Exit: 0 = OK; 1 = chyba; 2 = --fail-below a coverage_pct pod prahem (CI gate).
+    Exit: 0 = OK; 1 = chyba; 2 = --fail-below a category_coverage_pct pod prahem.
     """
     json_mode = getattr(args, "json", False) or getattr(args, "format", None) == "json"
 
@@ -2926,7 +2926,8 @@ def cmd_parser_quality(args: argparse.Namespace) -> int:
     if not json_mode:
         print(
             f"P1-1 parser quality — {report['quality_complete']}/{report['count']} "
-            f"parserů kompletních (coverage {report['coverage_pct']} %)"
+            f"parserů kompletních (coverage {report['coverage_pct']} %, "
+            f"kategorie {report['category_coverage_pct']} %)"
         )
         for row in report["parsers"]:
             mark = "✓" if not row["missing"] else "·"
@@ -2935,7 +2936,7 @@ def cmd_parser_quality(args: argparse.Namespace) -> int:
     else:
         print(json.dumps(report, ensure_ascii=False))
 
-    if threshold is not None and report["coverage_pct"] < float(threshold):
+    if threshold is not None and report["category_coverage_pct"] < float(threshold):
         return 2
     return 0
 
@@ -4273,7 +4274,7 @@ def build_parser() -> argparse.ArgumentParser:
                      help="formát výstupu (default: textová tabulka)")
     _add_json_flag(q_p)
     q_p.add_argument("--fail-below", type=float, metavar="PCT",
-                     help="CI gate: exit 2, pokud coverage_pct < PCT (např. 100)")
+                     help="CI gate: exit 2, pokud category_coverage_pct < PCT (např. 60)")
     q_p.set_defaults(func=cmd_parser_quality)
 
     ps_p = _ex_sub(sub, "parser-status",

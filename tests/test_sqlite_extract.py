@@ -84,21 +84,25 @@ def generic_db(tmp_path):
 
 class TestChromeHistory:
     def test_extracts_visits(self, chrome_history):
+        # quality: positive
         arts = extract_sqlite_artifacts(chrome_history)
         assert len(arts) == 2  # visita s časem 0 přeskočena
         assert all(a.artifact_type == "browser_history" for a in arts)
 
     def test_timestamps_correct(self, chrome_history):
+        # quality: positive
         arts = extract_sqlite_artifacts(chrome_history)
         ts = sorted(a.timestamp for a in arts if a.timestamp)
         assert ts[0] == datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc)
 
     def test_details_contain_title(self, chrome_history):
+        # quality: positive
         arts = extract_sqlite_artifacts(chrome_history)
         by_url = {a.title: a for a in arts}
         assert "Stránka A" == by_url["https://example.com/a"].details["page_title"]
 
     def test_source_id_unset_by_extractor(self, chrome_history):
+        # quality: positive
         """Extraktor nezná kontext — source_id doplní pipeline."""
         arts = extract_sqlite_artifacts(chrome_history)
         assert all(a.source_id is None for a in arts)
@@ -106,18 +110,21 @@ class TestChromeHistory:
 
 class TestFirefoxPlaces:
     def test_extracts_places(self, firefox_places):
+        # quality: positive
         arts = extract_sqlite_artifacts(firefox_places)
         assert len(arts) == 1
         assert arts[0].artifact_type == "browser_history"
         assert arts[0].details["engine"] == "firefox"
 
     def test_timestamp_ms_converted(self, firefox_places):
+        # quality: positive
         arts = extract_sqlite_artifacts(firefox_places)
         assert arts[0].timestamp == datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc)
 
 
 class TestGenericSqlite:
     def test_triage_artifact(self, generic_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(generic_db)
         assert len(arts) == 1
         a = arts[0]
@@ -126,11 +133,13 @@ class TestGenericSqlite:
         assert a.details["tables"] == {"users": 1, "orders": 0}
 
     def test_corrupt_file_returns_empty(self, tmp_path):
+        # quality: boundary corrupted
         p = tmp_path / "corrupt.db"
         p.write_bytes(b"SQLite format 3\x00" + b"\x00" * 16)
         assert extract_sqlite_artifacts(p) == []
 
     def test_missing_file_returns_empty(self, tmp_path):
+        # quality: boundary
         assert extract_sqlite_artifacts(tmp_path / "chybi.db") == []
 
 
@@ -214,21 +223,25 @@ def calllog_db(tmp_path):
 
 class TestIMessage:
     def test_extracts_messages(self, imessage_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(imessage_db)
         assert len(arts) == 2  # prázdná zpráva s časem 0 přeskočena
         assert all(a.artifact_type == "imessage" for a in arts)
 
     def test_timestamp_apple_epoch(self, imessage_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(imessage_db)
         ts = sorted(a.timestamp for a in arts if a.timestamp)
         assert ts[0] == datetime(2024, 3, 15, 12, 34, 56, tzinfo=timezone.utc)
 
     def test_handle_joined(self, imessage_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(imessage_db)
         assert all(a.details["handle"] == "+420777123456" for a in arts)
         assert arts[0].details["engine"] == "apple_imessage"
 
     def test_text_in_title(self, imessage_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(imessage_db)
         titles = {a.title for a in arts}
         assert "Ahoj, kde jsi?" in titles
@@ -236,16 +249,19 @@ class TestIMessage:
 
 class TestAndroidSms:
     def test_extracts_sms(self, android_sms_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(android_sms_db)
         assert len(arts) == 2
         assert all(a.artifact_type == "sms_message" for a in arts)
 
     def test_timestamp_ms_converted(self, android_sms_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(android_sms_db)
         ts = sorted(a.timestamp for a in arts if a.timestamp)
         assert ts[0] == datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc)
 
     def test_address_in_details(self, android_sms_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(android_sms_db)
         addrs = {a.details["address"] for a in arts}
         assert "+420604111222" in addrs
@@ -253,11 +269,13 @@ class TestAndroidSms:
 
 class TestCallLog:
     def test_extracts_calls(self, calllog_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(calllog_db)
         assert len(arts) == 2
         assert all(a.artifact_type == "call_log" for a in arts)
 
     def test_timestamp_and_details(self, calllog_db):
+        # quality: positive
         arts = extract_sqlite_artifacts(calllog_db)
         ts = sorted(a.timestamp for a in arts if a.timestamp)
         assert ts[0] == datetime(2024, 5, 20, 8, 15, tzinfo=timezone.utc)
@@ -268,6 +286,7 @@ class TestCallLog:
 
 class TestAppleEpochConversion:
     def test_from_apple_absolute_known_value(self):
+        # quality: positive
         from stopa.domain.times import from_apple_absolute
 
         # unix 1710506096 (2024-03-15T12:34:56Z) → Apple ts
@@ -277,6 +296,7 @@ class TestAppleEpochConversion:
         )
 
     def test_from_apple_absolute_negative(self):
+        # quality: positive
         from stopa.domain.times import from_apple_absolute
 
         with pytest.raises(ValueError):

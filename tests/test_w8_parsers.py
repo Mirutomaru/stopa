@@ -83,6 +83,7 @@ def _prefs_payload() -> dict:
 
 
 def test_prefs_parse_extensions():
+    # quality: positive
     records = parse_chrome_preferences(json.dumps(_prefs_payload()).encode())
     exts = [r for r in records if r.kind == "extension"]
     assert len(exts) == 1
@@ -91,6 +92,7 @@ def test_prefs_parse_extensions():
 
 
 def test_prefs_parse_search_and_sync():
+    # quality: positive
     records = parse_chrome_preferences(json.dumps(_prefs_payload()).encode())
     kinds = {r.kind for r in records}
     assert "search_engine" in kinds or any(
@@ -102,15 +104,18 @@ def test_prefs_parse_search_and_sync():
 
 
 def test_prefs_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_chrome_preferences(b"{nejson")
 
 
 def test_prefs_empty_payload():
+    # quality: boundary
     assert parse_chrome_preferences(b"{}") == []
 
 
 def test_prefs_detector_name_and_content():
+    # quality: positive
     head = json.dumps(_prefs_payload()).encode()[:2048]
     assert is_chrome_preferences_file("Preferences", head)
     assert not is_chrome_preferences_file("random.txt", head)
@@ -119,6 +124,7 @@ def test_prefs_detector_name_and_content():
 
 
 def test_prefs_build_artifacts_types():
+    # quality: positive
     records = parse_chrome_preferences(json.dumps(_prefs_payload()).encode())
     arts = build_pref_artifacts(records)
     types = {a.artifact_type for a in arts}
@@ -129,6 +135,7 @@ def test_prefs_build_artifacts_types():
 
 
 def test_prefs_entrypoint(tmp_path: Path):
+    # quality: positive
     p = _write(tmp_path, "Preferences", _prefs_payload())
     arts = extract_chrome_pref_artifacts(p)
     assert len(arts) >= 2
@@ -136,6 +143,7 @@ def test_prefs_entrypoint(tmp_path: Path):
 
 
 def test_prefs_entrypoint_missing_file(tmp_path: Path):
+    # quality: negative
     assert extract_chrome_pref_artifacts(tmp_path / "chybi.json") == []
 
 
@@ -165,6 +173,7 @@ def _drive_payload() -> list[dict]:
 
 
 def test_drive_parse_google():
+    # quality: positive
     records = parse_cloud_drive_files(json.dumps(_drive_payload()).encode(), name="Files.json")
     assert len(records) == 2
     r0 = records[0]
@@ -178,12 +187,14 @@ def test_drive_parse_google():
 
 
 def test_drive_parse_epoch_timestamps():
+    # quality: positive
     records = parse_cloud_drive_files(json.dumps(_drive_payload()).encode(), name="Files.json")
     r1 = records[1]
     assert r1.created_s is not None and abs(r1.created_s - 1739000000) < 2
 
 
 def test_drive_provider_detection():
+    # quality: positive
     payload = json.dumps(_drive_payload()).encode()
     # google drive — sizeBytes marker
     recs = parse_cloud_drive_files(payload, name="Files.json")
@@ -197,11 +208,13 @@ def test_drive_provider_detection():
 
 
 def test_drive_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_cloud_drive_files(b"[nejson", name="Files.json")
 
 
 def test_drive_detector_name_and_content():
+    # quality: positive
     head = json.dumps(_drive_payload()).encode()[:2048]
     assert is_cloud_drive_file("Drive/Files.json", head)
     assert not is_cloud_drive_file("random.txt", head)
@@ -210,6 +223,7 @@ def test_drive_detector_name_and_content():
 
 
 def test_drive_build_artifacts():
+    # quality: positive
     records = parse_cloud_drive_files(json.dumps(_drive_payload()).encode(), name="Files.json")
     arts = build_cloud_file_artifacts(records)
     assert len(arts) == 2
@@ -218,6 +232,7 @@ def test_drive_build_artifacts():
 
 
 def test_drive_entrypoint(tmp_path: Path):
+    # quality: positive
     p = _write(tmp_path, "Files.json", _drive_payload())
     # entrypoint dostane jen basename — provider z markerů v obsahu
     arts = extract_cloud_drive_artifacts(p)
@@ -278,6 +293,7 @@ def _voice_subscriber_payload() -> dict:
 
 
 def test_voice_parse_sms():
+    # quality: positive
     kind, records = parse_google_voice(json.dumps(_voice_sms_payload()).encode())
     assert kind == "sms"
     assert len(records) == 2
@@ -287,6 +303,7 @@ def test_voice_parse_sms():
 
 
 def test_voice_parse_voicemail():
+    # quality: positive
     kind, records = parse_google_voice(json.dumps(_voice_voicemail_payload()).encode())
     assert kind == "voicemail"
     assert len(records) == 1
@@ -295,6 +312,7 @@ def test_voice_parse_voicemail():
 
 
 def test_voice_parse_contact():
+    # quality: positive
     kind, records = parse_google_voice(json.dumps(_voice_contact_payload()).encode())
     assert kind == "contact"
     assert len(records) == 2
@@ -302,6 +320,7 @@ def test_voice_parse_contact():
 
 
 def test_voice_parse_subscriber():
+    # quality: positive
     kind, records = parse_google_voice(json.dumps(_voice_subscriber_payload()).encode())
     assert kind == "subscriber"
     assert len(records) == 1
@@ -309,17 +328,20 @@ def test_voice_parse_subscriber():
 
 
 def test_voice_unknown_kind():
+    # quality: negative
     kind, records = parse_google_voice(json.dumps({"foo": [1, 2, 3]}).encode())
     assert kind is None
     assert records == []
 
 
 def test_voice_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_google_voice(b"{nejson")
 
 
 def test_voice_detector_name_and_content():
+    # quality: positive
     head = json.dumps(_voice_sms_payload()).encode()[:2048]
     assert is_google_voice_file("Voice/Texts.json", head)
     assert not is_google_voice_file("random.txt", head)
@@ -328,6 +350,7 @@ def test_voice_detector_name_and_content():
 
 
 def test_voice_build_artifacts_types():
+    # quality: positive
     kind, records = parse_google_voice(json.dumps(_voice_sms_payload()).encode())
     arts = build_voice_artifacts(kind, records)
     assert all(a.artifact_type == "sms_message" for a in arts)
@@ -339,6 +362,7 @@ def test_voice_build_artifacts_types():
 
 
 def test_voice_entrypoint(tmp_path: Path):
+    # quality: positive
     p = _write(tmp_path, "Texts.json", _voice_sms_payload())
     arts = extract_google_voice_artifacts(p)
     assert len(arts) == 2
@@ -367,6 +391,7 @@ def _drivers_payload() -> list[dict]:
 
 
 def test_drivers_parse():
+    # quality: positive
     records = parse_win_drivers(json.dumps(_drivers_payload()).encode())
     assert len(records) == 2
     r0 = records[0]
@@ -377,17 +402,20 @@ def test_drivers_parse():
 
 
 def test_drivers_parse_unsigned():
+    # quality: positive
     records = parse_win_drivers(json.dumps(_drivers_payload()).encode())
     r1 = records[1]
     assert r1.signed is False
 
 
 def test_drivers_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_win_drivers(b"{nejson")
 
 
 def test_drivers_detector_name_and_content():
+    # quality: positive
     head = json.dumps(_drivers_payload()).encode()[:2048]
     assert is_win_drivers_file("drivers.json", head)
     assert not is_win_drivers_file("random.txt", head)
@@ -396,6 +424,7 @@ def test_drivers_detector_name_and_content():
 
 
 def test_drivers_build_artifacts_anomaly():
+    # quality: positive
     records = parse_win_drivers(json.dumps(_drivers_payload()).encode())
     arts = build_driver_artifacts(records)
     assert len(arts) == 2
@@ -409,6 +438,7 @@ def test_drivers_build_artifacts_anomaly():
 
 
 def test_drivers_entrypoint(tmp_path: Path):
+    # quality: positive
     p = _write(tmp_path, "drivers.json", _drivers_payload())
     arts = extract_win_driver_artifacts(p)
     assert len(arts) == 2
@@ -419,6 +449,7 @@ def test_drivers_entrypoint(tmp_path: Path):
 
 
 def test_registry_contains_wave8_parsers():
+    # quality: positive
     from stopa.domain.validation_registry import build_registry
 
     reg = build_registry()
@@ -428,6 +459,7 @@ def test_registry_contains_wave8_parsers():
 
 
 def test_pipeline_dispatch_wave8():
+    # quality: positive
     from stopa.pipeline import _name_based_match
 
     # Takeout layout — klíčové slovo v rodičovské složce (retry na celé cestě)

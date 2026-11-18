@@ -76,15 +76,18 @@ OTHER_XML = b'<?xml version="1.0"?><Task xmlns="x"><name>t</name></Task>'
 # ── is_wlan_profile_file (detekce) ─────────────────────────────────────
 
 def test_is_wlan_by_name_and_content():
+    # quality: positive
     assert is_wlan_profile_file("OfficeWiFi.xml", WLAN_PROFILE[:2048]) is True
 
 
 def test_is_wlan_rejects_other_xml_content():
+    # quality: negative
     # název sedí (wifi), ale obsah není WLANProfile → False
     assert is_wlan_profile_file("wifi_task.xml", OTHER_XML) is False
 
 
 def test_is_wlan_requires_name_hint():
+    # quality: positive
     # bez názvové nápovědy (.xml + wlan/wifi) — detekce nepadne
     assert is_wlan_profile_file("random.bin", WLAN_PROFILE[:2048]) is False
 
@@ -92,6 +95,7 @@ def test_is_wlan_requires_name_hint():
 # ── parse_wlan_profile_xml (čistá funkce) ─────────────────────────────
 
 def test_parse_wpa2_profile():
+    # quality: positive
     profiles = parse_wlan_profile_xml(WLAN_PROFILE)
     assert len(profiles) == 1
     p = profiles[0]
@@ -102,6 +106,7 @@ def test_parse_wpa2_profile():
 
 
 def test_parse_open_profile_with_mac():
+    # quality: positive
     profiles = parse_wlan_profile_xml(WLAN_OPEN)
     assert len(profiles) == 1
     p = profiles[0]
@@ -111,11 +116,13 @@ def test_parse_open_profile_with_mac():
 
 
 def test_parse_non_wlan_xml_empty():
+    # quality: boundary
     # jiný root → žádné profily (ne výjimka)
     assert parse_wlan_profile_xml(OTHER_XML) == []
 
 
 def test_parse_garbage_bytes_raises():
+    # quality: corrupted
     # ne-XML → ValueError (entrypoint ho zachytí a vrátí [])
     with pytest.raises(ValueError):
         parse_wlan_profile_xml(b"\x00\x01\x02garbage")
@@ -124,6 +131,7 @@ def test_parse_garbage_bytes_raises():
 # ── build_wifi_artifacts (čistá funkce) ───────────────────────────────
 
 def test_build_artifacts():
+    # quality: positive
     profiles = parse_wlan_profile_xml(WLAN_PROFILE)
     arts = build_wifi_artifacts(profiles)
     assert len(arts) == 1
@@ -134,12 +142,14 @@ def test_build_artifacts():
 
 
 def test_build_artifacts_empty():
+    # quality: boundary
     assert build_wifi_artifacts([]) == []
 
 
 # ── extract_wifi_artifacts (IO přes tmp_path) ─────────────────────────
 
 def test_extract_wlan_file(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "OfficeWiFi.xml"
     p.write_bytes(WLAN_PROFILE)
     arts = extract_wifi_artifacts(p)
@@ -148,6 +158,7 @@ def test_extract_wlan_file(tmp_path: Path):
 
 
 def test_extract_garbage_file(tmp_path: Path):
+    # quality: corrupted
     # poškozený XML → prázdný výsledek (ne výjimka)
     p = tmp_path / "broken.xml"
     p.write_bytes(b"\x00\x01garbage")
@@ -155,4 +166,5 @@ def test_extract_garbage_file(tmp_path: Path):
 
 
 def test_extract_missing_file(tmp_path: Path):
+    # quality: negative
     assert extract_wifi_artifacts(tmp_path / "nope.xml") == []

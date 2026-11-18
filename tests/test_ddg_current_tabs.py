@@ -24,6 +24,7 @@ def _json_sample() -> list[dict]:
 
 
 def test_parse_json_basic() -> None:
+    # quality: positive
     tabs = parse_current_tabs_json(json.dumps(_json_sample()).encode())
     assert len(tabs) == 2
     assert tabs[0].url == "https://example.com/stranka"
@@ -32,6 +33,7 @@ def test_parse_json_basic() -> None:
 
 
 def test_parse_json_invalid_raises() -> None:
+    # quality: negative
     with pytest.raises(ValueError):
         parse_current_tabs_json(b"{")
     with pytest.raises(TypeError):
@@ -45,6 +47,7 @@ https://example.com/stranka
 
 
 def test_parse_text_basic() -> None:
+    # quality: positive
     from stopa.artifacts.ddg_current_tabs import parse_current_tabs_text
 
     tabs = parse_current_tabs_text(TEXT_SAMPLE.encode())
@@ -54,6 +57,7 @@ def test_parse_text_basic() -> None:
 
 
 def test_artifacts() -> None:
+    # quality: positive
     tabs = parse_current_tabs_json(json.dumps(_json_sample()).encode())
     arts = build_tab_artifacts(tabs)
     assert len(arts) == 2
@@ -66,6 +70,7 @@ def test_artifacts() -> None:
 
 
 def test_detection() -> None:
+    # quality: positive
     head_json = json.dumps(_json_sample())[:2048].encode()
     assert is_current_tabs_file("current_tabs.json", head_json)
     # textový export — jméno obsahuje ddg, content check přes URL marker
@@ -76,6 +81,7 @@ def test_detection() -> None:
 
 
 def test_extract_end_to_end(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "current_tabs.json"
     p.write_text(json.dumps(_json_sample()))
     arts = extract_current_tabs_artifacts(p)
@@ -84,4 +90,5 @@ def test_extract_end_to_end(tmp_path: Path) -> None:
 
 
 def test_extract_missing_file(tmp_path: Path) -> None:
+    # quality: negative
     assert extract_current_tabs_artifacts(tmp_path / "chybi.json") == []

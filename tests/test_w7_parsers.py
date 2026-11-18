@@ -95,6 +95,7 @@ def _bookmarks_json() -> bytes:
 
 
 def test_bookmarks_parse_takeout():
+    # quality: positive
     records = parse_chrome_bookmarks(_bookmarks_json())
     assert len(records) == 2
     r0 = records[0]
@@ -109,6 +110,7 @@ def test_bookmarks_parse_takeout():
 
 
 def test_bookmarks_nested_folder_path():
+    # quality: positive
     records = parse_chrome_bookmarks(_bookmarks_json())
     nested = [r for r in records if "Podstránka" in r.name]
     assert len(nested) == 1
@@ -116,21 +118,25 @@ def test_bookmarks_nested_folder_path():
 
 
 def test_bookmarks_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_chrome_bookmarks(b"{nejson")
 
 
 def test_bookmarks_not_dict():
+    # quality: positive
     with pytest.raises(TypeError):
         parse_chrome_bookmarks(json.dumps([1, 2]).encode())
 
 
 def test_bookmarks_missing_roots():
+    # quality: negative
     with pytest.raises(TypeError):
         parse_chrome_bookmarks(json.dumps({"foo": "bar"}).encode())
 
 
 def test_bookmarks_detect():
+    # quality: positive
     head = b'{"roots": {"bookmark_bar": {"date_added": "1"}}}'
     assert is_chrome_bookmarks_file("Bookmarks", head)
     assert is_chrome_bookmarks_file("chrome_bookmarks.json")
@@ -141,6 +147,7 @@ def test_bookmarks_detect():
 
 
 def test_bookmarks_artifacts():
+    # quality: positive
     records = parse_chrome_bookmarks(_bookmarks_json())
     artifacts = build_bookmark_artifacts(records)
     assert len(artifacts) == 2
@@ -152,6 +159,7 @@ def test_bookmarks_artifacts():
 
 
 def test_bookmarks_extract_io(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "Bookmarks"
     p.write_bytes(_bookmarks_json())
     artifacts = extract_bookmarks_artifacts(p)
@@ -180,6 +188,7 @@ def _history_wr_json() -> bytes:
 
 
 def test_history_wr_parse_list():
+    # quality: positive
     records = parse_chrome_history_wr(_history_wr_json())
     assert len(records) == 2
     r0 = records[0]
@@ -193,6 +202,7 @@ def test_history_wr_parse_list():
 
 
 def test_history_wr_dict_wrapper():
+    # quality: positive
     data = json.dumps({"history": [{"url": "https://x.cz", "visit_time": "1"}]}).encode()
     records = parse_chrome_history_wr(data)
     assert len(records) == 1
@@ -200,16 +210,19 @@ def test_history_wr_dict_wrapper():
 
 
 def test_history_wr_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_chrome_history_wr(b"[{")
 
 
 def test_history_wr_not_list():
+    # quality: positive
     with pytest.raises(TypeError):
         parse_chrome_history_wr(json.dumps({"a": 1}).encode())
 
 
 def test_history_wr_detect():
+    # quality: positive
     head = b'[{"url": "https://x", "visit_time": "1"}]'
     assert is_chrome_history_wr_file("chrome_history.json", head)
     # lokální Chrome History DB (SQLite) → False
@@ -219,6 +232,7 @@ def test_history_wr_detect():
 
 
 def test_history_wr_artifacts():
+    # quality: positive
     records = parse_chrome_history_wr(_history_wr_json())
     artifacts = build_chrome_history_artifacts(records)
     assert len(artifacts) == 2
@@ -229,6 +243,7 @@ def test_history_wr_artifacts():
 
 
 def test_history_wr_extract_io(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "chrome_history.json"
     p.write_bytes(_history_wr_json())
     artifacts = extract_chrome_history_wr_artifacts(p)
@@ -259,6 +274,7 @@ def _contacts_json() -> bytes:
 
 
 def test_contacts_parse_takeout():
+    # quality: positive
     records = parse_contacts_wr(_contacts_json())
     assert len(records) == 2
     r0 = records[0]
@@ -270,6 +286,7 @@ def test_contacts_parse_takeout():
 
 
 def test_contacts_people_api_fallback():
+    # quality: positive
     records = parse_contacts_wr(_contacts_json())
     r1 = records[1]
     # names[0].displayName fallback
@@ -278,16 +295,19 @@ def test_contacts_people_api_fallback():
 
 
 def test_contacts_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_contacts_wr(b"[{")
 
 
 def test_contacts_not_list():
+    # quality: positive
     with pytest.raises(TypeError):
         parse_contacts_wr(json.dumps({"x": 1}).encode())
 
 
 def test_contacts_detect():
+    # quality: positive
     head = b'[{"givenName": ["A"], "emails": []}]'
     assert is_contacts_wr_file("contacts.json", head)
     # lokální contacts2.db (Android) → False
@@ -297,6 +317,7 @@ def test_contacts_detect():
 
 
 def test_contacts_artifacts():
+    # quality: positive
     records = parse_contacts_wr(_contacts_json())
     artifacts = build_contact_artifacts(records)
     assert len(artifacts) == 2
@@ -307,6 +328,7 @@ def test_contacts_artifacts():
 
 
 def test_contacts_extract_io(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "contacts.json"
     p.write_bytes(_contacts_json())
     artifacts = extract_contacts_wr_artifacts(p)
@@ -336,6 +358,7 @@ def _autofill_json() -> bytes:
 
 
 def test_autofill_parse_list():
+    # quality: positive
     records = parse_chrome_autofill(_autofill_json())
     assert len(records) == 2  # prázdný záznam vynechan
     r0 = records[0]
@@ -346,6 +369,7 @@ def test_autofill_parse_list():
 
 
 def test_autofill_empty_skipped():
+    # quality: boundary
     records = parse_chrome_autofill(_autofill_json())
     emails = [r.email for r in records]
     assert "jenmail@example.cz" in emails
@@ -354,16 +378,19 @@ def test_autofill_empty_skipped():
 
 
 def test_autofill_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_chrome_autofill(b"{")
 
 
 def test_autofill_not_list():
+    # quality: positive
     with pytest.raises(TypeError):
         parse_chrome_autofill(json.dumps({"a": 1}).encode())
 
 
 def test_autofill_detect():
+    # quality: positive
     head = b'[{"name": "A", "phoneNumber": "+420"}]'
     assert is_chrome_autofill_file("autofill.json", head)
     assert is_chrome_autofill_file("ContactInfo.json")
@@ -372,6 +399,7 @@ def test_autofill_detect():
 
 
 def test_autofill_artifacts():
+    # quality: positive
     records = parse_chrome_autofill(_autofill_json())
     artifacts = build_autofill_artifacts(records)
     assert len(artifacts) == 2
@@ -382,6 +410,7 @@ def test_autofill_artifacts():
 
 
 def test_autofill_extract_io(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "autofill.json"
     p.write_bytes(_autofill_json())
     artifacts = extract_chrome_autofill_artifacts(p)
@@ -448,6 +477,7 @@ def _skype_contacts_json() -> bytes:
 
 
 def test_skype_account_details():
+    # quality: positive
     records = parse_skype_warrant(_skype_account_json())
     assert len(records) == 1
     r0 = records[0]
@@ -457,6 +487,7 @@ def test_skype_account_details():
 
 
 def test_skype_chat_history():
+    # quality: positive
     records = parse_skype_warrant(_skype_chat_json())
     assert len(records) == 2
     r0 = records[0]
@@ -468,6 +499,7 @@ def test_skype_chat_history():
 
 
 def test_skype_chat_epoch_ms():
+    # quality: positive
     records = parse_skype_warrant(_skype_chat_json())
     r1 = records[1]
     # epoch ms → s
@@ -475,6 +507,7 @@ def test_skype_chat_epoch_ms():
 
 
 def test_skype_connection_history():
+    # quality: positive
     records = parse_skype_warrant(_skype_connection_json())
     assert len(records) == 1
     r0 = records[0]
@@ -484,6 +517,7 @@ def test_skype_connection_history():
 
 
 def test_skype_contacts():
+    # quality: positive
     records = parse_skype_warrant(_skype_contacts_json())
     assert len(records) == 1
     r0 = records[0]
@@ -493,17 +527,20 @@ def test_skype_contacts():
 
 
 def test_skype_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_skype_warrant(b"[{")
 
 
 def test_skype_unknown_subtype():
+    # quality: negative
     # pole bez známých markerů → neznámý subtyp
     with pytest.raises(TypeError):
         parse_skype_warrant(json.dumps([{"foo": 1}]).encode())
 
 
 def test_skype_detect():
+    # quality: positive
     head = b'[{"msnId": "8:x", "displayName": "X"}]'
     assert is_skype_warrant_file("skype_contacts.json", head)
     # skype v názvu + JSON → True (parser auto-detekuje subtyp)
@@ -513,6 +550,7 @@ def test_skype_detect():
 
 
 def test_skype_artifacts_by_subtype():
+    # quality: positive
     chat = build_skype_artifacts(parse_skype_warrant(_skype_chat_json()))
     assert all(a.artifact_type == "messenger_message" for a in chat)
     contacts = build_skype_artifacts(parse_skype_warrant(_skype_contacts_json()))
@@ -522,6 +560,7 @@ def test_skype_artifacts_by_subtype():
 
 
 def test_skype_extract_io(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "skype_chat.json"
     p.write_bytes(_skype_chat_json())
     artifacts = extract_skype_artifacts(p)

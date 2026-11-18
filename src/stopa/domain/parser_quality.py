@@ -98,7 +98,9 @@ def quality_report(profiles: Iterable[QualityProfile]) -> dict:
     """JSON-serializovatelný kontrakt reportu (CLI + budoucí Web/Assurance Center).
 
     Deterministický: parsery seřazené podle parser_id; ``coverage_pct`` = podíl
-    plně pokrytých parserů na 1. desetinné místo. Prázdný vstup → ``ValueError``.
+    plně pokrytých parserů na 1. desetinné místo, ``category_coverage_pct`` =
+    jemnější progress metrika (podíl pokrytých kategorií ze všech parser×kategorie).
+    Prázdný vstup → ``ValueError``.
     """
     rows = list(profiles)
     if not rows:
@@ -108,10 +110,14 @@ def quality_report(profiles: Iterable[QualityProfile]) -> dict:
             raise TypeError(f"očekáván QualityProfile, got {type(p).__name__}")
     ordered = sorted(rows, key=lambda p: p.parser_id)
     complete_count = sum(1 for p in ordered if p.complete)
+    total_covered = sum(len(p.covered) for p in ordered)
     return {
         "count": len(ordered),
         "quality_complete": complete_count,
         "coverage_pct": round(100.0 * complete_count / len(ordered), 1),
+        "category_coverage_pct": round(
+            100.0 * total_covered / (len(QUALITY_CATEGORIES) * len(ordered)), 1
+        ),
         "categories": list(QUALITY_CATEGORIES),
         "parsers": [
             {

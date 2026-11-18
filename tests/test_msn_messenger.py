@@ -23,6 +23,7 @@ jan@example.com: Ano, jak se máš?
 
 
 def test_parse_basic() -> None:
+    # quality: positive
     msgs = parse_msn_chat_log(CHATLOG.encode())
     assert len(msgs) == 3
     m = msgs[0]
@@ -36,6 +37,7 @@ def test_parse_basic() -> None:
 
 
 def test_parse_text_with_colon() -> None:
+    # quality: positive
     data = (
         "Windows Live Messenger 8.1\n"
         "Chat started on 1/1/2010 at 9:00 AM\n"
@@ -47,6 +49,7 @@ def test_parse_text_with_colon() -> None:
 
 
 def test_parse_skips_header_lines() -> None:
+    # quality: positive
     data = (
         "Microsoft Messenger 8.5\n"
         "Chat started on 2/14/2010 at 10:23 AM\n"
@@ -59,6 +62,7 @@ def test_parse_skips_header_lines() -> None:
 
 
 def test_parse_noise_filter() -> None:
+    # quality: positive
     # sender >40 znaků bez tečky ani @ = šum
     data = (
         "Messenger 8.5\n"
@@ -72,11 +76,13 @@ def test_parse_noise_filter() -> None:
 
 
 def test_parse_invalid_header_raises() -> None:
+    # quality: negative
     with pytest.raises(ValueError):
         parse_msn_chat_log(b"random text bez nadpisu\n")
 
 
 def test_artifacts() -> None:
+    # quality: positive
     msgs = parse_msn_chat_log(CHATLOG.encode())
     arts = build_msn_artifacts(msgs)
     assert len(arts) == 3
@@ -91,6 +97,7 @@ def test_artifacts() -> None:
 
 
 def test_detection() -> None:
+    # quality: positive
     head = CHATLOG.encode()[:4096]
     assert is_msn_chat_file("chatlog.txt", head)
     assert is_msn_chat_file("MSN_export.txt")
@@ -100,6 +107,7 @@ def test_detection() -> None:
 
 
 def test_extract_end_to_end(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "chatlog.txt"
     p.write_text(CHATLOG, encoding="utf-8")
     arts = extract_msn_artifacts(p)
@@ -108,10 +116,12 @@ def test_extract_end_to_end(tmp_path: Path) -> None:
 
 
 def test_extract_invalid_content(tmp_path: Path) -> None:
+    # quality: negative
     p = tmp_path / "msn.txt"
     p.write_text("tohle není chat log")
     assert extract_msn_artifacts(p) == []
 
 
 def test_extract_missing_file(tmp_path: Path) -> None:
+    # quality: negative
     assert extract_msn_artifacts(tmp_path / "chybi.txt") == []

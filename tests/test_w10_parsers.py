@@ -61,6 +61,7 @@ def _b(obj: object) -> bytes:
 
 class TestInstagramMessagesParse:
     def test_conversation_format(self):
+        # quality: positive
         data = _b(
             [
                 {
@@ -85,6 +86,7 @@ class TestInstagramMessagesParse:
         assert recs[1].timestamp == 1728000600
 
     def test_flat_format(self):
+        # quality: positive
         data = _b(
             [
                 {"from": "user_a", "to": "user_b", "body": "Přímá zpráva", "time": 1728000000},
@@ -98,6 +100,7 @@ class TestInstagramMessagesParse:
         assert recs[0].text == "Přímá zpráva"
 
     def test_shared_media_url(self):
+        # quality: positive
         data = _b(
             [
                 {
@@ -114,16 +117,19 @@ class TestInstagramMessagesParse:
         assert recs[0].extra.get("media_url") == "https://cdn.example.com/m1.jpg"
 
     def test_invalid_json(self):
+        # quality: negative
         with pytest.raises(ValueError):
             parse_instagram_messages(b"{nejson")
 
     def test_empty_payload(self):
+        # quality: boundary
         with pytest.raises(TypeError):
             parse_instagram_messages(_b({"foo": 1}))
 
 
 class TestInstagramMessagesArtifacts:
     def test_build_artifacts(self):
+        # quality: positive
         data = _b(
             [
                 {
@@ -146,6 +152,7 @@ class TestInstagramMessagesArtifacts:
         assert a.confidence >= 0.5
 
     def test_io_entrypoint(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "InstagramMessages.json"
         p.write_bytes(_b([{"from": "x", "to": "y", "body": "Hi"}]))
         arts = extract_instagram_message_artifacts(p)
@@ -153,6 +160,7 @@ class TestInstagramMessagesArtifacts:
         assert arts[0].artifact_type == "chat_message"
 
     def test_io_entrypoint_bad_json(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "x.json"
         p.write_bytes(b"not json")
         assert extract_instagram_message_artifacts(p) == []
@@ -168,6 +176,7 @@ class TestInstagramMessagesDetector:
         ],
     )
     def test_positive(self, name: str):
+        # quality: positive
         assert is_instagram_messages_file(name)
 
     @pytest.mark.parametrize(
@@ -179,6 +188,7 @@ class TestInstagramMessagesDetector:
         ],
     )
     def test_negative(self, name: str):
+        # quality: positive
         assert not is_instagram_messages_file(name)
 
 
@@ -187,6 +197,7 @@ class TestInstagramMessagesDetector:
 
 class TestInstagramPostsParse:
     def test_posts_with_comments(self):
+        # quality: positive
         data = _b(
             [
                 {
@@ -214,12 +225,14 @@ class TestInstagramPostsParse:
         assert comments[0].post_id == "post-1"
 
     def test_story_detection(self):
+        # quality: positive
         data = _b([{"id": "s-1", "story_id": "st-9", "type": "image"}])
         posts, _ = parse_instagram_posts(data)
         assert len(posts) == 1
         assert posts[0].is_story is True
 
     def test_media_list_format(self):
+        # quality: positive
         data = _b(
             {
                 "media": [
@@ -234,16 +247,19 @@ class TestInstagramPostsParse:
         assert posts[1].media_url == "https://cdn.example.com/m2.jpg"
 
     def test_invalid_json(self):
+        # quality: negative
         with pytest.raises(ValueError):
             parse_instagram_posts(b"[")
 
     def test_empty_payload(self):
+        # quality: boundary
         with pytest.raises(TypeError):
             parse_instagram_posts(_b({"x": 1}))
 
 
 class TestInstagramPostsArtifacts:
     def test_build_artifacts(self):
+        # quality: positive
         data = _b(
             [
                 {
@@ -268,6 +284,7 @@ class TestInstagramPostsArtifacts:
         assert comment_art.details["user"] == "u1"
 
     def test_io_entrypoint(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "InstagramPosts.json"
         p.write_bytes(_b([{"id": "p", "caption": "C"}]))
         arts = extract_instagram_post_artifacts(p)
@@ -287,6 +304,7 @@ class TestInstagramPostsDetector:
         ],
     )
     def test_positive(self, name: str):
+        # quality: positive
         assert is_instagram_posts_file(name)
 
     @pytest.mark.parametrize(
@@ -294,6 +312,7 @@ class TestInstagramPostsDetector:
         ["photos.json", "instagram_messages.json", "snapchat_media.json"],
     )
     def test_negative(self, name: str):
+        # quality: positive
         assert not is_instagram_posts_file(name)
 
 
@@ -302,6 +321,7 @@ class TestInstagramPostsDetector:
 
 class TestInstagramAccountParse:
     def test_events_format(self):
+        # quality: positive
         data = _b(
             [
                 {"type": "login", "timestamp": 1728000000, "ip_address": "1.2.3.4"},
@@ -316,6 +336,7 @@ class TestInstagramAccountParse:
         assert users == []
 
     def test_followers_format(self):
+        # quality: positive
         data = _b(
             {
                 "followers": [
@@ -333,16 +354,19 @@ class TestInstagramAccountParse:
         assert users[2].relationship == "following"
 
     def test_invalid_json(self):
+        # quality: negative
         with pytest.raises(ValueError):
             parse_instagram_account(b"{")
 
     def test_empty_payload(self):
+        # quality: boundary
         with pytest.raises(TypeError):
             parse_instagram_account(_b({"unrelated": True}))
 
 
 class TestInstagramAccountArtifacts:
     def test_build_artifacts_events(self):
+        # quality: positive
         data = _b([{"type": "login", "timestamp": 1728000000, "device": "Pixel 8"}])
         events, users = parse_instagram_account(data)
         arts = build_instagram_account_artifacts(events, users)
@@ -355,6 +379,7 @@ class TestInstagramAccountArtifacts:
         assert a.details["device"] == "Pixel 8"
 
     def test_build_artifacts_contacts(self):
+        # quality: positive
         data = _b({"followers": [{"username": "fan_1"}]})
         events, users = parse_instagram_account(data)
         arts = build_instagram_account_artifacts(events, users)
@@ -365,6 +390,7 @@ class TestInstagramAccountArtifacts:
         assert a.details["relationship"] == "follower"
 
     def test_io_entrypoint(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "InstagramAccountActions.json"
         p.write_bytes(_b([{"type": "login", "timestamp": 1728000000}]))
         arts = extract_instagram_account_artifacts(p)
@@ -382,10 +408,12 @@ class TestInstagramAccountDetector:
         ],
     )
     def test_positive(self, name: str):
+        # quality: positive
         assert is_instagram_account_file(name)
 
     @pytest.mark.parametrize("name", ["account_info.json", "instagram_posts.json"])
     def test_negative(self, name: str):
+        # quality: positive
         assert not is_instagram_account_file(name)
 
 
@@ -394,6 +422,7 @@ class TestInstagramAccountDetector:
 
 class TestSnapchatMessagesParse:
     def test_flat_messages(self):
+        # quality: positive
         data = _b(
             [
                 {"from": "user_a", "to": "user_b", "body": "Ahoj!", "time": 1728000000},
@@ -407,6 +436,7 @@ class TestSnapchatMessagesParse:
         assert recs[0].text == "Ahoj!"
 
     def test_conversation_format(self):
+        # quality: positive
         data = _b(
             {
                 "conversations": [
@@ -424,12 +454,14 @@ class TestSnapchatMessagesParse:
         assert recs[0].group_id == "g-1"
 
     def test_invalid_json(self):
+        # quality: negative
         with pytest.raises(ValueError):
             parse_snapchat_messages(b"{")
 
 
 class TestSnapchatContactsParse:
     def test_friends_list(self):
+        # quality: positive
         data = _b({"friends": [{"username": "friend_1", "full_name": "Friend One"}]})
         recs = parse_snapchat_contacts(data)
         assert len(recs) == 1
@@ -437,6 +469,7 @@ class TestSnapchatContactsParse:
         assert recs[0].username == "friend_1"
 
     def test_account_info(self):
+        # quality: positive
         data = _b(
             {"username": "me", "email": "me@example.com", "phone_number": "+420777123456"}
         )
@@ -448,6 +481,7 @@ class TestSnapchatContactsParse:
 
 class TestSnapchatGeoIpParse:
     def test_geolocation(self):
+        # quality: positive
         data = _b(
             [
                 {"latitude": 50.09, "longitude": 14.43, "time": 1728000000},
@@ -460,6 +494,7 @@ class TestSnapchatGeoIpParse:
         assert recs[1].longitude == 2.35
 
     def test_ip_history(self):
+        # quality: positive
         data = _b(
             {"ip_history": [{"ip_address": "1.2.3.4", "time": 1728000000, "event_type": "login"}]}
         )
@@ -471,6 +506,7 @@ class TestSnapchatGeoIpParse:
 
 class TestSnapchatArtifacts:
     def test_contact_artifacts_email_phone(self):
+        # quality: positive
         data = _b(
             {"username": "me", "email": "me@example.com", "phone_number": "+420777123456"}
         )
@@ -484,6 +520,7 @@ class TestSnapchatArtifacts:
         assert all(a.parser_version == SC_VER for a in arts)
 
     def test_extract_auto_detect_messages(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "SnapchatMessagesWR.json"
         p.write_bytes(_b([{"from": "a", "to": "b", "body": "Hi", "time": 1728000000}]))
         arts = extract_snapchat_artifacts(p)
@@ -492,6 +529,7 @@ class TestSnapchatArtifacts:
         assert arts[0].details["engine"] == "snapchat_wr"
 
     def test_extract_auto_detect_geolocation(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "SnapchatGeolocation.json"
         p.write_bytes(_b([{"latitude": 50.09, "longitude": 14.43}]))
         arts = extract_snapchat_artifacts(p)
@@ -500,6 +538,7 @@ class TestSnapchatArtifacts:
         assert arts[0].details["latitude"] == 50.09
 
     def test_extract_auto_detect_ip(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "SnapchatIpHistory.json"
         p.write_bytes(_b([{"ip_address": "1.2.3.4"}]))
         arts = extract_snapchat_artifacts(p)
@@ -507,6 +546,7 @@ class TestSnapchatArtifacts:
         assert arts[0].artifact_type == "network_connection"
 
     def test_extract_bad_json(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "x.json"
         p.write_bytes(b"not json")
         assert extract_snapchat_artifacts(p) == []
@@ -518,10 +558,12 @@ class TestSnapchatDetector:
         ["snapchat_messages_wr.json", "Snapchat/Friends.json", "Snapchat/AccountInfo.json"],
     )
     def test_positive(self, name: str):
+        # quality: positive
         assert is_snapchat_file(name)
 
     @pytest.mark.parametrize("name", ["friends.json", "instagram_friends.json"])
     def test_negative(self, name: str):
+        # quality: positive
         assert not is_snapchat_file(name)
 
 
@@ -561,6 +603,7 @@ class TestSnsPrepassDispatch:
         ],
     )
     def test_sns_paths(self, prepass, path: str, expected_module: str):
+        # quality: positive
         m = prepass(path)
         assert m is not None, f"{path} nebyl zachycen SNS pre-pass"
         assert expected_module in m[0].__module__
@@ -575,4 +618,5 @@ class TestSnsPrepassDispatch:
         ],
     )
     def test_non_sns_paths(self, prepass, path: str):
+        # quality: positive
         assert prepass(path) is None

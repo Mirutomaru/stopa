@@ -31,6 +31,7 @@ C:\\Windows\\System32\\drivers\\malware.sys
 
 
 def test_parse_cmdscan_basic() -> None:
+    # quality: positive
     entries = parse_cmdscan_text(CMDSAMPLE.encode())
     assert len(entries) == 2
     e = entries[0]
@@ -40,11 +41,13 @@ def test_parse_cmdscan_basic() -> None:
 
 
 def test_parse_cmdscan_invalid_header_raises() -> None:
+    # quality: negative
     with pytest.raises(ValueError):
         parse_cmdscan_text(b"random text without header\n")
 
 
 def test_parse_filescan_basic() -> None:
+    # quality: positive
     entries = parse_filescan_text(FILESAMPLE.encode())
     assert len(entries) == 3
     assert entries[0].path.startswith("C:\\Users\\test\\")
@@ -52,17 +55,20 @@ def test_parse_filescan_basic() -> None:
 
 
 def test_parse_filescan_dedupes() -> None:
+    # quality: positive
     data = "InMemory File Name\nC:\\x.txt\nC:\\x.txt\n"
     entries = parse_filescan_text(data.encode())
     assert len(entries) == 1
 
 
 def test_parse_filescan_invalid_header_raises() -> None:
+    # quality: negative
     with pytest.raises(ValueError):
         parse_filescan_text(b"no header here\n")
 
 
 def test_artifacts_cmdscan() -> None:
+    # quality: positive
     procs = parse_cmdscan_text(CMDSAMPLE.encode())
     arts = build_mem_scan_artifacts(procs, [])
     assert len(arts) == 2
@@ -75,6 +81,7 @@ def test_artifacts_cmdscan() -> None:
 
 
 def test_artifacts_filescan() -> None:
+    # quality: positive
     files = parse_filescan_text(FILESAMPLE.encode())
     arts = build_mem_scan_artifacts([], files)
     assert len(arts) == 3
@@ -83,6 +90,7 @@ def test_artifacts_filescan() -> None:
 
 
 def test_detection() -> None:
+    # quality: positive
     assert is_mem_scan_file("cmdscan.txt", CMDSAMPLE.encode())
     assert is_mem_scan_file("filescan_output.txt", FILESAMPLE.encode())
     assert not is_mem_scan_file("other.txt", CMDSAMPLE.encode())
@@ -91,6 +99,7 @@ def test_detection() -> None:
 
 
 def test_extract_end_to_end(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "cmdscan.txt"
     p.write_text(CMDSAMPLE)
     arts = extract_mem_scan_artifacts(p)
@@ -99,6 +108,7 @@ def test_extract_end_to_end(tmp_path: Path) -> None:
 
 
 def test_extract_filescan_end_to_end(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "filescan.txt"
     p.write_text(FILESAMPLE)
     arts = extract_mem_scan_artifacts(p)
@@ -107,4 +117,5 @@ def test_extract_filescan_end_to_end(tmp_path: Path) -> None:
 
 
 def test_extract_missing_file(tmp_path: Path) -> None:
+    # quality: negative
     assert extract_mem_scan_artifacts(tmp_path / "chybi.txt") == []

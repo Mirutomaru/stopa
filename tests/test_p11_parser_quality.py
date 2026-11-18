@@ -78,6 +78,8 @@ class TestProfileAndReport:
         json.dumps(rep, ensure_ascii=False)  # bez výjimky = serializovatelný
         assert rep["count"] == 2 and rep["quality_complete"] == 1
         assert rep["coverage_pct"] == 50.0
+        # 9/16 pokrytých kategorií (b: všech 8 + a: positive) = 56,2 %
+        assert rep["category_coverage_pct"] == 56.2
         assert [r["parser_id"] for r in rep["parsers"]] == ["a", "b"]
 
     def test_report_empty_valueerror(self):
@@ -145,7 +147,7 @@ class TestCli:
         rc, out = self._run("parser-quality", "--json")
         assert rc == 0
         rep = json.loads(out)
-        assert {"count", "quality_complete", "coverage_pct", "parsers"} <= set(rep)
+        assert {"count", "quality_complete", "coverage_pct", "category_coverage_pct", "parsers"} <= set(rep)
 
     def test_text_table(self):
         rc, out = self._run("parser-quality")

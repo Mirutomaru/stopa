@@ -165,6 +165,7 @@ def make_jump_list(entries: list[bytes]) -> bytes:
 
 
 def test_lnk_parse_localbase_target():
+    # quality: positive
     """LOCALBASE flag → ANSI target path se parsoje."""
     data = make_lnk(target="C:\\Windows\\system32\\dfrgui.exe")
     parsed = parse_lnk(data)
@@ -174,6 +175,7 @@ def test_lnk_parse_localbase_target():
 
 
 def test_lnk_parse_name_utf16_diacritics():
+    # quality: positive encoding
     """Name je UTF-16LE s diakritikou — i ASCII poslední znak se dekóduje celý.
 
     Regrese: `_read_utf16_null` původně hledal `\x00\x00` na libovolném offsetu,
@@ -186,6 +188,7 @@ def test_lnk_parse_name_utf16_diacritics():
 
 
 def test_lnk_parse_relative_path_only():
+    # quality: positive
     """Jen RELPATH flag → relative_path, target_path None."""
     data = make_lnk(relative="..\\Programs\\app.exe")
     parsed = parse_lnk(data)
@@ -194,6 +197,7 @@ def test_lnk_parse_relative_path_only():
 
 
 def test_lnk_parse_all_blocks():
+    # quality: positive
     """Všechny bloky najednou — sekvenční čtení v kanonickém pořadí."""
     data = make_lnk(
         target="C:\\bin\\tool.exe",
@@ -209,6 +213,7 @@ def test_lnk_parse_all_blocks():
 
 
 def test_lnk_bad_clsid_raises():
+    # quality: positive
     """Špatný CLSID @4 → ValueError (validace signatury)."""
     data = bytearray(make_lnk(target="C:\\x.exe"))
     data[4] = 0xFF
@@ -217,12 +222,14 @@ def test_lnk_bad_clsid_raises():
 
 
 def test_lnk_too_short_raises():
+    # quality: boundary
     """Soubor kratší než hlavička (76 B) → ValueError."""
     with pytest.raises(ValueError, match="too short"):
         parse_lnk(b"\x4c\x00" * 10)
 
 
 def test_lnk_artifacts_title_and_details():
+    # quality: positive
     """build_lnk_artifacts — title obsahuje cíl, details kompletní."""
     created = datetime(2026, 5, 1, 12, 0, 0, tzinfo=timezone.utc)
     parsed = parse_lnk(make_lnk(target="C:\\Windows\\notepad.exe", name="Notepad", created=created))
@@ -238,6 +245,7 @@ def test_lnk_artifacts_title_and_details():
 
 
 def test_lnk_signature_detection():
+    # quality: positive
     """detect_signature na generovaném LNK → typ 'lnk' (rodina windows)."""
     data = make_lnk(target="C:\\x.exe")
     sig = detect_signature(data)
@@ -250,6 +258,7 @@ def test_lnk_signature_detection():
 
 
 def test_pf_is_mam_magic():
+    # quality: positive
     """is_mam_prefetch — MAM magic ano, ostatní ne."""
     assert is_mam_prefetch(make_pf())
     assert not is_mam_prefetch(b"JFET\x01\x02\x03")
@@ -257,6 +266,7 @@ def test_pf_is_mam_magic():
 
 
 def test_pf_lzxp_identity_roundtrip():
+    # quality: positive
     """LZXPRESS dekomprese identity streamu — regrese EOF fixu.
 
     Dekodér čte 32-bit okno (init = 4 byty); u krátkých streamů se celý payload
@@ -270,6 +280,7 @@ def test_pf_lzxp_identity_roundtrip():
 
 
 def test_pf_parse_full_fixture():
+    # quality: positive
     """Kompletní MAM fixture — program, verze, run_count, časy, volume."""
     last_run = datetime(2026, 10, 26, 15, 20, 19, tzinfo=timezone.utc)
     data = make_pf(program="APPACTIONS.EXE", run_count=42, volume_serial=0x6E6F5F6B, last_run=last_run)
@@ -285,12 +296,14 @@ def test_pf_parse_full_fixture():
 
 
 def test_pf_bad_magic_returns_none():
+    # quality: positive
     """Ne-MAM magic → parse_prefetch vrátí None (ne výjimku)."""
     assert parse_prefetch(b"JFET\x01\x02\x03\x04") is None
     assert parse_prefetch(b"MAM") is None  # příliš krátké
 
 
 def test_pf_missing_scca_signature():
+    # quality: negative
     """Dekomprimuje se, ale chybí 'SCCA' @4 → None."""
     plain = bytearray(200)
     struct.pack_into("<I", plain, 0, 31)
@@ -300,6 +313,7 @@ def test_pf_missing_scca_signature():
 
 
 def test_pf_artifacts_title_and_details():
+    # quality: positive
     """build_prefetch_artifacts — title s programem a run_count, details kompletní."""
     last_run = datetime(2026, 10, 26, 15, 20, 19, tzinfo=timezone.utc)
     parsed = parse_prefetch(make_pf(run_count=9, volume_serial=0xABCDEF01, last_run=last_run))
@@ -315,12 +329,14 @@ def test_pf_artifacts_title_and_details():
 
 
 def test_pf_signature_detection():
+    # quality: positive
     """detect_signature na MAM souboru → typ 'win_prefetch'."""
     sig = detect_signature(make_pf())
     assert sig is not None and sig[0] == "win_prefetch" and sig[1] == "windows"
 
 
 def test_pf_extract_from_file(tmp_path: Path):
+    # quality: positive
     """extract_prefetch_artifacts — IO wrapper nad souborem ve fs."""
     p = tmp_path / "TESTPROG-1.pf"
     p.write_bytes(make_pf(run_count=3))
@@ -335,6 +351,7 @@ def test_pf_extract_from_file(tmp_path: Path):
 
 
 def test_jl_parse_container_with_entries():
+    # quality: positive
     """Kontejner se 2 embedded LNK → parse_jump_list vrátí obě entry s cíli."""
     e1 = make_lnk(target="C:\\Users\\gamer\\Documents\\prace.docx")
     e2 = make_lnk(relative="..\\Downloads\\img.png", name="Obrázek")
@@ -347,6 +364,7 @@ def test_jl_parse_container_with_entries():
 
 
 def test_jl_is_jump_list_file_name_based():
+    # quality: positive
     """Name-based detektor — .customDestinations-ms ano, ostatní ne."""
     assert is_jump_list_file("16f2f0042ddbe0e8.customDestinations-ms")
     assert is_jump_list_file("ABC.CUSTOMDESTINATIONS-MS")  # case-insensitive
@@ -355,6 +373,7 @@ def test_jl_is_jump_list_file_name_based():
 
 
 def test_jl_artifacts_per_entry():
+    # quality: positive
     """build_jump_list_artifacts — jeden artifact na entry, GUID v details."""
     entries = parse_jump_list(
         make_jump_list([make_lnk(target="C:\\a.exe"), make_lnk(target="C:\\b.exe")])
@@ -369,6 +388,7 @@ def test_jl_artifacts_per_entry():
 
 
 def test_jl_empty_container_no_entries(tmp_path: Path):
+    # quality: boundary
     """Kontejner bez embedded LNK → prázdný seznam (ne výjimka)."""
     data = make_jump_list([])  # jen 20 B header
     assert parse_jump_list(data) == []
@@ -398,6 +418,7 @@ def _add_source(db: CaseDB, root: Path) -> EvidenceSource:
 
 
 def test_e2e_lnk_pipeline(tmp_path: Path, case_db: CaseDB):
+    # quality: positive
     """LNK soubor v evidence stromu → shell_link artifact v DB."""
     (tmp_path / "Recent").mkdir()
     (tmp_path / "Recent" / "notepad.lnk").write_bytes(
@@ -413,6 +434,7 @@ def test_e2e_lnk_pipeline(tmp_path: Path, case_db: CaseDB):
 
 
 def test_e2e_prefetch_pipeline(tmp_path: Path, case_db: CaseDB):
+    # quality: positive
     """MAM .pf v evidence stromu → win_prefetch artifact v DB."""
     (tmp_path / "PF").mkdir()
     (tmp_path / "PF" / "TESTPROG-1.pf").write_bytes(make_pf(run_count=5))
@@ -426,6 +448,7 @@ def test_e2e_prefetch_pipeline(tmp_path: Path, case_db: CaseDB):
 
 
 def test_e2e_jumplist_pipeline(tmp_path: Path, case_db: CaseDB):
+    # quality: positive
     """Jump List (.customDestinations-ms) → win_jumplist artifacty v DB.
 
     Name-based dispatch — kontejner nemá spolehlivou magic, detekce podle názvu.

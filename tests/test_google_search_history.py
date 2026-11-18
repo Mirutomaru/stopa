@@ -34,6 +34,7 @@ def _sample() -> list[dict]:
 
 
 def test_parse_basic(tmp_path: Path) -> None:
+    # quality: positive
     data = json.dumps(_sample()).encode()
     entries = parse_google_search_history(data)
     assert len(entries) == 2
@@ -46,6 +47,7 @@ def test_parse_basic(tmp_path: Path) -> None:
 
 
 def test_parse_skips_non_search_items() -> None:
+    # quality: positive
     payload = [
         {"key": "youtubeWatch", "time": {"timestamp": "1"}, "title": "", "url": ""},
         {"key": "webSearch", "title": "dotaz", "time": {}},
@@ -56,16 +58,19 @@ def test_parse_skips_non_search_items() -> None:
 
 
 def test_parse_invalid_json_raises() -> None:
+    # quality: negative
     with pytest.raises(ValueError):
         parse_google_search_history(b"{nejson")
 
 
 def test_parse_non_list_raises() -> None:
+    # quality: positive
     with pytest.raises(TypeError):
         parse_google_search_history(json.dumps({"a": 1}).encode())
 
 
 def test_timestamp_variants() -> None:
+    # quality: positive
     payload = [
         {"key": "webSearch", "title": "q1", "time": {"timestamp": 1625097600}},
         {"key": "webSearch", "title": "q2", "time": {"timestamp": "1625097601"}},
@@ -78,6 +83,7 @@ def test_timestamp_variants() -> None:
 
 
 def test_artifacts() -> None:
+    # quality: positive
     data = json.dumps(_sample()).encode()
     arts = build_google_search_artifacts(parse_google_search_history(data))
     assert len(arts) == 2
@@ -92,6 +98,7 @@ def test_artifacts() -> None:
 
 
 def test_artifact_without_query_lower_confidence() -> None:
+    # quality: positive
     payload = [{"key": "webSearch", "title": "", "url": "https://x.cz/stranka"}]
     arts = build_google_search_artifacts(parse_google_search_history(json.dumps(payload).encode()))
     assert len(arts) == 1
@@ -100,6 +107,7 @@ def test_artifact_without_query_lower_confidence() -> None:
 
 
 def test_detection() -> None:
+    # quality: positive
     head = json.dumps(_sample())[:2048].encode()
     assert is_google_search_history_file("My Activity.json", head)
     assert is_google_search_history_file("search_history.json")
@@ -109,6 +117,7 @@ def test_detection() -> None:
 
 
 def test_extract_end_to_end(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "search_history.json"
     p.write_text(json.dumps(_sample()))
     arts = extract_google_search_artifacts(p)
@@ -117,10 +126,12 @@ def test_extract_end_to_end(tmp_path: Path) -> None:
 
 
 def test_extract_missing_file(tmp_path: Path) -> None:
+    # quality: negative
     assert extract_google_search_artifacts(tmp_path / "chybi.json") == []
 
 
 def test_extract_invalid_content(tmp_path: Path) -> None:
+    # quality: negative
     p = tmp_path / "search_history.json"
     p.write_text("tohle není json")
     assert extract_google_search_artifacts(p) == []

@@ -40,12 +40,14 @@ def _make_ddg_cookies_db() -> sqlite3.Connection:
 
 
 def test_ddg_cookies_detection():
+    # quality: positive
     from stopa.artifacts.ddg_cookies import is_cookies_database
 
     assert is_cookies_database(_make_ddg_cookies_db()) is True
 
 
 def test_ddg_cookies_not_detected_on_plain_db():
+    # quality: negative
     from stopa.artifacts.ddg_cookies import is_cookies_database
 
     conn = sqlite3.connect(":memory:")
@@ -54,6 +56,7 @@ def test_ddg_cookies_not_detected_on_plain_db():
 
 
 def test_ddg_cookies_extract():
+    # quality: positive
     from stopa.artifacts.ddg_cookies import extract_ddg_cookie_artifacts
 
     arts = extract_ddg_cookie_artifacts(_make_ddg_cookies_db())
@@ -68,6 +71,7 @@ def test_ddg_cookies_extract():
 
 
 def test_ddg_cookies_empty_db():
+    # quality: boundary
     from stopa.artifacts.ddg_cookies import extract_ddg_cookie_artifacts
 
     conn = sqlite3.connect(":memory:")
@@ -80,6 +84,7 @@ def test_ddg_cookies_empty_db():
 
 
 def test_allowlisted_detection():
+    # quality: positive
     from stopa.artifacts.allowlisted_websites import is_allowlisted_websites_file
 
     assert is_allowlisted_websites_file("allowlisted_websites.json") is True
@@ -88,6 +93,7 @@ def test_allowlisted_detection():
 
 
 def test_allowlisted_extract(tmp_path: Path):
+    # quality: positive
     from stopa.artifacts.allowlisted_websites import extract_allowlisted_websites_artifacts
 
     p = tmp_path / "allowlist.json"
@@ -100,6 +106,7 @@ def test_allowlisted_extract(tmp_path: Path):
 
 
 def test_allowlisted_extract_object_form(tmp_path: Path):
+    # quality: positive
     from stopa.artifacts.allowlisted_websites import extract_allowlisted_websites_artifacts
 
     p = tmp_path / "tracker_exceptions.json"
@@ -110,6 +117,7 @@ def test_allowlisted_extract_object_form(tmp_path: Path):
 
 
 def test_allowlisted_extract_invalid_json(tmp_path: Path):
+    # quality: negative
     from stopa.artifacts.allowlisted_websites import extract_allowlisted_websites_artifacts
 
     p = tmp_path / "allowlist.json"
@@ -118,6 +126,7 @@ def test_allowlisted_extract_invalid_json(tmp_path: Path):
 
 
 def test_allowlisted_extract_missing(tmp_path: Path):
+    # quality: negative
     from stopa.artifacts.allowlisted_websites import extract_allowlisted_websites_artifacts
 
     assert extract_allowlisted_websites_artifacts(tmp_path / "nope.json") == []
@@ -138,6 +147,7 @@ def _make_odb(path: Path, mimetype: str = "application/vnd.oasis.opendocument.ba
 
 
 def test_openoffice_detection():
+    # quality: positive
     from stopa.artifacts.openoffice_base import is_openoffice_base_file
 
     assert is_openoffice_base_file("mydb.odb") is True
@@ -146,6 +156,7 @@ def test_openoffice_detection():
 
 
 def test_openoffice_extract(tmp_path: Path):
+    # quality: positive
     from stopa.artifacts.openoffice_base import extract_openoffice_base_artifacts
 
     p = tmp_path / "mydb.odb"
@@ -158,6 +169,7 @@ def test_openoffice_extract(tmp_path: Path):
 
 
 def test_openoffice_extract_corrupt_zip(tmp_path: Path):
+    # quality: corrupted
     from stopa.artifacts.openoffice_base import extract_openoffice_base_artifacts
 
     p = tmp_path / "bad.odb"
@@ -166,6 +178,7 @@ def test_openoffice_extract_corrupt_zip(tmp_path: Path):
 
 
 def test_openoffice_extract_missing(tmp_path: Path):
+    # quality: negative
     from stopa.artifacts.openoffice_base import extract_openoffice_base_artifacts
 
     assert extract_openoffice_base_artifacts(tmp_path / "nope.odb") == []
@@ -195,12 +208,14 @@ def _make_parked_db() -> sqlite3.Connection:
 
 
 def test_parked_detection():
+    # quality: positive
     from stopa.artifacts.parked_car_locations import is_parked_car_database
 
     assert is_parked_car_database(_make_parked_db()) is True
 
 
 def test_parked_not_detected_plain():
+    # quality: negative
     from stopa.artifacts.parked_car_locations import is_parked_car_database
 
     conn = sqlite3.connect(":memory:")
@@ -209,6 +224,7 @@ def test_parked_not_detected_plain():
 
 
 def test_parked_extract():
+    # quality: positive
     from stopa.artifacts.parked_car_locations import extract_parked_car_artifacts
 
     arts = extract_parked_car_artifacts(_make_parked_db())
@@ -222,6 +238,7 @@ def test_parked_extract():
 
 
 def test_parked_extract_empty():
+    # quality: boundary
     from stopa.artifacts.parked_car_locations import extract_parked_car_artifacts
 
     conn = sqlite3.connect(":memory:")
@@ -254,12 +271,14 @@ def _make_voicemail_db() -> sqlite3.Connection:
 
 
 def test_voicemail_detection():
+    # quality: positive
     from stopa.artifacts.ios_voicemail import is_ios_voicemail_database
 
     assert is_ios_voicemail_database(_make_voicemail_db()) is True
 
 
 def test_voicemail_not_detected_plain():
+    # quality: negative
     from stopa.artifacts.ios_voicemail import is_ios_voicemail_database
 
     conn = sqlite3.connect(":memory:")
@@ -268,6 +287,7 @@ def test_voicemail_not_detected_plain():
 
 
 def test_voicemail_extract():
+    # quality: positive
     from stopa.artifacts.ios_voicemail import extract_ios_voicemail_artifacts
 
     arts = extract_ios_voicemail_artifacts(_make_voicemail_db())
@@ -280,6 +300,7 @@ def test_voicemail_extract():
 
 
 def test_voicemail_extract_empty():
+    # quality: boundary
     from stopa.artifacts.ios_voicemail import extract_ios_voicemail_artifacts
 
     conn = sqlite3.connect(":memory:")
@@ -334,6 +355,7 @@ UA_KEYS = [
 
 
 def test_userassist_rot13():
+    # quality: positive
     from stopa.artifacts.win_userassist import _rot13_decode
 
     # ROT13 je involuce: decode(decode(x)) == x; hex "6d" = 'm' → ROT13 'z'
@@ -341,6 +363,7 @@ def test_userassist_rot13():
 
 
 def test_userassist_filetime():
+    # quality: positive
     from stopa.artifacts.win_userassist import _filetime_to_dt
 
     dt = _filetime_to_dt(_UA_FT)
@@ -349,6 +372,7 @@ def test_userassist_filetime():
 
 
 def test_userassist_parse_invalid_binary():
+    # quality: negative
     from stopa.artifacts.win_userassist import _parse_userassist_value
 
     assert _parse_userassist_value(b"short") is None
@@ -358,6 +382,7 @@ def test_userassist_parse_invalid_binary():
 
 
 def test_userassist_build_artifacts():
+    # quality: positive
     from stopa.artifacts.win_userassist import (
         PARSER_VERSION,
         UserAssistEntry,
@@ -376,6 +401,7 @@ def test_userassist_build_artifacts():
 
 
 def test_userassist_extract(monkeypatch):
+    # quality: positive
     from stopa.artifacts.win_userassist import extract_userassist_artifacts
 
     monkeypatch.setattr(
@@ -388,6 +414,7 @@ def test_userassist_extract(monkeypatch):
 
 
 def test_userassist_extract_no_keys(monkeypatch):
+    # quality: positive
     from stopa.artifacts.win_userassist import extract_userassist_artifacts
 
     other = [FakeKey(r"Software\Microsoft\Windows\CurrentVersion\Run")]
@@ -396,6 +423,7 @@ def test_userassist_extract_no_keys(monkeypatch):
 
 
 def test_userassist_extract_missing(monkeypatch):
+    # quality: negative
     from stopa.artifacts.win_userassist import extract_userassist_artifacts
 
     def _raise(**_kw):
@@ -406,6 +434,7 @@ def test_userassist_extract_missing(monkeypatch):
 
 
 def test_userassist_extract_hive_error(monkeypatch):
+    # quality: positive
     from stopa.artifacts.win_userassist import extract_userassist_artifacts
 
     def _raise(**_kw):
@@ -419,6 +448,7 @@ def test_userassist_extract_hive_error(monkeypatch):
 
 
 def test_pipeline_name_based_allowlisted():
+    # quality: positive
     from stopa.pipeline import NAME_BASED_EXTRACTORS, _name_based_match
 
     m = _name_based_match("allowlisted_websites.json")
@@ -426,6 +456,7 @@ def test_pipeline_name_based_allowlisted():
 
 
 def test_pipeline_name_based_openoffice():
+    # quality: positive
     from stopa.pipeline import NAME_BASED_EXTRACTORS, _name_based_match
 
     m = _name_based_match("mydb.odb")
@@ -433,6 +464,7 @@ def test_pipeline_name_based_openoffice():
 
 
 def test_pipeline_registry_includes_userassist():
+    # quality: positive
     from stopa.pipeline import parser_versions
 
     # UserAssist běží v registry chainu (sdílená regf magic) — verze registry_hive
@@ -440,6 +472,7 @@ def test_pipeline_registry_includes_userassist():
 
 
 def test_c3_registry_w4_entries():
+    # quality: positive
     from stopa.domain.validation_registry import build_registry
 
     reg = build_registry()

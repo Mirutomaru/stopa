@@ -59,6 +59,7 @@ from stopa.artifacts.twitter_users import (
 
 class TestTwitterPostsParse:
     def test_flat_list(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -81,6 +82,7 @@ class TestTwitterPostsParse:
         assert r.retweets == 2
 
     def test_warrant_return_keys(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -100,6 +102,7 @@ class TestTwitterPostsParse:
         assert r.timestamp == 1727956800
 
     def test_milliseconds_heuristic(self):
+        # quality: positive
         data = json.dumps(
             [{"author": "u", "text": "x", "created_at": 1728000000123}]
         ).encode()
@@ -107,6 +110,7 @@ class TestTwitterPostsParse:
         assert records[0].timestamp == 1728000000
 
     def test_retweet_and_reply_types(self):
+        # quality: positive
         data = json.dumps(
             [
                 {"author": "u", "text": "RT", "retweeted_status": {"id": "x"}},
@@ -122,6 +126,7 @@ class TestTwitterPostsParse:
         assert records[1].post_type == "reply"
 
     def test_dict_wrapper(self):
+        # quality: positive
         data = json.dumps(
             {"posts": [{"author": "u", "text": "wrapped"}]}
         ).encode()
@@ -130,16 +135,19 @@ class TestTwitterPostsParse:
         assert records[0].text == "wrapped"
 
     def test_invalid_json(self):
+        # quality: negative
         with pytest.raises(ValueError):
             parse_twitter_posts(b"{nejson")
 
     def test_empty_raises_typeerror(self):
+        # quality: boundary
         with pytest.raises(TypeError):
             parse_twitter_posts(b"[{\"foo\": 1}]")
 
 
 class TestTwitterPostsBuild:
     def test_artifact_fields(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -163,6 +171,7 @@ class TestTwitterPostsBuild:
         assert a.confidence == 0.7
 
     def test_low_confidence_without_author(self):
+        # quality: positive
         data = json.dumps([{"text": "bez autora"}]).encode()
         artifacts = build_twitter_post_artifacts(parse_twitter_posts(data))
         assert artifacts[0].confidence == 0.5
@@ -170,6 +179,7 @@ class TestTwitterPostsBuild:
 
 class TestTwitterPostsIO:
     def test_entrypoint_roundtrip(self, tmp_path: Path):
+        # quality: positive
         f = tmp_path / "posts.json"
         f.write_text(json.dumps([{"author": "u", "text": "t"}]))
         artifacts = extract_twitter_post_artifacts(f)
@@ -177,6 +187,7 @@ class TestTwitterPostsIO:
         assert artifacts[0].artifact_type == "sns_post"
 
     def test_entrypoint_bad_json(self, tmp_path: Path):
+        # quality: positive
         f = tmp_path / "posts.json"
         f.write_text("{x")
         assert extract_twitter_post_artifacts(f) == []
@@ -193,6 +204,7 @@ class TestTwitterPostsDetector:
         ],
     )
     def test_positive(self, name: str):
+        # quality: positive
         assert is_twitter_posts_file(name)
 
     @pytest.mark.parametrize(
@@ -200,6 +212,7 @@ class TestTwitterPostsDetector:
         ["posts.json", "Twitter/messages.json", "twitter_users.json"],
     )
     def test_negative(self, name: str):
+        # quality: positive
         assert not is_twitter_posts_file(name)
 
 
@@ -208,6 +221,7 @@ class TestTwitterPostsDetector:
 
 class TestTwitterMessagesParse:
     def test_flat_list(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -227,6 +241,7 @@ class TestTwitterMessagesParse:
         assert r.timestamp == 1728000000
 
     def test_conversation_format(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -245,6 +260,7 @@ class TestTwitterMessagesParse:
         assert all(r.participants == ("a", "b") for r in records)
 
     def test_dict_wrapper(self):
+        # quality: positive
         data = json.dumps(
             {"direct_messages": [{"from": "x", "to": "y", "body": "hi"}]}
         ).encode()
@@ -253,16 +269,19 @@ class TestTwitterMessagesParse:
         assert records[0].sender == "x"
 
     def test_invalid_json(self):
+        # quality: negative
         with pytest.raises(ValueError):
             parse_twitter_messages(b"[")
 
     def test_empty_raises_typeerror(self):
+        # quality: boundary
         with pytest.raises(TypeError):
             parse_twitter_messages(b"[]")
 
 
 class TestTwitterMessagesBuild:
     def test_artifact_fields(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -287,6 +306,7 @@ class TestTwitterMessagesBuild:
 
 class TestTwitterMessagesIO:
     def test_entrypoint_roundtrip(self, tmp_path: Path):
+        # quality: positive
         f = tmp_path / "DirectMessages.json"
         f.write_text(json.dumps([{"sender": "a", "text": "t"}]))
         artifacts = extract_twitter_message_artifacts(f)
@@ -300,10 +320,12 @@ class TestTwitterMessagesDetector:
         ["twitter_messages.json", "Twitter/DirectMessages.json", "Twitter/messages.json"],
     )
     def test_positive(self, name: str):
+        # quality: positive
         assert is_twitter_messages_file(name)
 
     @pytest.mark.parametrize("name", ["messages.json", "Twitter/posts.json"])
     def test_negative(self, name: str):
+        # quality: positive
         assert not is_twitter_messages_file(name)
 
 
@@ -312,6 +334,7 @@ class TestTwitterMessagesDetector:
 
 class TestTwitterUsersParse:
     def test_flat_list(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -331,6 +354,7 @@ class TestTwitterUsersParse:
         assert r.friends_count == 7
 
     def test_own_account_dict(self):
+        # quality: positive
         data = json.dumps(
             {"screen_name": "me", "name": "Me", "followers_count": 10}
         ).encode()
@@ -339,6 +363,7 @@ class TestTwitterUsersParse:
         assert records[0].relationship == "account"
 
     def test_followers_following_sections(self):
+        # quality: positive
         data = json.dumps(
             {
                 "screen_name": "me",
@@ -353,16 +378,19 @@ class TestTwitterUsersParse:
         assert rels["idol_1"] == "following"
 
     def test_invalid_json(self):
+        # quality: negative
         with pytest.raises(ValueError):
             parse_twitter_users(b"{")
 
     def test_empty_raises_typeerror(self):
+        # quality: boundary
         with pytest.raises(TypeError):
             parse_twitter_users(b"[{\"foo\": 1}]")
 
 
 class TestTwitterUsersBuild:
     def test_contact_artifacts(self):
+        # quality: positive
         data = json.dumps([{"screen_name": "user_a", "name": "User A"}]).encode()
         artifacts = build_twitter_user_artifacts(parse_twitter_users(data))
         assert len(artifacts) == 1
@@ -376,6 +404,7 @@ class TestTwitterUsersBuild:
 
 class TestTwitterUsersIO:
     def test_entrypoint_roundtrip(self, tmp_path: Path):
+        # quality: positive
         f = tmp_path / "Users.json"
         f.write_text(json.dumps([{"screen_name": "u"}]))
         artifacts = extract_twitter_user_artifacts(f)
@@ -389,10 +418,12 @@ class TestTwitterUsersDetector:
         ["twitter_users.json", "Twitter/Users.json", "Twitter/FollowersAndFollowing.json"],
     )
     def test_positive(self, name: str):
+        # quality: positive
         assert is_twitter_users_file(name)
 
     @pytest.mark.parametrize("name", ["users.json", "Twitter/posts.json"])
     def test_negative(self, name: str):
+        # quality: positive
         assert not is_twitter_users_file(name)
 
 
@@ -401,6 +432,7 @@ class TestTwitterUsersDetector:
 
 class TestFacebookMessagesParse:
     def test_flat_list(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -420,6 +452,7 @@ class TestFacebookMessagesParse:
         assert r.timestamp == 1728000000
 
     def test_conversation_format(self):
+        # quality: positive
         data = json.dumps(
             {
                 "conversations": [
@@ -437,12 +470,14 @@ class TestFacebookMessagesParse:
         assert records[0].conversation_id == "c-9"
 
     def test_invalid_json(self):
+        # quality: negative
         with pytest.raises(ValueError):
             parse_facebook_messages(b"[")
 
 
 class TestFacebookFriendsParse:
     def test_friends_list(self):
+        # quality: positive
         data = json.dumps(
             {"friends": [{"name": "User B", "username": "user_b"}]}
         ).encode()
@@ -454,6 +489,7 @@ class TestFacebookFriendsParse:
         assert r.relationship == "friend"
 
     def test_own_account(self):
+        # quality: positive
         data = json.dumps({"name": "Me", "email": "me@example.com"}).encode()
         records = parse_facebook_friends(data)
         assert len(records) == 1
@@ -461,6 +497,7 @@ class TestFacebookFriendsParse:
         assert records[0].email == "me@example.com"
 
     def test_flat_list(self):
+        # quality: positive
         data = json.dumps([{"name": "Friend C"}]).encode()
         records = parse_facebook_friends(data)
         assert len(records) == 1
@@ -469,6 +506,7 @@ class TestFacebookFriendsParse:
 
 class TestFacebookTimelineParse:
     def test_timeline_posts(self):
+        # quality: positive
         data = json.dumps(
             {
                 "timeline": [
@@ -490,6 +528,7 @@ class TestFacebookTimelineParse:
 
 class TestFacebookProfileParse:
     def test_profile_dict(self):
+        # quality: positive
         data = json.dumps(
             {"name": "Me", "email": "me@example.com", "phone": "+420123"}
         ).encode()
@@ -499,11 +538,13 @@ class TestFacebookProfileParse:
         assert record.full_name == "Me"
 
     def test_non_dict_returns_none(self):
+        # quality: positive
         assert parse_facebook_profile(b"[1, 2]") is None
 
 
 class TestFacebookBuild:
     def test_message_artifacts(self):
+        # quality: positive
         data = json.dumps([{"sender": "a", "body": "Hi"}]).encode()
         artifacts = build_facebook_message_artifacts(parse_facebook_messages(data))
         assert len(artifacts) == 1
@@ -513,6 +554,7 @@ class TestFacebookBuild:
         assert a.details["engine"] == "facebook_wr"
 
     def test_contact_artifacts(self):
+        # quality: positive
         data = json.dumps({"friends": [{"name": "User B"}]}).encode()
         artifacts = build_facebook_contact_artifacts(parse_facebook_friends(data))
         assert len(artifacts) == 1
@@ -521,6 +563,7 @@ class TestFacebookBuild:
         assert a.details["mimetype"] == "sns:facebook"
 
     def test_timeline_artifacts(self):
+        # quality: positive
         data = json.dumps({"timeline": [{"author": "a", "text": "P"}]}).encode()
         artifacts = build_facebook_timeline_artifacts(parse_facebook_timeline(data))
         assert len(artifacts) == 1
@@ -531,6 +574,7 @@ class TestFacebookBuild:
 
 class TestFacebookIO:
     def test_entrypoint_multi_section(self, tmp_path: Path):
+        # quality: positive
         """Jeden WR soubor nese více sekcí — auto-detekce."""
         payload = {
             "messages": [{"sender": "a", "body": "Hi"}],
@@ -544,6 +588,7 @@ class TestFacebookIO:
         assert types == {"chat_message", "contact", "sns_post"}
 
     def test_entrypoint_profile_only(self, tmp_path: Path):
+        # quality: positive
         f = tmp_path / "ProfileInfo.json"
         f.write_text(json.dumps({"name": "Me", "email": "me@example.com"}))
         artifacts = extract_facebook_artifacts(f)
@@ -552,6 +597,7 @@ class TestFacebookIO:
         assert artifacts[0].details["relationship"] == "account"
 
     def test_entrypoint_bad_json(self, tmp_path: Path):
+        # quality: positive
         f = tmp_path / "Facebook.json"
         f.write_text("{x")
         assert extract_facebook_artifacts(f) == []
@@ -569,10 +615,12 @@ class TestFacebookDetector:
         ],
     )
     def test_positive(self, name: str):
+        # quality: positive
         assert is_facebook_file(name)
 
     @pytest.mark.parametrize("name", ["Friends.json", "messenger_chat.txt"])
     def test_negative(self, name: str):
+        # quality: positive
         assert not is_facebook_file(name)
 
 
@@ -608,6 +656,7 @@ class TestSnsPrepassDispatch:
         ],
     )
     def test_sns_paths(self, name: str, expected: str):
+        # quality: positive
         from stopa.pipeline import NAME_BASED_EXTRACTORS, _sns_prepass
 
         match = _sns_prepass(name)
@@ -627,6 +676,7 @@ class TestSnsPrepassDispatch:
         ],
     )
     def test_no_collision(self, name: str):
+        # quality: positive
         from stopa.pipeline import _sns_prepass
 
         assert _sns_prepass(name) is None
@@ -637,6 +687,7 @@ class TestSnsPrepassDispatch:
 
 class TestC3RegistryWave11:
     def test_new_parsers_registered(self):
+        # quality: positive
         from stopa.domain.validation_registry import build_registry
 
         reg = build_registry()
@@ -645,6 +696,7 @@ class TestC3RegistryWave11:
             assert reg[pid].version == "1.0"
 
     def test_registry_count_at_least_58(self):
+        # quality: positive
         from stopa.domain.validation_registry import build_registry
 
         assert len(build_registry()) >= 58

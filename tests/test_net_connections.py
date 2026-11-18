@@ -43,15 +43,18 @@ NOT_NETSTAT = b"some random file\r\nwith no table header\r\njust words here\r\n"
 # ── is_netstat_file (detekce) ──────────────────────────────────────────
 
 def test_is_netstat_by_name_and_content():
+    # quality: positive
     assert is_netstat_file("netstat.txt", WIN_NETSTAT[:2048]) is True
 
 
 def test_is_netstat_rejects_other_text():
+    # quality: negative
     # název sedí, ale obsah nemá hlavičku → False
     assert is_netstat_file("connections.txt", NOT_NETSTAT) is False
 
 
 def test_is_netstat_requires_name_hint():
+    # quality: positive
     # bez názvové nápovědy (netstat/connections/sockets) → False
     assert is_netstat_file("random.txt", WIN_NETSTAT[:2048]) is False
 
@@ -59,6 +62,7 @@ def test_is_netstat_requires_name_hint():
 # ── parse_netstat_text (čistá funkce) — Windows formát ────────────────
 
 def test_parse_windows_netstat():
+    # quality: positive
     conns = parse_netstat_text(WIN_NETSTAT)
     assert len(conns) == 4
     # první spojení — LISTENING na 0.0.0.0:135
@@ -81,6 +85,7 @@ def test_parse_windows_netstat():
 # ── parse_netstat_text (čistá funkce) — Unix formát ───────────────────
 
 def test_parse_unix_netstat():
+    # quality: positive
     conns = parse_netstat_text(UNIX_NETSTAT)
     assert len(conns) == 2
     c = conns[0]
@@ -91,6 +96,7 @@ def test_parse_unix_netstat():
 
 
 def test_parse_no_header_raises():
+    # quality: positive
     with pytest.raises(ValueError):
         parse_netstat_text(NOT_NETSTAT)
 
@@ -98,6 +104,7 @@ def test_parse_no_header_raises():
 # ── build_netstat_artifacts (čistá funkce) ────────────────────────────
 
 def test_build_artifacts():
+    # quality: positive
     conns = parse_netstat_text(WIN_NETSTAT)
     arts = build_netstat_artifacts(conns)
     assert len(arts) == 4
@@ -110,12 +117,14 @@ def test_build_artifacts():
 
 
 def test_build_artifacts_empty():
+    # quality: boundary
     assert build_netstat_artifacts([]) == []
 
 
 # ── extract_netstat_artifacts (IO přes tmp_path) ──────────────────────
 
 def test_extract_windows_file(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "netstat.txt"
     p.write_bytes(WIN_NETSTAT)
     arts = extract_netstat_artifacts(p)
@@ -123,6 +132,7 @@ def test_extract_windows_file(tmp_path: Path):
 
 
 def test_extract_unix_file(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "connections.txt"
     p.write_bytes(UNIX_NETSTAT)
     arts = extract_netstat_artifacts(p)
@@ -130,6 +140,7 @@ def test_extract_unix_file(tmp_path: Path):
 
 
 def test_extract_not_netstat(tmp_path: Path):
+    # quality: positive
     # název sedí, ale obsah není netstat → prázdný výsledek (ne výjimka)
     p = tmp_path / "netstat.txt"
     p.write_bytes(NOT_NETSTAT)
@@ -137,4 +148,5 @@ def test_extract_not_netstat(tmp_path: Path):
 
 
 def test_extract_missing_file(tmp_path: Path):
+    # quality: negative
     assert extract_netstat_artifacts(tmp_path / "nope.txt") == []

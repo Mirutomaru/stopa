@@ -105,6 +105,7 @@ AGG_FIXTURE = [
 
 
 def test_agg_parse_days():
+    # quality: positive
     days = parse_aggregated_activities(json.dumps(AGG_FIXTURE).encode())
     assert len(days) == 2
     assert days[0].date == "2024-01-15"
@@ -112,16 +113,19 @@ def test_agg_parse_days():
 
 
 def test_agg_parse_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_aggregated_activities(b"{nejson")
 
 
 def test_agg_parse_not_list():
+    # quality: positive
     with pytest.raises(TypeError):
         parse_aggregated_activities(json.dumps({"a": 1}).encode())
 
 
 def test_agg_build_artifacts():
+    # quality: positive
     days = parse_aggregated_activities(json.dumps(AGG_FIXTURE).encode())
     arts = build_activity_artifacts(days)
     assert len(arts) == 2
@@ -134,6 +138,7 @@ def test_agg_build_artifacts():
 
 
 def test_agg_extract_entrypoint(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "aggregated_activities.json"
     p.write_text(json.dumps(AGG_FIXTURE))
     arts = extract_aggregated_activities_artifacts(p)
@@ -142,6 +147,7 @@ def test_agg_extract_entrypoint(tmp_path: Path):
 
 
 def test_agg_detection():
+    # quality: positive
     head = json.dumps(AGG_FIXTURE).encode()[:100]
     assert is_aggregated_activities_file("aggregated_activities.json", head)
     # jiný název → False
@@ -158,6 +164,7 @@ IDENTITY_FIXTURE = [
 
 
 def test_identity_parse():
+    # quality: positive
     sessions = parse_identity_sessions(json.dumps(IDENTITY_FIXTURE).encode())
     assert len(sessions) == 1
     s = sessions[0]
@@ -167,6 +174,7 @@ def test_identity_parse():
 
 
 def test_identity_build():
+    # quality: positive
     sessions = parse_identity_sessions(json.dumps(IDENTITY_FIXTURE).encode())
     arts = build_identity_artifacts(sessions)
     assert len(arts) == 1
@@ -177,6 +185,7 @@ def test_identity_build():
 
 
 def test_identity_extract(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "identity_sessions.json"
     p.write_text(json.dumps(IDENTITY_FIXTURE))
     arts = extract_identity_sessions_artifacts(p)
@@ -185,6 +194,7 @@ def test_identity_extract(tmp_path: Path):
 
 
 def test_identity_detection():
+    # quality: positive
     head = json.dumps(IDENTITY_FIXTURE).encode()[:100]
     assert is_identity_sessions_file("identity_sessions.json", head)
     assert not is_identity_sessions_file("other.json", b"[")
@@ -224,6 +234,7 @@ MAPS_FIXTURE = {
 
 
 def test_maps_parse_place_visit():
+    # quality: positive
     objs = parse_maps_activity(json.dumps(MAPS_FIXTURE).encode())
     assert len(objs) == 2
     v = objs[0]
@@ -235,6 +246,7 @@ def test_maps_parse_place_visit():
 
 
 def test_maps_parse_activity_segment():
+    # quality: positive
     objs = parse_maps_activity(json.dumps(MAPS_FIXTURE).encode())
     seg = objs[1]
     assert seg.kind == "activity_segment"
@@ -244,6 +256,7 @@ def test_maps_parse_activity_segment():
 
 
 def test_maps_parse_invalid():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_maps_activity(b"{x")
     with pytest.raises(TypeError):
@@ -251,6 +264,7 @@ def test_maps_parse_invalid():
 
 
 def test_maps_build():
+    # quality: positive
     objs = parse_maps_activity(json.dumps(MAPS_FIXTURE).encode())
     arts = build_maps_artifacts(objs)
     assert len(arts) == 2
@@ -262,6 +276,7 @@ def test_maps_build():
 
 
 def test_maps_extract(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "maps_activity.json"
     p.write_text(json.dumps(MAPS_FIXTURE))
     arts = extract_maps_activity_artifacts(p)
@@ -270,6 +285,7 @@ def test_maps_extract(tmp_path: Path):
 
 
 def test_maps_detection():
+    # quality: positive
     head = json.dumps(MAPS_FIXTURE).encode()[:100]
     assert is_maps_activity_file("maps_activity.json", head)
     # pole místo objektu → False (head začíná [)
@@ -315,6 +331,7 @@ CHAT_FIXTURE = {
 
 
 def test_chat_parse_messages():
+    # quality: positive
     msgs = parse_chat_messages(json.dumps(CHAT_FIXTURE).encode())
     assert len(msgs) == 2
     m0 = msgs[0]
@@ -325,6 +342,7 @@ def test_chat_parse_messages():
 
 
 def test_chat_parse_invalid():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_chat_messages(b"{x")
     with pytest.raises(TypeError):
@@ -332,6 +350,7 @@ def test_chat_parse_invalid():
 
 
 def test_chat_build():
+    # quality: positive
     msgs = parse_chat_messages(json.dumps(CHAT_FIXTURE).encode())
     arts = build_chat_artifacts(msgs)
     assert len(arts) == 2
@@ -343,6 +362,7 @@ def test_chat_build():
 
 
 def test_chat_extract(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "hangouts.json"
     p.write_text(json.dumps(CHAT_FIXTURE))
     arts = extract_google_chat_artifacts(p)
@@ -351,6 +371,7 @@ def test_chat_extract(tmp_path: Path):
 
 
 def test_chat_detection():
+    # quality: positive
     head = json.dumps(CHAT_FIXTURE).encode()[:100]
     assert is_google_chat_file("hangouts.json", head)
     assert not is_google_chat_file("notes.txt", b"{")
@@ -386,6 +407,7 @@ EXPORT_SUMMARY_FIXTURE = {
 
 
 def test_acct_history_parse():
+    # quality: positive
     events = parse_account_change_history(json.dumps(ACCT_HISTORY_FIXTURE).encode())
     assert len(events) == 1
     e = events[0]
@@ -395,6 +417,7 @@ def test_acct_history_parse():
 
 
 def test_acct_history_build():
+    # quality: positive
     events = parse_account_change_history(json.dumps(ACCT_HISTORY_FIXTURE).encode())
     arts = build_account_event_artifacts(events)
     assert len(arts) == 1
@@ -404,6 +427,7 @@ def test_acct_history_build():
 
 
 def test_acct_history_extract(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "account_change_history.json"
     p.write_text(json.dumps(ACCT_HISTORY_FIXTURE))
     arts = extract_account_change_history_artifacts(p)
@@ -412,6 +436,7 @@ def test_acct_history_extract(tmp_path: Path):
 
 
 def test_devices_parse():
+    # quality: positive
     devices = parse_linked_devices(json.dumps(DEVICES_FIXTURE).encode())
     assert len(devices) == 1
     d = devices[0]
@@ -421,6 +446,7 @@ def test_devices_parse():
 
 
 def test_devices_build():
+    # quality: positive
     devices = parse_linked_devices(json.dumps(DEVICES_FIXTURE).encode())
     arts = build_device_artifacts(devices)
     assert len(arts) == 1
@@ -430,6 +456,7 @@ def test_devices_build():
 
 
 def test_devices_extract(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "linked_devices.json"
     p.write_text(json.dumps(DEVICES_FIXTURE))
     arts = extract_linked_devices_artifacts(p)
@@ -438,11 +465,13 @@ def test_devices_extract(tmp_path: Path):
 
 
 def test_export_summary_parse():
+    # quality: positive
     summary = parse_export_summary(json.dumps(EXPORT_SUMMARY_FIXTURE).encode())
     assert summary["products"] == ["Search history", "Location history"]
 
 
 def test_export_summary_build():
+    # quality: positive
     summary = parse_export_summary(json.dumps(EXPORT_SUMMARY_FIXTURE).encode())
     arts = build_export_summary_artifacts(summary)
     assert len(arts) == 1
@@ -453,6 +482,7 @@ def test_export_summary_build():
 
 
 def test_export_summary_extract(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "export_summary.json"
     p.write_text(json.dumps(EXPORT_SUMMARY_FIXTURE))
     arts = extract_export_summary_artifacts(p)
@@ -461,6 +491,7 @@ def test_export_summary_extract(tmp_path: Path):
 
 
 def test_acct_meta_detection():
+    # quality: positive
     h_head = json.dumps(ACCT_HISTORY_FIXTURE).encode()[:100]
     d_head = json.dumps(DEVICES_FIXTURE).encode()[:100]
     s_head = json.dumps(EXPORT_SUMMARY_FIXTURE).encode()[:100]
@@ -492,6 +523,7 @@ DRIVE_FIXTURE = [
 
 
 def test_drive_parse():
+    # quality: positive
     records = parse_drive_activity(json.dumps(DRIVE_FIXTURE).encode())
     assert len(records) == 2
     r0 = records[0]
@@ -502,6 +534,7 @@ def test_drive_parse():
 
 
 def test_drive_parse_wrapped():
+    # quality: positive
     # některé exporty balí pole do objektu s klíčem activities
     wrapped = {"activities": DRIVE_FIXTURE}
     records = parse_drive_activity(json.dumps(wrapped).encode())
@@ -509,6 +542,7 @@ def test_drive_parse_wrapped():
 
 
 def test_drive_parse_invalid():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_drive_activity(b"{x")
     with pytest.raises(TypeError):
@@ -516,6 +550,7 @@ def test_drive_parse_invalid():
 
 
 def test_drive_build():
+    # quality: positive
     records = parse_drive_activity(json.dumps(DRIVE_FIXTURE).encode())
     arts = build_drive_artifacts(records)
     assert len(arts) == 2
@@ -526,6 +561,7 @@ def test_drive_build():
 
 
 def test_drive_extract(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "drive_activity.json"
     p.write_text(json.dumps(DRIVE_FIXTURE))
     arts = extract_drive_activity_artifacts(p)
@@ -534,6 +570,7 @@ def test_drive_extract(tmp_path: Path):
 
 
 def test_drive_detection():
+    # quality: positive
     head = json.dumps(DRIVE_FIXTURE).encode()[:100]
     assert is_drive_activity_file("drive_activity.json", head)
     assert not is_drive_activity_file("other.txt", b"[")
@@ -564,11 +601,13 @@ def _make_samsung_db() -> sqlite3.Connection:
 
 
 def test_samsung_detection():
+    # quality: positive
     conn = _make_samsung_db()
     assert is_samsung_voice_recording_database(conn)
 
 
 def test_samsung_detection_negative():
+    # quality: positive
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE other (x TEXT)")
     conn.commit()
@@ -576,6 +615,7 @@ def test_samsung_detection_negative():
 
 
 def test_samsung_extract():
+    # quality: positive
     conn = _make_samsung_db()
     arts = extract_samsung_voice_recording_artifacts(conn)
     assert len(arts) == 2
@@ -587,6 +627,7 @@ def test_samsung_extract():
 
 
 def test_samsung_build_pure():
+    # quality: positive
     conn = _make_samsung_db()
     rows = conn.execute("SELECT * FROM voicerec").fetchall()
     arts = build_voice_recording_artifacts(rows)
@@ -596,6 +637,7 @@ def test_samsung_build_pure():
 
 
 def test_samsung_empty_db():
+    # quality: boundary
     conn = sqlite3.connect(":memory:")
     conn.execute("CREATE TABLE voicerec (name TEXT, path TEXT)")
     conn.commit()
@@ -608,5 +650,6 @@ def test_samsung_empty_db():
 # ---------------------------------------------------------------------------
 
 def test_parser_versions():
+    # quality: positive
     for v in (AGG_VERSION, MAPS_VERSION, CHAT_VERSION, ACCT_META_VERSION, DRIVE_VERSION, SAMSUNG_VERSION):
         assert v == "1.0"

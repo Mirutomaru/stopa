@@ -194,6 +194,7 @@ def make_usn_journal(records: list[tuple[int, int, int, str]]) -> bytes:
 
 
 def test_evtx_standard_content_scan():
+    # quality: positive
     """Standardní EVTX s EventID markery → content-scan najde všechny záznamy."""
     data = make_evtx_standard(3)
     parsed = parse_evtx_file(data)
@@ -208,6 +209,7 @@ def test_evtx_standard_content_scan():
 
 
 def test_evtx_elf_variant_parse():
+    # quality: positive
     """ElfFile varianta (ground-truth) → is_elf_variant + záznamy přes markery."""
     data = make_evtx_elf(2)
     parsed = parse_evtx_file(data)
@@ -218,6 +220,7 @@ def test_evtx_elf_variant_parse():
 
 
 def test_evtx_extract_binxml_strings_fields():
+    # quality: positive
     """_extract_binxml_strings — event_id, provider i message přesně."""
     payload = _evtx_binxml(4624)
     fields = _extract_binxml_strings(payload)
@@ -227,12 +230,14 @@ def test_evtx_extract_binxml_strings_fields():
 
 
 def test_evtx_bad_magic_raises():
+    # quality: positive
     """Neznámá magic → ValueError."""
     with pytest.raises(ValueError, match="Neznámá EVTX magic"):
         parse_evtx_file(b"XXXX" + b"\x00" * 124)
 
 
 def test_evtx_no_chunks_empty():
+    # quality: boundary
     """Validní header bez chunků → 0 záznamů (ne výjimka)."""
     data = make_evtx_standard(3)
     # oříznout na file header + polovinu prvního chunku (bez CHUN magiky)
@@ -243,6 +248,7 @@ def test_evtx_no_chunks_empty():
 
 
 def test_evtx_artifacts_title_and_details():
+    # quality: positive
     """build_evtx_artifacts — title s providerem + ID, details kompletní."""
     parsed = parse_evtx_file(make_evtx_standard(2))
     arts = build_evtx_artifacts(parsed)
@@ -257,6 +263,7 @@ def test_evtx_artifacts_title_and_details():
 
 
 def test_evtx_signature_detection():
+    # quality: positive
     """detect_signature na EVTX magice → typ 'evtx' (i ElfFile varianta)."""
     sig = detect_signature(make_evtx_standard(1))
     assert sig is not None and sig[0] == "evtx" and sig[1] == "windows"
@@ -265,6 +272,7 @@ def test_evtx_signature_detection():
 
 
 def test_evtx_extract_from_file(tmp_path: Path):
+    # quality: positive
     """extract_evtx_artifacts — IO wrapper nad souborem ve fs."""
     p = tmp_path / "System.evtx"
     p.write_bytes(make_evtx_standard(2))
@@ -279,6 +287,7 @@ def test_evtx_extract_from_file(tmp_path: Path):
 
 
 def test_shimcache_parse_ansi_entries():
+    # quality: positive
     """ANSI záznamy (bit 31 nečistý) → filename + file_size správně."""
     blob = make_shimcache_blob(
         [("C:\\Windows\\System32\\notepad.exe", 45678, False), ("C:\\app.dll", 999, False)]
@@ -293,6 +302,7 @@ def test_shimcache_parse_ansi_entries():
 
 
 def test_shimcache_parse_unicode_entries():
+    # quality: positive encoding
     """UTF-16LE záznamy (bit 31 čistý) → filename dekódováno, unicode=True."""
     blob = make_shimcache_blob([("C:\\Program Files\\App\\x.exe", 12345, True)])
     parsed = parse_shimcache_value(blob)
@@ -303,12 +313,14 @@ def test_shimcache_parse_unicode_entries():
 
 
 def test_shimcache_too_short_raises():
+    # quality: boundary
     """Blob < 12 B (bez headeru) → ValueError."""
     with pytest.raises(ValueError, match="příliš krátký"):
         parse_shimcache_value(b"\x00" * 8)
 
 
 def test_shimcache_artifacts_per_entry():
+    # quality: positive
     """build_shimcache_artifacts — jeden artifact na záznam, path v details."""
     parsed = parse_shimcache_value(
         make_shimcache_blob([("C:\\a.exe", 100, False), ("C:\\b.dll", 200, False)])
@@ -330,6 +342,7 @@ def test_shimcache_artifacts_per_entry():
 
 
 def test_usn_parse_journal_records():
+    # quality: positive
     """Header + 2 záznamy → entries s usn, reason, filename správně."""
     data = make_usn_journal(
         [
@@ -349,6 +362,7 @@ def test_usn_parse_journal_records():
 
 
 def test_usn_is_journal_file_name_based():
+    # quality: positive
     """Name-based detektor — $UsnJrnl ano, ostatní ne."""
     assert is_usn_journal_file("$UsnJrnl")
     assert is_usn_journal_file("$USNJRNL_0002")  # case-insensitive + rotace
@@ -357,12 +371,14 @@ def test_usn_is_journal_file_name_based():
 
 
 def test_usn_too_short_raises():
+    # quality: boundary
     """Data < 1024 B (bez headeru) → ValueError."""
     with pytest.raises(ValueError, match="příliš krátký"):
         parse_usn_journal(b"\x00" * 512)
 
 
 def test_usn_artifacts_per_record():
+    # quality: positive
     """build_usn_artifacts — jeden artifact na záznam, reason v details/title."""
     parsed = parse_usn_journal(
         make_usn_journal([(513, _ft(2026, 3, 1), USN_REASON_FILE_CREATE, "a.txt")])
@@ -383,6 +399,7 @@ def test_usn_artifacts_per_record():
 
 
 def test_amcache_parse_values_classic():
+    # quality: positive size
     """Klasický AppCompatCache — Name/Version/Publisher/Size/TimeStamps."""
     values = {
         "Name": "VLC media player",
@@ -401,6 +418,7 @@ def test_amcache_parse_values_classic():
 
 
 def test_amcache_parse_values_inventory():
+    # quality: positive size
     """Win11 Inventory styl — Name/Version/Publisher (bez Size)."""
     values = {
         "Name": "Magnet AXIOM",
@@ -415,6 +433,7 @@ def test_amcache_parse_values_inventory():
 
 
 def test_amcache_artifacts_per_entry():
+    # quality: positive
     """build_amcache_artifacts — title s aplikací, details s verzi/publisherem."""
     from stopa.artifacts.win_amcache import AmcacheEntry
 
@@ -459,6 +478,7 @@ def _add_source(db: CaseDB, root: Path) -> EvidenceSource:
 
 
 def test_e2e_evtx_pipeline(tmp_path: Path, case_db: CaseDB):
+    # quality: positive
     """EVTX soubor v evidence stromu → event_log_entry artifacty v DB."""
     (tmp_path / "winevt").mkdir()
     (tmp_path / "winevt" / "System.evtx").write_bytes(make_evtx_standard(2))
@@ -472,6 +492,7 @@ def test_e2e_evtx_pipeline(tmp_path: Path, case_db: CaseDB):
 
 
 def test_e2e_usn_pipeline(tmp_path: Path, case_db: CaseDB):
+    # quality: positive
     """$UsnJrnl v evidence stromu → usn_record artifacty v DB.
 
     Name-based dispatch — soubor nemá spolehlivou magic, detekce podle názvu.

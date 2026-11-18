@@ -80,6 +80,7 @@ def _procs_payload() -> list[dict]:
 
 
 def test_procs_parse_valid():
+    # quality: positive
     records = parse_mem_processes(json.dumps(_procs_payload()).encode())
     assert len(records) == 2
     chrome = next(r for r in records if r.pid == 1234)
@@ -90,6 +91,7 @@ def test_procs_parse_valid():
 
 
 def test_procs_parse_psxview_mismatch():
+    # quality: positive
     payload = [
         {"pid": 7, "name": "explorer.exe", "pebName": "svchost.exe"},
     ]
@@ -99,16 +101,19 @@ def test_procs_parse_psxview_mismatch():
 
 
 def test_procs_parse_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_mem_processes(b"{nejson")
 
 
 def test_procs_parse_empty_payload():
+    # quality: boundary
     with pytest.raises(TypeError):
         parse_mem_processes(b"{}")
 
 
 def test_procs_detector_name_and_content():
+    # quality: positive
     head = json.dumps(_procs_payload()).encode()[:2048]
     assert is_mem_processes_file("processlist.json", head)
     assert is_mem_processes_file("psxview.json", head)
@@ -118,6 +123,7 @@ def test_procs_detector_name_and_content():
 
 
 def test_procs_build_artifacts():
+    # quality: positive
     records = parse_mem_processes(json.dumps(_procs_payload()).encode())
     arts = build_process_artifacts(records)
     assert len(arts) == 2
@@ -130,6 +136,7 @@ def test_procs_build_artifacts():
 
 
 def test_procs_psxview_anomaly_flag():
+    # quality: positive
     payload = [{"pid": 7, "name": "explorer.exe", "pebName": "svchost.exe"}]
     arts = build_process_artifacts(parse_mem_processes(json.dumps(payload).encode()))
     assert len(arts) == 1
@@ -137,6 +144,7 @@ def test_procs_psxview_anomaly_flag():
 
 
 def test_procs_entrypoint(tmp_path: Path):
+    # quality: positive
     p = _write(tmp_path, "processlist.json", _procs_payload())
     arts = extract_mem_process_artifacts(p)
     assert len(arts) == 2
@@ -144,6 +152,7 @@ def test_procs_entrypoint(tmp_path: Path):
 
 
 def test_procs_entrypoint_non_json(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "processlist.bin"
     p.write_bytes(b"\x00\x01\x02 not json")
     assert extract_mem_process_artifacts(p) == []
@@ -166,6 +175,7 @@ def _conns_payload() -> list[dict]:
 
 
 def test_conns_parse_valid():
+    # quality: positive
     records = parse_mem_connections(json.dumps(_conns_payload()).encode())
     assert len(records) == 1
     r = records[0]
@@ -178,22 +188,26 @@ def test_conns_parse_valid():
 
 
 def test_conns_parse_wrapped():
+    # quality: positive
     payload = {"connections": _conns_payload()}
     records = parse_mem_connections(json.dumps(payload).encode())
     assert len(records) == 1
 
 
 def test_conns_parse_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_mem_connections(b"{nejson")
 
 
 def test_conns_parse_empty_payload():
+    # quality: boundary
     with pytest.raises(TypeError):
         parse_mem_connections(b"{}")
 
 
 def test_conns_detector_name_and_content():
+    # quality: positive
     head = json.dumps(_conns_payload()).encode()[:2048]
     assert is_mem_network_file("open_connections.json", head)
     assert is_mem_network_file("network_connections.json", head)
@@ -203,6 +217,7 @@ def test_conns_detector_name_and_content():
 
 
 def test_conns_build_artifacts():
+    # quality: positive
     records = parse_mem_connections(json.dumps(_conns_payload()).encode())
     arts = build_connection_artifacts(records)
     assert len(arts) == 1
@@ -215,6 +230,7 @@ def test_conns_build_artifacts():
 
 
 def test_conns_entrypoint(tmp_path: Path):
+    # quality: positive
     p = _write(tmp_path, "open_connections.json", _conns_payload())
     arts = extract_mem_connection_artifacts(p)
     assert len(arts) == 1
@@ -239,6 +255,7 @@ def _handles_payload() -> dict:
 
 
 def test_handles_parse_valid():
+    # quality: positive
     records = parse_mem_handles(json.dumps(_handles_payload()).encode())
     assert len(records) == 1
     r = records[0]
@@ -248,6 +265,7 @@ def test_handles_parse_valid():
 
 
 def test_handles_normalize_decimal():
+    # quality: positive
     payload = {"handles": [{"pid": 1, "handleValue": 6732, "type": "Key"}]}
     records = parse_mem_handles(json.dumps(payload).encode())
     assert len(records) == 1
@@ -256,16 +274,19 @@ def test_handles_normalize_decimal():
 
 
 def test_handles_parse_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_mem_handles(b"{nejson")
 
 
 def test_handles_parse_empty_payload():
+    # quality: boundary
     with pytest.raises(TypeError):
         parse_mem_handles(b"{}")
 
 
 def test_handles_detector_name_and_content():
+    # quality: positive
     head = json.dumps(_handles_payload()).encode()[:2048]
     assert is_mem_handles_file("open_handles.json", head)
     assert not is_mem_handles_file("random.txt", head)
@@ -273,6 +294,7 @@ def test_handles_detector_name_and_content():
 
 
 def test_handles_build_artifacts():
+    # quality: positive
     records = parse_mem_handles(json.dumps(_handles_payload()).encode())
     arts = build_handle_artifacts(records)
     assert len(arts) == 1
@@ -284,6 +306,7 @@ def test_handles_build_artifacts():
 
 
 def test_handles_entrypoint(tmp_path: Path):
+    # quality: positive
     p = _write(tmp_path, "handles.json", _handles_payload())
     arts = extract_mem_handle_artifacts(p)
     assert len(arts) == 1
@@ -315,6 +338,7 @@ def _modules_payload() -> list[dict]:
 
 
 def test_modules_parse_valid():
+    # quality: positive
     records = parse_mem_modules(json.dumps(_modules_payload()).encode())
     assert len(records) == 2
     hidden = next(r for r in records if r.name.endswith("hidden.dll"))
@@ -323,16 +347,19 @@ def test_modules_parse_valid():
 
 
 def test_modules_parse_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_mem_modules(b"{nejson")
 
 
 def test_modules_parse_empty_payload():
+    # quality: boundary
     with pytest.raises(TypeError):
         parse_mem_modules(b"{}")
 
 
 def test_modules_detector_name_and_content():
+    # quality: positive
     head = json.dumps(_modules_payload()).encode()[:2048]
     assert is_mem_modules_file("modscan.json", head)
     assert is_mem_modules_file("malfind.json", head)
@@ -341,6 +368,7 @@ def test_modules_detector_name_and_content():
 
 
 def test_modules_build_artifacts_hidden_flag():
+    # quality: positive
     records = parse_mem_modules(json.dumps(_modules_payload()).encode())
     arts = build_module_artifacts(records)
     assert len(arts) == 2
@@ -356,6 +384,7 @@ def test_modules_build_artifacts_hidden_flag():
 
 
 def test_modules_entrypoint(tmp_path: Path):
+    # quality: positive
     p = _write(tmp_path, "malfind.json", _modules_payload())
     arts = extract_mem_module_artifacts(p)
     assert len(arts) == 2
@@ -381,6 +410,7 @@ def _hooks_payload() -> dict:
 
 
 def test_hooks_parse_valid():
+    # quality: positive
     records = parse_mem_hooks(json.dumps(_hooks_payload()).encode())
     assert len(records) == 1
     r = records[0]
@@ -390,16 +420,19 @@ def test_hooks_parse_valid():
 
 
 def test_hooks_parse_invalid_json():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_mem_hooks(b"{nejson")
 
 
 def test_hooks_parse_empty_payload():
+    # quality: boundary
     with pytest.raises(TypeError):
         parse_mem_hooks(b"{}")
 
 
 def test_hooks_detector_name_and_content():
+    # quality: positive
     head = json.dumps(_hooks_payload()).encode()[:2048]
     assert is_mem_hooks_file("api_hooks.json", head)
     assert is_mem_hooks_file("callbacks.json", head)
@@ -408,6 +441,7 @@ def test_hooks_detector_name_and_content():
 
 
 def test_hooks_build_artifacts():
+    # quality: positive
     records = parse_mem_hooks(json.dumps(_hooks_payload()).encode())
     arts = build_hook_artifacts(records)
     assert len(arts) == 1
@@ -419,6 +453,7 @@ def test_hooks_build_artifacts():
 
 
 def test_hooks_entrypoint(tmp_path: Path):
+    # quality: positive
     p = _write(tmp_path, "api_hooks.json", _hooks_payload())
     arts = extract_mem_hook_artifacts(p)
     assert len(arts) == 1

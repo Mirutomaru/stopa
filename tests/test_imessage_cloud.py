@@ -24,17 +24,21 @@ from stopa.artifacts.imessage_cloud import (
 
 class TestNameDetection:
     def test_detects_lowercase(self):
+        # quality: positive
         assert is_icloud_messages_file("MessagesInICloud.csv")
 
     def test_detects_case_insensitive(self):
+        # quality: positive
         assert is_icloud_messages_file("messagesinicloud.csv")
         assert is_icloud_messages_file("MESSAGESINICLOUD.XLSX")
 
     def test_detects_in_path_basename(self):
+        # quality: positive
         # detekce pracuje s názvem, ne celou cestou — ale marker v názvu stačí
         assert is_icloud_messages_file("[Apple_Request]-MessagesInICloud-1.csv")
 
     def test_rejects_unrelated(self):
+        # quality: negative
         assert not is_icloud_messages_file("chat.db")
         assert not is_icloud_messages_file("messages.txt")  # bez "inicloud"
 
@@ -43,17 +47,20 @@ class TestNameDetection:
 
 class TestHeaderMapping:
     def test_normalize_strips_case_and_nonalnum(self):
+        # quality: positive
         assert _normalize_header("IsFromMe") == "isfromme"
         assert _normalize_header("Message ID") == "messageid"
         assert _normalize_header("Date Sent") == "datesent"
 
     def test_find_column_exact(self):
+        # quality: positive
         headers = ["MessageID", "Text", "Date", "IsFromMe"]
         assert _find_column(headers, ("text",)) == 1
         assert _find_column(headers, ("date",)) == 2
         assert _find_column(headers, ("isfromme",)) == 3
 
     def test_find_column_substring_fallback(self):
+        # quality: positive
         headers = ["MessageID", "BodyText", "DateSent"]
         # 'text' není přesná shoda → substring v 'bodytext'
         assert _find_column(headers, ("text",)) == 1
@@ -61,6 +68,7 @@ class TestHeaderMapping:
         assert _find_column(headers, ("date",)) == 2
 
     def test_find_column_missing(self):
+        # quality: negative
         headers = ["Foo", "Bar"]
         assert _find_column(headers, ("text",)) is None
 
@@ -69,37 +77,45 @@ class TestHeaderMapping:
 
 class TestTimestampParsing:
     def test_iso_space_format(self):
+        # quality: positive
         ts = _parse_timestamp("2024-03-15 12:34:56")
         assert ts == datetime(2024, 3, 15, 12, 34, 56, tzinfo=timezone.utc)
 
     def test_iso_t_format(self):
+        # quality: positive
         ts = _parse_timestamp("2024-03-15T12:34:56")
         assert ts == datetime(2024, 3, 15, 12, 34, 56, tzinfo=timezone.utc)
 
     def test_iso_with_micros(self):
+        # quality: positive
         ts = _parse_timestamp("2024-03-15T12:34:56.789")
         assert ts == datetime(2024, 3, 15, 12, 34, 56, 789000, tzinfo=timezone.utc)
 
     def test_epoch_seconds(self):
+        # quality: positive
         # unix 1710506096 = 2024-03-15T12:34:56Z
         ts = _parse_timestamp("1710506096")
         assert ts == datetime(2024, 3, 15, 12, 34, 56, tzinfo=timezone.utc)
 
     def test_epoch_millis(self):
+        # quality: positive
         ts = _parse_timestamp("1710506096000")
         assert ts == datetime(2024, 3, 15, 12, 34, 56, tzinfo=timezone.utc)
 
     def test_datetime_object_naive_assumed_utc(self):
+        # quality: positive
         dt = datetime(2024, 3, 15, 12, 34, 56)  # naivní (openpyxl vrací bez tz)
         ts = _parse_timestamp(dt)
         assert ts == datetime(2024, 3, 15, 12, 34, 56, tzinfo=timezone.utc)
 
     def test_empty_and_none(self):
+        # quality: boundary
         assert _parse_timestamp(None) is None
         assert _parse_timestamp("") is None
         assert _parse_timestamp("   ") is None
 
     def test_unrecognized_returns_none(self):
+        # quality: positive
         assert _parse_timestamp("not a date") is None
 
 
@@ -113,6 +129,7 @@ def _write_tsv(path: Path, header: str, rows: list[list[str]]) -> Path:
 
 class TestDelimitedText:
     def test_extracts_messages_tsv(self, tmp_path):
+        # quality: positive
         p = _write_tsv(
             tmp_path / "MessagesInICloud.csv",
             "MessageID\tText\tDate\tIsFromMe\tHandle",
@@ -127,6 +144,7 @@ class TestDelimitedText:
         assert all(a.details["engine"] == "icloud_messages" for a in arts)
 
     def test_timestamps_and_details(self, tmp_path):
+        # quality: positive
         p = _write_tsv(
             tmp_path / "MessagesInICloud.csv",
             "MessageID\tText\tDate\tIsFromMe\tHandle",
@@ -139,6 +157,7 @@ class TestDelimitedText:
         assert arts[0].details["direction"] == "TRUE"
 
     def test_comma_delimited(self, tmp_path):
+        # quality: boundary
         p = tmp_path / "MessagesInICloud.csv"
         p.write_text(
             "MessageID,Text,Date\n1,Ahoj,2024-03-15 12:34:56\n", encoding="utf-8"
@@ -148,6 +167,7 @@ class TestDelimitedText:
         assert arts[0].title == "Ahoj"
 
     def test_metadata_rows_above_header(self, tmp_path):
+        # quality: positive
         """Apple export má nad hlavičkou metadata — detekce najde správný řádek."""
         p = tmp_path / "MessagesInICloud.csv"
         content = (
@@ -163,6 +183,7 @@ class TestDelimitedText:
         assert arts[0].title == "Ahoj"
 
     def test_empty_rows_skipped(self, tmp_path):
+        # quality: boundary
         p = _write_tsv(
             tmp_path / "MessagesInICloud.csv",
             "MessageID\tText\tDate",
@@ -172,6 +193,7 @@ class TestDelimitedText:
         assert len(arts) == 2
 
     def test_empty_text_placeholder(self, tmp_path):
+        # quality: boundary
         p = _write_tsv(
             tmp_path / "MessagesInICloud.csv",
             "MessageID\tText\tDate",
@@ -182,11 +204,13 @@ class TestDelimitedText:
         assert arts[0].title == "(prázdná zpráva)"
 
     def test_no_header_returns_empty(self, tmp_path):
+        # quality: boundary
         p = tmp_path / "MessagesInICloud.csv"
         p.write_text("random\ndata\nno known columns here\n", encoding="utf-8")
         assert extract_icloud_messages(p) == []
 
     def test_missing_file_returns_empty(self, tmp_path):
+        # quality: boundary
         assert extract_icloud_messages(tmp_path / "chybi.csv") == []
 
 
@@ -212,17 +236,20 @@ class TestXlsx:
         return p
 
     def test_extracts_from_xlsx(self, xlsx_file):
+        # quality: positive
         arts = extract_icloud_messages(xlsx_file)
         assert len(arts) == 2
         assert all(a.artifact_type == "imessage" for a in arts)
         assert all(a.details["engine"] == "icloud_messages" for a in arts)
 
     def test_xlsx_timestamps(self, xlsx_file):
+        # quality: positive
         arts = extract_icloud_messages(xlsx_file)
         ts = sorted(a.timestamp for a in arts if a.timestamp)
         assert ts[0] == datetime(2024, 3, 15, 12, 34, 56, tzinfo=timezone.utc)
 
     def test_xlsx_details(self, xlsx_file):
+        # quality: positive
         arts = extract_icloud_messages(xlsx_file)
         assert all(a.details["handle"] == "+420****3456" for a in arts)
 
@@ -231,6 +258,7 @@ class TestXlsx:
 
 class TestPipelineFallback:
     def test_process_source_extracts_icloud(self, tmp_path):
+        # quality: positive
         from stopa.data.db import CaseDB
         from stopa.models import Case, EvidenceSource
         from stopa.pipeline import process_source
@@ -257,6 +285,7 @@ class TestPipelineFallback:
         assert arts[0].title == "Ahoj z cloudu"
 
     def test_regular_file_not_affected(self, tmp_path):
+        # quality: positive
         """Soubor bez iCloud markeru v názvu → žádný artifact (fallback nespálí vše)."""
         from stopa.data.db import CaseDB
         from stopa.models import Case, EvidenceSource

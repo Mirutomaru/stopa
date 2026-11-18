@@ -17,6 +17,7 @@ TS = datetime(2024, 3, 15, 12, 34, 56, tzinfo=UTC)
 
 class TestBuildPlistArtifacts:
     def test_datetime_field_becomes_date_artifact(self):
+        # quality: positive
         data = {"LastOpened": TS, "Name": "Test"}
         arts = build_plist_artifacts(data)
         # 1 date artifact + 1 triage
@@ -27,6 +28,7 @@ class TestBuildPlistArtifacts:
         assert "LastOpened" in date_arts[0].details["key_path"]
 
     def test_nested_datetime_found(self):
+        # quality: positive
         data = {"Outer": {"Inner": {"When": TS}}}
         arts = build_plist_artifacts(data)
         date_arts = [a for a in arts if a.artifact_type == "plist_date"]
@@ -35,18 +37,21 @@ class TestBuildPlistArtifacts:
         assert "Outer/Inner/When" in date_arts[0].details["key_path"]
 
     def test_list_datetime_indexed(self):
+        # quality: positive
         data = {"Events": [TS, TS]}
         arts = build_plist_artifacts(data)
         date_arts = [a for a in arts if a.artifact_type == "plist_date"]
         assert len(date_arts) == 2
 
     def test_non_datetime_no_date_artifacts(self):
+        # quality: positive
         data = {"Name": "Test", "Count": 42, "Flag": True}
         arts = build_plist_artifacts(data)
         date_arts = [a for a in arts if a.artifact_type == "plist_date"]
         assert date_arts == []
 
     def test_triage_always_present(self):
+        # quality: positive
         data = {"A": 1, "B": 2}
         arts = build_plist_artifacts(data)
         triage = [a for a in arts if a.artifact_type == "property_list"]
@@ -54,12 +59,14 @@ class TestBuildPlistArtifacts:
         assert set(triage[0].details["top_level_keys"]) <= {"A", "B"}
 
     def test_triage_root_type(self):
+        # quality: positive
         data = {"A": 1}
         arts = build_plist_artifacts(data)
         triage = next(a for a in arts if a.artifact_type == "property_list")
         assert triage.details["root_type"] == "dict"
 
     def test_empty_dict(self):
+        # quality: boundary
         arts = build_plist_artifacts({})
         # jen triage, žádné date
         assert len(arts) == 1
@@ -84,6 +91,7 @@ class TestExtractPlistArtifactsIO:
         return p
 
     def test_binary_plist_with_date(self, tmp_path: Path):
+        # quality: positive
         from stopa.artifacts.plist_extract import extract_plist_artifacts
 
         p = self._write_binary_plist(tmp_path, {"LastOpened": self.NAIVE_TS, "Name": "Test"})
@@ -95,6 +103,7 @@ class TestExtractPlistArtifactsIO:
         assert date_arts[0].timestamp.year == 2024
 
     def test_xml_plist_with_date(self, tmp_path: Path):
+        # quality: positive
         from stopa.artifacts.plist_extract import extract_plist_artifacts
 
         p = self._write_xml_plist(tmp_path, {"When": self.NAIVE_TS})
@@ -103,6 +112,7 @@ class TestExtractPlistArtifactsIO:
         assert len(date_arts) == 1
 
     def test_corrupt_plist_returns_empty(self, tmp_path: Path):
+        # quality: boundary corrupted
         from stopa.artifacts.plist_extract import extract_plist_artifacts
 
         p = tmp_path / "corrupt.plist"
@@ -111,6 +121,7 @@ class TestExtractPlistArtifactsIO:
         assert extract_plist_artifacts(p) == []
 
     def test_missing_file_returns_empty(self, tmp_path: Path):
+        # quality: boundary
         from stopa.artifacts.plist_extract import extract_plist_artifacts
 
         assert extract_plist_artifacts(tmp_path / "chybi.plist") == []
@@ -120,6 +131,7 @@ class TestSignatureIntegration:
     """Signatura → extraktor dispatch (pipeline ARTIFACT_EXTRACTORS)."""
 
     def test_dispatch_map_has_new_types(self):
+        # quality: positive
         from stopa.pipeline import ARTIFACT_EXTRACTORS
 
         assert "sqlite" in ARTIFACT_EXTRACTORS
@@ -127,12 +139,14 @@ class TestSignatureIntegration:
         assert "plist" in ARTIFACT_EXTRACTORS
 
     def test_dispatch_map_extractors_are_callable(self):
+        # quality: positive
         from stopa.pipeline import ARTIFACT_EXTRACTORS
 
         for sig, (fn, _ver) in ARTIFACT_EXTRACTORS.items():
             assert callable(fn), f"extraktor pro {sig} není callable"
 
     def test_dispatch_map_has_parser_versions(self):
+        # quality: positive
         """E1: každý extraktor má verzi parseru (reprodukovatelnost)."""
         from stopa.pipeline import ARTIFACT_EXTRACTORS, parser_versions
 

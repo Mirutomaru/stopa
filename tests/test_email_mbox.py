@@ -66,12 +66,14 @@ MBOX_TWO = (
     ],
 )
 def test_is_email_file(name: str, expected: bool):
+    # quality: positive
     assert is_email_file(name) is expected
 
 
 # ── parse_email_message (čistá funkce) ────────────────────────────────
 
 def test_parse_single_eml():
+    # quality: boundary
     msg = parse_email_message(EML_SINGLE)
     assert msg is not None
     assert "alice@example.com" in msg.sender.lower()
@@ -84,6 +86,7 @@ def test_parse_single_eml():
 
 
 def test_parse_eml_no_date():
+    # quality: positive
     raw = b"From: x@y.z\r\nSubject: NoDate\r\n\r\nbody"
     msg = parse_email_message(raw)
     assert msg is not None
@@ -92,12 +95,14 @@ def test_parse_eml_no_date():
 
 
 def test_parse_eml_empty():
+    # quality: boundary
     assert parse_email_message(b"") is None
 
 
 # ── split_mbox (čistá funkce) ─────────────────────────────────────────
 
 def test_split_mbox_two_messages():
+    # quality: positive
     segments = split_mbox(MBOX_TWO)
     # 2 zprávy + případně prázdný segment — odfiltrujeme prázdné
     non_empty = [s for s in segments if b"Subject:" in s]
@@ -105,6 +110,7 @@ def test_split_mbox_two_messages():
 
 
 def test_split_mbox_single_is_one():
+    # quality: boundary
     # jednotlivý EML bez From-oddělovače → jeden segment
     segments = split_mbox(EML_SINGLE)
     non_empty = [s for s in segments if b"Subject:" in s]
@@ -114,6 +120,7 @@ def test_split_mbox_single_is_one():
 # ── build_email_artifacts (čistá funkce) ──────────────────────────────
 
 def test_build_artifacts_from_message():
+    # quality: positive
     msg = parse_email_message(EML_SINGLE)
     assert msg is not None
     arts = build_email_artifacts([msg])
@@ -126,12 +133,14 @@ def test_build_artifacts_from_message():
 
 
 def test_build_artifacts_empty():
+    # quality: boundary
     assert build_email_artifacts([]) == []
 
 
 # ── extract_email_artifacts (IO přes tmp_path) ────────────────────────
 
 def test_extract_eml_file(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "msg.eml"
     p.write_bytes(EML_SINGLE)
     arts = extract_email_artifacts(p)
@@ -140,6 +149,7 @@ def test_extract_eml_file(tmp_path: Path):
 
 
 def test_extract_mbox_file(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "mailbox.mbox"
     p.write_bytes(MBOX_TWO)
     arts = extract_email_artifacts(p)
@@ -148,10 +158,12 @@ def test_extract_mbox_file(tmp_path: Path):
 
 
 def test_extract_missing_file(tmp_path: Path):
+    # quality: negative
     assert extract_email_artifacts(tmp_path / "nope.eml") == []
 
 
 def test_extract_empty_file(tmp_path: Path):
+    # quality: boundary
     p = tmp_path / "empty.mbox"
     p.write_bytes(b"")
     assert extract_email_artifacts(p) == []

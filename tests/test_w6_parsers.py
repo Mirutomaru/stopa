@@ -68,6 +68,7 @@ def _photos_json() -> bytes:
 
 
 def test_photos_parse_takeout_list():
+    # quality: positive
     records = parse_photos(_photos_json())
     assert len(records) == 2
     r0 = records[0]
@@ -82,12 +83,14 @@ def test_photos_parse_takeout_list():
 
 
 def test_photos_epoch_ms_timestamp():
+    # quality: positive
     records = parse_photos(_photos_json())
     # druhý záznam: epoch ms → s
     assert records[1].timestamp_s == pytest.approx(1_705_314_600.0, abs=1.0)
 
 
 def test_photos_single_object_wrapped():
+    # quality: boundary
     data = json.dumps(
         {"filename": "a.jpg", "photoTakenTime": {"timestamp": "2024-01-01T00:00:00Z"}}
     ).encode()
@@ -97,16 +100,19 @@ def test_photos_single_object_wrapped():
 
 
 def test_photos_invalid_json_raises():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_photos(b"{nejson")
 
 
 def test_photos_not_list_raises():
+    # quality: positive
     with pytest.raises(TypeError):
         parse_photos(json.dumps({"foo": "bar"}).encode())
 
 
 def test_photos_build_artifacts():
+    # quality: positive
     records = [
         PhotoRecord(
             filename="IMG_001.jpg",
@@ -130,6 +136,7 @@ def test_photos_build_artifacts():
 
 
 def test_photos_no_ts_confidence_lower():
+    # quality: positive
     arts = build_photo_artifacts([PhotoRecord(filename="x.jpg")])
     assert len(arts) == 1
     assert arts[0].timestamp is None
@@ -137,6 +144,7 @@ def test_photos_no_ts_confidence_lower():
 
 
 def test_photos_is_file_detection():
+    # quality: positive
     head = _photos_json()[:2048]
     assert is_photos_file("photos.json", head)
     assert is_photos_file("google_photos/photo.json", head)
@@ -146,6 +154,7 @@ def test_photos_is_file_detection():
 
 
 def test_photos_extract_entrypoint(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "photos.json"
     p.write_bytes(_photos_json())
     arts = extract_photos_artifacts(p)
@@ -154,6 +163,7 @@ def test_photos_extract_entrypoint(tmp_path: Path):
 
 
 def test_photos_extract_missing_file(tmp_path: Path):
+    # quality: negative
     assert extract_photos_artifacts(tmp_path / "chybi.json") == []
 
 
@@ -183,6 +193,7 @@ def _mail_json() -> bytes:
 
 
 def test_mail_parse_gmail_us():
+    # quality: positive
     records = parse_mail_info(_mail_json())
     assert len(records) == 2
     r0 = records[0]
@@ -196,6 +207,7 @@ def test_mail_parse_gmail_us():
 
 
 def test_mail_plain_string_addrs_and_cc():
+    # quality: positive
     records = parse_mail_info(_mail_json())
     r1 = records[1]
     # plain string from + to, cc připojeno bez duplicit
@@ -204,6 +216,7 @@ def test_mail_plain_string_addrs_and_cc():
 
 
 def test_mail_single_object_wrapped():
+    # quality: boundary
     data = json.dumps({"threadId": "t1", "subject": "X"}).encode()
     records = parse_mail_info(data)
     assert len(records) == 1
@@ -211,16 +224,19 @@ def test_mail_single_object_wrapped():
 
 
 def test_mail_invalid_json_raises():
+    # quality: negative
     with pytest.raises(ValueError):
         parse_mail_info(b"[{")
 
 
 def test_mail_not_list_raises():
+    # quality: positive
     with pytest.raises(TypeError):
         parse_mail_info(json.dumps({"foo": 1}).encode())
 
 
 def test_mail_build_artifacts():
+    # quality: positive
     records = [
         MailInfoRecord(
             thread_id="abc",
@@ -245,6 +261,7 @@ def test_mail_build_artifacts():
 
 
 def test_mail_no_ts_confidence_lower():
+    # quality: positive
     arts = build_mail_info_artifacts([MailInfoRecord(thread_id="t")])
     assert len(arts) == 1
     assert arts[0].timestamp is None
@@ -252,6 +269,7 @@ def test_mail_no_ts_confidence_lower():
 
 
 def test_mail_is_file_detection():
+    # quality: positive
     head = _mail_json()[:2048]
     assert is_mail_info_file("gmail_messages.json", head)
     assert is_mail_info_file("mail_message_information.json", head)
@@ -260,6 +278,7 @@ def test_mail_is_file_detection():
 
 
 def test_mail_extract_entrypoint(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "gmail_messages.json"
     p.write_bytes(_mail_json())
     arts = extract_mail_info_artifacts(p)
@@ -268,6 +287,7 @@ def test_mail_extract_entrypoint(tmp_path: Path):
 
 
 def test_mail_extract_missing_file(tmp_path: Path):
+    # quality: negative
     assert extract_mail_info_artifacts(tmp_path / "chybi.json") == []
 
 
@@ -290,6 +310,7 @@ def _make_chrome_db(with_search_terms: bool = True, with_columns: bool = True) -
 
 
 def test_bar_is_chrome_history_db():
+    # quality: positive
     assert is_chrome_history_db(_make_chrome_db())
     # jen visits bez urls → ne Chrome history
     c = sqlite3.connect(":memory:")
@@ -299,6 +320,7 @@ def test_bar_is_chrome_history_db():
 
 
 def test_bar_extract_search_terms():
+    # quality: positive
     conn = _make_chrome_db()
     ts = to_chrome_micros(datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc))
     conn.execute(
@@ -327,11 +349,13 @@ def test_bar_extract_search_terms():
 
 
 def test_bar_no_search_terms_table():
+    # quality: positive
     conn = _make_chrome_db(with_search_terms=False)
     assert extract_search_terms(conn) == []
 
 
 def test_bar_missing_required_columns():
+    # quality: negative
     # tabulka bez time_last_used → ne search_terms
     conn = _make_chrome_db(with_columns=False)
     conn.execute("INSERT INTO search_terms (term, time_last_used) VALUES ('x', 1)")
@@ -339,6 +363,7 @@ def test_bar_missing_required_columns():
 
 
 def test_bar_build_dedup_and_no_ts():
+    # quality: positive
     rows = [
         {"term": "a", "time_last_used": None},
         {"term": "A", "time_last_used": to_chrome_micros(datetime(2024, 1, 1, tzinfo=timezone.utc))},
@@ -353,6 +378,7 @@ def test_bar_build_dedup_and_no_ts():
 
 
 def test_bar_extract_entrypoint(tmp_path: Path):
+    # quality: positive
     db = tmp_path / "History"
     conn = _make_chrome_db()
     ts = to_chrome_micros(datetime(2024, 1, 15, tzinfo=timezone.utc))
@@ -390,6 +416,7 @@ def test_bar_extract_entrypoint(tmp_path: Path):
 
 
 def test_bar_extract_missing_file(tmp_path: Path):
+    # quality: negative
     assert extract_google_bar_artifacts(tmp_path / "chybi") == []
 
 
@@ -418,6 +445,7 @@ BASE64PAYLOAD
 
 
 def test_attachment_parse_with_attachment():
+    # quality: positive
     date, atts = parse_attachments(_MIME_WITH_ATTACHMENT)
     assert len(atts) == 1
     a = atts[0]
@@ -432,6 +460,7 @@ def test_attachment_parse_with_attachment():
 
 
 def test_attachment_parse_no_attachments():
+    # quality: positive
     raw = b"From: a@x.cz\nTo: b@y.cz\nSubject: X\nDate: Mon, 15 Jan 2024 10:30:00 +0000\n\nTelo."
     date, atts = parse_attachments(raw)
     assert atts == []
@@ -439,11 +468,13 @@ def test_attachment_parse_no_attachments():
 
 
 def test_attachment_parse_corrupted():
+    # quality: corrupted
     # prázdný vstup → (None, []) bez výjimky
     assert parse_attachments(b"") == (None, [])
 
 
 def test_attachment_inline_disposition():
+    # quality: positive
     raw = b"""From: a@x.cz
 To: b@y.cz
 Subject: X
@@ -466,6 +497,7 @@ DATA
 
 
 def test_attachment_build_artifacts():
+    # quality: positive
     from datetime import timezone as tz
 
     date = datetime(2024, 1, 15, 10, 30, tzinfo=tz.utc)
@@ -486,6 +518,7 @@ def test_attachment_build_artifacts():
 
 
 def test_attachment_build_without_date():
+    # quality: positive
     arts = build_attachment_artifacts([AttachmentInfo(filename="x.txt")])
     assert len(arts) == 1
     assert arts[0].timestamp is None
@@ -493,6 +526,7 @@ def test_attachment_build_without_date():
 
 
 def test_attachment_extract_from_message_entrypoint():
+    # quality: positive
     arts = extract_attachments_from_message(_MIME_WITH_ATTACHMENT)
     assert len(arts) == 1
     assert arts[0].artifact_type == "email_attachment"
@@ -503,6 +537,7 @@ def test_attachment_extract_from_message_entrypoint():
 
 
 def test_pipeline_name_based_photos():
+    # quality: positive
     from stopa.pipeline import NAME_BASED_EXTRACTORS, _name_based_match
 
     m = _name_based_match("photos.json")
@@ -513,6 +548,7 @@ def test_pipeline_name_based_photos():
 
 
 def test_pipeline_name_based_mail_info():
+    # quality: positive
     from stopa.pipeline import NAME_BASED_EXTRACTORS, _name_based_match
 
     m = _name_based_match("gmail_messages.json")
@@ -523,6 +559,7 @@ def test_pipeline_name_based_mail_info():
 
 
 def test_registry_contains_wave6_parsers():
+    # quality: positive
     from stopa.domain.validation_registry import build_registry
 
     reg = build_registry()

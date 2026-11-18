@@ -32,6 +32,7 @@ def _json_sample() -> list[dict]:
 
 
 def test_parse_json_basic() -> None:
+    # quality: positive
     points = parse_location_history_json(json.dumps(_json_sample()).encode())
     assert len(points) == 2
     p = points[0]
@@ -45,6 +46,7 @@ def test_parse_json_basic() -> None:
 
 
 def test_parse_json_skips_without_coords() -> None:
+    # quality: positive
     payload = [{"foo": 1}, {"latitudeE7": 500000000}]
     points = parse_location_history_json(json.dumps(payload).encode())
     assert len(points) == 1
@@ -52,6 +54,7 @@ def test_parse_json_skips_without_coords() -> None:
 
 
 def test_parse_json_invalid_raises() -> None:
+    # quality: negative
     with pytest.raises(ValueError):
         parse_location_history_json(b"xx")
     with pytest.raises(TypeError):
@@ -66,6 +69,7 @@ CSV_SAMPLE = (
 
 
 def test_parse_csv_basic() -> None:
+    # quality: positive
     points = parse_location_history_csv(CSV_SAMPLE.encode())
     assert len(points) == 2
     p = points[0]
@@ -78,11 +82,13 @@ def test_parse_csv_basic() -> None:
 
 
 def test_parse_csv_missing_columns_raises() -> None:
+    # quality: negative
     with pytest.raises(ValueError):
         parse_location_history_csv(b"a,b\n1,2\n")
 
 
 def test_artifacts() -> None:
+    # quality: positive
     points = parse_location_history_json(json.dumps(_json_sample()).encode())
     arts = build_location_artifacts(points)
     assert len(arts) == 2
@@ -96,6 +102,7 @@ def test_artifacts() -> None:
 
 
 def test_artifact_without_coords_lower_confidence() -> None:
+    # quality: positive
     points = parse_location_history_json(json.dumps([{"longitudeE7": 144270841}]).encode())
     arts = build_location_artifacts(points)
     assert len(arts) == 1
@@ -103,6 +110,7 @@ def test_artifact_without_coords_lower_confidence() -> None:
 
 
 def test_detection() -> None:
+    # quality: positive
     head_json = json.dumps(_json_sample())[:2048].encode()
     assert is_location_history_file("location_history.json", head_json)
     assert is_location_history_file("LocationHistory.csv", CSV_SAMPLE.encode()[:2048])
@@ -111,6 +119,7 @@ def test_detection() -> None:
 
 
 def test_extract_end_to_end(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "location_history.json"
     p.write_text(json.dumps(_json_sample()))
     arts = extract_location_artifacts(p)
@@ -119,6 +128,7 @@ def test_extract_end_to_end(tmp_path: Path) -> None:
 
 
 def test_extract_csv_end_to_end(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "location_history.csv"
     p.write_text(CSV_SAMPLE)
     arts = extract_location_artifacts(p)
@@ -126,4 +136,5 @@ def test_extract_csv_end_to_end(tmp_path: Path) -> None:
 
 
 def test_extract_missing_file(tmp_path: Path) -> None:
+    # quality: negative
     assert extract_location_artifacts(tmp_path / "chybi.json") == []

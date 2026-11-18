@@ -26,6 +26,7 @@ def jb(obj) -> bytes:
 
 class TestMsContacts:
     def test_parse_list(self):
+        # quality: positive
         from stopa.artifacts.ms_contacts import parse_ms_contacts
 
         data = jb(
@@ -44,6 +45,7 @@ class TestMsContacts:
         assert "+420123456789" in recs[0].phones
 
     def test_parse_container_value(self):
+        # quality: positive
         from stopa.artifacts.ms_contacts import parse_ms_contacts
 
         data = jb(
@@ -58,6 +60,7 @@ class TestMsContacts:
         assert len(recs) == 2
 
     def test_parse_single_object(self):
+        # quality: boundary
         from stopa.artifacts.ms_contacts import parse_ms_contacts
 
         data = jb({"displayName": "Solo", "emailAddresses": ["solo@z.cz"]})
@@ -66,18 +69,21 @@ class TestMsContacts:
         assert recs[0].display_name == "Solo"
 
     def test_parse_invalid_json(self):
+        # quality: negative
         from stopa.artifacts.ms_contacts import parse_ms_contacts
 
         with pytest.raises(ValueError):
             parse_ms_contacts(b"{nejson")
 
     def test_parse_no_records(self):
+        # quality: positive
         from stopa.artifacts.ms_contacts import parse_ms_contacts
 
         with pytest.raises(TypeError):
             parse_ms_contacts(jb([{"foo": "bar"}]))
 
     def test_build_artifact_type(self):
+        # quality: positive
         from stopa.artifacts.ms_contacts import (
             MsContactRecord,
             build_ms_contact_artifacts,
@@ -91,18 +97,21 @@ class TestMsContacts:
         assert arts[0].details.get("engine") in ("ms_contacts", "ms:contacts") or True
 
     def test_detector_positive(self):
+        # quality: positive
         from stopa.artifacts.ms_contacts import is_ms_contacts_file
 
         assert is_ms_contacts_file("export/microsoft/contacts.json")
         assert is_ms_contacts_file("outlook_contact_export.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         from stopa.artifacts.ms_contacts import is_ms_contacts_file
 
         # generic contacts.json bez MS markery → nepadne (Google WR)
         assert not is_ms_contacts_file("google/contacts.json")
 
     def test_detector_rejects_non_json_head(self):
+        # quality: negative
         from stopa.artifacts.ms_contacts import is_ms_contacts_file
 
         assert not is_ms_contacts_file(
@@ -116,6 +125,7 @@ class TestMsContacts:
 
 class TestMsMailPst:
     def test_parse_list(self):
+        # quality: positive
         from stopa.artifacts.ms_mail_pst import parse_ms_mail_pst
 
         data = jb(
@@ -137,6 +147,7 @@ class TestMsMailPst:
         assert recs[0].timestamp_s is not None
 
     def test_parse_container_messages(self):
+        # quality: positive
         from stopa.artifacts.ms_mail_pst import parse_ms_mail_pst
 
         data = jb({"messages": [{"title": "A", "sender": "s@x.cz"}]})
@@ -145,18 +156,21 @@ class TestMsMailPst:
         assert recs[0].subject == "A"
 
     def test_parse_invalid_json(self):
+        # quality: negative
         from stopa.artifacts.ms_mail_pst import parse_ms_mail_pst
 
         with pytest.raises(ValueError):
             parse_ms_mail_pst(b"[")
 
     def test_parse_no_records(self):
+        # quality: positive
         from stopa.artifacts.ms_mail_pst import parse_ms_mail_pst
 
         with pytest.raises(TypeError):
             parse_ms_mail_pst(jb([{"unrelated": 1}]))
 
     def test_build_email_message(self):
+        # quality: positive
         from stopa.artifacts.ms_mail_pst import (
             MsMailRecord,
             build_ms_mail_artifacts,
@@ -170,12 +184,14 @@ class TestMsMailPst:
         assert arts[0].details.get("engine") == "ms_mail_pst"
 
     def test_detector_positive(self):
+        # quality: positive
         from stopa.artifacts.ms_mail_pst import is_ms_mail_file
 
         assert is_ms_mail_file("microsoft/mail/messages.json")
         assert is_ms_mail_file("outlook_export.pst.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         from stopa.artifacts.ms_mail_pst import is_ms_mail_file
 
         # generic messages.json bez MS markery → nepadne (Google Mail Info)
@@ -188,6 +204,7 @@ class TestMsMailPst:
 
 class TestMsTeamsConversations:
     def test_parse_list(self):
+        # quality: positive
         from stopa.artifacts.ms_teams_conversations import (
             parse_teams_conversations,
         )
@@ -207,6 +224,7 @@ class TestMsTeamsConversations:
         assert recs[0].text in ("Ahoj týmu", None) or recs[0].text is not None
 
     def test_parse_sender_display_name(self):
+        # quality: positive
         from stopa.artifacts.ms_teams_conversations import (
             parse_teams_conversations,
         )
@@ -217,6 +235,7 @@ class TestMsTeamsConversations:
         assert recs[0].sender == "Karel Dvořák"
 
     def test_parse_invalid_json(self):
+        # quality: negative
         from stopa.artifacts.ms_teams_conversations import (
             parse_teams_conversations,
         )
@@ -225,6 +244,7 @@ class TestMsTeamsConversations:
             parse_teams_conversations(b"{")
 
     def test_build_chat_message(self):
+        # quality: positive
         from stopa.artifacts.ms_teams_conversations import (
             TeamsMessageRecord,
             build_teams_conversation_artifacts,
@@ -237,6 +257,7 @@ class TestMsTeamsConversations:
         assert arts[0].artifact_type == "chat_message"
 
     def test_detector_positive(self):
+        # quality: positive
         from stopa.artifacts.ms_teams_conversations import (
             is_ms_teams_conversations_file,
         )
@@ -244,6 +265,7 @@ class TestMsTeamsConversations:
         assert is_ms_teams_conversations_file("microsoft/teams/conversations.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         from stopa.artifacts.ms_teams_conversations import (
             is_ms_teams_conversations_file,
         )
@@ -258,6 +280,7 @@ class TestMsTeamsConversations:
 
 class TestMsTeamsTeams:
     def test_build_team_artifacts(self):
+        # quality: positive
         from stopa.artifacts.ms_teams_teams import build_team_artifacts
 
         entries = [
@@ -275,6 +298,7 @@ class TestMsTeamsTeams:
         assert arts[0].details.get("member_count") == 5
 
     def test_extract_teams_file(self, tmp_path: Path):
+        # quality: positive
         from stopa.artifacts.ms_teams_teams import extract_teams
 
         p = tmp_path / "teams.json"
@@ -286,6 +310,7 @@ class TestMsTeamsTeams:
         assert "Marketing" in arts[0].title
 
     def test_extract_teams_list(self, tmp_path: Path):
+        # quality: positive
         from stopa.artifacts.ms_teams_teams import extract_teams
 
         p = tmp_path / "ms_teams.json"
@@ -294,6 +319,7 @@ class TestMsTeamsTeams:
         assert len(arts) == 1
 
     def test_extract_invalid_json(self, tmp_path: Path):
+        # quality: negative
         from stopa.artifacts.ms_teams_teams import extract_teams
 
         p = tmp_path / "teams.json"
@@ -301,17 +327,20 @@ class TestMsTeamsTeams:
         assert extract_teams(p) == []
 
     def test_detector_exact_basename(self):
+        # quality: positive
         from stopa.artifacts.ms_teams_teams import is_ms_teams_file
 
         assert is_ms_teams_file("export/microsoft/teams/teams.json")
         assert is_ms_teams_file("/x/ms_teams.json")
 
     def test_detector_team_in_path(self):
+        # quality: positive
         from stopa.artifacts.ms_teams_teams import is_ms_teams_file
 
         assert is_ms_teams_file("microsoft/teams/myteam.json")
 
     def test_detector_negative(self):
+        # quality: positive
         from stopa.artifacts.ms_teams_teams import is_ms_teams_file
 
         # teams.json bez MS kontextu — basename match ale "team" v name?
@@ -325,6 +354,7 @@ class TestMsTeamsTeams:
 
 class TestMsOutlookCalendar:
     def test_parse_list(self):
+        # quality: positive
         from stopa.artifacts.ms_outlook_calendar import parse_outlook_calendar
 
         data = jb(
@@ -348,6 +378,7 @@ class TestMsOutlookCalendar:
         assert len(recs[0].attendees) == 2
 
     def test_parse_container_events(self):
+        # quality: positive
         from stopa.artifacts.ms_outlook_calendar import parse_outlook_calendar
 
         data = jb({"events": [{"title": "X", "startTime": "2024-10-03T08:00:00Z"}]})
@@ -356,12 +387,14 @@ class TestMsOutlookCalendar:
         assert recs[0].subject == "X"
 
     def test_parse_invalid_json(self):
+        # quality: negative
         from stopa.artifacts.ms_outlook_calendar import parse_outlook_calendar
 
         with pytest.raises(ValueError):
             parse_outlook_calendar(b"[")
 
     def test_build_calendar_event(self):
+        # quality: positive
         from stopa.artifacts.ms_outlook_calendar import (
             OutlookEventRecord,
             build_outlook_calendar_artifacts,
@@ -374,6 +407,7 @@ class TestMsOutlookCalendar:
         assert arts[0].artifact_type == "calendar_event"
 
     def test_detector_positive(self):
+        # quality: positive
         from stopa.artifacts.ms_outlook_calendar import (
             is_ms_outlook_calendar_file,
         )
@@ -382,6 +416,7 @@ class TestMsOutlookCalendar:
         assert is_ms_outlook_calendar_file("microsoft/appointments.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         from stopa.artifacts.ms_outlook_calendar import (
             is_ms_outlook_calendar_file,
         )
@@ -396,6 +431,7 @@ class TestMsOutlookCalendar:
 
 class TestSharePointWr:
     def test_parse_documents(self):
+        # quality: positive
         from stopa.artifacts.sharepoint_wr import parse_sharepoint
 
         data = jb(
@@ -411,6 +447,7 @@ class TestSharePointWr:
         assert all(it.kind == "document" for it in items)
 
     def test_parse_pages(self):
+        # quality: positive
         from stopa.artifacts.sharepoint_wr import parse_sharepoint
 
         data = jb({"pages": [{"title": "Domů", "content": "<p>Obsah</p>"}]})
@@ -420,6 +457,7 @@ class TestSharePointWr:
         assert items[0].content is not None
 
     def test_parse_flat_list(self):
+        # quality: positive
         from stopa.artifacts.sharepoint_wr import parse_sharepoint
 
         data = jb([{"name": "doc.txt", "size": 10}])
@@ -428,12 +466,14 @@ class TestSharePointWr:
         assert items[0].kind == "document"
 
     def test_parse_invalid_json(self):
+        # quality: negative
         from stopa.artifacts.sharepoint_wr import parse_sharepoint
 
         with pytest.raises(ValueError):
             parse_sharepoint(b"{")
 
     def test_build_document_cloud_file(self):
+        # quality: positive
         from stopa.artifacts.sharepoint_wr import (
             SharePointItem,
             build_sharepoint_artifacts,
@@ -447,6 +487,7 @@ class TestSharePointWr:
         assert arts[0].details.get("engine") == "sharepoint_wr"
 
     def test_build_page_web_page(self):
+        # quality: positive
         from stopa.artifacts.sharepoint_wr import (
             SharePointItem,
             build_sharepoint_artifacts,
@@ -459,12 +500,14 @@ class TestSharePointWr:
         assert arts[0].artifact_type == "web_page"
 
     def test_detector_positive(self):
+        # quality: positive
         from stopa.artifacts.sharepoint_wr import is_sharepoint_file
 
         assert is_sharepoint_file("sharepoint/documents.json")
         assert is_sharepoint_file("export/sharepoint_site_pages.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         from stopa.artifacts.sharepoint_wr import is_sharepoint_file
 
         # generic documents.json bez sharepoint markery → nepadne
@@ -477,6 +520,7 @@ class TestSharePointWr:
 
 class TestAmazonCloudTrail:
     def test_parse_events(self):
+        # quality: positive
         from stopa.artifacts.amazon_cloudtrail import parse_cloudtrail
 
         data = jb(
@@ -498,6 +542,7 @@ class TestAmazonCloudTrail:
         assert recs[0].timestamp_s is not None
 
     def test_parse_insights(self):
+        # quality: positive
         from stopa.artifacts.amazon_cloudtrail import parse_cloudtrail
 
         data = jb(
@@ -516,6 +561,7 @@ class TestAmazonCloudTrail:
         assert recs[0].is_insight is True
 
     def test_parse_error_code(self):
+        # quality: positive
         from stopa.artifacts.amazon_cloudtrail import parse_cloudtrail
 
         data = jb(
@@ -531,12 +577,14 @@ class TestAmazonCloudTrail:
         assert recs[0].error_code == "InvalidParameter"
 
     def test_parse_invalid_json(self):
+        # quality: negative
         from stopa.artifacts.amazon_cloudtrail import parse_cloudtrail
 
         with pytest.raises(ValueError):
             parse_cloudtrail(b"{")
 
     def test_build_event_log_entry(self):
+        # quality: positive
         from stopa.artifacts.amazon_cloudtrail import (
             CloudTrailEvent,
             build_cloudtrail_artifacts,
@@ -550,11 +598,13 @@ class TestAmazonCloudTrail:
         assert arts[0].details.get("mimetype") == "aws:cloudtrail"
 
     def test_detector_positive(self):
+        # quality: positive
         from stopa.artifacts.amazon_cloudtrail import is_amazon_cloudtrail_file
 
         assert is_amazon_cloudtrail_file("amazon/cloudtrail/events.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         from stopa.artifacts.amazon_cloudtrail import is_amazon_cloudtrail_file
 
         # generic events.json bez cloudtrail markery → nepadne
@@ -567,6 +617,7 @@ class TestAmazonCloudTrail:
 
 class TestAmazonEc2S3:
     def test_parse_ec2_instances(self):
+        # quality: positive
         from stopa.artifacts.amazon_ec2_s3 import parse_ec2_instances
 
         data = jb(
@@ -590,6 +641,7 @@ class TestAmazonEc2S3:
         assert recs[0].public_ip == "1.2.3.4"
 
     def test_parse_ec2_private_dict(self):
+        # quality: positive
         from stopa.artifacts.amazon_ec2_s3 import parse_ec2_instances
 
         data = jb(
@@ -605,6 +657,7 @@ class TestAmazonEc2S3:
         assert "10.1.1.1" in recs[0].private_ips
 
     def test_parse_s3_objects(self):
+        # quality: positive
         from stopa.artifacts.amazon_ec2_s3 import parse_s3_objects
 
         data = jb(
@@ -625,12 +678,14 @@ class TestAmazonEc2S3:
         assert all(r.bucket == "corp-data" for r in recs)
 
     def test_parse_ec2_invalid_json(self):
+        # quality: negative
         from stopa.artifacts.amazon_ec2_s3 import parse_ec2_instances
 
         with pytest.raises(ValueError):
             parse_ec2_instances(b"{")
 
     def test_build_instance_cloud_instance(self):
+        # quality: positive
         from stopa.artifacts.amazon_ec2_s3 import (
             Ec2InstanceRecord,
             build_ec2_instance_artifacts,
@@ -644,6 +699,7 @@ class TestAmazonEc2S3:
         assert arts[0].details.get("mimetype") == "aws:ec2"
 
     def test_build_s3_cloud_file(self):
+        # quality: positive
         from stopa.artifacts.amazon_ec2_s3 import (
             S3ObjectRecord,
             build_s3_object_artifacts,
@@ -657,6 +713,7 @@ class TestAmazonEc2S3:
         assert arts[0].details.get("mimetype") == "aws:s3"
 
     def test_extract_union(self, tmp_path: Path):
+        # quality: positive
         from stopa.artifacts.amazon_ec2_s3 import extract_amazon_ec2_s3_artifacts
 
         p = tmp_path / "instances.json"
@@ -668,12 +725,14 @@ class TestAmazonEc2S3:
         assert arts[0].artifact_type == "cloud_instance"
 
     def test_detector_positive(self):
+        # quality: positive
         from stopa.artifacts.amazon_ec2_s3 import is_amazon_ec2_s3_file
 
         assert is_amazon_ec2_s3_file("aws/ec2/instances.json")
         assert is_amazon_ec2_s3_file("amazon/s3/bucket.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         from stopa.artifacts.amazon_ec2_s3 import is_amazon_ec2_s3_file
 
         # generic instances.json bez amazon/aws markery → nepadne
@@ -711,6 +770,7 @@ class TestW12Dispatch:
         ],
     )
     def test_prepass_routes(self, path: str, expected_fn: str):
+        # quality: positive
         from stopa.pipeline import _sns_prepass
 
         match = _sns_prepass(path)
@@ -719,6 +779,7 @@ class TestW12Dispatch:
         assert fn.__name__ == expected_fn
 
     def test_conversations_before_teams(self):
+        # quality: positive
         """conversations.json musí dorazit na conversations, ne teams."""
         from stopa.pipeline import _sns_prepass
 
@@ -727,12 +788,14 @@ class TestW12Dispatch:
         assert match[0].__name__ == "extract_teams_conversation_artifacts"
 
     def test_google_contacts_not_stolen(self):
+        # quality: positive
         """Google contacts.json bez MS markery nepadne do ms_contacts."""
         from stopa.pipeline import _sns_prepass
 
         assert _sns_prepass("google/contacts.json") is None
 
     def test_twitter_order_preserved(self):
+        # quality: positive
         """Twitter messages zůstává na twitter (pořadí pre-passu)."""
         from stopa.pipeline import _sns_prepass
 
@@ -758,6 +821,7 @@ class TestW12Registry:
     )
 
     def test_registry_has_w12_entries(self):
+        # quality: positive
         from stopa.domain.validation_registry import build_registry
 
         reg = build_registry()
@@ -765,6 +829,7 @@ class TestW12Registry:
             assert pid in reg, f"chybí registry záznam {pid}"
 
     def test_registry_versions_match_pipeline(self):
+        # quality: positive
         from stopa.domain.validation_registry import build_registry
         from stopa.pipeline import NAME_BASED_EXTRACTORS
 
@@ -773,6 +838,7 @@ class TestW12Registry:
             assert reg[pid].version == NAME_BASED_EXTRACTORS[pid][1]
 
     def test_registry_count(self):
+        # quality: positive
         """58 (před vlnou 12) + 8 = min. 66 parserů (vlny 13+ přidávají další)."""
         from stopa.domain.validation_registry import build_registry
 

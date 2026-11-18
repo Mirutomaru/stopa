@@ -58,16 +58,19 @@ OTHER_XML = b'<?xml version="1.0"?><WLANProfile xmlns="x"><name>w</name></WLANPr
 # ── is_scheduled_task_file (detekce) ───────────────────────────────────
 
 def test_is_schedtask_by_path_and_content():
+    # quality: positive
     name = "Windows/System32/Tasks/MyTask.xml"
     assert is_scheduled_task_file(name, TASK_XML[:2048]) is True
 
 
 def test_is_schedtask_rejects_other_xml():
+    # quality: negative
     # cesta sedí (Tasks), ale obsah není task → False
     assert is_scheduled_task_file("Windows/System32/Tasks/x.xml", OTHER_XML) is False
 
 
 def test_is_schedtask_requires_tasks_path():
+    # quality: positive
     # bez Tasks v cestě a bez scheduledtask v názvu → False
     assert is_scheduled_task_file("random/task.xml", TASK_XML[:2048]) is False
 
@@ -75,6 +78,7 @@ def test_is_schedtask_requires_tasks_path():
 # ── parse_scheduled_task_xml (čistá funkce) ───────────────────────────
 
 def test_parse_full_task():
+    # quality: positive
     tasks = parse_scheduled_task_xml(TASK_XML)
     assert len(tasks) == 1
     t = tasks[0]
@@ -89,16 +93,19 @@ def test_parse_full_task():
 
 
 def test_parse_empty_task_returns_none():
+    # quality: boundary
     tasks = parse_scheduled_task_xml(EMPTY_TASK)
     # bez akcí/triggerů/autora → prázdný výsledek
     assert tasks == []
 
 
 def test_parse_non_task_xml_empty():
+    # quality: boundary
     assert parse_scheduled_task_xml(OTHER_XML) == []
 
 
 def test_parse_garbage_raises():
+    # quality: corrupted
     with pytest.raises(ValueError):
         parse_scheduled_task_xml(b"\x00\x01garbage")
 
@@ -106,6 +113,7 @@ def test_parse_garbage_raises():
 # ── build_scheduled_task_artifacts (čistá funkce) ─────────────────────
 
 def test_build_artifacts():
+    # quality: positive
     tasks = parse_scheduled_task_xml(TASK_XML)
     arts = build_scheduled_task_artifacts(tasks)
     assert len(arts) == 1
@@ -117,12 +125,14 @@ def test_build_artifacts():
 
 
 def test_build_artifacts_empty():
+    # quality: boundary
     assert build_scheduled_task_artifacts([]) == []
 
 
 # ── extract_scheduled_task_artifacts (IO přes tmp_path) ───────────────
 
 def test_extract_task_file(tmp_path: Path):
+    # quality: positive
     p = tmp_path / "MyTask.xml"
     p.write_bytes(TASK_XML)
     arts = extract_scheduled_task_artifacts(p)
@@ -132,4 +142,5 @@ def test_extract_task_file(tmp_path: Path):
 
 
 def test_extract_missing_file(tmp_path: Path):
+    # quality: negative
     assert extract_scheduled_task_artifacts(tmp_path / "nope.xml") == []

@@ -56,6 +56,7 @@ from stopa.artifacts.whatsapp_cloud import (
 
 class TestAppleCloud:
     def test_parse_contacts_list(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -75,6 +76,7 @@ class TestAppleCloud:
         assert r.phone == "+4201"
 
     def test_parse_keychain(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -92,6 +94,7 @@ class TestAppleCloud:
         assert r.name == "GitHub:mirda"
 
     def test_parse_mail(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -112,6 +115,7 @@ class TestAppleCloud:
         assert r.recipient is not None and "jan@y.cz" in r.recipient
 
     def test_parse_backup(self):
+        # quality: positive
         data = json.dumps(
             [{"name": "iPhone 15 backup", "domain": "com.apple.mobilebackup"}]
         ).encode()
@@ -122,12 +126,14 @@ class TestAppleCloud:
         assert r.name == "iPhone 15 backup"
 
     def test_kind_hint_overrides(self):
+        # quality: positive
         data = json.dumps([{"label": "x", "account": "y"}]).encode()
         recs = parse_apple_cloud(data, kind_hint="keychain")
         assert len(recs) == 1
         assert recs[0].kind == "keychain"
 
     def test_build_artifacts_contact(self):
+        # quality: positive
         data = json.dumps(
             [{"firstName": "Jan", "lastName": "Novák", "emailAddresses": [{"value": "jan@x.cz"}]}]
         ).encode()
@@ -137,16 +143,19 @@ class TestAppleCloud:
         assert a.details.get("engine") == "apple_cloud"
 
     def test_extract_roundtrip(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "AppleContacts.json"
         p.write_text(json.dumps([{"firstName": "Jan", "lastName": "Novák"}]))
         arts = extract_apple_cloud_artifacts(p)
         assert len(arts) == 1
 
     def test_detector_positive(self):
+        # quality: positive
         assert is_apple_file("AppleCloudExport/contacts.json")
         assert is_apple_file("icloud/keychain_export.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         assert not is_apple_file("contacts.json")
 
 
@@ -157,6 +166,7 @@ class TestAppleCloud:
 
 class TestGoogle2025Wr:
     def test_parse_access_log(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -175,6 +185,7 @@ class TestGoogle2025Wr:
         assert r.created_s is not None
 
     def test_parse_target_assoc(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -193,6 +204,7 @@ class TestGoogle2025Wr:
         assert r.account_email == "jan@x.cz"
 
     def test_parse_calls_explicit_fields(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -212,6 +224,7 @@ class TestGoogle2025Wr:
         assert r.duration_s == 90
 
     def test_parse_calls_from_to_fallback(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -229,12 +242,14 @@ class TestGoogle2025Wr:
         assert r.duration_s == 120
 
     def test_kind_hint_from_path(self):
+        # quality: positive
         data = json.dumps([{"deviceName": "X", "ipAddress": "9.9.9.9"}]).encode()
         recs = parse_google_2025_wr(data, kind_hint="access_log")
         assert len(recs) == 1
         assert recs[0].kind == "access_log"
 
     def test_build_artifacts(self):
+        # quality: positive
         data = json.dumps(
             [{"deviceName": "Pixel", "ipAddress": "1.2.3.4", "accessTime": "2026-01-01T00:00:00Z"}]
         ).encode()
@@ -242,17 +257,20 @@ class TestGoogle2025Wr:
         assert len(arts) == 1
 
     def test_extract_roundtrip(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "GoogleAccessLogDevices2025.json"
         p.write_text(json.dumps([{"deviceName": "Pixel", "ipAddress": "1.2.3.4"}]))
         arts = extract_google_2025_artifacts(p)
         assert len(arts) == 1
 
     def test_detector_positive(self):
+        # quality: positive
         assert is_google_2025_file("GoogleAccessLogDevices2025.json")
         assert is_google_2025_file("AccountTargetAssociation2025.json")
         assert is_google_2025_file("google/calls.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         assert not is_google_2025_file("calls.json")
 
 
@@ -263,6 +281,7 @@ class TestGoogle2025Wr:
 
 class TestWhatsAppCloud:
     def test_parse_chats(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -282,6 +301,7 @@ class TestWhatsAppCloud:
         assert r.created_s is not None
 
     def test_parse_backups(self):
+        # quality: positive
         data = json.dumps(
             [{"backupDate": "2026-01-01", "version": "2.23", "sizeBytes": 1024}]
         ).encode()
@@ -292,6 +312,7 @@ class TestWhatsAppCloud:
         assert r.version == "2.23"
 
     def test_build_artifacts_chat(self):
+        # quality: positive
         data = json.dumps([{"sender": "+4201", "text": "Ahoj"}]).encode()
         arts = build_whatsapp_artifacts(parse_whatsapp_cloud(data))
         assert len(arts) == 1
@@ -299,16 +320,19 @@ class TestWhatsAppCloud:
         assert a.details.get("engine") == "whatsapp_cloud"
 
     def test_extract_roundtrip(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "WhatsAppChats.json"
         p.write_text(json.dumps([{"sender": "+4201", "text": "Ahoj"}]))
         arts = extract_whatsapp_artifacts(p)
         assert len(arts) == 1
 
     def test_detector_positive(self):
+        # quality: positive
         assert is_whatsapp_file("whatsapp/chats.json")
         assert is_whatsapp_file("WhatsAppBackups.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         assert not is_whatsapp_file("chats.json")
 
 
@@ -319,6 +343,7 @@ class TestWhatsAppCloud:
 
 class TestCloudGeneric:
     def test_parse_accounts(self):
+        # quality: positive
         data = json.dumps([{"accountName": "jan@x.cz", "provider": "Google"}]).encode()
         recs = parse_cloud_generic(data, kind_hint="accounts")
         assert len(recs) == 1
@@ -328,6 +353,7 @@ class TestCloudGeneric:
         assert r.provider == "Google"
 
     def test_parse_passwords(self):
+        # quality: positive
         data = json.dumps(
             [{"service": "GitHub", "username": "mirda", "password": "sekret"}]
         ).encode()
@@ -339,12 +365,14 @@ class TestCloudGeneric:
         assert r.username == "mirda"
 
     def test_parse_connected_apps(self):
+        # quality: positive
         data = json.dumps([{"appName": "Photos", "scope": "read"}]).encode()
         recs = parse_cloud_generic(data, kind_hint="apps")
         assert len(recs) == 1
         assert recs[0].kind == "apps"
 
     def test_parse_recent_devices(self):
+        # quality: positive
         data = json.dumps([{"deviceName": "Pixel", "ipAddress": "5.6.7.8"}]).encode()
         recs = parse_cloud_generic(data, kind_hint="devices")
         assert len(recs) == 1
@@ -353,6 +381,7 @@ class TestCloudGeneric:
         assert r.device_name == "Pixel"
 
     def test_parse_timeline(self):
+        # quality: positive
         data = json.dumps([{"event": "login", "actor": "jan@x.cz"}]).encode()
         recs = parse_cloud_generic(data, kind_hint="timeline")
         assert len(recs) == 1
@@ -361,6 +390,7 @@ class TestCloudGeneric:
         assert r.event == "login"
 
     def test_parse_android_backups(self):
+        # quality: positive
         data = json.dumps([{"packageName": "com.example.app", "sizeBytes": 2048}]).encode()
         recs = parse_cloud_generic(data, kind_hint="android_backup")
         assert len(recs) == 1
@@ -369,6 +399,7 @@ class TestCloudGeneric:
         assert r.package_name == "com.example.app"
 
     def test_parse_azure_vm(self):
+        # quality: positive
         data = json.dumps(
             [{"vmName": "prod-1", "snapshotId": "snap-9", "sizeGb": 40.5}]
         ).encode()
@@ -379,6 +410,7 @@ class TestCloudGeneric:
         assert r.vm_name == "prod-1"
 
     def test_build_artifacts(self):
+        # quality: positive
         data = json.dumps([{"service": "GitHub", "username": "mirda"}]).encode()
         arts = build_cloud_generic_artifacts(
             parse_cloud_generic(data, kind_hint="passwords")
@@ -386,17 +418,20 @@ class TestCloudGeneric:
         assert len(arts) == 1
 
     def test_extract_roundtrip(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "AccountsInfo.json"
         p.write_text(json.dumps([{"accountName": "jan@x.cz"}]))
         arts = extract_cloud_generic_artifacts(p)
         assert len(arts) == 1
 
     def test_detector_positive(self):
+        # quality: positive
         assert is_cloud_generic_file("CloudExport/AccountsInfo.json")
         assert is_cloud_generic_file("cloud/ConnectedApps.json")
         assert is_cloud_generic_file("cloud/AzureVirtualMachineSnapshots.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         # bez cloud markery nepadne (aby se nekradly cizí soubory)
         assert not is_cloud_generic_file("timeline.json")
 
@@ -408,6 +443,7 @@ class TestCloudGeneric:
 
 class TestGmailMessages:
     def test_parse_messages(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -429,21 +465,25 @@ class TestGmailMessages:
         assert r.created_s is not None
 
     def test_build_artifacts(self):
+        # quality: positive
         data = json.dumps([{"from": "a@b.c", "to": "d@e.f", "subject": "Test"}]).encode()
         arts = build_gmail_artifacts(parse_gmail_messages(data))
         assert len(arts) == 1
 
     def test_extract_roundtrip(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "GmailMessages.json"
         p.write_text(json.dumps([{"from": "a@b.c", "to": "d@e.f", "subject": "T"}]))
         arts = extract_gmail_artifacts(p)
         assert len(arts) == 1
 
     def test_detector_positive(self):
+        # quality: positive
         assert is_gmail_file("gmail/messages.json")
         assert is_gmail_file("GmailMessages.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         assert not is_gmail_file("messages.json")
 
 
@@ -454,6 +494,7 @@ class TestGmailMessages:
 
 class TestMapsLabeledPlaces:
     def test_parse_places(self):
+        # quality: positive
         data = json.dumps(
             [
                 {
@@ -473,21 +514,25 @@ class TestMapsLabeledPlaces:
         assert r.longitude == pytest.approx(14.4)
 
     def test_build_artifacts(self):
+        # quality: positive
         data = json.dumps([{"label": "Práce", "latitude": 50.2, "longitude": 14.5}]).encode()
         arts = build_maps_labeled_artifacts(parse_maps_labeled_places(data))
         assert len(arts) == 1
 
     def test_extract_roundtrip(self, tmp_path: Path):
+        # quality: positive
         p = tmp_path / "LabeledPlaces.json"
         p.write_text(json.dumps([{"label": "Domov", "latitude": 50.1}]))
         arts = extract_maps_labeled_artifacts(p)
         assert len(arts) == 1
 
     def test_detector_positive(self):
+        # quality: positive
         assert is_maps_labeled_file("maps/labeled_places.json")
         assert is_maps_labeled_file("GoogleMapsLabeledPlacesWarrantReturn.json")
 
     def test_detector_negative_generic(self):
+        # quality: positive
         assert not is_maps_labeled_file("places.json")
 
 
@@ -504,51 +549,61 @@ class TestWave14Dispatch:
         return pipeline
 
     def test_apple_contacts_routes(self, pipeline):
+        # quality: positive
         r = pipeline._sns_prepass("/case/AppleCloudExport/contacts.json")
         assert r is not None
         assert r[0].__name__ == "extract_apple_cloud_artifacts"
 
     def test_icloud_keychain_routes(self, pipeline):
+        # quality: positive
         r = pipeline._sns_prepass("/case/icloud/keychain_export.json")
         assert r is not None
         assert r[0].__name__ == "extract_apple_cloud_artifacts"
 
     def test_google2025_accesslog_routes(self, pipeline):
+        # quality: positive
         r = pipeline._sns_prepass("/case/GoogleAccessLogDevices2025.json")
         assert r is not None
         assert r[0].__name__ == "extract_google_2025_artifacts"
 
     def test_google2025_targetassoc_routes(self, pipeline):
+        # quality: positive
         r = pipeline._sns_prepass("/case/AccountTargetAssociation2025.json")
         assert r is not None
         assert r[0].__name__ == "extract_google_2025_artifacts"
 
     def test_whatsapp_routes(self, pipeline):
+        # quality: positive
         r = pipeline._sns_prepass("/case/whatsapp/chats.json")
         assert r is not None
         assert r[0].__name__ == "extract_whatsapp_artifacts"
 
     def test_gmail_routes(self, pipeline):
+        # quality: positive
         r = pipeline._sns_prepass("/case/gmail/messages.json")
         assert r is not None
         assert r[0].__name__ == "extract_gmail_artifacts"
 
     def test_maps_labeled_routes(self, pipeline):
+        # quality: positive
         r = pipeline._sns_prepass("/case/maps/labeled_places.json")
         assert r is not None
         assert r[0].__name__ == "extract_maps_labeled_artifacts"
 
     def test_cloud_generic_accounts_routes(self, pipeline):
+        # quality: positive
         r = pipeline._sns_prepass("/case/CloudExport/AccountsInfo.json")
         assert r is not None
         assert r[0].__name__ == "extract_cloud_generic_artifacts"
 
     def test_cloud_generic_azure_routes(self, pipeline):
+        # quality: positive
         r = pipeline._sns_prepass("/case/cloud/AzureVirtualMachineSnapshots.json")
         assert r is not None
         assert r[0].__name__ == "extract_cloud_generic_artifacts"
 
     def test_generic_basenames_not_stolen(self, pipeline):
+        # quality: positive
         # generic basenames bez cloud markery nepadnou do cloud_generic
         for name in ("timeline.json", "passwords.json", "accounts.json"):
             r = pipeline._sns_prepass(f"/case/{name}")
@@ -556,6 +611,7 @@ class TestWave14Dispatch:
                 assert r[0].__name__ != "extract_cloud_generic_artifacts"
 
     def test_older_waves_keep_order(self, pipeline):
+        # quality: positive
         # vlna 13 (box) drží pořadí před vlnou 14
         r = pipeline._sns_prepass("/case/box_files_export.json")
         assert r is not None
@@ -569,6 +625,7 @@ class TestWave14Dispatch:
 
 class TestWave14Registry:
     def test_registry_count(self):
+        # quality: positive
         # 70 (po vlně 13) + 6 = min. 76 parserů (další vlny přidávají další)
         from stopa.domain.validation_registry import build_registry
 
@@ -576,6 +633,7 @@ class TestWave14Registry:
         assert len(reg) >= 76
 
     def test_wave14_records_present(self):
+        # quality: positive
         from stopa.domain.validation_registry import build_registry
 
         reg = build_registry()

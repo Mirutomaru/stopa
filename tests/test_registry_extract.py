@@ -58,6 +58,7 @@ EMPTY_CONTAINER = FakeSubkey(r"\Software\Microsoft\Windows\CurrentVersion\Run", 
 
 class TestBuildRegistryArtifacts:
     def test_run_key_is_persistence(self):
+        # quality: positive
         arts = build_registry_artifacts([RUN_KEY])
         assert len(arts) == 1
         a = arts[0]
@@ -68,12 +69,14 @@ class TestBuildRegistryArtifacts:
         assert isinstance(a.details["values"]["CCleaner"], str)
 
     def test_mounted_devices_is_usb(self):
+        # quality: positive
         arts = build_registry_artifacts([MOUNTED_DEVICES])
         assert len(arts) == 1
         assert arts[0].artifact_type == "registry_usb_device"
         assert len(arts[0].details["values"]) == 2
 
     def test_user_name_is_user_info(self):
+        # quality: positive
         arts = build_registry_artifacts([USER_NAME])
         assert len(arts) == 1
         assert arts[0].artifact_type == "registry_user_info"
@@ -81,20 +84,24 @@ class TestBuildRegistryArtifacts:
         assert arts[0].details["values"]["(Default)"] == "Gamer"
 
     def test_environment_key(self):
+        # quality: positive
         arts = build_registry_artifacts([ENV_KEY])
         assert len(arts) == 1
         assert arts[0].artifact_type == "registry_environment"
         assert arts[0].details["values"]["USERPROFILE"] == "C:\\Users\\Gamer"
 
     def test_plain_key_ignored(self):
+        # quality: positive
         # klíč mimo INTERESTING_KEY_PATTERNS → žádný artifact
         assert build_registry_artifacts([PLAIN_KEY]) == []
 
     def test_empty_container_skipped(self):
+        # quality: boundary
         # Run klíč bez hodnot (jen kontejner) → ignorovat
         assert build_registry_artifacts([EMPTY_CONTAINER]) == []
 
     def test_mixed_keys_only_interesting_extracted(self):
+        # quality: positive
         arts = build_registry_artifacts([RUN_KEY, PLAIN_KEY, MOUNTED_DEVICES, USER_NAME])
         types = [a.artifact_type for a in arts]
         assert "registry_persistence" in types
@@ -104,6 +111,7 @@ class TestBuildRegistryArtifacts:
         assert len(arts) == 3
 
     def test_path_with_forward_slashes(self):
+        # quality: positive
         # cesty s / (normalizace) — shoda i tak
         fwd = FakeSubkey(
             "/Software/Microsoft/Windows/CurrentVersion/Run",
@@ -115,6 +123,7 @@ class TestBuildRegistryArtifacts:
         assert arts[0].artifact_type == "registry_persistence"
 
     def test_long_value_truncated(self):
+        # quality: corrupted
         long_val = FakeSubkey(
             r"\Environment",
             timestamp=TS,
@@ -124,6 +133,7 @@ class TestBuildRegistryArtifacts:
         assert len(arts[0].details["values"]["HUGE"]) == 200
 
     def test_none_value_serialized_empty(self):
+        # quality: boundary
         k = FakeSubkey(r"\Environment", timestamp=TS, values=[FakeValue("NUL", None)])
         arts = build_registry_artifacts([k])
         assert arts[0].details["values"]["NUL"] == ""
@@ -131,6 +141,7 @@ class TestBuildRegistryArtifacts:
 
 class TestExtractRegistryArtifactsIO:
     def test_non_hive_file_returns_empty(self, tmp_path: Path):
+        # quality: boundary corrupted
         """Soubor s regf magic ale jinak poškozený → defenzivní [], ne výjimka."""
         from stopa.artifacts.registry_extract import extract_registry_artifacts
 
@@ -139,6 +150,7 @@ class TestExtractRegistryArtifactsIO:
         assert extract_registry_artifacts(p) == []
 
     def test_missing_file_returns_empty(self, tmp_path: Path):
+        # quality: boundary
         from stopa.artifacts.registry_extract import extract_registry_artifacts
 
         assert extract_registry_artifacts(tmp_path / "chybi.hive") == []
@@ -146,6 +158,7 @@ class TestExtractRegistryArtifactsIO:
 
 class TestTriageArtifact:
     def test_triage_counts_and_top_keys(self):
+        # quality: positive
         from stopa.artifacts.registry_extract import _triage_artifact
 
         keys = [

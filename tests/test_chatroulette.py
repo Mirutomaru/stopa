@@ -24,6 +24,7 @@ from stopa.artifacts.chatroulette import (
 # ── textový formát ──────────────────────────────────────────────────
 
 def test_parse_typed_line() -> None:
+    # quality: positive
     data = b"[2018-05-06 09:30:00] partner_abc said: hi there\n"
     msgs = parse_chatroulette(data)
     assert len(msgs) == 1
@@ -35,6 +36,7 @@ def test_parse_typed_line() -> None:
 
 
 def test_parse_plain_line() -> None:
+    # quality: positive
     data = b"me: hello!\n"
     msgs = parse_chatroulette(data)
     assert len(msgs) == 1
@@ -44,6 +46,7 @@ def test_parse_plain_line() -> None:
 
 
 def test_parse_mixed_lines() -> None:
+    # quality: positive
     data = (
         b"[2018-05-06 09:30:00] partner_abc said: hi there\n"
         b"me: hello!\n"
@@ -56,6 +59,7 @@ def test_parse_mixed_lines() -> None:
 # ── JSON formát ─────────────────────────────────────────────────────
 
 def test_parse_json_list() -> None:
+    # quality: positive
     payload = [
         {"partner": "p1", "message": "první", "timestamp": 1525563000},
         {"user": "p2", "text": "druhá"},
@@ -71,11 +75,13 @@ def test_parse_json_list() -> None:
 
 
 def test_parse_json_invalid_raises() -> None:
+    # quality: negative
     with pytest.raises(ValueError):
         parse_chatroulette(b"[{bad")
 
 
 def test_parse_json_non_list_raises() -> None:
+    # quality: positive
     with pytest.raises(TypeError):
         parse_chatroulette(json.dumps({"a": 1}).encode())
 
@@ -83,20 +89,24 @@ def test_parse_json_non_list_raises() -> None:
 # ── detekce ─────────────────────────────────────────────────────────
 
 def test_detect_by_name_and_content() -> None:
+    # quality: positive
     head = b"[2018-05-06 09:30:00] partner_abc said: hi there\n"
     assert is_chatroulette_file("chatroulette_log.txt", head) is True
 
 
 def test_detect_by_name_only() -> None:
+    # quality: positive
     assert is_chatroulette_file("cr_chat_export.log") is True
 
 
 def test_reject_wrong_name() -> None:
+    # quality: negative
     head = b"[2018-05-06 09:30:00] partner_abc said: hi there\n"
     assert is_chatroulette_file("notes.txt", head) is False
 
 
 def test_reject_no_content_marker() -> None:
+    # quality: negative
     # správný název, ale obsah bez markerů (chatroulette/said:/partner/message)
     assert is_chatroulette_file("cr_chat.txt", b"hello world") is False
 
@@ -104,6 +114,7 @@ def test_reject_no_content_marker() -> None:
 # ── artifacty + entrypoint ─────────────────────────────────────────
 
 def test_build_artifacts() -> None:
+    # quality: positive
     data = b"[2018-05-06 09:30:00] partner_abc said: hi there\n"
     msgs = parse_chatroulette(data)
     arts = build_chatroulette_artifacts(msgs)
@@ -115,6 +126,7 @@ def test_build_artifacts() -> None:
 
 
 def test_entrypoint_text(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "chatroulette.txt"
     p.write_text("[2018-05-06 09:30:00] partner_abc said: hi there\nme: hello!\n")
     arts = extract_chatroulette_artifacts(p)
@@ -123,12 +135,14 @@ def test_entrypoint_text(tmp_path: Path) -> None:
 
 
 def test_entrypoint_invalid_json_returns_empty(tmp_path: Path) -> None:
+    # quality: boundary
     p = tmp_path / "cr.json"
     p.write_text("[{bad")
     assert extract_chatroulette_artifacts(p) == []
 
 
 def test_entrypoint_empty(tmp_path: Path) -> None:
+    # quality: boundary
     p = tmp_path / "chatroulette.txt"
     p.write_bytes(b"")
     assert extract_chatroulette_artifacts(p) == []

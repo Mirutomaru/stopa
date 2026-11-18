@@ -25,29 +25,35 @@ from stopa.artifacts.limewire_p2p import (
 # ── detekce rodiny ──────────────────────────────────────────────────
 
 def test_detect_limewire_by_name() -> None:
+    # quality: positive
     assert detect_family(name="LimeWire.dat") == "limewire_shared_file"
 
 
 def test_detect_limerunner_priority_over_limewire() -> None:
+    # quality: positive
     # limerunner obsahuje "limewire"? ne — ale marker je specifický;
     # ověřujeme, že limerunner vyhraje i když by šlo o obecný název
     assert detect_family(name="limerunner_export.txt") == "limerunner_shared_file"
 
 
 def test_detect_luckywire_by_name() -> None:
+    # quality: positive
     assert detect_family(name="LuckyWire.log") == "luckywire_shared_file"
 
 
 def test_detect_by_content() -> None:
+    # quality: positive
     head = b'limewire shared files\nfilename|size|path|hash\na.mp3|123|/x|abc\n'
     assert detect_family(head=head) == "limewire_shared_file"
 
 
 def test_detect_none() -> None:
+    # quality: negative
     assert detect_family(name="notes.txt", head=b"hello world") is None
 
 
 def test_is_family_file() -> None:
+    # quality: positive
     assert is_limewire_family_file("LimeWire.dat") is True
     assert is_limewire_family_file("random.txt") is False
 
@@ -55,6 +61,7 @@ def test_is_family_file() -> None:
 # ── JSON parser ─────────────────────────────────────────────────────
 
 def test_parse_json_list() -> None:
+    # quality: positive
     payload = [
         {
             "filename": "song.mp3",
@@ -79,6 +86,7 @@ def test_parse_json_list() -> None:
 
 
 def test_parse_json_transfer_fields() -> None:
+    # quality: positive
     payload = [
         {
             "filename": "x.zip",
@@ -93,11 +101,13 @@ def test_parse_json_transfer_fields() -> None:
 
 
 def test_parse_json_invalid_raises() -> None:
+    # quality: negative
     with pytest.raises(ValueError):
         parse_shared_files(b"[{bad")
 
 
 def test_parse_json_non_list_raises() -> None:
+    # quality: positive
     with pytest.raises(TypeError):
         parse_shared_files(json.dumps({"a": 1}).encode())
 
@@ -105,6 +115,7 @@ def test_parse_json_non_list_raises() -> None:
 # ── pipe-delimited parser ───────────────────────────────────────────
 
 def test_parse_pipe_full() -> None:
+    # quality: positive
     data = b"song.mp3|123456|/shared/song.mp3|abc123|2010-01-02 03:04:05\n"
     recs = parse_shared_files(data)
     assert len(recs) == 1
@@ -117,6 +128,7 @@ def test_parse_pipe_full() -> None:
 
 
 def test_parse_pipe_minimal() -> None:
+    # quality: boundary
     data = b"doc.pdf|99\n"
     # pipe regex vyžaduje name|size|path|hash — 2 pole nestačí
     recs = parse_shared_files(data)
@@ -124,6 +136,7 @@ def test_parse_pipe_minimal() -> None:
 
 
 def test_parse_pipe_skip_comments_and_garbage() -> None:
+    # quality: corrupted
     data = (
         "# hlavička\n"
         "song.mp3|123456|/shared/song.mp3|abc123\n"
@@ -136,6 +149,7 @@ def test_parse_pipe_skip_comments_and_garbage() -> None:
 # ── artifacty + entrypoint ─────────────────────────────────────────
 
 def test_build_artifacts_with_family_type() -> None:
+    # quality: positive
     data = b"song.mp3|123456|/shared/song.mp3|abc123\n"
     recs = parse_shared_files(data)
     arts = build_shared_file_artifacts(recs, "limewire_shared_file")
@@ -147,6 +161,7 @@ def test_build_artifacts_with_family_type() -> None:
 
 
 def test_entrypoint_limewire(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "LimeWire.dat"
     p.write_text("song.mp3|123456|/shared/song.mp3|abc123\n")
     arts = extract_shared_files_artifacts(p)
@@ -155,6 +170,7 @@ def test_entrypoint_limewire(tmp_path: Path) -> None:
 
 
 def test_entrypoint_limerunner(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "limerunner_export.txt"
     p.write_text("doc.pdf|99|/x/doc.pdf|hash1\n")
     arts = extract_shared_files_artifacts(p)
@@ -163,6 +179,7 @@ def test_entrypoint_limerunner(tmp_path: Path) -> None:
 
 
 def test_entrypoint_luckywire(tmp_path: Path) -> None:
+    # quality: positive
     p = tmp_path / "LuckyWire.log"
     p.write_text("vid.avi|55|/y/vid.avi|h2\n")
     arts = extract_shared_files_artifacts(p)
@@ -171,12 +188,14 @@ def test_entrypoint_luckywire(tmp_path: Path) -> None:
 
 
 def test_entrypoint_unknown_family_returns_empty(tmp_path: Path) -> None:
+    # quality: boundary
     p = tmp_path / "notes.txt"
     p.write_text("song.mp3|123456|/shared/song.mp3|abc123\n")
     assert extract_shared_files_artifacts(p) == []
 
 
 def test_entrypoint_empty(tmp_path: Path) -> None:
+    # quality: boundary
     p = tmp_path / "LimeWire.dat"
     p.write_bytes(b"")
     assert extract_shared_files_artifacts(p) == []
