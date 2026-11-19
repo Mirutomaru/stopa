@@ -7,6 +7,7 @@ Použití:
   stopa search <case_id> "dotaz" [--source ID]   # full-text (FTS5)
   stopa timeline <case_id> [--type browser_history] [--path text] [-v]
   stopa timeline-intel <case_id> [--json]    # P2-3 — pokročilá timeline intelligence (gapy/outliery/korelace/nejistota)
+  stopa xcorr <case_a> <case_b>|--all [--entity email|tel|hash] [--user U] [--json]   # P2-6 — sdílené entity napříč případy
   stopa image <case_id> /cesta/ke/obrazu.img       # disk image (TSK) [+ --no-carve]
   stopa mobile <case_id> /obraz.img [--password HESLO]  # mobilní FDE/FBE unlock + TSK
   stopa stats <case_id>
@@ -146,6 +147,9 @@ from .commands.workspace import (
     cmd_workspace_task_set_status,
 )
 
+# P2-6 — Cross-case Correlation v cli/commands/xcorr.py
+from .commands.xcorr import cmd_xcorr
+
 # R0.4 — příklady pro --help (AK: každý subpříkaz ukazuje reálný příklad)
 _SUBCOMMAND_EXAMPLES = {
     "new": 'stopa case new "Případ 2026-014" --examiner M.Matúš',
@@ -178,6 +182,7 @@ _SUBCOMMAND_EXAMPLES = {
     "backup": "stopa backup case-abc --out /mnt/backup",
     "timeline": "stopa timeline case-abc --type browser_history --intel",
     "timeline-intel": "stopa timeline-intel case-abc --json   # P2-3 — gapy/outliery/korelace/nejistota",
+    "xcorr": "stopa xcorr case-a case-b --entity email --user m.matous --json   # P2-6 — sdílené entity napříč případy",
     "correlate": "stopa correlate case-abc -v",
     "analytics": "stopa analytics case-abc --from-ts 2026-01-01T00:00:00Z --to-ts 2026-02-01T00:00:00Z",
     "image": "stopa image case-abc /path/disk.img --no-carve",
@@ -690,6 +695,24 @@ def build_parser() -> argparse.ArgumentParser:
     tli_p.add_argument("case_id")
     _add_json_flag(tli_p)
     tli_p.set_defaults(func=cmd_timeline_intel)
+
+    # P2-6 — Cross-case Correlation: sdílené entity napříč případy (read-only,
+    # tenancy pravidla, audit hash chain). Exit 0 OK / 1 chyba / 2 bez oprávnění.
+    xc_p = _ex_sub(
+        sub, "xcorr",
+        help="P2-6 — sdílené entity napříč případy (read-only + tenancy + audit)",
+        example="stopa xcorr case-a case-b --entity email --json   # nebo: stopa xcorr --all --user m.matous",
+    )
+    xc_p.add_argument("case_a", nargs="?", help="první případ (pouze s case_b; jinak --all)")
+    xc_p.add_argument("case_b", nargs="?", help="druhý případ")
+    xc_p.add_argument("--all", action="store_true", dest="all",
+                      help="dotázat všechny případy v STOPA_DB_DIR (min. 2)")
+    xc_p.add_argument("--entity", choices=["email", "tel", "hash"], default=None,
+                      help="filtr druhu entity (default: všechny)")
+    xc_p.add_argument("--user", metavar="USERNAME", default=None,
+                      help="identita multi-user režimu (bez ní fail-closed exit 2)")
+    _add_json_flag(xc_p)
+    xc_p.set_defaults(func=cmd_xcorr)
 
     cor_p = _ex_sub(sub, "correlate", help="E4 — Entity + Correlation Engine (explicitní krok)")
     cor_p.add_argument("case_id")

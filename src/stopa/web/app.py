@@ -788,7 +788,7 @@ def create_app(
         app.mount("/spa", StaticFiles(directory=spa_dir, html=True), name="spa")
 
     # P1-4 vlna C — routery domén (povrch byte-přesný: tests/golden/p14_web_surface.json)
-    from .routers import ai, analysis, cases, collab, files, investigation, reports, system
+    from .routers import ai, analysis, cases, collab, files, investigation, reports, system, xcorr
 
     ctx = {
         "base": base,
@@ -826,6 +826,7 @@ def create_app(
     reports.register(app, ctx)
     collab.register(app, ctx)
     investigation.register(app, ctx)  # P2-4 — investigation workspace
+    xcorr.register(app, ctx)  # P2-6 — cross-case correlation (instance DB)
     system.register(app, ctx)
 
     @app.get("/")

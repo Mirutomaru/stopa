@@ -621,5 +621,15 @@
       "--task",
       "-h"
     ]
+  },
+  "xcorr": {
+    "opts": [
+      "--all",
+      "--entity",
+      "--help",
+      "--json",
+      "--user",
+      "-h"
+    ]
   }
 }

@@ -312,6 +312,21 @@
   [
     "http",
     "GET",
+    "/api/xcorr/audit"
+  ],
+  [
+    "http",
+    "GET",
+    "/api/xcorr/correlate"
+  ],
+  [
+    "http",
+    "GET",
+    "/api/xcorr/grants"
+  ],
+  [
+    "http",
+    "GET",
     "/auth/me"
   ],
   [
@@ -473,6 +488,11 @@
     "http",
     "POST",
     "/api/users"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/xcorr/grants"
   ],
   [
     "http",
