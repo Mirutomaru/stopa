@@ -257,6 +257,30 @@
       "-h"
     ]
   },
+  "intel": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "intel/import": {
+    "opts": [
+      "--help",
+      "--ioc",
+      "--json",
+      "--source",
+      "--stix",
+      "--tlp",
+      "-h"
+    ]
+  },
+  "intel/match": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
   "memory-analyze": {
     "opts": [
       "--help",

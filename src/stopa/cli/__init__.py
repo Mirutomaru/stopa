@@ -8,6 +8,8 @@ Použití:
   stopa timeline <case_id> [--type browser_history] [--path text] [-v]
   stopa timeline-intel <case_id> [--json]    # P2-3 — pokročilá timeline intelligence (gapy/outliery/korelace/nejistota)
   stopa xcorr <case_a> <case_b>|--all [--entity email|tel|hash] [--user U] [--json]   # P2-6 — sdílené entity napříč případy
+  stopa intel import <case_id> --stix FILE|--ioc KIND:HODNOTA[,…] [--tlp TLP] [--source S] [--json]  # P2-5 — Threat Intel (IoC feed STIX 2.1)
+  stopa intel match <case_id> [--json]    # P2-5 — deterministické matching IoC × artefakty/entities
   stopa image <case_id> /cesta/ke/obrazu.img       # disk image (TSK) [+ --no-carve]
   stopa mobile <case_id> /obraz.img [--password HESLO]  # mobilní FDE/FBE unlock + TSK
   stopa stats <case_id>
@@ -94,6 +96,9 @@ from .commands.integrity import (
     cmd_seal,
     cmd_verify,
 )
+
+# P2-5 — Threat Intelligence Workspace v cli/commands/intel.py
+from .commands.intel import cmd_intel_import, cmd_intel_match
 
 # P1-4 — životní cyklus případu přesunut do cli/commands/lifecycle.py (re-export)
 from .commands.lifecycle import cmd_analyze, cmd_audit, cmd_backup, cmd_validate
@@ -713,6 +718,41 @@ def build_parser() -> argparse.ArgumentParser:
                       help="identita multi-user režimu (bez ní fail-closed exit 2)")
     _add_json_flag(xc_p)
     xc_p.set_defaults(func=cmd_xcorr)
+
+    # P2-5 — Threat Intelligence Workspace: per-případový IoC feed (STIX 2.1) +
+    # deterministické matching × artefakty/entities. Exit 0 OK / 1 chyba/prázdný feed.
+    intel_p = _ex_sub(
+        sub, "intel",
+        help="P2-5 — Threat Intelligence Workspace (IoC feed STIX 2.1 + matching)",
+        example="stopa intel match case-abc --json",
+    )
+    intel_sub = intel_p.add_subparsers(dest="intel_cmd", required=True, metavar="<podprikaz>")
+
+    ii_p = _ex_sub(
+        intel_sub, "import",
+        help="Import IoC do feedu případu (--stix FILE nebo --ioc KIND:HODNOTA[,…])",
+        example="stopa intel import case-abc --ioc domain:evil.example.com,hash:aabbccdd --tlp AMBER --source feed-a --json",
+    )
+    ii_p.add_argument("case_id", help="ID případu")
+    ii_p.add_argument("--stix", metavar="FILE", default=None,
+                      help="STIX 2.1 bundle (soubor; import fail-closed)")
+    ii_p.add_argument("--ioc", metavar="KIND:HODNOTA[,...]", default=None,
+                      help="IoC ve tvaru KIND:HODNOTA (kind ∈ ip|domain|hash|url), čárkou oddělené")
+    ii_p.add_argument("--tlp", choices=["WHITE", "GREEN", "AMBER", "RED"], default="GREEN",
+                      help="TLP level pro položky --ioc (default GREEN)")
+    ii_p.add_argument("--source", metavar="SOURCE", default=None,
+                      help="zdroj intel datu (metadata feedu)")
+    _add_json_flag(ii_p)
+    ii_p.set_defaults(func=cmd_intel_import)
+
+    im_p = _ex_sub(
+        intel_sub, "match",
+        help="Deterministické matching IoC feedu případu × artefakty/entities",
+        example="stopa intel match case-abc --json",
+    )
+    im_p.add_argument("case_id", help="ID případu")
+    _add_json_flag(im_p)
+    im_p.set_defaults(func=cmd_intel_match)
 
     cor_p = _ex_sub(sub, "correlate", help="E4 — Entity + Correlation Engine (explicitní krok)")
     cor_p.add_argument("case_id")

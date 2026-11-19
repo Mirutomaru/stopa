@@ -162,6 +162,11 @@
   [
     "http",
     "GET",
+    "/api/cases/{case_id}/intel/feed"
+  ],
+  [
+    "http",
+    "GET",
     "/api/cases/{case_id}/interop-export"
   ],
   [
@@ -413,6 +418,16 @@
     "http",
     "POST",
     "/api/cases/{case_id}/hypotheses/{hyp_id}/status"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/cases/{case_id}/intel/import"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/cases/{case_id}/intel/match"
   ],
   [
     "http",
