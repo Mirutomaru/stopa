@@ -299,6 +299,33 @@ CREATE TABLE IF NOT EXISTS case_members (
 );
 """
 
+#: P2-6 — Cross-case correlation DDL (**instance DB** ``{db_dir}/stopa_instance.db``,
+# ne case DB): audit trail dotazů s hash chainem (GENESIS → SHA-256; stejný idiom
+# jako P2-4 ``hypothesis_revisions``) + explicitní cross-tenant oprávnění uživatelům.
+#: Aplikuje se idempotentně vedle :data:`MULTITENANT_DDL` (bez verze instance DB).
+CROSS_CASE_DDL = """
+-- P2-6: Audit trail cross-case dotazů — kdo/kdy/které případy/rozsah, hash chain.
+CREATE TABLE IF NOT EXISTS cross_case_queries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    actor TEXT,                      -- username (multi-user) / None = legacy single-operator
+    cases_json TEXT NOT NULL,        -- seřazená ID případů dotazu (deterministické)
+    scope_json TEXT NOT NULL DEFAULT '{}',  -- {"entity": "email"|"phone"|"hash"|null}
+    prev_hash TEXT NOT NULL,         -- hash předchozího záznamu nebo 'GENESIS'
+    hash TEXT NOT NULL               -- SHA-256(prev_hash|payload) — kanonický JSON
+);
+
+-- P2-6: Explicitní cross-tenant grant (user → org): dotaz smí mostovat mezi
+-- vlastní tenancí uživatele a daným orgem. Default = jen stejný tenant.
+CREATE TABLE IF NOT EXISTS xcorr_grants (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id TEXT NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+    granted_by TEXT,
+    ts_utc TEXT NOT NULL,
+    PRIMARY KEY(user_id, org_id)
+);
+"""
+
 #: F4.5 — Case sharing & collaboration DDL (case DB): comments na artefaktech
 # + in-app notifikace. ``artifact_comments.case_id`` je denormalizace (artifacts
 # nemá vlastní case_id sloupec — JOIN přes files→sources; viz F4.3).

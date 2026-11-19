@@ -254,9 +254,9 @@ def entity_confidence_map(correlation_rows: list[dict]) -> dict[str, str]:
     best: dict[str, int] = {}
     for row in correlation_rows or ():
         level = map_legacy_confidence(row.get("confidence"))
-        rank = CONFIDENCE_LEVELS.index(level)
+        rank = CONFIDENCE_LEVELS.index(level)   # 0 = confirmed (nejvyšší)
         for entity in (row.get("entity_a"), row.get("entity_b")):
-            if entity and rank > best.get(entity, -1):
+            if entity and rank < best.get(entity, len(CONFIDENCE_LEVELS)):
                 best[entity] = rank
     return {e: CONFIDENCE_LEVELS[r] for e, r in sorted(best.items())}
 

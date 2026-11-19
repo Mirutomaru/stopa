@@ -76,6 +76,10 @@ PERMISSIONS: dict[str, frozenset[str]] = {
     # analyst je zamčený režim (bez auth vrstvy = operační guardrail,
     # ne bezpečnostní hranice).
     "settings.write": frozenset({"examiner", "admin"}),
+    # P2-6 — cross-case korelace (explicitní oprávnění; analyst = zamčený
+    # režim). Tenancy izolace řeší samostatně domain/cross_case.xcorr_allowed
+    # (default = stejný tenant, cross-tenant jen explicitním grantem xcorr_grants).
+    "cross_case_query": frozenset({"examiner", "admin"}),
 }
 
 
