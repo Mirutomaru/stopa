@@ -20,8 +20,14 @@ jeho entry point jako subprocess s limity z :class:`SandboxLimits`.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
+from stopa.domain.integrity import sign_hash, verify_signature
 
 #: Povolené znaky jména pluginu (lowercase slug)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
@@ -282,3 +288,80 @@ def sandbox_limits(data: object) -> SandboxLimits:
         network_isolated=net_raw,
         extra_env={str(k): str(v) for k, v in extra_raw.items()},
     )
+
+
+# ---------------------------------------------------------------------------
+# P2-7 — Plugin Marketplace: Ed25519 podpis + trust model (čistá doména)
+# ---------------------------------------------------------------------------
+
+
+def _manifest_canonical(m: PluginManifest) -> dict[str, Any]:
+    """Kanonický tvar manifestu pro hashování (deterministické pole)."""
+    return {
+        "name": m.name,
+        "version": m.version,
+        "description": m.description,
+        "author": m.author,
+        "min_stopa_version": m.min_stopa_version,
+        "extractors": [asdict(e) for e in m.extractors],
+        "triage_profiles": [asdict(t) for t in m.triage_profiles],
+        "ai_tools": [asdict(a) for a in m.ai_tools],
+    }
+
+
+def manifest_digest(m: PluginManifest) -> str:
+    """Deterministický SHA-256 manifestu (kanonické JSON, seřazené klíče).
+
+    Stejný manifest = stejný digest na jakékoli platformě a kdykoli —
+    podklad pro podpis. Změna libovolného pole manifestu (i popisu) → jiný
+    digest.
+    """
+    payload = json.dumps(
+        _manifest_canonical(m), sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def sign_plugin(manifest: PluginManifest, private_b64: str) -> str:
+    """Ed25519 podpis nad digested manifestem (base64)."""
+    return sign_hash(private_b64, manifest_digest(manifest))
+
+
+def verify_plugin_signature(public_b64: str, digest_hex: str, sig_b64: str) -> bool:
+    """Ověří Ed25519 podpis proti danému digestu.
+
+    Fail-closed: libovolně deformovaný vstup (ne base64, špatná délka…) →
+    ``False``, nevyrábí výjimky — volající rozhoduje o exit kódu.
+    """
+    try:
+        return verify_signature(public_b64, digest_hex, sig_b64)
+    except Exception:  # noqa: BLE001 — fail-closed na deformovaný vstup
+        return False
+
+
+@dataclass(frozen=True)
+class TrustDecision:
+    """Rozhodnutí trust modelu marketplace.
+
+    ``root_label`` = který pinovaný kořenový klíč podpis potvrdil; None =
+    žádný z pinovaných kořenů nepodpisoval (neznámý podepsatel).
+    """
+
+    trusted: bool
+    root_label: str | None = None
+
+
+def check_trust(sig_b64: str, digest_hex: str, roots: Mapping[str, str]) -> TrustDecision:
+    """Ověří podpis proti pinovaným kořenovým klíčům marketplace (offline).
+
+    Kořeny se procházejí v deterministickém pořadí (seřazeno podle labelu) —
+    při více platných podpisech vyhrává lexikálně první label. Prázdná sada
+    nebo žádný shoda → :class:`TrustDecision` s ``trusted=False``.
+
+    Trust model P2-7: marketplace root key + pinning — ověřitelné offline,
+    bez sítě a bez CA hierarchie.
+    """
+    for label in sorted(roots):
+        if verify_plugin_signature(roots[label], digest_hex, sig_b64):
+            return TrustDecision(trusted=True, root_label=label)
+    return TrustDecision(trusted=False)
