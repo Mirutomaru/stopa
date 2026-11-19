@@ -6,6 +6,7 @@ Použití:
   stopa files <case_id> [--bad-ext] [--dups] [--family image] [--limit 50]
   stopa search <case_id> "dotaz" [--source ID]   # full-text (FTS5)
   stopa timeline <case_id> [--type browser_history] [--path text] [-v]
+  stopa timeline-intel <case_id> [--json]    # P2-3 — pokročilá timeline intelligence (gapy/outliery/korelace/nejistota)
   stopa image <case_id> /cesta/ke/obrazu.img       # disk image (TSK) [+ --no-carve]
   stopa mobile <case_id> /obraz.img [--password HESLO]  # mobilní FDE/FBE unlock + TSK
   stopa stats <case_id>
@@ -121,6 +122,9 @@ from .commands.repro import cmd_benchmark, cmd_integrity, cmd_replay
 # P1-4 — web GUI přesunut do cli/commands/serve.py (re-export)
 from .commands.serve import cmd_serve
 
+# P2-3 — Advanced Timeline Intelligence v cli/commands/timeline_adv.py
+from .commands.timeline_adv import cmd_timeline_intel
+
 # P1-4 — write-blocker/compliance přesunuty do cli/commands/wb.py (re-export)
 from .commands.wb import (
     cmd_attack_map,
@@ -173,6 +177,7 @@ _SUBCOMMAND_EXAMPLES = {
     "audit": "stopa audit case-abc -v --limit 50",
     "backup": "stopa backup case-abc --out /mnt/backup",
     "timeline": "stopa timeline case-abc --type browser_history --intel",
+    "timeline-intel": "stopa timeline-intel case-abc --json   # P2-3 — gapy/outliery/korelace/nejistota",
     "correlate": "stopa correlate case-abc -v",
     "analytics": "stopa analytics case-abc --from-ts 2026-01-01T00:00:00Z --to-ts 2026-02-01T00:00:00Z",
     "image": "stopa image case-abc /path/disk.img --no-carve",
@@ -675,6 +680,16 @@ def build_parser() -> argparse.ArgumentParser:
                       help="časové okno pro detekci rozporů v sekundách (default 60)")
     _add_json_flag(tl_p)
     tl_p.set_defaults(func=cmd_timeline)
+
+    # P2-3 — Advanced Timeline Intelligence: IQR gapy/outliery + cross-source
+    # korelace (E4 confidence) + vysvětlení nejistoty nad celou timeline.
+    tli_p = _ex_sub(
+        sub, "timeline-intel",
+        help="P2-3 — pokročilá timeline intelligence (gapy/outliery/korelace/nejistota)",
+    )
+    tli_p.add_argument("case_id")
+    _add_json_flag(tli_p)
+    tli_p.set_defaults(func=cmd_timeline_intel)
 
     cor_p = _ex_sub(sub, "correlate", help="E4 — Entity + Correlation Engine (explicitní krok)")
     cor_p.add_argument("case_id")

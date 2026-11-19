@@ -242,6 +242,11 @@
   [
     "http",
     "GET",
+    "/api/cases/{case_id}/timeline/advanced-intel"
+  ],
+  [
+    "http",
+    "GET",
     "/api/cases/{case_id}/timesketch-status"
   ],
   [

@@ -32,7 +32,7 @@ from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 from zoneinfo import ZoneInfo
 
-from stopa.domain.entity_resolution import CONFIDENCE_LEVELS
+from stopa.domain.entity_resolution import CONFIDENCE_LEVELS, map_legacy_confidence
 from stopa.domain.timeline_intel import classify_precision
 
 # ── Normalizace s deklarovanou přesností ─────────────────────────────────────
@@ -242,6 +242,23 @@ class XCorrelationGroup:
 
 def _stable_group_id(prefix: str, seed: object) -> str:
     return f"{prefix}-{hashlib.sha256(json.dumps(seed).encode('utf-8')).hexdigest()[:16]}"
+
+
+def entity_confidence_map(correlation_rows: list[dict]) -> dict[str, str]:
+    """E4 confidence per entita = nejvyšší rank mezi jejími propojeními.
+
+    Vstup = řádky z ``db.list_correlations(case_id)`` (entity_a/entity_b +
+    confidence); staré hodnoty mapuje ``map_legacy_confidence`` (idempotentní).
+    Entita bez propojení se nevrací → konzument použije default ``possible``.
+    """
+    best: dict[str, int] = {}
+    for row in correlation_rows or ():
+        level = map_legacy_confidence(row.get("confidence"))
+        rank = CONFIDENCE_LEVELS.index(level)
+        for entity in (row.get("entity_a"), row.get("entity_b")):
+            if entity and rank > best.get(entity, -1):
+                best[entity] = rank
+    return {e: CONFIDENCE_LEVELS[r] for e, r in sorted(best.items())}
 
 
 def find_cross_source_correlations(

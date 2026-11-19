@@ -473,6 +473,13 @@
       "-v"
     ]
   },
+  "timeline-intel": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
   "timesketch-push": {
     "opts": [
       "--help",

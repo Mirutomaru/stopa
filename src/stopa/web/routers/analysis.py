@@ -241,6 +241,34 @@ def register(app, ctx) -> None:
         finally:
             db.close()
 
+    # ── P2-3 Advanced Timeline Intelligence ────────────────────────
+    @app.get("/api/cases/{case_id}/timeline/advanced-intel")
+    def timeline_advanced_intel(case_id: str) -> dict:
+        """P2-3 — pokročilá timeline intelligence (IQR gapy/outliery, cross-source korelace, nejistota).
+
+        Počítá on-the-fly nad materializovanou ``timeline_events`` + E4 correlations
+        (cache tabulka je v designu volitelná → Wave 2 bez DDL). Výstup je
+        deterministický (stejné vstupy = stejný JSON); confidence korelací z
+        nejvyššího ranku E4 propojení entity. Neznámý případ → 404,
+        semantická chyba → 400.
+        """
+        from stopa.domain.timeline_adv import analyze_timeline_adv, entity_confidence_map
+
+        db = open_db(case_id)   # neznámý případ → HTTPException(404) z ctx["open_db"]
+        try:
+            events = db.list_timeline_events()
+            conf_map = entity_confidence_map(db.list_correlations(case_id))
+            result = analyze_timeline_adv(events, entity_confidence=conf_map)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        finally:
+            db.close()
+        return {
+            "case_id": case_id,
+            "events_analyzed": len(events),
+            **result.to_dict(),
+        }
+
     # ── E4 Entity + Correlation Engine ────────────────────────────────
     @app.post("/api/cases/{case_id}/correlate")
     def correlate(case_id: str) -> dict:
