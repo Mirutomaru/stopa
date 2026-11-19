@@ -796,6 +796,7 @@ def create_app(
         files,
         intel,
         investigation,
+        registry,
         reports,
         system,
         xcorr,
@@ -838,6 +839,7 @@ def create_app(
     collab.register(app, ctx)
     investigation.register(app, ctx)  # P2-4 — investigation workspace
     intel.register(app, ctx)  # P2-5 — threat intelligence workspace (IoC feed + match)
+    registry.register(app, ctx)  # P2-2 — centrální registr případů (instance DB)
     xcorr.register(app, ctx)  # P2-6 — cross-case correlation (instance DB)
     system.register(app, ctx)
 

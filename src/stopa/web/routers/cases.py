@@ -101,6 +101,10 @@ def register(app, ctx) -> None:
                 pass
         finally:
             db.close()
+        # P2-2 — centrální registr případů: automatický sync při vzniku případu (defenzivní)
+        from stopa.data.case_registry_repository import auto_sync
+
+        auto_sync(base, case.id)
         return {"id": case.id, "name": case.name}
     @app.get("/api/cases/{case_id}")
     def get_case(case_id: str) -> dict:
@@ -393,4 +397,8 @@ def register(app, ctx) -> None:
             repo.conn.commit()
         finally:
             repo.conn.close()
+        # P2-2 — centrální registr případů: odebrat záznam při smazání případu (defenzivní)
+        from stopa.data.case_registry_repository import auto_remove
+
+        auto_remove(base, case_id)
         return {"deleted": case_id}

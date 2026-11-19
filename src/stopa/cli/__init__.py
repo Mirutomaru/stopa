@@ -8,6 +8,7 @@ Použití:
   stopa timeline <case_id> [--type browser_history] [--path text] [-v]
   stopa timeline-intel <case_id> [--json]    # P2-3 — pokročilá timeline intelligence (gapy/outliery/korelace/nejistota)
   stopa xcorr <case_a> <case_b>|--all [--entity email|tel|hash] [--user U] [--json]   # P2-6 — sdílené entity napříč případy
+  stopa registry [--tenant ORG] [--user U] [--sync CASE_ID] [--json]   # P2-2 — centrální registr případů (instance DB)
   stopa intel import <case_id> --stix FILE|--ioc KIND:HODNOTA[,…] [--tlp TLP] [--source S] [--json]  # P2-5 — Threat Intel (IoC feed STIX 2.1)
   stopa intel match <case_id> [--json]    # P2-5 — deterministické matching IoC × artefakty/entities
   stopa image <case_id> /cesta/ke/obrazu.img       # disk image (TSK) [+ --no-carve]
@@ -112,6 +113,9 @@ from .commands.plugins import (
     cmd_plugin_verify,
 )
 
+# P2-2 — Centrální registr případů v cli/commands/registry.py
+from .commands.registry import cmd_registry
+
 # P1-4 — reporty/analytické rodiny přesunuty do cli/commands/report.py (re-export)
 from .commands.report import (
     cmd_advanced,
@@ -188,6 +192,7 @@ _SUBCOMMAND_EXAMPLES = {
     "timeline": "stopa timeline case-abc --type browser_history --intel",
     "timeline-intel": "stopa timeline-intel case-abc --json   # P2-3 — gapy/outliery/korelace/nejistota",
     "xcorr": "stopa xcorr case-a case-b --entity email --user m.matous --json   # P2-6 — sdílené entity napříč případy",
+    "registry": "stopa registry --user m.matous --json   # P2-2 — centrální registr případů (instance DB)",
     "correlate": "stopa correlate case-abc -v",
     "analytics": "stopa analytics case-abc --from-ts 2026-01-01T00:00:00Z --to-ts 2026-02-01T00:00:00Z",
     "image": "stopa image case-abc /path/disk.img --no-carve",
@@ -718,6 +723,22 @@ def build_parser() -> argparse.ArgumentParser:
                       help="identita multi-user režimu (bez ní fail-closed exit 2)")
     _add_json_flag(xc_p)
     xc_p.set_defaults(func=cmd_xcorr)
+
+    # P2-2 — Centrální registr případů: instance-level seznam případů + tenancy
+    # izolace (+ explicitní sync jednotlivého případu). Exit 0 OK / 1 chyba / 2 bez oprávnění.
+    reg_p = _ex_sub(
+        sub, "registry",
+        help="P2-2 — centrální registr případů (instance DB; tenancy izolace)",
+        example="stopa registry --user m.matous --json   # nebo: stopa registry --sync case-abc",
+    )
+    reg_p.add_argument("--tenant", metavar="ORG_ID", default=None,
+                       help="filtr podle tenant organizace (org ID)")
+    reg_p.add_argument("--user", metavar="USERNAME", default=None,
+                       help="identita multi-user režimu (bez ní fail-closed exit 2)")
+    reg_p.add_argument("--sync", metavar="CASE_ID", default=None,
+                       help="explicitní sync jednoho případu do registru (idempotentní)")
+    _add_json_flag(reg_p)
+    reg_p.set_defaults(func=cmd_registry)
 
     # P2-5 — Threat Intelligence Workspace: per-případový IoC feed (STIX 2.1) +
     # deterministické matching × artefakty/entities. Exit 0 OK / 1 chyba/prázdný feed.

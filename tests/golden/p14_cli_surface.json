@@ -415,6 +415,16 @@
       "-h"
     ]
   },
+  "registry": {
+    "opts": [
+      "--help",
+      "--json",
+      "--sync",
+      "--tenant",
+      "--user",
+      "-h"
+    ]
+  },
   "reparse": {
     "opts": [
       "--help",

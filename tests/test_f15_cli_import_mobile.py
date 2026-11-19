@@ -20,7 +20,7 @@ def _case(tmp_path: Path, monkeypatch) -> str:
 
     monkeypatch.setenv("STOPA_DB_DIR", str(tmp_path))
     assert cli.main(["case", "new", "F15 CLI"]) == 0
-    return next(iter(list(tmp_path.glob("*.db")))).stem
+    return next(p.stem for p in tmp_path.glob("*.db") if not p.name.startswith("stopa_"))  # P2-2: auto-sync → stopa_instance.db v téže složce
 
 
 def _ufdr_zip(path: Path) -> Path:

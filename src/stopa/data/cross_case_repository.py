@@ -20,7 +20,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from stopa.data.schema import CROSS_CASE_DDL, MULTITENANT_DDL
+from stopa.data.schema import CASE_REGISTRY_DDL, CROSS_CASE_DDL, MULTITENANT_DDL
 from stopa.domain.cross_case import next_audit_record, verify_chain
 
 
@@ -32,7 +32,7 @@ def _utc_now() -> str:
 
 
 def open_instance(db_dir: str | Path) -> sqlite3.Connection:
-    """Instance DB s P2-6 tabulkami (idempotentní, soubor vytvoří pokud chybí).
+    """Instance DB s P2-6/P2-2 tabulkami (idempotentní, soubor vytvoří pokud chybí).
 
     Legacy single-operator nasazení bez F4.4 nemá instance DB — oba skripty DDL
     používají ``CREATE TABLE IF NOT EXISTS``, takže volání je vždy bezpečné.
@@ -42,6 +42,7 @@ def open_instance(db_dir: str | Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(MULTITENANT_DDL)
     conn.executescript(CROSS_CASE_DDL)
+    conn.executescript(CASE_REGISTRY_DDL)  # P2-2 — centrální registr případů
     return conn
 
 

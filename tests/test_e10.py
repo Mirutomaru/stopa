@@ -219,7 +219,7 @@ def e10_case(tmp_path: Path, monkeypatch) -> tuple[object, str]:
 
     monkeypatch.setenv("STOPA_DB_DIR", str(tmp_path))
     assert cli.main(["case", "new", "E10 IO"]) == 0
-    case_id = next(iter(list(tmp_path.glob("*.db")))).stem
+    case_id = next(p.stem for p in tmp_path.glob("*.db") if not p.name.startswith("stopa_"))  # P2-2: auto-sync → stopa_instance.db v téže složce
     db = CaseDB(tmp_path / f"{case_id}.db")
     src = EvidenceSource(case_id=case_id, kind="folder", path="/evidence/box")
     db.add_source(src)

@@ -326,6 +326,26 @@ CREATE TABLE IF NOT EXISTS xcorr_grants (
 );
 """
 
+#: P2-2 — Centrální registr případů DDL (**instance DB** ``{db_dir}/stopa_instance.db``,
+#: ne case DB): cross-case přehled s tenancy kontrolou při čtení. ``tenant`` = primární
+#: tenance (deterministicky nejmenší org_id mezi orgy členů; NULL = legacy/bez vlastníka).
+#: ``stats_json`` = deterministický snapshot {"files", "artifacts", "size_bytes"} z case DB.
+#: Sync při lifecycle operacích (create/delete/update) + explicitní ``stopa registry --sync``.
+CASE_REGISTRY_DDL = """
+-- P2-2: Centrální registr případů — cross-case přehled nad instance DB.
+CREATE TABLE IF NOT EXISTS case_registry (
+    case_id TEXT PRIMARY KEY,        -- odpovídá {case_id}.db v db_dir
+    name TEXT NOT NULL DEFAULT '',   -- zobrazovací název případu (z cases.name)
+    examiner TEXT,                   -- vedoucí vyšetřovatel / vlastník
+    tenant TEXT,                     -- primární org_id; NULL = legacy/bez vlastníka
+    created_at TEXT,                 -- ISO UTC z case DB (cases.created_at)
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+    stats_json TEXT NOT NULL DEFAULT '{}',  -- {"files": N, "artifacts": M, "size_bytes": K}
+    synced_at TEXT NOT NULL          -- poslední sync ISO UTC
+);
+CREATE INDEX IF NOT EXISTS idx_case_registry_tenant ON case_registry(tenant);
+"""
+
 #: F4.5 — Case sharing & collaboration DDL (case DB): comments na artefaktech
 # + in-app notifikace. ``artifact_comments.case_id`` je denormalizace (artifacts
 # nemá vlastní case_id sloupec — JOIN přes files→sources; viz F4.3).

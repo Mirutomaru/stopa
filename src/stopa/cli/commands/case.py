@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 
+from stopa.data.case_registry_repository import auto_sync
 from stopa.data.db import CaseDB
 from stopa.models import Case
 
@@ -29,6 +30,8 @@ def cmd_case_new(args: argparse.Namespace) -> int:
         details={"case_id": case.id, "name": case.name},
     )
     db.close()
+    # P2-2 — centrální registr případů: automatický sync při vzniku případu (defenzivní)
+    auto_sync(_db_dir(), case.id)
     if getattr(args, "json", False):
         _print_json(
             {

@@ -16,6 +16,11 @@
   ],
   [
     "http",
+    "DELETE",
+    "/api/registry/{case_id}"
+  ],
+  [
+    "http",
     "GET",
     "/"
   ],
@@ -292,6 +297,11 @@
   [
     "http",
     "GET",
+    "/api/registry"
+  ],
+  [
+    "http",
+    "GET",
     "/api/roles"
   ],
   [
@@ -493,6 +503,16 @@
     "http",
     "POST",
     "/api/orgs"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/registry/{case_id}/status"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/registry/{case_id}/sync"
   ],
   [
     "http",

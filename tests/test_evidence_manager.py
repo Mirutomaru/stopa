@@ -174,8 +174,8 @@ class TestCliAudit:
         monkeypatch.setenv("STOPA_DB_DIR", str(tmp_path))
         rc = cli.main(["case", "new", "Test case", "--examiner", "JUDr. M."])
         assert rc == 0
-        # najdi DB a ověř audit záznam
-        dbs = list(tmp_path.glob("*.db"))
+        # najdi DB a ověř audit záznam (P2-2: auto-sync přidá stopa_instance.db → filtr)
+        dbs = [p for p in tmp_path.glob("*.db") if not p.name.startswith("stopa_")]
         assert len(dbs) == 1
         d = CaseDB(dbs[0])
         entries = d.list_audit_log()
@@ -193,7 +193,7 @@ class TestCliAudit:
         (src / "f.txt").write_bytes(b"data")
         rc = cli.main(["case", "new", "T"])
         assert rc == 0
-        case_id = next(iter(list(tmp_path.glob("*.db")))).stem
+        case_id = next(p.stem for p in tmp_path.glob("*.db") if not p.name.startswith("stopa_"))
         rc = cli.main(
             ["add", case_id, str(src), "--custodian", "A. B.", "--method", "USB export"]
         )
@@ -225,7 +225,7 @@ class TestVerify:
         (src / "will_change.txt").write_bytes(b"world")
         rc = cli.main(["case", "new", "T"])
         assert rc == 0
-        case_id = next(iter(list(tmp_path.glob("*.db")))).stem
+        case_id = next(p.stem for p in tmp_path.glob("*.db") if not p.name.startswith("stopa_"))
         rc = cli.main(["add", case_id, str(src)])
         assert rc == 0
         return case_id, src
@@ -278,7 +278,7 @@ class TestBackup:
         (src / "f.txt").write_bytes(b"data")
         rc = cli.main(["case", "new", "T"])
         assert rc == 0
-        case_id = next(iter(list(tmp_path.glob("*.db")))).stem
+        case_id = next(p.stem for p in tmp_path.glob("*.db") if not p.name.startswith("stopa_"))
         rc = cli.main(["add", case_id, str(src)])
         assert rc == 0
 
