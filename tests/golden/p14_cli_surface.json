@@ -185,6 +185,32 @@
       "-h"
     ]
   },
+  "exchange": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "exchange/pack": {
+    "opts": [
+      "--anon",
+      "--help",
+      "--json",
+      "--key-file",
+      "--key-out",
+      "--out",
+      "-h"
+    ]
+  },
+  "exchange/verify": {
+    "opts": [
+      "--help",
+      "--json",
+      "--root",
+      "--roots",
+      "-h"
+    ]
+  },
   "export": {
     "opts": [
       "--bundle",

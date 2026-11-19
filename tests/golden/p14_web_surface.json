@@ -497,6 +497,16 @@
   [
     "http",
     "POST",
+    "/api/exchange/pack"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/exchange/verify"
+  ],
+  [
+    "http",
+    "POST",
     "/api/files/{file_id}/flag"
   ],
   [

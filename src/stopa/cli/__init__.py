@@ -11,6 +11,8 @@ Použití:
   stopa registry [--tenant ORG] [--user U] [--sync CASE_ID] [--json]   # P2-2 — centrální registr případů (instance DB)
   stopa intel import <case_id> --stix FILE|--ioc KIND:HODNOTA[,…] [--tlp TLP] [--source S] [--json]  # P2-5 — Threat Intel (IoC feed STIX 2.1)
   stopa intel match <case_id> [--json]    # P2-5 — deterministické matching IoC × artefakty/entities
+  stopa exchange pack <case_id> [--out FILE] [--anon] [--key-file F] [--key-out F] [--json]  # P2-7 — Case Exchange bundle v1 (+ anonymizace)
+  stopa exchange verify BUNDLE_FILE [--roots FILE] [--root LABEL=BASE64]... [--json]   # P2-7 — ověření bundle (trust roots)
   stopa image <case_id> /cesta/ke/obrazu.img       # disk image (TSK) [+ --no-carve]
   stopa mobile <case_id> /obraz.img [--password HESLO]  # mobilní FDE/FBE unlock + TSK
   stopa stats <case_id>
@@ -69,6 +71,9 @@ from .commands.core import (
     cmd_stats,
     cmd_timeline,
 )
+
+# P2-7 — Case Exchange bundle v1 v cli/commands/exchange.py
+from .commands.exchange import cmd_exchange_pack, cmd_exchange_verify
 
 # P1-4 — vývoz/integrace přesunuty do cli/commands/export.py (re-export;
 # _write_export_manifest je součást kompatibilitního povrchu — testy ho importují)
@@ -193,6 +198,7 @@ _SUBCOMMAND_EXAMPLES = {
     "timeline-intel": "stopa timeline-intel case-abc --json   # P2-3 — gapy/outliery/korelace/nejistota",
     "xcorr": "stopa xcorr case-a case-b --entity email --user m.matous --json   # P2-6 — sdílené entity napříč případy",
     "registry": "stopa registry --user m.matous --json   # P2-2 — centrální registr případů (instance DB)",
+    "exchange": "stopa exchange pack case-a --anon --key-out anon.key   # P2-7 — Case Exchange bundle v1 (+ anonymizace)",
     "correlate": "stopa correlate case-abc -v",
     "analytics": "stopa analytics case-abc --from-ts 2026-01-01T00:00:00Z --to-ts 2026-02-01T00:00:00Z",
     "image": "stopa image case-abc /path/disk.img --no-carve",
@@ -774,6 +780,44 @@ def build_parser() -> argparse.ArgumentParser:
     im_p.add_argument("case_id", help="ID případu")
     _add_json_flag(im_p)
     im_p.set_defaults(func=cmd_intel_match)
+
+    # P2-7 — Case Exchange bundle v1 (pack/verify, volitelná anonymizace). Exit 0 OK / 1 chyba.
+    exchange_p = _ex_sub(
+        sub, "exchange",
+        help="P2-7 — Case Exchange bundle v1 (pack/verify marketplace, volitelná anonymizace)",
+        example="stopa exchange pack case-a --anon --key-out anon.key   # nebo: stopa exchange verify bundle.json --root root=BASE64",
+    )
+    exchange_sub = exchange_p.add_subparsers(dest="exchange_cmd", required=True, metavar="<podprikaz>")
+
+    ex_pack = _ex_sub(
+        exchange_sub, "pack",
+        help="Pack případu do exchange bundle v1 (volitelně anonymizovaný)",
+        example="stopa exchange pack case-a --anon --key-out anon.key --out bundle.json",
+    )
+    ex_pack.add_argument("case_id", help="ID případu")
+    ex_pack.add_argument("--out", metavar="FILE", default=None,
+                         help="výstupní soubor (default stdout)")
+    ex_pack.add_argument("--anon", action="store_true",
+                         help="anonymizované entity (mapping se do bundle nedostává)")
+    ex_pack.add_argument("--key-file", metavar="FILE", default=None,
+                         help="soubor klíče anonymizace (base64)")
+    ex_pack.add_argument("--key-out", metavar="FILE", default=None,
+                         help="kam uložit nově vygenerovaný klíč (povinné pro --anon bez --key-file)")
+    _add_json_flag(ex_pack)
+    ex_pack.set_defaults(func=cmd_exchange_pack)
+
+    ex_ver = _ex_sub(
+        exchange_sub, "verify",
+        help="Ověření bundle v1 proti trust rootům (tamper → exit 1)",
+        example="stopa exchange verify bundle.json --root stopa-root=PUB_BASE64 --json",
+    )
+    ex_ver.add_argument("bundle_file", help="cesta k bundle (JSON)")
+    ex_ver.add_argument("--roots", metavar="FILE", default=None,
+                        help="soubor trust rootů (JSON {label: public_b64})")
+    ex_ver.add_argument("--root", action="append", default=[], metavar="LABEL=BASE64",
+                        help="trust kořen LABEL=public key base64 (opakovatelné)")
+    _add_json_flag(ex_ver)
+    ex_ver.set_defaults(func=cmd_exchange_verify)
 
     cor_p = _ex_sub(sub, "correlate", help="E4 — Entity + Correlation Engine (explicitní krok)")
     cor_p.add_argument("case_id")
