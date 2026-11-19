@@ -61,6 +61,9 @@ EXPECTED_TABLES = {
     "inv_notes",
     "inv_tasks",
     "hypothesis_revisions",
+    # P2-5 — Threat Intelligence Workspace: IoC feed + matching (STIX 2.1)
+    "ioc_feed_items",
+    "intel_matches",
 }
 
 EXPECTED_AUDIT_TRIGGERS = {"audit_no_update", "audit_no_delete"}
@@ -82,10 +85,10 @@ def _trigger_names(conn: sqlite3.Connection) -> set[str]:
 
 
 class TestSchemaModule:
-    def test_schema_version_is_23(self):
+    def test_schema_version_is_24(self):
         """F5.1 v19; P0-2 v20 public_key_b64; P0-1 v21 provenance; P1-3 v22 graph_edges;
-        P2-4 v23 investigation workspace."""
-        assert SCHEMA_VERSION == 23
+        P2-4 v23 investigation workspace; P2-5 v24 threat intelligence."""
+        assert SCHEMA_VERSION == 24
 
     def test_schema_version_fallback_on_empty_db(self, tmp_path: Path):
         """Bez meta řádku vrací 1 (staré DB bez verze)."""

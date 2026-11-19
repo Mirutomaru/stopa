@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verzi umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -446,6 +446,37 @@ CREATE TABLE IF NOT EXISTS hypothesis_revisions (
 CREATE INDEX IF NOT EXISTS idx_hyprev_case ON hypothesis_revisions(case_id);
 """
 
+#: P2-5 — Threat Intelligence Workspace DDL (case DB): IoC feed items s TLP a
+# stářím intel dat + deterministické matchingy IoC × artefakty/entity.
+INTEL_DDL = """
+-- P2-5: IoC položky feedu — id = UUIDv5(kind|value), double-import = 1 řádek.
+CREATE TABLE IF NOT EXISTS ioc_feed_items (
+    id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('ip', 'domain', 'hash', 'url')),
+    value TEXT NOT NULL,             -- kanonický tvar (E4 kanonika)
+    raw_value TEXT,                  -- původní tvar z feedu
+    tlp TEXT NOT NULL DEFAULT 'GREEN' CHECK (tlp IN ('WHITE', 'GREEN', 'AMBER', 'RED')),
+    source TEXT,                     -- zdroj intel dat (feed/proces)
+    acquired_at TEXT NOT NULL,       -- ISO UTC — základ stáří klasifikace
+    imported_at TEXT NOT NULL        -- ISO UTC času importu
+);
+CREATE INDEX IF NOT EXISTS idx_ioc_feed_case ON ioc_feed_items(case_id);
+
+-- P2-5: Matching IoC × case artefakty/entity (re-run = clear + insert).
+CREATE TABLE IF NOT EXISTS intel_matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    ioc_id TEXT NOT NULL REFERENCES ioc_feed_items(id) ON DELETE CASCADE,
+    match_kind TEXT NOT NULL CHECK (match_kind IN ('entity', 'file_hash', 'artifact_text')),
+    evidence_json TEXT NOT NULL DEFAULT '[]',  -- [{artifact_id, rel_path, ts_utc}, …] strop MAX_EVIDENCE
+    first_seen TEXT,
+    last_seen TEXT,
+    matched_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_intel_matches_case ON intel_matches(case_id);
+"""
+
 SCHEMA = _SCHEMA_CORE + MULTITENANT_DDL + COLLAB_DDL + CASE_SEALS_DDL + """
 -- P0 Core C5: Reproducibility Engine — záznamy analytických operací.
 -- Každá operace nese vstupní soubory + hashe, verze parserů/STOPA, hash konfigurace,
@@ -521,4 +552,4 @@ CREATE TRIGGER IF NOT EXISTS artifacts_au AFTER UPDATE ON artifacts BEGIN
     INSERT INTO artifacts_fts(rowid, artifact_type, title, details_json)
     VALUES (new.rowid, new.artifact_type, new.title, new.details_json);
 END;
-""" + GRAPH_EDGES_DDL + INVESTIGATION_DDL  # P1-3 hrany / P2-4 investigation workspace (aditivní)
+""" + GRAPH_EDGES_DDL + INVESTIGATION_DDL + INTEL_DDL  # P1-3 hrany / P2-4 investigation workspace / P2-5 threat intel (aditivní)
