@@ -43,6 +43,12 @@ def exchange_snapshot(conn: sqlite3.Connection, case_id: str) -> dict[str, Any]:
         " WHERE case_id = ? ORDER BY kind ASC, value_normalized ASC",
         (case_id,),
     ).fetchall()
+    # P3-6 — IoC z threat-intel feedu s per-entity TLP (zdroj pro verify kontrolu)
+    ioc_rows = conn.execute(
+        "SELECT kind, value, tlp FROM ioc_feed_items"
+        " WHERE case_id = ? ORDER BY kind ASC, value ASC",
+        (case_id,),
+    ).fetchall()
 
     return {
         "title": row["name"],  # může být NULL → build_bundle akceptuje None
@@ -52,6 +58,9 @@ def exchange_snapshot(conn: sqlite3.Connection, case_id: str) -> dict[str, Any]:
             "entities": len(entity_rows),
         },
         "entities": [(r["kind"], r["value_normalized"]) for r in entity_rows],
+        # 3-ice (kind, value, tlp) — build_bundle je akceptuje (P3-6 per-entity TLP);
+        # v anon režimu se IoC neanonymizují (kanonická hodnota = cross-ref do feedu).
+        "ioc_entities": [(r["kind"], r["value"], r["tlp"]) for r in ioc_rows],
         "provenance": {
             "artifacts_total": len(artifact_rows),
             "with_provenance": with_prov,
@@ -67,18 +76,26 @@ def pack_case_bundle(
     *,
     packed_at: str,
     anon_key: AnonKey | None = None,
+    tlp: str | None = None,
 ) -> tuple[dict[str, Any], AnonResult | None]:
     """Snapshot + volitelná anonymizace → bundle v1 (doména ``build_bundle``).
 
     :param anon_key: Klíč anonymizace; ``None`` = kanonické entity.
+    :param tlp: P3-6 — deklarovaná distribuční úroveň (CLEAR/GREEN/AMBER/RED/WHITE);
+        ``None`` = klíč se do bundle nedostane (digest starých bundlů beze změny).
     :return: ``(bundle, AnonResult|None)`` — mapping je v ``AnonResult.mapping``
         a **nesmí** se dostat do bundle (re-anonymizovatelné jen s klíčem).
+
+    Entity payload = kanonické entity (nebo jejich pseudonymy) + IoC z feedu
+    s per-entity TLP; ``counts.entities`` sleduje finální délku payloadu.
     """
     snap = exchange_snapshot(conn, case_id)
-    entities: list[tuple[str, str]] = [(k, v) for k, v in snap["entities"]]
+    entities: list[tuple[str, str] | tuple[str, str, str]] = [
+        (k, v) for k, v in snap["entities"]
+    ]
     anon: AnonResult | None = None
     if anon_key is not None:
-        anon = anonymize(anon_key, entities)  # ValueError/TypeError → fail-closed výše
+        anon = anonymize(anon_key, [(k, v) for k, v in snap["entities"]])  # fail-closed výše
         entities = [(r.kind, r.pseudonym) for r in anon.records]
 
     bundle = build_bundle(
@@ -88,9 +105,11 @@ def pack_case_bundle(
         counts={
             "files": snap["counts"]["files"],
             "artifacts": snap["counts"]["artifacts"],
-            "entities": len(entities),
+            # finální payload: kanonické/pseudonymizované entity + IoC s TLP (P3-6)
+            "entities": len(entities) + len(snap["ioc_entities"]),
         },
-        entities=entities,
+        entities=[*entities, *snap["ioc_entities"]],
         provenance=snap["provenance"],
+        tlp=tlp,
     )
     return bundle, anon

@@ -1,10 +1,12 @@
 """P2-7 Case Exchange — Web marketplace sekce (pack/verify bundle v1).
 
 Routy:
-  POST /api/exchange/pack   {case_id, anon?, key_b64?} → {bundle, key_fingerprint?, key_b64?}
+  POST /api/exchange/pack   {case_id, anon?, key_b64?, tlp?} → {bundle, key_fingerprint?, key_b64?}
       --anon bez key_b64 → vygeneruje se nový klíč a vrátí se v base64 (UI ho musí
       uložit — s ním je mapping re-anonymizovatelný) + fingerprint.
-  POST /api/exchange/verify {bundle: {...}, roots?: {label: pub_b64}} → {ok, reasons}
+      tlp (P3-6) = distribuční úroveň bundle; neplatná → 400.
+  POST /api/exchange/verify {bundle: {...}, roots?: {label: pub_b64}} → {ok, reasons, warnings}
+      warnings (P3-6) = TLP porušení per entity (nemění ok).
 
 Logika žije v ``domain/exchange`` (+ ``data/exchange_repository``); tady jen API hrana.
 Konvence: 404 = neznámý případ (z ``ctx["open_db"]``); 400 = semantická chyba domény.
@@ -22,6 +24,9 @@ class PackIn(BaseModel):
     case_id: str
     anon: bool = False
     key_b64: str | None = Field(None, description="klíč anonymizace (base64); bez něj → nový klíč")
+    tlp: str | None = Field(
+        None, description="P3-6 — TLP distribuční úroveň bundle (CLEAR/GREEN/AMBER/RED/WHITE)"
+    )
 
 
 class VerifyIn(BaseModel):
@@ -56,7 +61,8 @@ def register(app, ctx) -> None:
         db = open_db(body.case_id)  # neznámý případ → 404 (konvence ctx)
         try:
             bundle, anon_result = pack_case_bundle(
-                db.conn, body.case_id, packed_at=_now_iso(), anon_key=anon_key
+                db.conn, body.case_id, packed_at=_now_iso(),
+                anon_key=anon_key, tlp=body.tlp,
             )
         except (ValueError, TypeError) as exc:
             raise HTTPException(400, str(exc)) from exc
@@ -78,4 +84,8 @@ def register(app, ctx) -> None:
             result = verify_bundle(body.bundle, body.roots or {})
         except (ValueError, TypeError) as exc:
             raise HTTPException(400, str(exc)) from exc  # defenzivní — pydantic zajistí Mapping
-        return {"ok": result.ok, "reasons": list(result.reasons)}
+        return {
+            "ok": result.ok,
+            "reasons": list(result.reasons),
+            "warnings": list(result.warnings),  # P3-6 — TLP porušení (nemění ok)
+        }

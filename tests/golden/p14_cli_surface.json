@@ -200,6 +200,7 @@
       "--key-file",
       "--key-out",
       "--out",
+      "--tlp",
       "-h"
     ]
   },

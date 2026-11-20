@@ -11,7 +11,7 @@ Použití:
   stopa registry [--tenant ORG] [--user U] [--sync CASE_ID] [--json]   # P2-2 — centrální registr případů (instance DB)
   stopa intel import <case_id> --stix FILE|--ioc KIND:HODNOTA[,…] [--tlp TLP] [--source S] [--json]  # P2-5 — Threat Intel (IoC feed STIX 2.1)
   stopa intel match <case_id> [--json]    # P2-5 — deterministické matching IoC × artefakty/entities
-  stopa exchange pack <case_id> [--out FILE] [--anon] [--key-file F] [--key-out F] [--json]  # P2-7 — Case Exchange bundle v1 (+ anonymizace)
+  stopa exchange pack <case_id> [--out FILE] [--anon] [--key-file F] [--key-out F] [--tlp LEVEL] [--json]  # P2-7 — Case Exchange bundle v1 (+ anonymizace, TLP)
   stopa exchange verify BUNDLE_FILE [--roots FILE] [--root LABEL=BASE64]... [--json]   # P2-7 — ověření bundle (trust roots)
   stopa image <case_id> /cesta/ke/obrazu.img       # disk image (TSK) [+ --no-carve]
   stopa mobile <case_id> /obraz.img [--password HESLO]  # mobilní FDE/FBE unlock + TSK
@@ -822,6 +822,10 @@ def build_parser() -> argparse.ArgumentParser:
                          help="soubor klíče anonymizace (base64)")
     ex_pack.add_argument("--key-out", metavar="FILE", default=None,
                          help="kam uložit nově vygenerovaný klíč (povinné pro --anon bez --key-file)")
+    ex_pack.add_argument(
+        "--tlp", choices=("CLEAR", "GREEN", "AMBER", "RED", "WHITE"), default=None,
+        help="TLP distribuční úroveň bundle (P3-6); porušení při verify = varování, ne chyba",
+    )
     _add_json_flag(ex_pack)
     ex_pack.set_defaults(func=cmd_exchange_pack)
 

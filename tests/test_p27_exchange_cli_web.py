@@ -370,7 +370,8 @@ class TestExchangeWeb:
             "/api/exchange/verify", json={"bundle": bundle, "roots": {issuer: pub}}
         )
         assert r.status_code == 200
-        assert r.json() == {"ok": True, "reasons": []}
+        # P3-6: aditivní klíč warnings (prázdný — bundle bez deklarovaného TLP)
+        assert r.json() == {"ok": True, "reasons": [], "warnings": []}
 
         tampered = json.loads(json.dumps(bundle))
         tampered["counts"]["artifacts"] = 99

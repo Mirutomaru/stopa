@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from stopa.domain.integrity import sign_hash, verify_signature
+from stopa.domain.threat_intel import TLP_LEVELS
 
 #: Verze formátu — změna struktury = nová verze.
 FORMAT_V1 = "stopa-exchange/v1"
@@ -40,13 +41,42 @@ FORMAT_V1 = "stopa-exchange/v1"
 #: Povinné klíče sekce ``counts`` (přísnost formátu v1).
 COUNT_KEYS: tuple[str, ...] = ("files", "artifacts", "entities")
 
+#: Legacy alias TLP 1.0 (starší dokumentace) → kanonická úroveň P2-5.
+_TLP_ALIASES = {"CLEAR": "WHITE"}
+
+
+def normalize_tlp(value: Any) -> str | None:
+    """Normalizuje TLP úroveň na kanonický tvar (``TLP_LEVELS`` z P2-5).
+
+    ``None`` → ``None`` (žádný deklarovaný TLP); přijímá i legacy alias
+    ``CLEAR`` (→ ``WHITE``) a velká/malá písmena. Semantická chyba
+    (neznámá úroveň) → ``ValueError``, typová → ``TypeError``.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"TLP musí být řetězec, dostal {type(value).__name__}")
+    norm = value.strip().upper()
+    norm = _TLP_ALIASES.get(norm, norm)
+    if norm not in TLP_LEVELS:
+        raise ValueError(
+            f"Neplatná TLP úroveň: {value!r} (očekáváno {'/'.join(TLP_LEVELS)} nebo CLEAR)"
+        )
+    return norm
+
 
 @dataclass(frozen=True)
 class VerifyResult:
-    """Výsledek ověření bundle — ``ok=False`` + neduplikované důvody."""
+    """Výsledek ověření bundle — ``ok=False`` + neduplikované důvody.
+
+    ``warnings`` (P3-6 TLP politika): porušení distribuční úrovně (entita s
+    vyšším TLP, než je deklarovaný TLP bundle) — mění výstup, ale NEMĚNÍ
+    exit kód / ``ok``. Pořadí = pořadí entit v bundle (deterministicky).
+    """
 
     ok: bool
     reasons: tuple[str, ...] = ()  # prázdné = ověřeno
+    warnings: tuple[str, ...] = ()  # P3-6 — TLP porušení (stabilní formát)
 
 
 def _canonical_payload(bundle: Mapping[str, Any]) -> str:
@@ -62,11 +92,14 @@ def bundle_digest(bundle: Mapping[str, Any]) -> str:
     return hashlib.sha256(_canonical_payload(bundle).encode("utf-8")).hexdigest()
 
 
-def _normalize_entities(entities: Any) -> list[tuple[str, str]]:
+def _normalize_entities(entities: Any) -> list[tuple[str, str, str | None]]:
     """Validace + kanonizace vstupních entit (fail-closed).
 
-    Akceptuje sekvenci dvojic ``(kind, value)`` nebo mappingů ``{kind, value}``.
-    Prázdné kind/value po stripu → ``ValueError``; špatný typ → ``TypeError``.
+    Akceptuje sekvenci dvojic ``(kind, value)``, trojic ``(kind, value, tlp)``
+    (P3-6 — volitelné per-entity TLP z threat-intel IoC) nebo mappingů
+    ``{kind, value}`` / ``{kind, value, tlp}``. Prázdné kind/value po stripu →
+    ``ValueError``; špatný typ → ``TypeError``. Per-entity TLP se normalizuje
+    přes :func:`normalize_tlp` (None = bez úrovně).
     """
     if isinstance(entities, Mapping):
         raise TypeError("entities musí být sekvence, ne mapping")
@@ -75,24 +108,31 @@ def _normalize_entities(entities: Any) -> list[tuple[str, str]]:
     except TypeError as exc:  # fail-closed
         raise TypeError(f"entities musí být sekvence, dostal {type(entities).__name__}") from exc
 
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str, str | None]] = []
     for item in items:
+        tlp_raw: Any = None
         if isinstance(item, Mapping):
             kind = item.get("kind")
             value = item.get("value")
+            tlp_raw = item.get("tlp")
         elif isinstance(item, (tuple, list)) and len(item) == 2:
             kind, value = item
+        elif isinstance(item, (tuple, list)) and len(item) == 3:
+            kind, value, tlp_raw = item
         else:
-            raise TypeError(f"entita musí být dvojice nebo {{kind,value}}, dostal {item!r}")
+            raise TypeError(
+                f"entita musí být dvojice/trojice nebo {{kind,value}}, dostal {item!r}"
+            )
         if not isinstance(kind, str) or not isinstance(value, str):
             raise TypeError("entity kind/value musí být řetězce")
+        tlp = normalize_tlp(tlp_raw)  # None prochází; neznámá úroveň → ValueError
         kind_s = kind.strip()
         value_s = value.strip()
         if not kind_s:
             raise ValueError("prázdný entity kind")
         if not value_s:
             raise ValueError(f"prázdná hodnota pro entity {kind_s!r}")
-        out.append((kind_s, value_s))
+        out.append((kind_s, value_s, tlp))
     return out
 
 
@@ -104,13 +144,17 @@ def build_bundle(
     entities: Sequence[Any] = (),
     title: str | None = None,
     provenance: Mapping[str, Any] | None = None,
+    tlp: str | None = None,
 ) -> dict[str, Any]:
     """Sestaví bundle v1 (deterministický).
 
     - ``counts`` musí mít přesně klíče :data:`COUNT_KEYS` s nezápornými inty.
     - Entity se deduplikují a seřadí podle ``(kind, value)``; hodnoty jsou
       už ve finálním tvaru (kanonické nebo pseudonym — viz anonymize).
+      Duplicity se slučují konzervativně: per-entity TLP = nejvyšší rank.
     - ``provenance`` = libovolné JSON-serializovatelné mapping (souhrn P0-1).
+    - ``tlp`` (P3-6) — deklarovaná distribuční úroveň bundle; klíč se do
+      bundle dostane jen když je zadána → digest starých bundlů beze změny.
 
     Chybová sémantika: semantická chyba → ``ValueError``, typová → ``TypeError``.
     """
@@ -128,13 +172,25 @@ def build_bundle(
             raise ValueError(f"counts[{key!r}] musí být nezáporné celé číslo")
         count_dict[key] = val
 
+    declared_tlp = normalize_tlp(tlp)
+
+    def _rank(level: str | None) -> int:
+        return TLP_LEVELS.index(level) if level is not None else -1
+
     pairs = _normalize_entities(entities)
-    seen: set[tuple[str, str]] = set()
+    merged: dict[tuple[str, str], str | None] = {}
+    for kind_s, value_s, tlp_level in sorted(set(pairs), key=lambda p: (p[0], p[1])):
+        key = (kind_s, value_s)
+        existing = merged.get(key)
+        if existing is None or _rank(tlp_level) > _rank(existing):
+            merged[key] = tlp_level
+
     unique: list[dict[str, str]] = []
-    for kind_s, value_s in sorted(set(pairs)):
-        if (kind_s, value_s) not in seen:
-            seen.add((kind_s, value_s))
-            unique.append({"kind": kind_s, "value": value_s})
+    for kind_s, value_s in sorted(merged):
+        ent: dict[str, str] = {"kind": kind_s, "value": value_s}
+        if merged[(kind_s, value_s)] is not None:
+            ent["tlp"] = merged[(kind_s, value_s)]  # type: ignore[index]
+        unique.append(ent)
 
     bundle: dict[str, Any] = {
         "format": FORMAT_V1,
@@ -148,6 +204,8 @@ def build_bundle(
         if not isinstance(provenance, Mapping):
             raise TypeError("provenance musí být mapping")
         bundle["provenance"] = {str(k): v for k, v in provenance.items()}
+    if declared_tlp is not None:  # P3-6 — aditivní klíč, digest jen pokud zadáno
+        bundle["tlp"] = declared_tlp
     return bundle
 
 
@@ -190,16 +248,22 @@ def verify_bundle(
 
     Důvody (neexhaustivní): ``missing_format``/``unknown_format``,
     ``missing_case_id``, ``bad_packed_at``, ``bad_counts``, ``bad_entities``,
-    ``bad_entity``, ``duplicate_entity``, ``bad_provenance``,
+    ``bad_entity``, ``duplicate_entity``, ``bad_tlp``, ``bad_provenance``,
     ``bad_signature_block``, ``no_trust_roots``, ``untrusted_signature``,
     ``signature_mismatch``.
 
     ``trust_roots`` = mapping label→public key b64 (nebo sekvence dvojic).
+
+    P3-6 TLP politika: deklarovaný klíč bundle ``tlp`` (aditivní) se porovnává
+    s per-entity TLP; entita s vyšší úrovní → ``warnings``
+    (``tlp_violation:<kind>=<value>`` v pořadí bundle), NEMĚNÍ ``ok``.
+    Neplatná deklarovaná úroveň → důvod ``bad_tlp`` (fail-closed).
     """
     if not isinstance(bundle, Mapping):
         return VerifyResult(False, ("not_mapping",))
 
     reasons: list[str] = []
+    warnings: list[str] = []  # P3-6 — TLP porušení (nemění ok/exit kód)
 
     fmt = bundle.get("format")
     if fmt != FORMAT_V1:
@@ -225,6 +289,17 @@ def verify_bundle(
     if not isinstance(entities, list):
         reasons.append("bad_entities")
     else:
+        # P3-6 — deklarovaný TLP bundle (klíč aditivní; chybí → žádná kontrola).
+        declared_rank: int | None = None
+        if "tlp" in bundle:
+            try:
+                norm_tlp = normalize_tlp(bundle.get("tlp"))
+            except (ValueError, TypeError):
+                reasons.append("bad_tlp")
+            else:
+                declared_rank = TLP_LEVELS.index(norm_tlp) if norm_tlp is not None else None
+
+        tlp_warnings: list[str] = []  # porušení v pořadí entit bundle (deterministicky)
         seen_pairs: set[tuple[str, str]] = set()
         for ent in entities:
             if (
@@ -236,11 +311,26 @@ def verify_bundle(
             ):
                 reasons.append("bad_entity")
                 break
+            # P3-6 — per-entity TLP (volitelný; neplatná úroveň = deformovaná entita).
+            ent_tlp: str | None = None
+            if "tlp" in ent and ent["tlp"] is not None:
+                try:
+                    ent_tlp = normalize_tlp(ent["tlp"])
+                except (ValueError, TypeError):
+                    reasons.append("bad_entity")
+                    break
             pair = (str(ent["kind"]).strip(), str(ent["value"]).strip())
+            if declared_rank is not None and ent_tlp is not None \
+                    and TLP_LEVELS.index(ent_tlp) > declared_rank:
+                tlp_warnings.append(f"tlp_violation:{pair[0]}={pair[1]}")
             if pair in seen_pairs:
                 reasons.append("duplicate_entity")
                 break
             seen_pairs.add(pair)
+
+        if "bad_entities" not in reasons and "bad_entity" not in reasons \
+                and "duplicate_entity" not in reasons:
+            warnings.extend(tlp_warnings)
 
     if "provenance" in bundle and not isinstance(bundle.get("provenance"), Mapping):
         reasons.append("bad_provenance")
@@ -267,4 +357,4 @@ def verify_bundle(
                 if not valid:
                     reasons.append("signature_mismatch")
 
-    return VerifyResult(not reasons, tuple(reasons))
+    return VerifyResult(not reasons, tuple(reasons), tuple(warnings))

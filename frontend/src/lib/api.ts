@@ -70,6 +70,38 @@ export interface HypoNode {
   parent_id?: string | null;
 }
 
+/** P3-6 — pokročilá timeline intelligence (P2-3 API, GET .../timeline/advanced-intel). */
+export interface TimelineIntelData {
+  case_id: string;
+  events_analyzed: number;
+  gaps: Array<{
+    start_event_id: string;
+    end_event_id: string;
+    start_ts: string;
+    end_ts: string;
+    duration_seconds: number;
+  }>;
+  outliers: Array<{
+    event_id: string;
+    ts_utc: string;
+    prev_gap_seconds: number;
+    next_gap_seconds: number;
+  }>;
+  correlations: Array<{
+    group_id: string;
+    subject: string;
+    confidence: string;
+    source_ids: string[];
+    event_ids: string[];
+  }>;
+  uncertainty: Array<{
+    event_id: string;
+    reasons: string[];
+    severity: "low" | "medium" | "high";
+  }>;
+  summary: Record<string, number>;
+}
+
 export interface HypoLineage {
   [artifactId: string]: { type?: string; title?: string } & Record<string, unknown>;
 }
@@ -137,6 +169,10 @@ export const api = {
   },
   timeline(caseId: string, opts?: PageOpts): Promise<TimelineRow[]> {
     return req(`/api/cases/${encodeURIComponent(caseId)}/timeline${qs(opts)}`);
+  },
+  // P3-6 — pokročilá timeline intelligence (P2-3 API; bez WS/limitu, full analýza případu)
+  timelineIntel(caseId: string): Promise<TimelineIntelData> {
+    return req(`/api/cases/${encodeURIComponent(caseId)}/timeline/advanced-intel`);
   },
   entities(caseId: string): Promise<EntityRow[]> {
     return req(`/api/cases/${encodeURIComponent(caseId)}/entities`);

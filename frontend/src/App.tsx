@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import DashboardPage from "./pages/Dashboard";
 import CaseFilesPage from "./pages/CaseFiles";
 import TimelinePage from "./pages/Timeline";
+import TimelineIntelPage from "./pages/TimelineIntel";
 import EntitiesPage from "./pages/Entities";
 import AiPanelPage from "./pages/AiPanel";
 import HypothesesPage from "./pages/Hypotheses";
@@ -23,6 +24,9 @@ export default function App() {
         </NavLink>
         <NavLink to="/timeline" className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
           {t("nav_timeline")}
+        </NavLink>
+        <NavLink to="/timeline-intel" className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
+          {t("nav_timeline_intel")}
         </NavLink>
         <NavLink to="/entities" className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
           {t("nav_entities")}
@@ -46,6 +50,7 @@ export default function App() {
           <Route path="/files" element={<CaseFilesPage />} />
           <Route path="/artifacts/:file_id" element={<ArtifactDetailPage />} />
           <Route path="/timeline" element={<TimelinePage />} />
+          <Route path="/timeline-intel" element={<TimelineIntelPage />} />
           <Route path="/entities" element={<EntitiesPage />} />
           <Route path="/ai" element={<AiPanelPage />} />
           <Route path="/hypotheses" element={<HypothesesPage />} />

@@ -4,9 +4,11 @@ Bundle v1 (``domain/exchange``) + anonymizace (``domain/anonymize``); snapshot
 case DB je v ``data/exchange_repository``. Tady je jen CLI hrana.
 
 Příkazy:
-  stopa exchange pack <case_id> [--out FILE] [--anon] [--key-file F] [--key-out F] [--json]
+  stopa exchange pack <case_id> [--out FILE] [--anon] [--key-file F] [--key-out F]
+      [--tlp CLEAR|GREEN|AMBER|RED|WHITE] [--json]
       Bundle do souboru nebo stdout; --anon = anonymizované entity (mapping se
-      do bundle nedostává; nový klíč vyžaduje --key-out).
+      do bundle nedostává; nový klíč vyžaduje --key-out); --tlp = distribuční
+      úroveň bundle (P3-6, porušení při verify = varování).
   stopa exchange verify BUNDLE_FILE [--roots FILE] [--root LABEL=BASE64]... [--json]
       Ověření proti trust rootům (AK: tamperovaný podpis → exit 1).
 
@@ -58,7 +60,8 @@ def cmd_exchange_pack(args: argparse.Namespace) -> int:
     db = _open_db(args.case_id)
     try:
         bundle, anon_result = pack_case_bundle(
-            db.conn, args.case_id, packed_at=_now_iso(), anon_key=anon_key
+            db.conn, args.case_id, packed_at=_now_iso(),
+            anon_key=anon_key, tlp=getattr(args, "tlp", None),
         )
     except (ValueError, TypeError) as exc:
         raise SystemExit(str(exc)) from None
@@ -77,9 +80,11 @@ def cmd_exchange_pack(args: argparse.Namespace) -> int:
         payload["key_fingerprint"] = fingerprint
 
     c = bundle["counts"]
+    tlp_level = bundle.get("tlp")  # P3-6 — jen pokud bylo --tlp zadáno
     summary = (
         f"Bundle {args.case_id}: files={c['files']} artifacts={c['artifacts']} "
-        f"entities={c['entities']}" + (" [anon]" if fingerprint else "")
+        f"entities={c['entities']}" + (f" tlp={tlp_level}" if tlp_level else "")
+        + (" [anon]" if fingerprint else "")
     )
     if out_path:
         with open(out_path, "w", encoding="utf-8") as f:
@@ -128,10 +133,18 @@ def cmd_exchange_verify(args: argparse.Namespace) -> int:
 
     result = verify_bundle(bundle, roots)  # ValueError jen non-Mapping → fail-closed níže
     if _json_mode(args):
-        print(json.dumps({"ok": result.ok, "reasons": list(result.reasons)}, ensure_ascii=False))
+        print(json.dumps(
+            {"ok": result.ok, "reasons": list(result.reasons), "warnings": list(result.warnings)},
+            ensure_ascii=False,
+        ))
     else:
         if result.ok:
             print("Bundle ověřeno (formát v1 + podpis platný).")
         else:
             print(f"Bundle NEověřeno: {', '.join(result.reasons)}")
+        # P3-6 — TLP porušení = varování (nemění exit kód)
+        if result.warnings:
+            print(f"TLP varování ({len(result.warnings)}): entity s vyšší úrovní než deklarovaná:")
+            for w in result.warnings:
+                print(f"  - {w}")
     return 0 if result.ok else 1
