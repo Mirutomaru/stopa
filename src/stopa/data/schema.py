@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verzi umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -498,6 +498,33 @@ CREATE TABLE IF NOT EXISTS intel_matches (
 CREATE INDEX IF NOT EXISTS idx_intel_matches_case ON intel_matches(case_id);
 """
 
+# P3-3: výsledky klasifikace souborů (pravidlový klasifikátor, W2).
+# Re-run `classify` = upsert AUTO polí per file (deterministický výsledek
+# domain/classification.py); lidský override je aditivní sloupec — automatická
+# hodnota vždy zůstává dohledatelná (reverzibilní, AK3). CHECK taxonomie musí
+# sedět na CATEGORIES v domain/classification.py.
+CLASSIFICATIONS_DDL = """
+CREATE TABLE IF NOT EXISTS classifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    file_id TEXT NOT NULL UNIQUE REFERENCES files(id) ON DELETE CASCADE,
+    rel_path TEXT NOT NULL,          -- denormalizováno pro zobrazení
+    category TEXT NOT NULL CHECK (category IN ('browser', 'chat_messaging', 'email', 'contact_identity', 'cloud_sync', 'location_tracking', 'system_logs', 'memory_capture', 'crypto_assets', 'documents_media', 'unknown')),
+    confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+    reasons_json TEXT NOT NULL DEFAULT '[]',   -- JSON list[str] — neprázdné (AK2)
+    needs_review INTEGER NOT NULL DEFAULT 0,
+    risk_flags_json TEXT NOT NULL DEFAULT '[]',
+    classified_at TEXT NOT NULL,     -- ISO UTC času běhu klasifikátoru
+    stopa_version TEXT,              -- verze STOPA (single-source z pyproject)
+    status TEXT NOT NULL DEFAULT 'auto' CHECK (status IN ('auto', 'overridden')),
+    override_category TEXT CHECK (override_category IS NULL OR override_category IN ('browser', 'chat_messaging', 'email', 'contact_identity', 'cloud_sync', 'location_tracking', 'system_logs', 'memory_capture', 'crypto_assets', 'documents_media', 'unknown')),
+    override_actor TEXT,             -- actor lidského override (RBAC resolved)
+    override_reason TEXT NOT NULL DEFAULT '',  -- důvod override (forenzní stopa)
+    overridden_at TEXT               -- ISO UTC času override
+);
+CREATE INDEX IF NOT EXISTS idx_classifications_case ON classifications(case_id);
+"""
+
 SCHEMA = _SCHEMA_CORE + MULTITENANT_DDL + COLLAB_DDL + CASE_SEALS_DDL + """
 -- P0 Core C5: Reproducibility Engine — záznamy analytických operací.
 -- Každá operace nese vstupní soubory + hashe, verze parserů/STOPA, hash konfigurace,
@@ -573,4 +600,4 @@ CREATE TRIGGER IF NOT EXISTS artifacts_au AFTER UPDATE ON artifacts BEGIN
     INSERT INTO artifacts_fts(rowid, artifact_type, title, details_json)
     VALUES (new.rowid, new.artifact_type, new.title, new.details_json);
 END;
-""" + GRAPH_EDGES_DDL + INVESTIGATION_DDL + INTEL_DDL  # P1-3 hrany / P2-4 investigation workspace / P2-5 threat intel (aditivní)
+""" + GRAPH_EDGES_DDL + INVESTIGATION_DDL + INTEL_DDL + CLASSIFICATIONS_DDL  # P1-3 hrany / P2-4 investigation workspace / P2-5 threat intel (aditivní) / P3-3 klasifikace souborů (v26, aditivní)

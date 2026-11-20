@@ -383,7 +383,7 @@ class TestSchemaV24:
     def test_version_bumped_and_intel_tables_in_schema(self):
         from stopa.data.schema import SCHEMA, SCHEMA_VERSION
 
-        assert SCHEMA_VERSION == 25  # v24 = P2-5 intel; v25 = P3-5 rule matching
+        assert SCHEMA_VERSION == 26  # v24 = P2-5 intel; v25 = P3-5 rule matching; v26 = P3-3 klasifikace souborů
         assert "CREATE TABLE IF NOT EXISTS ioc_feed_items" in SCHEMA
         assert "CREATE TABLE IF NOT EXISTS intel_matches" in SCHEMA
         assert "CHECK (kind IN ('ip', 'domain', 'hash', 'url'," in SCHEMA  # v25 += yara_rule/sigma_tpl

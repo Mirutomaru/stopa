@@ -792,6 +792,7 @@ def create_app(
         ai,
         analysis,
         cases,
+        classification,
         collab,
         exchange,
         files,
@@ -840,6 +841,7 @@ def create_app(
     collab.register(app, ctx)
     investigation.register(app, ctx)  # P2-4 — investigation workspace
     intel.register(app, ctx)  # P2-5 — threat intelligence workspace (IoC feed + match)
+    classification.register(app, ctx)  # P3-3 — automated classification souborů (+ override)
     registry.register(app, ctx)  # P2-2 — centrální registr případů (instance DB)
     xcorr.register(app, ctx)  # P2-6 — cross-case correlation (instance DB)
     exchange.register(app, ctx)  # P2-7 — case exchange bundle v1 (pack/verify marketplace)

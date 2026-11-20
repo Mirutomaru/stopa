@@ -133,6 +133,17 @@
       "-h"
     ]
   },
+  "classify": {
+    "opts": [
+      "--actor",
+      "--category",
+      "--help",
+      "--json",
+      "--override",
+      "--reason",
+      "-h"
+    ]
+  },
   "compare-artifacts": {
     "opts": [
       "--help",

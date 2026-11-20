@@ -92,6 +92,11 @@
   [
     "http",
     "GET",
+    "/api/cases/{case_id}/classifications"
+  ],
+  [
+    "http",
+    "GET",
     "/api/cases/{case_id}/compliance-report"
   ],
   [
@@ -418,6 +423,16 @@
     "http",
     "POST",
     "/api/cases/{case_id}/artifacts/{artifact_id}/review"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/cases/{case_id}/classifications/classify"
+  ],
+  [
+    "http",
+    "POST",
+    "/api/cases/{case_id}/classifications/override"
   ],
   [
     "http",

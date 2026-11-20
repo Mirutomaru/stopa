@@ -62,6 +62,9 @@ from .commands.artifact_compare import cmd_compare_artifacts
 # P1-4 — rodina `case` přesunuta do cli/commands/case.py (re-export pro kompatibilitu)
 from .commands.case import cmd_case_auto_export, cmd_case_auto_interval, cmd_case_new
 
+# P3-3 — Automated Classification (pravidlový klasifikátor souborů + override)
+from .commands.classification import cmd_classify
+
 # P1-4 — jádrové case operace přesunuty do cli/commands/core.py (re-export)
 from .commands.core import (
     cmd_add,
@@ -190,6 +193,7 @@ _SUBCOMMAND_EXAMPLES = {
     "attack-map": "stopa attack-map case-abc --format stix --out ./map.json   # F6.3 — MITRE ATT&CK heat-mapa",
     "reparse": "stopa reparse case-abc --parser-version 2.4   # F5.3 — pinned verze + diff report",
     "compare-artifacts": "stopa compare-artifacts case-abc art-1 art-2 --json   # P3-2 — JSON diff verzí artefaktu",
+    "classify": "stopa classify case-abc --json   # P3-3 — pravidlová klasifikace souborů (+ --override ID --category X --reason R)",
     "wb": "stopa wb attach case-abc --device 'Tableau TBW-100'   # F5.4 — WB připojení + auto-detekce",
     "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
     "replay": "stopa replay case-abc op-123   # bez op = poslední extract",
@@ -621,6 +625,21 @@ def build_parser() -> argparse.ArgumentParser:
     ca_p.add_argument("id_b", metavar="ID_B", help="verze B (artifact ID)")
     _add_json_flag(ca_p)
     ca_p.set_defaults(func=cmd_compare_artifacts)
+
+    # P3-3 — Automated Classification: pravidlový klasifikátor + lidský override
+    cl_p = _ex_sub(sub, "classify",
+                   help="P3-3 — pravidlová klasifikace souborů (+ --override ID --category X --reason R)")
+    cl_p.add_argument("case_id")
+    cl_p.add_argument("--override", default=None, metavar="ID",
+                      help="lidský override klasifikace (ID řádku classifications)")
+    cl_p.add_argument("--category", default=None, metavar="CAT",
+                      help="cílová kategorie override (taxonomie 11 kategorií)")
+    cl_p.add_argument("--reason", default=None, metavar="R",
+                      help="důvod override (forenzní stopa; povinný s --override)")
+    cl_p.add_argument("--actor", default=None, metavar="ACTOR",
+                      help="explicitní actor override (default: case examiner)")
+    _add_json_flag(cl_p)
+    cl_p.set_defaults(func=cmd_classify)
 
     # F5.4 — write-blocker integration API (status/attach/remove + ingest gate)
     wb_p = _ex_sub(sub, "wb", help="F5.4 — write-blocker: status/attach/remove")

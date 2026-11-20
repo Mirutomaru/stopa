@@ -11,6 +11,7 @@ import sqlite3
 
 from stopa.data.schema import (
     CASE_SEALS_DDL,
+    CLASSIFICATIONS_DDL,
     COLLAB_DDL,
     MULTITENANT_DDL,
     SCHEMA_VERSION,
@@ -133,6 +134,7 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     # artifacts.parent_artifact_id). Idempotentní; nová DB mají vše ze SCHEMA.
     apply_provenance_metadata_migration(conn)
     apply_rule_matching_migration(conn)  # P3-5 (v25): intel_matches.match_kind += yara/sigma
+    apply_classification_migration(conn)  # P3-3 (v26): tabulka classifications (aditivní)
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).
     if _schema_version(conn) < SCHEMA_VERSION:
@@ -456,5 +458,15 @@ def apply_rule_matching_migration(conn: sqlite3.Connection) -> None:
         "CHECK (match_kind IN ('entity', 'file_hash', 'artifact_text'))",
         "CHECK (match_kind IN ('entity', 'file_hash', 'artifact_text', 'yara', 'sigma'))",
     )
+    conn.commit()
+
+
+def apply_classification_migration(conn: sqlite3.Connection) -> None:
+    """P3-3 (v26): tabulka ``classifications`` — výsledky pravidlového klasifikátoru.
+
+    Čistě aditivní (nová tabulka, žádná změna stávajících DDL) → idempotentní
+    executescript s IF NOT EXISTS funguje pro staré i nové DB (no-op na nových).
+    """
+    conn.executescript(CLASSIFICATIONS_DDL)
     conn.commit()
 
