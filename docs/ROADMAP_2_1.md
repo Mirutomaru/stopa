@@ -140,7 +140,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 | P3-3 | Automated Classification | pravidlový (offline deterministický) klasifikátor s confidence + reasons; append-only lidský override v audit_log |
 | P3-4 | Evidence Storage Manager | inventář + read-only rehash + kapacitní rozpočet + export/import kvarentény per case (Ed25519 manifest) |
 | P3-5 | Threat Intel: YARA/Sigma matching | dokončení návrhu P2-5; volitelné závislosti s graceful degradation; matchy do `intel_matches` v24 |
-| P3-6 | UI/policy follow-upy z 2.2 | SPA view pro timeline-intel (hotové API) + TLP distribuční politika Case Exchange bundle |
+| P3-6 | UI/policy follow-upy z 2.2 ✅ **hotovo 2026-11-20** (`d8ae657`) | SPA view timeline-intel (4 sekce, live refresh) + TLP politika Case Exchange (--tlp, porušení = warning, bad_tlp fail-closed); testy 32 + vitest 13/13, web reg. 162/162, povrch aditivní CLI +1 |
 
 ---
 
