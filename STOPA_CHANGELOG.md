@@ -2,6 +2,11 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-20 (STOPA 2.4: post-release roadmap P4 návrhy k schválení)
+
+### Added — Post-release 2.3: P4 návrhy k schválení (2026-11-20)
+- **`docs/P4_DESIGNS.md`** — všech 10 P4 položek s návrhem + prioritou + AK podle pravidla v ROADMAP; zdroj = `STOPA_ANALYZE.md` §8 známý dluh (stav ověřen v HEAD `7ca55f5`: plně vyřešeno 2/10, částečné 5/10, otevřené 3/10) + §7 design otázky; doporučené pořadí **P4-1 → P4-3 → P4-2 → P4-6 → P4-5 → P4-4 → P4-9 → P4-8 → P4-7 → P4-10** (nejdřve CI infrastrukturní jistota + stabilní plugin kontrakt, pak bezpečnost/soudní způsobilost a AI robustness; největší strategická položka = frontend sjednocení až po stabilizaci infrastruktury; škálování a distribuce na závěr). Každá položka = samostatná releasovatelná jednotka.
+
 ## [Unreleased] — 2026-11-20 (STOPA 2.3: post-release roadmap **P3 hotová 6/6** — P3-1 pokročilé vyhledávání, P3-6 UI/policy follow-upy z 2.2, P3-2 srovnání verzí artefaktů, P3-5 YARA/Sigma matching, P3-3 automatizovaná klasifikace, P3-4 evidence storage manager; full suite **5013p/1s** exit 0)
 
 ### Added — Post-release 2.2: P3 roadmap kompletní (6/6 položek, 2026-11-20)

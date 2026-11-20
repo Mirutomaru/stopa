@@ -145,6 +145,31 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 
 ---
 
+## P4 — Stabilizace a škálování (post-2.3)
+
+> **Návrhy + priority + AK (2026-11-20):** `docs/P4_DESIGNS.md` — zdroj = `STOPA_ANALYZE.md` §8 známý dluh
+> (stav ověřen v HEAD: 2/10 hotovo, 5/10 částečné, 3/10 otevřené) + §7 design otázky; doporučené pořadí:
+> P4-1 CI matrix pro volitelné extras → P4-3 Plugin API semvering → P4-2 sandbox hardening →
+> P4-6 Sealing v2 (time hash chain + external witness) → P4-5 AI production robustness →
+> P4-4 Frontend sjednocení (SPA kanonická) → P4-9 Cross-platform a stabilita → P4-8 i18n CLI/legacy →
+> P4-7 Multi-node readiness → P4-10 Rust distribuce.
+> **Stav 2026-11-20: všech 10 položek = návrhy k schválení** (implementace až po explicitním pokynu).
+
+| # | Položka | Priorita | Velikost | Pozn. |
+|---|---------|----------|----------|-------|
+| P4-1 | CI matrix pro volitelné extras („bez X“ + „s X“) | **P0** | S | 3 dependency profily v ci.yml (min/full), EXTRAS_COVERAGE.md; bez src změn |
+| P4-2 | Plugin sandbox hardening (rlimits + seccomp strict profil) | **P0** | M | default backward compatible; adversariální testy (fork bomb/fd/CPU/write-outside-dir) |
+| P4-3 | Plugin API semvering + breaking change log | **P0** | S | api_version v manifestu, tabulka stabilních povrchů, marker `!plugins:` |
+| P4-6 | Sealing v2 — time hash chain + external witness | **P1** | S–M | domain seal_chain.py (H(prev_root‖case_id‖ts‖merkle_root)), aditivní v27, CLI `seal --chain` + witness |
+| P4-5 | AI production robustness (streaming/retry/token budget/eval gate) | **P1** | M | nad P1-2 orchestrátorem; SSE endpoint, deterministický jitter, CLI ai-eval |
+| P4-4 | Frontend sjednocení — SPA kanonická, legacy za flagem | **P1** | L | W1 parity gap audit → W2 chybějící view v SPA → W3 `?ui=legacy` + warning; odstranění = P5 |
+| P4-9 | Cross-platform a long-running stabilita (Win/macOS CI + leak canary) | **P2** | M | windows job na Rust-fallback cestě, tracemalloc canary, PLATFORM_MATRIX.md |
+| P4-8 | i18n CLI (+ legacy UI katalog) | **P2** | M | cs/en JSON katalogy, STOPA_LANG/--lang default cs byte-kompatibilní; vlny per command rodina |
+| P4-7 | Multi-node readiness (DB event bus + registry lease) | **P2** | L | events tabulka v instance DB, long-poll worker, node liveness přes lease; bez Redis |
+| P4-10 | Rust distribuce — manylinux wheels | **P2** | M | GHA matrix x86_64/aarch64, extra `[carving]`, wheel parity gate |
+
+---
+
 ## Postup práce (etapy A–G z master promptu)
 
 | Etapa | Obsah | Stav |
