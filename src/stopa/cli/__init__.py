@@ -56,6 +56,9 @@ from .commands.analysis import (
     cmd_reparse,
 )
 
+# P3-2 — Artifact Version Comparison (path JSON diff dvou verzí artefaktu)
+from .commands.artifact_compare import cmd_compare_artifacts
+
 # P1-4 — rodina `case` přesunuta do cli/commands/case.py (re-export pro kompatibilitu)
 from .commands.case import cmd_case_auto_export, cmd_case_auto_interval, cmd_case_new
 
@@ -186,6 +189,7 @@ _SUBCOMMAND_EXAMPLES = {
     "daubert": "stopa daubert case-abc   # F5.5 — Daubert pack (peer-reviewed reference + error rates)",
     "attack-map": "stopa attack-map case-abc --format stix --out ./map.json   # F6.3 — MITRE ATT&CK heat-mapa",
     "reparse": "stopa reparse case-abc --parser-version 2.4   # F5.3 — pinned verze + diff report",
+    "compare-artifacts": "stopa compare-artifacts case-abc art-1 art-2 --json   # P3-2 — JSON diff verzí artefaktu",
     "wb": "stopa wb attach case-abc --device 'Tableau TBW-100'   # F5.4 — WB připojení + auto-detekce",
     "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
     "replay": "stopa replay case-abc op-123   # bez op = poslední extract",
@@ -608,6 +612,15 @@ def build_parser() -> argparse.ArgumentParser:
                       help="umístění dočasné reparse DB (default: systémový tmp)")
     _add_json_flag(rp_p)
     rp_p.set_defaults(func=cmd_reparse)
+
+    # P3-2 — Artifact Version Comparison: path JSON diff dvou verzí téhož artefaktu
+    ca_p = _ex_sub(sub, "compare-artifacts",
+                   help="P3-2 — srovnání dvou verzí artefaktu (path JSON diff + parser_version)")
+    ca_p.add_argument("case_id")
+    ca_p.add_argument("id_a", metavar="ID_A", help="verze A (artifact ID)")
+    ca_p.add_argument("id_b", metavar="ID_B", help="verze B (artifact ID)")
+    _add_json_flag(ca_p)
+    ca_p.set_defaults(func=cmd_compare_artifacts)
 
     # F5.4 — write-blocker integration API (status/attach/remove + ingest gate)
     wb_p = _ex_sub(sub, "wb", help="F5.4 — write-blocker: status/attach/remove")

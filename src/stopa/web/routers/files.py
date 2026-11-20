@@ -61,6 +61,33 @@ def register(app, ctx) -> None:
             return [a.model_dump(mode="json") for a in arts]
         finally:
             db.close()
+
+    # P3-2 — Artifact Version Comparison (path JSON diff dvou verzí téhož artefaktu)
+    @app.get("/api/cases/{case_id}/artifacts/compare")
+    def compare_artifact_versions(case_id: str, id_a: str = "", id_b: str = "") -> dict:
+        """Srovnání dvou verzí artefaktu (path JSON diff + parser_version provenance).
+
+        Zrcadlí CLI ``stopa compare-artifacts``. 404 pokud některá verze neexistuje;
+        400 pro jiný artifact_key / neplatné details_json (semantické chyby domény).
+        """
+        from stopa.data.artifact_compare_repository import ArtifactCompareRepository
+        from stopa.domain.artifact_compare import compare_artifacts, comparison_to_dict
+
+        db = open_db(case_id)
+        try:
+            repo = ArtifactCompareRepository(db.conn)
+            try:
+                rec_a = repo.get_record(id_a)
+                rec_b = repo.get_record(id_b)
+                missing = [i for i, r in ((id_a, rec_a), (id_b, rec_b)) if r is None]
+                if missing:
+                    raise HTTPException(404, f"artefakt neexistuje: {', '.join(missing)}")
+                result = compare_artifacts(rec_a, rec_b)  # type: ignore[arg-type]
+            except (ValueError, TypeError) as exc:
+                raise HTTPException(400, str(exc)) from exc
+        finally:
+            db.close()
+        return {"ids": {"a": id_a, "b": id_b}, **comparison_to_dict(result)}
     @app.get("/api/cases/{case_id}/artifacts/{artifact_id}/provenance")
     def artifact_provenance(case_id: str, artifact_id: str) -> dict:
         """P0-1 — řetězec provenience artefaktu (kroky + mezery + upozornění).

@@ -125,6 +125,17 @@ class TestCompareArtifacts:
         assert not r.identical and r.json_diffs == ()
         assert ("parser_version", "2.3", "2.4") in r.metadata_diffs
 
+    def test_context_metadata_change_keeps_identical(self):
+        """Kontext zachycení (source_id) se hlásí, ale identitu nevyvrací —
+        shoda detailů + parser_version = stejná verze artefaktu."""
+        d = {"a": 1}
+        r = compare_artifacts(
+            _rec(details=d, source_id="src-1"),
+            _rec(id="art-y", details=dict(d), source_id="src-2"),
+        )
+        assert r.identical and r.json_diffs == ()
+        assert [m[0] for m in r.metadata_diffs] == ["source_id"]
+
     def test_metadata_diff_fixed_field_order(self):
         a = _rec(source_id="src-1", confidence=0.5, title="A", anomaly_flags=("f1",))
         b = _rec(id="art-y", source_id="src-2", confidence=0.9, title=None,

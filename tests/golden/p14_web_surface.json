@@ -57,6 +57,11 @@
   [
     "http",
     "GET",
+    "/api/cases/{case_id}/artifacts/compare"
+  ],
+  [
+    "http",
+    "GET",
     "/api/cases/{case_id}/artifacts/{artifact_id}/comments"
   ],
   [

@@ -85,14 +85,22 @@ METADATA_FIELDS: tuple[str, ...] = (
     "title",
 )
 
+#: Metadata pole určující **identitu verze** — jejich změna obrací ``identical``.
+#: Ostatní METADATA_FIELDS jsou kontext zachycení (zdroj, čas extrakce, …) a
+#: sice se hlásí v metadata_diffs, ale shodu detailů + parser_version nevyvracejí:
+#: stejný obsah extrahovaný z jiného zachytí je stále ta sama verze artefaktu.
+VERSION_DETERMINING_FIELDS: tuple[str, ...] = ("parser_version",)
+
 
 @dataclass(frozen=True)
 class ArtifactComparison:
     """Výsledek srovnání dvou verzí téhož logického artefaktu.
 
-    ``identical`` = prázdný JSON diff I prázdný metadata diff (exit 0 CLI).
-    ``parser_versions`` = (verze A, verze B) — AK3: každá změna je vysvětlitelná
-    verzemi extraktorů, které ji vyprodukovaly.
+    ``identical`` = prázdný JSON diff I žádné změněné pole z
+    ``VERSION_DETERMINING_FIELDS`` (parser_version) — exit 0 CLI. Kontextové
+    metadata (source_id, extracted_at, …) se hlásí v ``metadata_diffs``, ale
+    shodu nevyvracejí. ``parser_versions`` = (verze A, verze B) — AK3: každá
+    změna je vysvětlitelná verzemi extraktorů, které ji vyprodukovaly.
     """
 
     key: tuple[str, str]  # sdílené artifact_key (ověřeno shodné)
@@ -204,9 +212,11 @@ def compare_artifacts(a: ArtifactRecord, b: ArtifactRecord) -> ArtifactCompariso
         vb = getattr(b, name)
         if va != vb:
             metadata_diffs.append((name, va, vb))
+    changed_fields = {f for (f, _o, _n) in metadata_diffs}
+    identical = not json_diffs and not (changed_fields & set(VERSION_DETERMINING_FIELDS))
     return ArtifactComparison(
         key=key_a,
-        identical=not json_diffs and not metadata_diffs,
+        identical=identical,
         json_diffs=json_diffs,
         metadata_diffs=tuple(metadata_diffs),
         parser_versions=(a.parser_version, b.parser_version),
