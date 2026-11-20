@@ -10,7 +10,7 @@ domény/repotitáře (ValueError/TypeError); 201 = import proběhl.
 
 from __future__ import annotations
 
-from fastapi import HTTPException
+from fastapi import Body, HTTPException
 from pydantic import BaseModel, Field
 
 from stopa.data.intel_repository import IntelRepository, run_intel_match
@@ -25,6 +25,13 @@ class IoCIn(BaseModel):
 
 class ImportIn(BaseModel):
     iocs: list[IoCIn]
+
+
+class MatchIn(BaseModel):
+    """P3-5 volitelné parametry matchingu (bez těla = klasické IoC matching)."""
+
+    yara_dir: str | None = Field(None, description="adresář YARA pravidel (.yar)")
+    sigma_file: str | None = Field(None, description="Sigma šablony — JSON/YAML dokument")
 
 
 def _repo(db) -> IntelRepository:
@@ -66,11 +73,16 @@ def register(app, ctx) -> None:
             db.close()
 
     @app.post("/api/cases/{case_id}/intel/match")
-    def intel_match(case_id: str):
-        """Matching IoC feedu případu × artefakty/entity (re-run = clear + insert)."""
+    def intel_match(case_id: str, body: MatchIn | None = Body(default=None)):
+        """Matching IoC feedu × artefakty/entities (+ P3-5 YARA/Sigma), re-run = clear + insert."""
         db = open_db(case_id)
         try:
-            return run_intel_match(db, case_id)  # ValueError → 400 níže
+            return run_intel_match(
+                db,
+                case_id,
+                yara_dir=body.yara_dir if body else None,
+                sigma_file=body.sigma_file if body else None,
+            )  # ValueError → 400 níže
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         finally:

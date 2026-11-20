@@ -472,11 +472,17 @@ def match_iocs(
     - ``ip`` IoC ↔ sken volného textu artefaktů (vyžaduje :data:`artifacts`;
       bez nich IP matching deterministicky nevystihne nic).
 
+    Pravidla druhů ``yara_rule``/``sigma_tpl`` (P3-5) se zde záměrně přeskočí —
+    skenují je dedikované enginy v datové vrstvě (``run_intel_match``, match_kind
+    ``yara``/``sigma``).
+
     Výstup je seřazen ``(ioc_id, match_kind)`` → nezávislý na pořadí vstupních
     seznamů. ATT&CK techniky ↔ artefakty mapuje F6.3 (mitre_attack), ne zde.
     """
     results: list[IntelMatch] = []
     for ioc in sorted(iocs, key=ioc_id):
+        if ioc.kind in RULE_KINDS:
+            continue  # P3-5: pravidla skenují dedikované enginy (yara/sigma)
         candidates: list[tuple[str, list[dict]]] = [
             ("entity", _match_entity(occurrences, ioc)),
             ("file_hash", _match_file_hash(files, ioc)),

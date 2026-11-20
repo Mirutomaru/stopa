@@ -246,8 +246,9 @@ class TestMigration:
         from stopa.data.schema import SCHEMA_VERSION
 
         # v20 = P0-2 (public_key_b64); v21 = P0-1 provenance; v22 = P1-3 graph_edges;
-        # v23 = P2-4 investigation workspace; v24 = P2-5 threat intelligence
-        assert SCHEMA_VERSION == 24
+        # v23 = P2-4 investigation workspace; v24 = P2-5 threat intelligence;
+        # v25 = P3-5 rule matching (CHECKy ioc_feed_items/intel_matches)
+        assert SCHEMA_VERSION == 25
         d = CaseDB(tmp_path / "case-m.db")
         cols = {r["name"] for r in d.conn.execute("PRAGMA table_info(integrity_checkpoints)")}
         assert "public_key_b64" in cols

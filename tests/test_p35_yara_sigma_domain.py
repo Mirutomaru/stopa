@@ -37,7 +37,8 @@ from stopa.domain.yara_sigma import (
 )
 
 YARA_SRC = '''
-private global rule Malware_Sample {
+// Pozor: `private` pravidla nemusí engine hlásit mezi shodami (závisí na verzi)
+rule Malware_Sample {
     meta:
         tlp = "AMBER"
         author = "stopa-test"

@@ -140,7 +140,10 @@ def match_yara_files(rules_text: str, targets: Sequence[YaraTarget]) -> list[Yar
             "balík yara-python není nainstalován (pip install yara-python)"
         ) from exc
     try:
-        compiled = yara.compile(source_rules=rules_text)
+        try:
+            compiled = yara.compile(source=rules_text)  # yara-python 4.x
+        except TypeError:  # starší verze používají jiný kwarg
+            compiled = yara.compile(source_rules=rules_text)
     except yara.Error as exc:  # SyntaxError/CompileError — semantická chyba pravidla
         raise ValueError(f"Neplatný YARA zdroj: {exc}") from exc
 

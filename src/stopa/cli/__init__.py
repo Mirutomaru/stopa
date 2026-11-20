@@ -810,6 +810,14 @@ def build_parser() -> argparse.ArgumentParser:
         example="stopa intel match case-abc --json",
     )
     im_p.add_argument("case_id", help="ID případu")
+    im_p.add_argument(
+        "--yara", metavar="DIR", default=None,
+        help="P3-5: adresář YARA pravidel (.yar) — sken souborů případu (vyžaduje yara-python)",
+    )
+    im_p.add_argument(
+        "--sigma", metavar="FILE", default=None,
+        help="P3-5: Sigma šablony (JSON/YAML dokument) — sken timeline událostí",
+    )
     _add_json_flag(im_p)
     im_p.set_defaults(func=cmd_intel_match)
 

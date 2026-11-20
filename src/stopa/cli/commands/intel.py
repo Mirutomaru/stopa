@@ -59,12 +59,19 @@ def cmd_intel_import(args: argparse.Namespace) -> int:
 
 
 def cmd_intel_match(args: argparse.Namespace) -> int:
-    """Deterministické matching IoC feedu případu × artefakty/entity."""
+    """Deterministické matching IoC feedu × artefakty/entities (+ P3-5 YARA/Sigma)."""
     from stopa.data.intel_repository import run_intel_match
 
     db = _open_db(args.case_id)
     try:
-        result = run_intel_match(db, args.case_id)  # ValueError (prázdný feed) → níže
+        # ValueError (prázdný feed / neplatná YARA DIR nebo Sigma FILE) → níže;
+        # getattr: starší volající (testy P2-5) staví Namespace bez novích atributů
+        result = run_intel_match(
+            db,
+            args.case_id,
+            yara_dir=getattr(args, "yara", None),
+            sigma_file=getattr(args, "sigma", None),
+        )
     except ValueError as exc:
         raise SystemExit(str(exc))
     finally:

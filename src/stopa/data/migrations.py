@@ -132,6 +132,7 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     # provenance sloupců (files.hashed_at, custody_items acquisition metadata,
     # artifacts.parent_artifact_id). Idempotentní; nová DB mají vše ze SCHEMA.
     apply_provenance_metadata_migration(conn)
+    apply_rule_matching_migration(conn)  # P3-5 (v25): intel_matches.match_kind += yara/sigma
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).
     if _schema_version(conn) < SCHEMA_VERSION:
@@ -390,3 +391,70 @@ def apply_provenance_metadata_migration(conn: sqlite3.Connection) -> None:
         # bez inline FK (staré DB): logická self-referenc, ON DELETE SET NULL v DDL pro nová DB
         conn.execute("ALTER TABLE artifacts ADD COLUMN parent_artifact_id TEXT")
         conn.commit()
+
+
+def _rebuild_table_check(
+    conn: sqlite3.Connection, table: str, old_check: str, new_check: str
+) -> None:
+    """Rebuild ``table`` s nahrazeným CHECK constraint (SQLite neumí ALTER CONSTRAINT).
+
+    DDL nové tabulky = originální text ze ``sqlite_master`` + textová výměna CHECKu —
+    přesné sloupce/FK zůstanou identické; jiný formát → ValueError (fail-closed, ne
+    ztráta dat). Idempotentní: nová DB už mají rozšířený CHECK. Indexy se po RENAME
+    připojí ke staré tabulce (SQLite) → znovu vytvořeny se stejným DDL textem.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"Tabulka {table} neexistuje — chybějící legacy DDL?")
+    old_sql = row["sql"] or ""
+    if new_check in old_sql:  # rozšířeno (čistá DB v25) → no-op
+        return
+    new_sql = old_sql.replace(old_check, new_check)
+    if new_sql == old_sql:  # neočekávaný formát — fail-closed
+        raise ValueError(f"Neočekávané DDL {table} (CHECK?): {old_sql[:120]!r}")
+
+    idx_defs = [
+        r[0]
+        for r in conn.execute(
+            "SELECT sql FROM sqlite_master"
+            " WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+            (table,),
+        )
+    ]
+    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+    col_list = ", ".join(cols)
+    tmp = f"_old_{table}_p35"
+    conn.execute(f"ALTER TABLE {table} RENAME TO {tmp}")
+    conn.execute(new_sql)
+    conn.execute(f"INSERT INTO {table} ({col_list}) SELECT {col_list} FROM {tmp}")
+    conn.execute(f"DROP TABLE {tmp}")  # indexy odešly se starou tabulkou → znovu níže
+    for idx_sql in idx_defs:  # DDL text nese konečný název tabulky — spustí se beze změny
+        conn.execute(idx_sql)
+
+
+def apply_rule_matching_migration(conn: sqlite3.Connection) -> None:
+    """P3-5 (v25): pravidla žijí ve feedu, jejich shody jdou dedikovanými enginy.
+
+    - ``ioc_feed_items.kind`` += ``yara_rule``, ``sigma_tpl`` — pravidla jsou feed itemy
+      (kanonický název v ``value``, text pravidla/JSON šablony v ``raw_value``);
+    - ``intel_matches.match_kind`` += ``yara``, ``sigma`` — shody dedikovaných engine.
+
+    SQLite neumí ALTER CONSTRAINT → obě tabulky se rebuildují přes RENAME + CREATE +
+    INSERT…SELECT (jen CHECK nahrazen textově). Idempotentní na nových DB.
+    """
+    _rebuild_table_check(
+        conn,
+        "ioc_feed_items",
+        "CHECK (kind IN ('ip', 'domain', 'hash', 'url'))",
+        "CHECK (kind IN ('ip', 'domain', 'hash', 'url', 'yara_rule', 'sigma_tpl'))",
+    )
+    _rebuild_table_check(
+        conn,
+        "intel_matches",
+        "CHECK (match_kind IN ('entity', 'file_hash', 'artifact_text'))",
+        "CHECK (match_kind IN ('entity', 'file_hash', 'artifact_text', 'yara', 'sigma'))",
+    )
+    conn.commit()
+

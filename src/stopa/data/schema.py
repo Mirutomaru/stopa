@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verzi umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -473,7 +473,7 @@ INTEL_DDL = """
 CREATE TABLE IF NOT EXISTS ioc_feed_items (
     id TEXT PRIMARY KEY,
     case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK (kind IN ('ip', 'domain', 'hash', 'url')),
+    kind TEXT NOT NULL CHECK (kind IN ('ip', 'domain', 'hash', 'url', 'yara_rule', 'sigma_tpl')),  -- P3-5: pravidla = feed itemy
     value TEXT NOT NULL,             -- kanonický tvar (E4 kanonika)
     raw_value TEXT,                  -- původní tvar z feedu
     tlp TEXT NOT NULL DEFAULT 'GREEN' CHECK (tlp IN ('WHITE', 'GREEN', 'AMBER', 'RED')),
@@ -488,7 +488,8 @@ CREATE TABLE IF NOT EXISTS intel_matches (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
     ioc_id TEXT NOT NULL REFERENCES ioc_feed_items(id) ON DELETE CASCADE,
-    match_kind TEXT NOT NULL CHECK (match_kind IN ('entity', 'file_hash', 'artifact_text')),
+    match_kind TEXT NOT NULL CHECK (match_kind IN ('entity', 'file_hash', 'artifact_text', 'yara', 'sigma')),
+    -- P3-5: yara/sigma = shody dedikovaných engine (pravidla žijí ve feedu)
     evidence_json TEXT NOT NULL DEFAULT '[]',  -- [{artifact_id, rel_path, ts_utc}, …] strop MAX_EVIDENCE
     first_seen TEXT,
     last_seen TEXT,

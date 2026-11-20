@@ -174,8 +174,8 @@ class TestRevisionChain:
 
 
 class TestRepositoryNotes:
-    def test_schema_version_is_24(self, db):
-        assert SCHEMA_VERSION == 24 and db.schema_version() == SCHEMA_VERSION
+    def test_schema_version_is_25(self, db):
+        assert SCHEMA_VERSION == 25 and db.schema_version() == SCHEMA_VERSION
 
     def test_note_on_artifact_roundtrip(self, repo):
         note_id = repo.add_note(CASE_ID, "artifact", "art-1", "poznamka na artefakt", "znalec")

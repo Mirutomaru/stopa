@@ -313,6 +313,8 @@
     "opts": [
       "--help",
       "--json",
+      "--sigma",
+      "--yara",
       "-h"
     ]
   },
