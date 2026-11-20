@@ -132,6 +132,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > **Návrhy + priority + AK (2026-11-20):** `docs/P3_DESIGNS.md` — doporučené pořadí:
 > P3-1 Advanced Search → P3-6 UI/policy follow-upy z 2.2 → P3-2 Artifact Version Comparison →
 > P3-5 YARA/Sigma matching → P3-3 Automated Classification → P3-4 Evidence Storage Manager.
+> **Stav 2026-11-20: všech 6 položek hotovo ✅** (SHAs v `STOPA_CHANGELOG.md` / SKILL) — Release STOPA 2.3, suite **5013p/1s**.
 
 | # | Položka | Pozn. |
 |---|---------|-------|
