@@ -204,6 +204,29 @@
       "-h"
     ]
   },
+  "evidence-storage": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "evidence-storage/report": {
+    "opts": [
+      "--budget",
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "evidence-storage/verify": {
+    "opts": [
+      "--export",
+      "--help",
+      "--import",
+      "--json",
+      "-h"
+    ]
+  },
   "exchange": {
     "opts": [
       "--help",

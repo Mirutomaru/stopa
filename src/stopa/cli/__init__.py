@@ -78,6 +78,9 @@ from .commands.core import (
     cmd_timeline,
 )
 
+# P3-4 — Evidence Storage Manager (kvarenténa originálů: inventář/rehash/rozpočet/manifest)
+from .commands.evidence_storage import cmd_evidence_storage
+
 # P2-7 — Case Exchange bundle v1 v cli/commands/exchange.py
 from .commands.exchange import cmd_exchange_pack, cmd_exchange_verify
 
@@ -194,6 +197,7 @@ _SUBCOMMAND_EXAMPLES = {
     "reparse": "stopa reparse case-abc --parser-version 2.4   # F5.3 — pinned verze + diff report",
     "compare-artifacts": "stopa compare-artifacts case-abc art-1 art-2 --json   # P3-2 — JSON diff verzí artefaktu",
     "classify": "stopa classify case-abc --json   # P3-3 — pravidlová klasifikace souborů (+ --override ID --category X --reason R)",
+    "evidence-storage": "stopa evidence-storage verify case-abc --json   # P3-4 — read-only rehash kvarentény + kapacitní report (+ --export/--import FILE)",
     "wb": "stopa wb attach case-abc --device 'Tableau TBW-100'   # F5.4 — WB připojení + auto-detekce",
     "integrity": 'stopa integrity case-abc --init-key --checkpoint "před exportem"',
     "replay": "stopa replay case-abc op-123   # bez op = poslední extract",
@@ -640,6 +644,37 @@ def build_parser() -> argparse.ArgumentParser:
                       help="explicitní actor override (default: case examiner)")
     _add_json_flag(cl_p)
     cl_p.set_defaults(func=cmd_classify)
+
+    # P3-4 — Evidence Storage Manager: kvarenténa originálů (inventář/rozpočet/manifest)
+    ev_p = _ex_sub(
+        sub, "evidence-storage",
+        help="P3-4 — Evidence Storage Manager (kvarenténa originálních důkazů)",
+    )
+    ev_sub = ev_p.add_subparsers(dest="evidence_cmd", required=True, metavar="<podprikaz>")
+
+    evv_p = _ex_sub(
+        ev_sub, "verify",
+        help="Read-only rehash kvarentény případu (verified/corrupt/missing/no_reference)",
+        example="stopa evidence-storage verify case-abc --export manifest.json   # fail-closed; exit 0/2",
+    )
+    evv_p.add_argument("case_id", help="ID případu")
+    evv_p.add_argument("--export", metavar="FILE", default=None,
+                       help="export podepsaného Ed25519 manifestu (fail-closed: při missing/corrupt se nepodepíše)")
+    evv_p.add_argument("--import", dest="import_file", metavar="FILE", default=None,
+                       help="import cizího reference manifestu (ověření podpisu + okamžitá disk kontrola)")
+    _add_json_flag(evv_p)
+    evv_p.set_defaults(func=cmd_evidence_storage, action="verify")
+
+    evr_p = _ex_sub(
+        ev_sub, "report",
+        help="Kapacitní rozpočet kvarentény z DB metadata (+ --budget MB)",
+        example="stopa evidence-storage report case-abc --budget 500   # utilization + over_budget",
+    )
+    evr_p.add_argument("case_id", help="ID případu")
+    evr_p.add_argument("--budget", metavar="MB", type=float, default=None,
+                       help="kapacitní rozpočet v MB (utilization/over_budget)")
+    _add_json_flag(evr_p)
+    evr_p.set_defaults(func=cmd_evidence_storage, action="report")
 
     # F5.4 — write-blocker integration API (status/attach/remove + ingest gate)
     wb_p = _ex_sub(sub, "wb", help="F5.4 — write-blocker: status/attach/remove")
