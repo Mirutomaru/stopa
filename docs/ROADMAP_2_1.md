@@ -127,6 +127,21 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 
 **F14 produktové schopnosti A–N (z master promptu):** Evidence Graph=P1-3; Advanced Timeline=P2-3; Investigation Workspace=P2-4; Chain of Custody=rozšíření `custody_items` v P0-1/P1-7; Threat Intel=P2-5; Automated Classification / Cross-case Correlation / Advanced Deduplication (F2.3 existuje) / Artifact Version Comparison / Advanced Search (FTS5 existuje — rozšířit o metadata+vztahy) / Distributed Processing=P2-1 / Evidence Storage Manager / QA Center=P0-4+P1-7 / Report Marketplace & Case Exchange=P2-7. Každá dostane návrh+prioritu+AK před implementací (neimplementovat všechny automaticky).
 
+## P3 — Další rozšíření (post-2.2)
+
+> **Návrhy + priority + AK (2026-11-20):** `docs/P3_DESIGNS.md` — doporučené pořadí:
+> P3-1 Advanced Search → P3-6 UI/policy follow-upy z 2.2 → P3-2 Artifact Version Comparison →
+> P3-5 YARA/Sigma matching → P3-3 Automated Classification → P3-4 Evidence Storage Manager.
+
+| # | Položka | Pozn. |
+|---|---------|-------|
+| P3-1 | Advanced Search (FTS5 + metadata + vztahy) | FTS5 `files_fts`/`artifacts_fts` existují — rozšířit o strukturované filtry a průchod graph v22 (BFS depth-limited, deterministický) |
+| P3-2 | Artifact Version Comparison | path-based JSON diff verzí artefaktů napříč běhy/reparse; re-use F5.3 parser versioning + lineage P0-1 |
+| P3-3 | Automated Classification | pravidlový (offline deterministický) klasifikátor s confidence + reasons; append-only lidský override v audit_log |
+| P3-4 | Evidence Storage Manager | inventář + read-only rehash + kapacitní rozpočet + export/import kvarentény per case (Ed25519 manifest) |
+| P3-5 | Threat Intel: YARA/Sigma matching | dokončení návrhu P2-5; volitelné závislosti s graceful degradation; matchy do `intel_matches` v24 |
+| P3-6 | UI/policy follow-upy z 2.2 | SPA view pro timeline-intel (hotové API) + TLP distribuční politika Case Exchange bundle |
+
 ---
 
 ## Postup práce (etapy A–G z master promptu)

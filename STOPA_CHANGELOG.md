@@ -17,6 +17,9 @@ Formát: Conventional Commits + fáze. Nejnovější nahoře.
 - Full regression: **`4698 passed / 1 skipped`, exit 0** (~52 min; +420 testů vs. báze 4278p na 2.1). Ruff clean repo-wide; rozpočet `db.py` **599 < 600 ř.** nedotčen; golden povrchy (CLI/Web/pipeline/validation registry) aditivní set-difem byte-přesně vs. HEAD; package kompatibilita `python -m stopa.cli` exit 0.
 - Release notes s známými limity: `docs/RELEASE_NOTES_2_2.md`.
 
+### Added — Post-release 2.2: P3 návrhy k schválení (2026-11-20)
+- **`docs/P3_DESIGNS.md`** — všech 6 položek s návrhem + prioritou + AK podle pravidla v ROADMAP; doporučené pořadí **P3-1 Advanced Search → P3-6 UI/policy follow-upy z 2.2 → P3-2 Artifact Version Comparison → P3-5 YARA/Sigma matching → P3-3 Automated Classification → P3-4 Evidence Storage Manager**. Zdroj: F14 schopnosti dosud bez povrchu (Advanced Search, Artifact Version Comparison, Automated Classification, Evidence Storage Manager) + známé limity release 2.2 (SPA timeline-intel view, YARA/Sigma matching, TLP distribuční politika). Každá položka = samostatná releasable jednotka; aditivní migrace od schématu v24.
+
 ## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-1 evidence provenance engine + P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model; P1-1 parser quality framework uzavřeno — jádro + vlny 1–17 markerů/sad (category coverage 100 %, 624/624, 78/78 parserů plně); **P1-2 AI orchestrátor hotov** — jádro + case wiring + eval sada + CLI ai-run + Web endpoity (74 testů offline); **P1-3 Evidence Graph hotov** — čistá doména + schema v22 graph_edges + CLI `stopa graph` + Web endpoint (43 testů offline); SW cache fix; fáze 1/15 dokumentace)
 
 ### Added — Post-release 2.1: P2 návrhy k schválení (2026-11-18)
