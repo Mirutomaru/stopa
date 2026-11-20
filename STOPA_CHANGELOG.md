@@ -2,6 +2,21 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-20 (STOPA 2.2: post-release roadmap **P2 hotová 7/7** — P2-4 investigation workspace, P2-3 advanced timeline intelligence, P2-6 cross-case correlation, P2-5 threat intelligence, P2-2 centrální registr případů, P2-7 plugin marketplace & Case Exchange, P2-1 distribuované zpracování; full suite **4698p/1s** exit 0)
+
+### Added — Post-release 2.1: P2 roadmap kompletní (7/7 položek, 2026-11-19…20)
+- **P2-4 Investigation Workspace** (`c12b617`/`05f811f`): schéma v23 — poznámky/úkoly/revize hypotéz s append-only hash chain (tamper = exit 2); CLI `stopa workspace note/task/hypo-rev` + Web `/api/cases/{id}/inv/*` (7 rout); testy W2 **69/69**.
+- **P2-3 Advanced Timeline Intelligence** (`9e6465d`/`fc6db63`): `domain/timeline_adv.py` — normalizace epoch/ISO/TZ, IQR gaps/outliery (Tukey), cross-source korelace s E4 confidence, vysvětlení nejistoty; 1M událostí = 3,06 s / RSS 1,3 GB; CLI `stopa timeline-intel` + Web GET advanced-intel (on-the-fly bez DDL).
+- **P2-6 Cross-case Correlation** (`dbd4739`/`7216338`): instance DDL cross_case_queries/xcorr_grants + `domain/cross_case.py` (sdílené entity E4 confidence, tenancy fail-closed, audit hash chain GENESIS); CLI `stopa xcorr <a> <b>|--all [--entity ...]` exit 0/1/**2** + Web `/api/xcorr/{correlate,audit,grants}`.
+- **P2-5 Threat Intelligence Workspace** (`6b07cda`/`4305d26`): schéma v24 INTEL_DDL (ioc_feed_items UUIDv5 idempotentní / intel_matches); `domain/threat_intel.py` — IoC ip|domain|hash|url + TLP, kanonizace fail-closed, stáří fresh/stale/old, STIX 2.1 roundtrip, deterministické matching; doména **56/56**, CLI `stopa intel import|match` + Web `/api/cases/{id}/intel/*`, boundary **18/18**.
+- **P2-2 Centrální registr případů** (`5c3a919`): instance DB case_registry (DDL idempotentní, bez bumpu SCHEMA_VERSION); `domain/case_registry.py` (primary_tenant = nejmenší org_id, stats snapshot kanonické JSON, konzervativní viditelnost); CLI `stopa registry [--tenant --user --sync]` exit 0/1/**2** + Web `/api/registry`; defenzivní auto_sync/auto_remove hooky; doména **28/28**, boundary **18/18**.
+- **P2-7 Plugin Marketplace & Case Exchange** (`e532c10`/`39e5e18`): W1 — HMAC-SHA256 anonymizace (mapping se neexportuje) + Ed25519 podpis pluginů (manifest_digest SHA-256 kanonického JSON); W2 — **bundle `stopa-exchange/v1`** (deterministické counts, bundle_digest bez klíče signature, verify fail-closed), read-only snapshot case DB, CLI `stopa exchange pack|verify`, Web marketplace `/api/exchange/pack|verify`; boundary **20/20**.
+- **P2-1 Distribuované zpracování** (`ca550e0`/`b53982e`): W1 — čistá doména `domain/work_queue.py` (WorkQueue Protocol[T], InProcessWorkQueue backpressure + graceful stop, CapacityBudget); W2 — integrace do pipeline core `process_source(work_queue=None, disk_budget_bytes=None)` s zachovaným FIFO determinismem a DB writes v hlavním procesu + CLI `stopa add --disk-budget MB`; nalezený deadlock (maxsize < window → main thread v put()) opraven + test na hranici. **AK měřeně:** parita hash manifestů seq==inj==default ✅, SIGTERM stop+resume bez ztráty dat ✅, benchmark N=4 = **3,51×** ≥ cíl 2,0× (N/2) PROSPEL ✅; W2 testy **12/12**.
+
+### Changed — Validace STOPA 2.2
+- Full regression: **`4698 passed / 1 skipped`, exit 0** (~52 min; +420 testů vs. báze 4278p na 2.1). Ruff clean repo-wide; rozpočet `db.py` **599 < 600 ř.** nedotčen; golden povrchy (CLI/Web/pipeline/validation registry) aditivní set-difem byte-přesně vs. HEAD; package kompatibilita `python -m stopa.cli` exit 0.
+- Release notes s známými limity: `docs/RELEASE_NOTES_2_2.md`.
+
 ## [Unreleased] — 2026-11-18 (STOPA 2.1: P0 bezpečnost & integrita = P0-1 evidence provenance engine + P0-2 klíčová správa pečetí + P0-3 plugin sandbox hardening + P0-4 forensic validation lab + P0-5 security threat model; P1-1 parser quality framework uzavřeno — jádro + vlny 1–17 markerů/sad (category coverage 100 %, 624/624, 78/78 parserů plně); **P1-2 AI orchestrátor hotov** — jádro + case wiring + eval sada + CLI ai-run + Web endpoity (74 testů offline); **P1-3 Evidence Graph hotov** — čistá doména + schema v22 graph_edges + CLI `stopa graph` + Web endpoint (43 testů offline); SW cache fix; fáze 1/15 dokumentace)
 
 ### Added — Post-release 2.1: P2 návrhy k schválení (2026-11-18)

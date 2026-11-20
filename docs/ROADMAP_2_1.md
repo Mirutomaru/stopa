@@ -113,6 +113,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 
 > **Návrhy + priority + AK (2026-11-18):** `docs/P2_DESIGNS.md` — doporučené pořadí:
 > P2-4 → P2-3 → P2-6 → P2-5 → P2-2 → P2-7 → P2-1.
+> **Stav 2026-11-20: všech 7 položek hotovo ✅** (SHAs v `STOPA_CHANGELOG.md` / SKILL) — Release STOPA 2.2, suite **4698p/1s**.
 
 | # | Položka | Pozn. |
 |---|---|---|
