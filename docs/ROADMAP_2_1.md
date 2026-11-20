@@ -136,7 +136,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 | # | Položka | Pozn. |
 |---|---------|-------|
 | P3-1 | Advanced Search (FTS5 + metadata + vztahy) ✅ **hotovo 2026-11-20** (`71666c4`/`54c0682`) | W1 čistá doména `domain/search_adv.py`; W2 `data/search_repository.py` + CLI `stopa search` +7 volitelných flagů (bez nich byte-identicky) + Web GET `/api/cases/{id}/search/advanced`; testy W1 29 + W2 18, regression 175/175 |
-| P3-2 | Artifact Version Comparison | path-based JSON diff verzí artefaktů napříč běhy/reparse; re-use F5.3 parser versioning + lineage P0-1 |
+| P3-2 | Artifact Version Comparison ✅ **hotovo 2026-11-20** (`855a36a`/`5819fa2`) | path-based JSON diff verzí napříč zachytími (klíč = type+rel_path, source není částí klíče); CLI `stopa compare-artifacts` (exit 0/1/2) + Web GET `/artifacts/compare`; identity = detaily + parser_version; testy 35/35, povrch aditivní CLI +7/Web 116→117 |
 | P3-3 | Automated Classification | pravidlový (offline deterministický) klasifikátor s confidence + reasons; append-only lidský override v audit_log |
 | P3-4 | Evidence Storage Manager | inventář + read-only rehash + kapacitní rozpočet + export/import kvarentény per case (Ed25519 manifest) |
 | P3-5 | Threat Intel: YARA/Sigma matching | dokončení návrhu P2-5; volitelné závislosti s graceful degradation; matchy do `intel_matches` v24 |
