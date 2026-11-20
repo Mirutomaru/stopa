@@ -135,7 +135,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 
 | # | Položka | Pozn. |
 |---|---------|-------|
-| P3-1 | Advanced Search (FTS5 + metadata + vztahy) | FTS5 `files_fts`/`artifacts_fts` existují — rozšířit o strukturované filtry a průchod graph v22 (BFS depth-limited, deterministický) |
+| P3-1 | Advanced Search (FTS5 + metadata + vztahy) ✅ **hotovo 2026-11-20** (`71666c4`/`54c0682`) | W1 čistá doména `domain/search_adv.py`; W2 `data/search_repository.py` + CLI `stopa search` +7 volitelných flagů (bez nich byte-identicky) + Web GET `/api/cases/{id}/search/advanced`; testy W1 29 + W2 18, regression 175/175 |
 | P3-2 | Artifact Version Comparison | path-based JSON diff verzí artefaktů napříč běhy/reparse; re-use F5.3 parser versioning + lineage P0-1 |
 | P3-3 | Automated Classification | pravidlový (offline deterministický) klasifikátor s confidence + reasons; append-only lidský override v audit_log |
 | P3-4 | Evidence Storage Manager | inventář + read-only rehash + kapacitní rozpočet + export/import kvarentény per case (Ed25519 manifest) |
