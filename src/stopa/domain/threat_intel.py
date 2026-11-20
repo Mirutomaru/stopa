@@ -38,8 +38,15 @@ from typing import Any
 from stopa.domain.entities import EntityOccurrence, normalize_hash, normalize_url_host
 from stopa.models import Artifact, FileRecord
 
-#: Druhy IoC — kanonické hodnoty ve schématu (CHECK constraint).
-IOC_KINDS = ("ip", "domain", "hash", "url")
+#: Druhy IoC — E4 kanonika + P3-5 pravidlové druhy (feed item nese samotné
+#: pravidlo: value = název, raw_value = zdrojový soubor; STIX je nenesou).
+IOC_KINDS = ("ip", "domain", "hash", "url", "yara_rule", "sigma_tpl")
+
+#: Pravidlové druhy (P3-5) — YARA pravidla a Sigma šablony.
+RULE_KINDS = ("yara_rule", "sigma_tpl")
+
+#: Druhy s STIX třídou — bundle nese jen indikátorové hodnoty, ne pravidla.
+_STIX_KINDS = tuple(k for k in IOC_KINDS if k not in RULE_KINDS)
 
 #: TLP 1.0 úrovně sdílení (uppercase — kanonický tvar v DB i STIX expanzi).
 TLP_LEVELS = ("WHITE", "GREEN", "AMBER", "RED")
@@ -111,6 +118,11 @@ def canonical_value(kind: str, value: str) -> str:
         if n is None:
             raise ValueError(f"Neplatný hash IoC (hex 32/40/64): {value!r}")
         return n
+    if kind in RULE_KINDS:  # P3-5: název pravidla je už kanonický (identifikátor)
+        v = value.strip()
+        if not v or any(c.isspace() for c in v):
+            raise ValueError(f"Neplatný název pravidla ({kind}): {value!r}")
+        return v
     raise ValueError(f"Neznámý druh IoC: {kind!r} (očekáváno {'/'.join(IOC_KINDS)})")
 
 
@@ -209,10 +221,14 @@ def export_bundle(iocs: Sequence[IoC]) -> str:
     a ``x_stopa_tlp`` (TLP úroveň). ``name`` je deterministická funkce STIX
     třídy + kanonické hodnoty → roundtrip ``import(export(X)) == export(X)``
     drží i pro druh „url“ (vrací se jako „domain“, stejné ID a pattern).
-    ``raw_value`` je display metadata — přes bundle se nenesie.
+    ``raw_value`` je display metadata — přes bundle se nenesie. P3-5: pravidlové
+    druhy (yara_rule/sigma_tpl) jsou STOPA-lokální — bundle nese jen indikátorové
+    hodnoty (:data:`_STIX_KINDS`), pravidla zůstávají v feedu s plným textem.
     """
     objects = []
     for ioc in sorted(iocs, key=ioc_id):
+        if ioc.kind not in _STIX_KINDS:  # P3-5: pravidla nemají STIX třídu
+            continue
         created = _iso(ioc.acquired_at) or datetime.now(timezone.utc).isoformat()
         name = f"[{_stix_class(ioc.kind)}] {ioc.value}"
         objects.append(
