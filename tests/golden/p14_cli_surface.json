@@ -497,9 +497,16 @@
   },
   "search": {
     "opts": [
+      "--entity",
       "--help",
       "--json",
+      "--kind",
       "--limit",
+      "--mtime-from",
+      "--mtime-to",
+      "--rel-depth",
+      "--size-max",
+      "--size-min",
       "--source",
       "-h"
     ]

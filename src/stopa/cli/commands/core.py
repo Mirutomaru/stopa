@@ -324,8 +324,22 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    """Full-text search (FTS5) — AXIOM-style vyhledávání napříč případem."""
+    """Full-text search (FTS5) — AXIOM-style vyhledávání napříč případem + P3-1 filtry."""
     db = _open_db(args.case_id)
+    # P3-1 — s jakýmkoli pokročilým flagem jde přes SearchRepository; bez nich
+    # zůstává původní cesta byte-identická (AK1).
+    if any(
+        (
+            getattr(args, "kind", None),
+            getattr(args, "entity", None),
+            getattr(args, "size_min", None) is not None,
+            getattr(args, "size_max", None) is not None,
+            getattr(args, "mtime_from", None),
+            getattr(args, "mtime_to", None),
+            getattr(args, "rel_depth", None),
+        )
+    ):
+        return _cmd_search_advanced(args, db)
     records = db.search(args.query, source_id=args.source, limit=args.limit)
     json_mode = getattr(args, "json", False)
     if not records:
@@ -360,6 +374,95 @@ def cmd_search(args: argparse.Namespace) -> int:
         _print_json({"case_id": args.case_id, "query": args.query, "results": results, "total": len(results)})
     else:
         print(f"\nCELKEM: {len(records)} souborů (dotaz: {args.query!r})")
+    db.close()
+    return 0
+
+
+def _cmd_search_advanced(args: argparse.Namespace, db) -> int:
+    """P3-1 — strukturované vyhledávání se filtry a procházením grafu vztahů.
+
+    Voláno z :func:`cmd_search`, když je zadán jakýkoli pokročilý flag
+    (--kind/--entity/--size-min/--size-max/--mtime-from/--mtime-to/--rel-depth).
+    Výstupní formát výsledků odpovídá původnímu search; JSON dostává aditivně
+    klíče ``filters`` a ``related``, textový režim sekci VZTAHY.
+    """
+    from stopa.data.search_repository import SearchRepository
+    from stopa.domain.search_adv import AdvancedSearchQuery, FilterSpec, RelationSpec
+
+    try:
+        spec = FilterSpec.from_iso(
+            kind=args.kind,
+            size_min=args.size_min,
+            size_max=args.size_max,
+            mtime_from=args.mtime_from,
+            mtime_to=args.mtime_to,
+            source_id=getattr(args, "source", None),
+            entity=args.entity,
+        )
+        relations = RelationSpec(depth=args.rel_depth) if args.rel_depth else None
+        query = AdvancedSearchQuery(
+            text=args.query or None,
+            scope="files",
+            filters=spec,
+            relations=relations,
+            limit=getattr(args, "limit", 100),
+        )
+        result = SearchRepository(db.conn).search_advanced(query)
+    except (ValueError, TypeError) as exc:
+        print(f"Neplatný filtr: {exc}", file=sys.stderr)
+        db.close()
+        return 2
+
+    json_mode = getattr(args, "json", False)
+    results_out = []
+    for r in result.results:
+        flags = [f for f in (r.bad_extension and "BAD-EXT", bool(r.is_duplicate_of) and f"DUP→{r.is_duplicate_of}", r.hash_set_hit and f"HASHSET:{r.hash_set_hit}") if f]
+        flag_str = f"  [{' '.join(flags)}]" if flags else ""
+        sig = r.signature_type or "?"
+        results_out.append(
+            {
+                "rel_path": r.rel_path,
+                "signature": sig,
+                "size_bytes": r.size_bytes,
+                "flags": flags,
+            }
+        )
+        if not json_mode:
+            print(f"{r.rel_path}  [{sig}] {r.size_bytes:,} B{flag_str}")
+
+    related_out = [
+        {"rel_path": r.rel_path, "signature": r.signature_type or "?", "size_bytes": r.size_bytes}
+        for r in result.related_files
+    ]
+
+    if json_mode:
+        _print_json(
+            {
+                "case_id": args.case_id,
+                "query": args.query,
+                "results": results_out,
+                "total": len(results_out),
+                "filters": query.to_dict().get("filters", {}),
+                "related": {"files": related_out, "nodes": list(result.related_nodes)},
+            }
+        )
+    else:
+        if not result.results and not related_out:
+            print(f"(žádné soubory neodpovídají dotazu: {args.query!r})")
+        if related_out or result.related_nodes:
+            print(
+                f"\nVZTAHY (hloubka {args.rel_depth}): {len(related_out)} souvisejících"
+                f" souborů, {len(result.related_nodes)} uzlů grafu"
+            )
+            for r in result.related_files:
+                sig = r.signature_type or "?"
+                print(f"  {r.rel_path}  [{sig}] {r.size_bytes:,} B")
+            for n in list(result.related_nodes)[:20]:
+                rels = ",".join(n["relations"]) if n["relations"] else "?"
+                print(f"  [{n['type']}] id={n['id']} depth={n['depth']} relations={rels}")
+        if result.results:
+            extra = f" (+{len(related_out)} souvisejících)" if related_out else ""
+            print(f"\nCELKEM: {len(result.results)} souborů{extra} (dotaz: {args.query!r})")
     db.close()
     return 0
 

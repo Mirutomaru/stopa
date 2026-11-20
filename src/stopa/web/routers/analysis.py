@@ -93,6 +93,60 @@ def register(app, ctx) -> None:
             return [r.model_dump(mode="json") for r in recs]
         finally:
             db.close()
+
+    # ── P3-1 Advanced Search ────────────────────────────────────────────
+    @app.get("/api/cases/{case_id}/search/advanced")
+    def search_advanced(
+        case_id: str,
+        q: str = "",
+        kind: str | None = Query(None),
+        entity: str | None = Query(None),
+        size_min: int | None = Query(None),
+        size_max: int | None = Query(None),
+        mtime_from: str | None = Query(None),
+        mtime_to: str | None = Query(None),
+        rel_depth: int | None = Query(None, ge=1, le=3),
+        limit: int = 100,
+    ) -> dict:
+        """P3-1 — Advanced Search: FTS5 + strukturované filtry + graf vztahů.
+
+        Bez parametrů ekvivalentní ``/search``; ``rel_depth`` přidá procházení
+        ``graph_edges`` (hloubka 1..3) z artefaktů výsledků. Neznámý případ →
+        404, semantická chyba filtru → 400.
+        """
+        from stopa.data.search_repository import SearchRepository
+        from stopa.domain.search_adv import AdvancedSearchQuery, FilterSpec, RelationSpec
+
+        db = open_db(case_id)
+        try:
+            spec = FilterSpec.from_iso(
+                kind=kind,
+                size_min=size_min,
+                size_max=size_max,
+                mtime_from=mtime_from,
+                mtime_to=mtime_to,
+                entity=entity,
+            )
+            relations = RelationSpec(depth=rel_depth) if rel_depth else None
+            query = AdvancedSearchQuery(
+                text=q or None, scope="files", filters=spec, relations=relations, limit=limit
+            )
+            result = SearchRepository(db.conn).search_advanced(query)
+            return {
+                "case_id": case_id,
+                "query": q,
+                "results": [r.model_dump(mode="json") for r in result.results],
+                "total": len(result.results),
+                "related": {
+                    "files": [r.model_dump(mode="json") for r in result.related_files],
+                    "nodes": list(result.related_nodes),
+                },
+            }
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, f"neplatný filtr: {exc}") from exc
+        finally:
+            db.close()
+
     @app.get("/api/cases/{case_id}/timeline")
     def timeline(
         case_id: str,

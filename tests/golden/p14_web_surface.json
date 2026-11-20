@@ -242,6 +242,11 @@
   [
     "http",
     "GET",
+    "/api/cases/{case_id}/search/advanced"
+  ],
+  [
+    "http",
+    "GET",
     "/api/cases/{case_id}/sharing"
   ],
   [

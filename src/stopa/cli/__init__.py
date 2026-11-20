@@ -328,6 +328,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_p.add_argument("--source", help="filtr podle evidence source ID")
     search_p.add_argument("--limit", type=int, default=100)
+    # P3-1 Advanced Search — volitelné strukturované filtry; bez flagů = stávající chování
+    search_p.add_argument(
+        "--kind", help="filtr podle signatury (soubory: signature_type, např. PDF)"
+    )
+    search_p.add_argument(
+        "--entity", help="soubor s artefaktem přímo spojeným danou entitou (graf vztahů)"
+    )
+    search_p.add_argument("--size-min", type=int, help="minimální velikost v B (včetně)")
+    search_p.add_argument("--size-max", type=int, help="maximální velikost v B (včetně)")
+    search_p.add_argument("--mtime-from", help="od data (ISO 8601, včetně)")
+    search_p.add_argument("--mtime-to", help="do data (ISO 8601, včetně)")
+    search_p.add_argument(
+        "--rel-depth",
+        type=int,
+        choices=(1, 2, 3),
+        help="procházet graf vztahů od výsledků (hloubka 1..3)",
+    )
     _add_json_flag(search_p)
     search_p.set_defaults(func=cmd_search)
 
