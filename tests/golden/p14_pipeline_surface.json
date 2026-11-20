@@ -50,7 +50,7 @@
   "summarize_outputs"
  ],
  "signatures": {
-  "process_source": "(db: 'CaseDB', source_id: 'str', root: 'Path', profile_name: 'str' = 'forensic', hash_sets: 'dict[str, set[str]] | None' = None, progress: 'Callable[[int, int], None] | None' = None, resume: 'bool' = False, max_workers: 'int | None' = None, pool: 'str' = 'auto', commit_every: 'int' = 256, stop_event: 'threading.Event | None' = None, max_inflight: 'int | None' = None, pinned_parser_version: 'str | None' = None) -> 'ProcessResult'",
+  "process_source": "(db: 'CaseDB', source_id: 'str', root: 'Path', profile_name: 'str' = 'forensic', hash_sets: 'dict[str, set[str]] | None' = None, progress: 'Callable[[int, int], None] | None' = None, resume: 'bool' = False, max_workers: 'int | None' = None, pool: 'str' = 'auto', commit_every: 'int' = 256, stop_event: 'threading.Event | None' = None, max_inflight: 'int | None' = None, pinned_parser_version: 'str | None' = None, work_queue: 'WorkQueue | None' = None, disk_budget_bytes: 'int | None' = None) -> 'ProcessResult'",
   "replay_extract": "(op: 'AnalysisOperation', root: 'Path', workdir: 'Path | None' = None) -> 'ReplayResult'",
   "run_timeline_intel": "(db: 'CaseDB', window_seconds: 'float' = 60.0) -> 'dict[str, int]'",
   "load_hash_sets": "(paths: 'list[Path]') -> 'dict[str, set[str]]'",

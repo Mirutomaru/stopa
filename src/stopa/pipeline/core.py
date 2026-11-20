@@ -35,6 +35,7 @@ from stopa.domain.reproducibility import (
 )
 from stopa.domain.timeline_anomaly import AnomalyContext, detect_anomalies
 from stopa.domain.timeline_intel import analyze_timeline
+from stopa.domain.work_queue import CapacityBudget, InProcessWorkQueue, WorkQueue  # P2-1
 from stopa.models import ProcessResult
 
 from .pool import (
@@ -91,6 +92,8 @@ def process_source(
     stop_event: threading.Event | None = None,
     max_inflight: int | None = None,
     pinned_parser_version: str | None = None,
+    work_queue: WorkQueue | None = None,
+    disk_budget_bytes: int | None = None,
 ) -> ProcessResult:
     """Zpracuje jeden evidence source daným processing profilem.
 
@@ -116,6 +119,16 @@ def process_source(
     `pinned_parser_version` — F5.3 reparse: prokládaná verze parserové sady;
         všechny extrahované artefakty dostanou tuto provenience místo aktuální
         registry (chování parserů se nemění → deterministický souhrn je stejný).
+    `work_queue` — P2-1 abstrakce fronty úkolů (WorkQueue kontrakt); None = in-process
+        InProcessWorkQueue (aktuální stav F2.4, omezená na `window`). Broker backend
+        se napojí pod stejným rozhraním bez změny ostatní pipeline logiky; DB writes +
+        dedupe zůstávají v hlavním procesu a konzumace je FIFO → determinismus.
+        Kontrakt: kapacita fronty (maxsize) musí být ≥ `window` nebo neomezená —
+        refill burst plní okno bez mezizastavení na konzumaci, takže menší omezená
+        fronta by v put() blokovala (backpressure bez aktivního konzumenta).
+    `disk_budget_bytes` — P2-1 kapacitní řízení: max celková velikost in-flight souborů
+        (CapacityBudget); None/0 = bez limitu (původní chování). Soubor větší než celý
+        rozpočet projde vždy, když nic jiného není in-flight (fail-open pro jeden velký).
     """
     profile = get_profile(profile_name)
     result = ProcessResult(source_id=source_id, profile=profile.name)
@@ -333,7 +346,17 @@ def process_source(
                     _process_file_worker, wf_, _abs(wf_), source_id, profile, normalized_sets
                 )
 
-        inflight: list[tuple[Future[_FileWork], WalkedFile]] = []
+        # P2-1 — abstrakce fronty úkolů: default in-process InProcessWorkQueue
+        # (= aktuální stav F2.4, omezená na `window`); broker backend se napojuje
+        # přes parametr `work_queue` pod stejným WorkQueue kontraktem. Konzumace je
+        # FIFO (take_batch) → deterministický originál vs. duplikát; DB writes + dedupe
+        # zůstávají v hlavním procesu. CapacityBudget = disk budget in-flight souborů.
+        queue: WorkQueue = (
+            work_queue if work_queue is not None else InProcessWorkQueue(maxsize=window)
+        )
+        budget = CapacityBudget(
+            max_workers=max(1, workers), disk_budget_bytes=disk_budget_bytes
+        )
         it = iter(to_process)
         next_wf: WalkedFile | None = next(it, None)
         stopped = False
@@ -341,19 +364,35 @@ def process_source(
         for i in range(n):
             # F2.4 backpressure — doplnit okno na max `window` in-flight úloh;
             # walk (producer) se tak nemůže běhat neomezeně napřed před parsem.
-            while len(inflight) < window and next_wf is not None:
+            # P2-1: omezení přes WorkQueue.pending + CapacityBudget disk budget.
+            while not stopped and next_wf is not None and queue.pending < window:
                 if stop_event is not None and stop_event.is_set():
                     stopped = True  # nová submit už ne; in-flight úlohy dojedou (graceful)
                     break
-                inflight.append((_submit_one(next_wf), next_wf))
+                wf_ = next_wf
+                size = max(0, wf_.size_bytes)
+                # P2-1 kapacitní řízení — disk budget in-flight souborů: plný rozpočet →
+                # nechat konzumační fázi uvolnit místo (jeden soubor větší než celý
+                # rozpočet projde vždy, když nic jiného není in-flight).
+                if budget.inflight_bytes > 0 and not budget.can_admit(size):
+                    break
+                budget.admit(size)
+                queue.put((_submit_one(wf_), wf_))
                 next_wf = next(it, None)
 
-            if not inflight:
+            # P2-1 konzumace — FIFO take_batch; stop+drained → [] (graceful shutdown).
+            if stopped and queue.pending == 0:
+                batch: list[tuple[Future[_FileWork], WalkedFile]] = []
+            else:
+                batch = queue.take_batch(1)
+
+            if not batch:
                 break  # vše odesláno+zkonzumováno (nebo stop bez in-flight úloh)
 
-            fut, wf = inflight.pop(0)
+            fut, wf = batch[0]
             work = fut.result()  # konzumace v pořadí procházky → deterministické dedupe
             _apply_work(work, wf, i)
+            budget.release(max(0, wf.size_bytes))  # P2-1 — kapacita uvolněna po DB write
             if commit_every > 0 and (i + 1) % commit_every == 0:
                 db.commit()  # F2.4 checkpoint — stav přežije kill uprostřed běhu
 

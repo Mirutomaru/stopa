@@ -122,6 +122,11 @@ def cmd_add(args: argparse.Namespace) -> int:
             max_workers=args.workers,  # F2.4 — CLI --workers (default auto)
             pool=args.pool,  # F2.4 — CLI --pool (auto = procesy pro N>1)
             stop_event=_stop_ev,  # F2.4 — SIGINT/SIGTERM → graceful shutdown
+            disk_budget_bytes=(  # P2-1 — CLI --disk-budget MB (0 = bez limitu)
+                int(getattr(args, "disk_budget", 0)) * 1024 * 1024
+                if getattr(args, "disk_budget", 0)
+                else None
+            ),
         )
         if bar is not None and _bar_state["task"] is not None:
             # dokončit task (100 %) — Rich transient bar

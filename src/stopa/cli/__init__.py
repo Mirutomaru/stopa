@@ -304,6 +304,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="F2.4 počet worker procesů/vláken (default: min(8, jádra CPU))")
     add_p.add_argument("--pool", choices=["auto", "threads", "processes"], default="auto",
                        help="F2.4 typ poolu: auto = procesy pro N>1 (GIL), threads = E3 režim")
+    add_p.add_argument("--disk-budget", type=int, default=0, metavar="MB",
+                       help="P2-1 disk budget in-flight souborů v MB (kapacitní řízení; 0 = bez limitu)")
     _add_json_flag(add_p)
     add_p.set_defaults(func=cmd_add)
 
