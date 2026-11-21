@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verzi umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -402,6 +402,29 @@ CREATE TABLE IF NOT EXISTS case_seals (
 );
 """
 
+#: P4-6 — Sealing v2: time hash chain F5.1 pečetí (case DB, aditivní v27).
+# Každý záznam vazí předchozí Merkle root + aktuální root + case_id + čas
+# (chain_hash = SHA-256; genesis = self-binding vlastní root) → manipulace
+# s jakýmkoli minulým rootem láme linku. seal_id = 1:1 odkaz na řádek
+# case_seals (zdroj Ed25519 podpisu); merkle_root je denormalizovaná kopie
+# pro samostatnou tamper-evidence + vazbu witnesse. witness_json = externí
+# důkaz (kind/ref/digest/content_b64) — volitelný out-of-band attestation.
+SEAL_CHAIN_DDL = """
+CREATE TABLE IF NOT EXISTS seal_chain (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL,             -- pořadové číslo v řetězci případu (1-based)
+    seal_id INTEGER NOT NULL UNIQUE,  -- 1:1 na case_seals.id (Ed25519 podpis + root)
+    ts TEXT NOT NULL,                 -- musí odpovídat case_seals.ts dané pečetě
+    merkle_root TEXT NOT NULL,        -- kopie case_seals.root_hash (tamper-evidence)
+    prev_merkle_root TEXT NOT NULL,   -- root předchozí pečetě; genesis = vlastní root
+    chain_hash TEXT NOT NULL,         -- H(prev || case_id || ts || merkle_root), SHA-256 hex
+    witness_json TEXT,                -- P4-6 externí witness (null = bez attestation)
+    UNIQUE (case_id, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_seal_chain_case ON seal_chain(case_id);
+"""
+
 # P1-3 Evidence Graph — ruční/AI hrany unifikovaného grafu důkazů.
 # Každá hrana nese vztah, polaritu (podpůrná/protichůdná), důvod vzniku a confidence.
 # Derived hrany (korelace/hypotézy/události/findings) se počítají na letě
@@ -600,4 +623,4 @@ CREATE TRIGGER IF NOT EXISTS artifacts_au AFTER UPDATE ON artifacts BEGIN
     INSERT INTO artifacts_fts(rowid, artifact_type, title, details_json)
     VALUES (new.rowid, new.artifact_type, new.title, new.details_json);
 END;
-""" + GRAPH_EDGES_DDL + INVESTIGATION_DDL + INTEL_DDL + CLASSIFICATIONS_DDL  # P1-3 hrany / P2-4 investigation workspace / P2-5 threat intel (aditivní) / P3-3 klasifikace souborů (v26, aditivní)
+""" + GRAPH_EDGES_DDL + INVESTIGATION_DDL + INTEL_DDL + CLASSIFICATIONS_DDL + SEAL_CHAIN_DDL  # P1-3 hrany / P2-4 investigation workspace / P2-5 threat intel (aditivní) / P3-3 klasifikace souborů (v26, aditivní) / P4-6 sealing v2 chain (v27, aditivní)

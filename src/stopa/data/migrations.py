@@ -15,6 +15,7 @@ from stopa.data.schema import (
     COLLAB_DDL,
     MULTITENANT_DDL,
     SCHEMA_VERSION,
+    SEAL_CHAIN_DDL,
     _schema_version,
 )
 from stopa.domain.integrity import GENESIS, compute_audit_hash
@@ -135,6 +136,7 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     apply_provenance_metadata_migration(conn)
     apply_rule_matching_migration(conn)  # P3-5 (v25): intel_matches.match_kind += yara/sigma
     apply_classification_migration(conn)  # P3-3 (v26): tabulka classifications (aditivní)
+    apply_seal_chain_migration(conn)  # P4-6 (v27): tabulka seal_chain — sealing v2 chain (aditivní)
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).
     if _schema_version(conn) < SCHEMA_VERSION:
@@ -468,5 +470,16 @@ def apply_classification_migration(conn: sqlite3.Connection) -> None:
     executescript s IF NOT EXISTS funguje pro staré i nové DB (no-op na nových).
     """
     conn.executescript(CLASSIFICATIONS_DDL)
+    conn.commit()
+
+
+def apply_seal_chain_migration(conn: sqlite3.Connection) -> None:
+    """P4-6 (v27): tabulka ``seal_chain`` — time hash chain F5.1 pečetí.
+
+    Čistě aditivní (nová tabulka + index; FK na cases/case_seals řeší
+    ON DELETE CASCADE a 1:1 UNIQUE). Idempotentní IF NOT EXISTS → no-op
+    na nových DB, doplní chybějící strukturu starých case DB.
+    """
+    conn.executescript(SEAL_CHAIN_DDL)
     conn.commit()
 

@@ -117,11 +117,73 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 1 if (mismatched or missing or seals_valid != len(seal_reports)) else 0
 
 
+def _parse_witness_arg(raw: str) -> dict | None:
+    """P4-6 — rozbalí CLI `--witness` JSON (validace tvaru, fail-closed).
+
+    Tvar: ``{"kind": "url"|"file", "ref": ...}`` + volitelné ``content_b64``
+    (offline manuální import důkazu; jinak se obsah vyřeší po pečetění —
+    file = čtení souboru, url = POST merkle_root na URL).
+    """
+    from stopa.domain.seal_chain import WITNESS_KINDS
+
+    try:
+        obj = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"witness není platný JSON: {e}") from None
+    if not isinstance(obj, dict):
+        raise TypeError("witness musí být JSON objekt")
+    kind, ref = obj.get("kind"), obj.get("ref")
+    if not isinstance(kind, str) or kind not in WITNESS_KINDS:
+        raise ValueError(f"witness.kind musí být {'|'.join(WITNESS_KINDS)}")
+    if not isinstance(ref, str) or not ref.strip():
+        raise ValueError("witness.ref musí být neprázdný string")
+    content_b64 = obj.get("content_b64")
+    if content_b64 is not None and not isinstance(content_b64, str):
+        raise ValueError("witness.content_b64 musí být string (base64)")
+    return {"kind": kind, "ref": ref, "content_b64": content_b64}
+
+
+def _resolve_witness_evidence(witness: dict, case_id: str, merkle_root: str) -> bytes:
+    """P4-6 — obsah důkaze pro witness (design §P4-6): file = čtení souboru;
+
+    url = POST ``{"case_id", "merkle_root"}`` na URL, response = atestační
+    záznam. Fail-closed :class:`ValueError` (soubor/HTTP/timeout).
+    """
+    import urllib.error
+    import urllib.request
+    from pathlib import Path as _Path
+
+    kind, ref = witness["kind"], witness["ref"]
+    if kind == "file":
+        try:
+            return _Path(ref).read_bytes()
+        except OSError as e:
+            raise ValueError(f"witness.file {ref}: {e}") from None
+    body = json.dumps({"case_id": case_id, "merkle_root": merkle_root}, sort_keys=True).encode("utf-8")
+    req = urllib.request.Request(ref, data=body, headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — http(s) z argumentu uživatele
+            return resp.read()
+    except (OSError, urllib.error.URLError) as e:  # timeout/refused/DNS/HTTPError → fail-closed
+        raise ValueError(f"witness.url {ref}: {e}") from None
+
+
 def cmd_seal(args: argparse.Namespace) -> int:
     """F5.1 — Merkle zamčení případu: snapshot stavu zamčený podepsaným kořenem."""
     json_mode = getattr(args, "json", False)
     db = _open_db(args.case_id)
     actor = case_examiner(db, args.case_id)
+    witness: dict | None = None
+    if getattr(args, "witness", None):
+        try:
+            witness = _parse_witness_arg(args.witness)
+        except (ValueError, TypeError) as e:  # chybný tvar / typ — fail-closed před pečetěním
+            if json_mode:
+                _print_json({"ok": 0, "error": str(e)})
+            else:
+                print(f"Chybný witness: {e}", file=sys.stderr)
+            db.close()
+            return 1
     try:
         seal = db.seal_case(reason=args.reason, actor=actor)
     except RuntimeError as e:  # chybí volitelný balík cryptography
@@ -137,11 +199,39 @@ def cmd_seal(args: argparse.Namespace) -> int:
             print(msg, file=sys.stderr)
         db.close()
         return 2
+    # P4-6 — externí witness se váže na řetězový záznam této pečetě (v2 chain).
+    if witness is not None:
+        import base64 as _b64
+
+        from stopa.domain.seal_chain import canonical_witness
+
+        try:
+            if "seq" not in seal:
+                raise ValueError("witness vyžaduje identifikátor případu (řetěz v2 nedostupný)")
+            data = (
+                _b64.b64decode(witness["content_b64"])
+                if witness["content_b64"] is not None
+                else _resolve_witness_evidence(witness, args.case_id, seal["root_hash"])
+            )
+            canon = canonical_witness(witness["kind"], witness["ref"], data)
+            db.seal_repo.attach_witness(args.case_id, int(seal["seq"]), canon)
+            seal["witness"] = canon
+        except (ValueError, TypeError) as e:  # obsah/druh/řetězový záznam — fail-closed
+            if json_mode:
+                _print_json({**seal, "ok": 0, "error": f"witness: {e}"})
+            else:
+                print(f"Chyba witness: {e}", file=sys.stderr)
+            db.close()
+            return 1
     if json_mode:
         _print_json(seal)
     else:
         print(f"Případ zamčen (F5.1): pečeť #{seal['id']}")
         print(f"  Root: {seal['root_hash']}")
+        if "chain_hash" in seal:
+            print(
+                f"  Řetěz v2: seq={seal['seq']} chain_hash={seal['chain_hash']}"
+            )
         print(
             f"  Rozsah: artifacts={seal['artifacts']}, "
             f"timeline_events={seal['timeline_events']}, audit_log={seal['audit_log']} řádků"
@@ -149,8 +239,46 @@ def cmd_seal(args: argparse.Namespace) -> int:
         who = seal["sealed_by"] or "—"
         why = f" — {seal['reason']}" if seal["reason"] else ""
         print(f"  Zamčeno: {who} ({seal['ts']}){why}")
+        if witness is not None and "witness" in seal:
+            w = seal["witness"]
+            print(f"  Witness: {w['kind']} → {w['ref']}")
     db.close()
     return 0
+
+
+def cmd_seal_chain(args: argparse.Namespace) -> int:
+    """P4-6 — time hash chain pečetí v2: stav řetězce + ověření (fail-closed).
+
+    Exit: 0 = řetěz platný; 1 = porušená linka / vazba na F5.1 pečeť;
+    2 = chyba (DB/JSON). Zpráva: každý záznam s prev/root/witness + verdikt.
+    """
+    json_mode = getattr(args, "json", False)
+    db = _open_db(args.case_id)
+    try:
+        report = db.seal_repo.verify_chain(args.case_id)
+    finally:
+        db.close()
+    if json_mode:
+        _print_json(report)
+        return 0 if report["verified"] else 1
+    print(f"Sealing v2 chain {args.case_id} — {report['count']} pečetí")
+    for r in report["records"]:
+        w = r.get("witness") or {}
+        witness_txt = f"{w.get('kind')} → {w.get('ref')}" if w else "—"
+        mark = "✓" if r["seal_ok"] and report["verified"] else "✗"
+        print(
+            f"  [{mark}] seq={r['seq']} {r['ts']} root={r['merkle_root'][:16]}…"
+            f" prev={r['prev_merkle_root'][:16]}… chain_hash={r['chain_hash'][:16]}…"
+        )
+        print(f"       witness: {witness_txt}")
+    if report["verified"]:
+        print("Verdikt: řetěz PLATNÝ (linka hashů + F5.1 vazby OK)")
+        return 0
+    print(f"Verdikt: řetěz PORUŠEN — {report['error']}")
+    for r in report["records"]:
+        if not r["seal_ok"] and r.get("note"):
+            print(f"  ! seq={r['seq']}: {r['note']}")
+    return 1
 
 
 def _ed25519_fingerprint(public_b64: str) -> str:

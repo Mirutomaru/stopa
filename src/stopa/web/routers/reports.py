@@ -604,4 +604,19 @@ def register(app, ctx) -> None:
         finally:
             db.close()
 
+    # ── P4-6 — Sealing v2 chain (time hash chain + witness) ─────────────
+    @app.get("/api/cases/{case_id}/seals/chain")
+    def seal_chain(case_id: str) -> dict:
+        """P4-6 — time hash chain F5.1 pečetí v2 + ověření (fail-closed).
+
+        ``verified`` = linka hashů (seq 1..N, prev = kořen předchozí pečetě,
+        přepočet chain_hash) **a** vazba každého záznamu na F5.1 pečeť (shoda
+        root + platný Ed25519 podpis). Records nesou externí witness.
+        """
+        db = open_db(case_id)
+        try:
+            return db.seal_repo.verify_chain(case_id)
+        finally:
+            db.close()
+
     # ── E11 — AI Forensic Assistant (LM Studio) ───────────────

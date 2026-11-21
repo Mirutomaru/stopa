@@ -28,6 +28,15 @@ from stopa.domain.case_seal import (
 )
 from stopa.domain.integrity import sign_hash, verify_signature
 from stopa.domain.rbac import resolve_actor  # actor pečetě (resolve jako audit log)
+from stopa.domain.seal_chain import (
+    SealChainRecord,
+)
+from stopa.domain.seal_chain import (
+    build_record as _build_chain_record,
+)
+from stopa.domain.seal_chain import (
+    verify_chain as _verify_chain_domain,
+)
 
 #: Tabulky spadající pod pečet' v globálním pořadí leafů (domain.case_seal).
 SEALED_TABLES: tuple[str, ...] = ("artifacts", "timeline_events", "audit_log")
@@ -151,7 +160,7 @@ class SealRepository:
             if row is not None:
                 examiner = row["examiner"]
         sealed_by = resolve_actor(actor, examiner)
-        seal = self._create_seal(sealed_by=sealed_by, reason=reason)
+        seal = self._create_seal(sealed_by=sealed_by, reason=reason, case_id=case_id)
         if self._audit_repo is not None:
             self._audit_repo.log_operation(
                 "case_sealed",
@@ -166,11 +175,15 @@ class SealRepository:
             )
         return seal
 
-    def _create_seal(self, *, sealed_by: str | None = None, reason: str | None = None) -> dict:
+    def _create_seal(
+        self, *, sealed_by: str | None = None, reason: str | None = None, case_id: str | None = None
+    ) -> dict:
         """Jádro pečetění (bez klíčové/actor orchestrace): vyžaduje Ed25519 klíč.
 
         Klíč případu v ``meta`` (integrity_pub/integrity_priv); jinak
-        :class:`KeyError`. Vrací info o uložené pečetí.
+        :class:`KeyError`. Vrací info o uložené pečetí; P4-6 navíc vždy
+        připojí řetězový záznam Sealing v2 (tabulka ``seal_chain``, klíče
+        ``seq``/``chain_hash``), pokud je v DB identifikátor případu.
         """
         pub_row = self.conn.execute("SELECT value FROM meta WHERE key = 'integrity_pub'").fetchone()
         priv_row = self.conn.execute("SELECT value FROM meta WHERE key = 'integrity_priv'").fetchone()
@@ -208,8 +221,7 @@ class SealRepository:
                 meta_json,
             ),
         )
-        self.conn.commit()
-        return {
+        out: dict = {
             "id": int(cur.lastrowid),
             "ts": ts,
             "sealed_by": sealed_by,
@@ -217,6 +229,33 @@ class SealRepository:
             "root_hash": root_hex_str,
             **res["counts"],
         }
+        # P4-6 — Sealing v2: řetězový záznam 1:1 s touto pečetí (stejná transakce).
+        # prev = poslední root v řetězci; genesis = self-binding vlastní root.
+        cid = case_id or self._resolve_case_id()
+        if cid is not None:
+            last = self.conn.execute(
+                "SELECT seq, merkle_root FROM seal_chain WHERE case_id = ? ORDER BY seq DESC LIMIT 1",
+                (cid,),
+            ).fetchone()
+            prev_root = last["merkle_root"] if last is not None else None
+            seq = int(last["seq"]) + 1 if last is not None else 1
+            rec = _build_chain_record(seq, cid, ts, root_hex_str, prev_root)
+            self.conn.execute(
+                "INSERT INTO seal_chain"
+                " (case_id, seq, seal_id, ts, merkle_root, prev_merkle_root, chain_hash)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (cid, rec.seq, out["id"], rec.ts_iso, rec.merkle_root_hex,
+                 rec.prev_merkle_root_hex, rec.chain_hash_hex),
+            )
+            out["seq"] = rec.seq
+            out["chain_hash"] = rec.chain_hash_hex
+        self.conn.commit()
+        return out
+
+    def _resolve_case_id(self) -> str | None:
+        """Identifikátor případu v této case DB (konvence: jeden příklad na soubor)."""
+        row = self.conn.execute("SELECT id FROM cases ORDER BY rowid LIMIT 1").fetchone()
+        return row["id"] if row is not None else None
 
     def list_seals(self) -> list[dict]:
         """Pečetě chronologicky (id ASC) — pro report / nezávislou kontrolu."""
@@ -272,3 +311,85 @@ class SealRepository:
                 }
             )
         return reports
+
+    # ── P4-6 — Sealing v2: time hash chain + externí witness ────────────────
+
+    def _load_chain_rows(self, case_id: str) -> list[dict]:
+        """Řetězové záznamy případu chronologicky (seq ASC)."""
+        rows = self.conn.execute(
+            "SELECT id, seq, seal_id, ts, merkle_root, prev_merkle_root,"
+            " chain_hash, witness_json FROM seal_chain WHERE case_id = ? ORDER BY seq ASC",
+            (case_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_chain(self, case_id: str) -> list[dict]:
+        """Řetěz pečetí v2 pro report (witness_json rozbaleno na ``witness``)."""
+        out: list[dict] = []
+        for r in self._load_chain_rows(case_id):
+            w = json.loads(r["witness_json"]) if r.get("witness_json") else None
+            out.append({**r, "witness": w})
+        return out
+
+    def verify_chain(self, case_id: str) -> dict:
+        """Ověří celý řetěz pečetí v2 (fail-closed); vrací report.
+
+        Dvě nezávislé rovnice: (1) doménová linka hashů — sekvence 1..N,
+        každý ``prev`` = root předchozí pečetě, přepočet ``chain_hash``;
+        (2) vazba na F5.1 pečeť přes ``seal_id`` — shoda ``merkle_root`` s
+        ``case_seals.root_hash`` a platný Ed25519 podpis (uloženým veřejným
+        klíčem). Jakákoli odchylka → ``verified=False`` + popis chyby.
+        """
+        rows = self._load_chain_rows(case_id)
+        records = [
+            SealChainRecord(
+                seq=r["seq"],
+                ts_iso=r["ts"],
+                merkle_root_hex=r["merkle_root"],
+                prev_merkle_root_hex=r["prev_merkle_root"],
+                chain_hash_hex=r["chain_hash"],
+            )
+            for r in rows
+        ]
+        error: str | None = None
+        try:
+            _verify_chain_domain(case_id, records)
+        except ValueError as exc:  # fail-closed — popisná chyba pro report
+            error = f"řetěz: {exc}"
+
+        detail: list[dict] = []
+        for r in rows:
+            seal_ok = True
+            note: str | None = None
+            srow = self.conn.execute(
+                "SELECT root_hash, signature_b64, public_key_b64 FROM case_seals WHERE id = ?",
+                (r["seal_id"],),
+            ).fetchone()
+            if srow is None:
+                seal_ok, note = False, f"chybí pečeť #{r['seal_id']} v case_seals"
+            elif r["merkle_root"] != srow["root_hash"]:
+                seal_ok, note = False, "merkle_root se liší od case_seals.root_hash (tampering)"
+            elif not verify_signature(srow["public_key_b64"], srow["root_hash"], srow["signature_b64"]):
+                seal_ok, note = False, "neplatný Ed25519 podpis F5.1 pečetě"
+            if error is None and not seal_ok:
+                error = f"seq={r['seq']}: {note}"
+            detail.append({**r, "witness": json.loads(r["witness_json"]) if r.get("witness_json") else None,
+                          "seal_ok": seal_ok, "note": note})
+
+        return {
+            "case_id": case_id,
+            "count": len(rows),
+            "verified": error is None and all(d["seal_ok"] for d in detail),
+            "error": error,
+            "records": detail,
+        }
+
+    def attach_witness(self, case_id: str, seq: int, witness: dict) -> None:
+        """Uloží externí witness u řetězového záznamu (fail-closed na neexistující)."""
+        cur = self.conn.execute(
+            "UPDATE seal_chain SET witness_json = ? WHERE case_id = ? AND seq = ?",
+            (json.dumps(witness, sort_keys=True, separators=(",", ":")), case_id, seq),
+        )
+        if cur.rowcount != 1:
+            raise ValueError(f"seal_chain: neexistuje záznam case={case_id!r} seq={seq}")
+        self.conn.commit()

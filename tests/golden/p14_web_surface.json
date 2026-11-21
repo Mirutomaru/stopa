@@ -247,6 +247,11 @@
   [
     "http",
     "GET",
+    "/api/cases/{case_id}/seals/chain"
+  ],
+  [
+    "http",
+    "GET",
     "/api/cases/{case_id}/search"
   ],
   [

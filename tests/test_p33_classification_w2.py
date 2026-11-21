@@ -128,10 +128,10 @@ def db(dbdir: Path) -> CaseDB:
 
 
 class TestSchemaV26:
-    def test_new_db_is_v26_with_classifications_table(self, dbdir):
+    def test_new_db_is_v27_with_classifications_table(self, dbdir):
         from stopa.data.schema import SCHEMA_VERSION
 
-        assert SCHEMA_VERSION == 26
+        assert SCHEMA_VERSION == 27
         d = CaseDB(dbdir / f"{CASE_ID}.db")
         try:
             assert d.schema_version() == SCHEMA_VERSION
@@ -153,8 +153,8 @@ class TestSchemaV26:
         finally:
             d.close()
 
-    def test_legacy_v25_migrates_to_v26(self, dbdir):
-        """Staré v25 DB (bez tabulky) se po open dostanou na v26 s tabulkou."""
+    def test_legacy_v25_migrates_to_latest(self, dbdir):
+        """Staré v25 DB (bez tabulky) se po open dostanou na aktuální verzi (v27)."""
         path = dbdir / f"{CASE_ID}.db"
         d = CaseDB(path)
         d.conn.execute("DROP TABLE classifications")
@@ -164,13 +164,13 @@ class TestSchemaV26:
         d.conn.commit()
         d.close()
 
-        d2 = CaseDB(path)  # reopen → apply_legacy_migrations
+        d2 = CaseDB(path)  # reopen → apply_legacy_migrations (v26 + v27 aditivní)
         try:
-            assert d2.schema_version() == 26
-            exists = d2.conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='classifications'"
-            ).fetchone()
-            assert exists is not None
+            assert d2.schema_version() == 27
+            tables = {
+                r[0] for r in d2.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            assert {"classifications", "seal_chain"} <= tables
         finally:
             d2.close()
 

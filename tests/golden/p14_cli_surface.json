@@ -537,6 +537,14 @@
       "--help",
       "--json",
       "--reason",
+      "--witness",
+      "-h"
+    ]
+  },
+  "seal-chain": {
+    "opts": [
+      "--help",
+      "--json",
       "-h"
     ]
   },

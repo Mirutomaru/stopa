@@ -109,6 +109,7 @@ from .commands.integrity import (
     cmd_provenance,
     cmd_rotate_key,
     cmd_seal,
+    cmd_seal_chain,
     cmd_verify,
 )
 
@@ -184,6 +185,7 @@ _SUBCOMMAND_EXAMPLES = {
     "stats": "stopa stats case-abc",
     "verify": "stopa verify case-abc --limit 20",
     "seal": "stopa seal case-abc --reason 'před soudním předložením'",
+    "seal-chain": "stopa seal-chain case-abc --json   # P4-6 — stav řetězce pečetí v2 + ověření (fail-closed)",
     "integrity-keys": "stopa integrity-keys case-abc --json",
     "rotate-key": "stopa rotate-key case-abc --reason 'legace v týmu'",
     "parser-status": "stopa parser-status --format json",
@@ -377,8 +379,19 @@ def build_parser() -> argparse.ArgumentParser:
     seal_p.add_argument("case_id")
     seal_p.add_argument("--reason", metavar="DUVOD", default=None,
                         help="důvod zamčení (např. 'před soudním předložením')")
+    seal_p.add_argument("--witness", metavar='JSON', default=None,
+                        help=("P4-6 — externí witness pro řetězovou pečeť v2: JSON objekt "
+                              '{"kind": "url"|"file", "ref": ...} + volitelné "content_b64" '
+                              "(inline důkaz; digest vždy, b64 do 32 kB); např. --witness "
+                              "'{\"kind\":\"url\",\"ref\":\"https://notary.example/X-1\"}'"))
     _add_json_flag(seal_p)
     seal_p.set_defaults(func=cmd_seal)
+
+    sc_p = _ex_sub(sub, "seal-chain",
+                   help="P4-6 — time hash chain pečetí v2: stav řetězce + ověření (fail-closed)")
+    sc_p.add_argument("case_id")
+    _add_json_flag(sc_p)
+    sc_p.set_defaults(func=cmd_seal_chain)
 
     ik_p = _ex_sub(sub, "integrity-keys",
                    help="P0-2 — export Ed25519 integrity klíče případu (nezávislá verifikace)")
