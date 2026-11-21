@@ -21,6 +21,7 @@ def _plugin_row(p) -> dict:
         "description": p.description,
         "author": p.author,
         "min_stopa_version": p.min_stopa_version,
+        "api_version": p.api_version,  # P4-3
         "verified": p.verified,
         "capabilities": list(p.capabilities),
         "issues": list(p.issues),
@@ -124,6 +125,7 @@ def cmd_plugin_info(args: argparse.Namespace) -> int:
     print(f"{row['name']} v{row['version']} — {row['description'] or '(bez popisu)'}")
     print(f"  autor:          {row['author'] or '-'}")
     print(f"  min_stopa:      {row['min_stopa_version']}")
+    print(f"  api_verze:      {row['api_version']}")
     print(f"  stav:           {'ověřený (in-process)' if row['verified'] else 'neověřený (sandbox)'}")
     print(f"  kapacity:       {', '.join(row['capabilities']) or '-'}")
     print(f"  cesta:          {row['path']}")

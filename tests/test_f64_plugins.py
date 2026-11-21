@@ -19,7 +19,12 @@ from stopa.data.plugin_loader import (
     resolve_triage_profiles,
     sandbox_exec,
 )
-from stopa.domain.plugins import parse_manifest, sandbox_limits, validate_manifest
+from stopa.domain.plugins import (
+    manifest_digest,
+    parse_manifest,
+    sandbox_limits,
+    validate_manifest,
+)
 
 REPO_PLUGINS = Path(__file__).resolve().parent.parent / "plugins"
 
@@ -140,6 +145,50 @@ def test_validate_no_caps_warning():
     assert len(issues) == 1 and "žádné kapacity" in issues[0]
 
 
+# ── Doména: P4-3 plugin API verzirování (api_version) ─────
+
+
+def test_parse_manifest_api_version_default():
+    """P4-3: chybějící api_version → výchozí "1", bez upozornění."""
+    m = parse_manifest(_manifest())
+    assert m.api_version == "1"
+    assert all("api_version" not in i for i in validate_manifest(m, "2.0.0"))
+
+
+def test_validate_api_version_matrix():
+    """P4-3 AK: 1 → akcept; mimo rozsah / nečíselné → upozornění (ne odmítnutí)."""
+    ok = parse_manifest(_manifest(api_version="1"))
+    assert all("api_version" not in i for i in validate_manifest(ok, "2.0.0"))
+    future = parse_manifest(_manifest(api_version="2"))
+    assert any(
+        "api_version" in i and "rozsah" in i for i in validate_manifest(future, "2.0.0")
+    )
+    below = parse_manifest(_manifest(api_version="0"))
+    assert any(
+        "api_version" in i and "rozsah" in i for i in validate_manifest(below, "2.0.0")
+    )
+    non_numeric = parse_manifest(_manifest(api_version="x1"))
+    assert any(
+        "api_version" in i and "celé číslo" in i
+        for i in validate_manifest(non_numeric, "2.0.0")
+    )
+
+
+@pytest.mark.parametrize("bad", [5, True, ["1"], None])
+def test_parse_manifest_api_version_wrong_type(bad):
+    """P4-3: typový nesoulad = TypeError (konzistentní s F6.4 manifest sémantikou)."""
+    with pytest.raises(TypeError):
+        parse_manifest(_manifest(api_version=bad))
+
+
+def test_digest_sensitive_to_api_version():
+    """P4-3: api_version je součást podepsaného kontraktu → digest + determinismus."""
+    base = manifest_digest(parse_manifest(_manifest()))
+    assert base == manifest_digest(parse_manifest(_manifest()))  # deterministický
+    other = manifest_digest(parse_manifest(_manifest(api_version="2")))
+    assert other != base
+
+
 # ── Doména: sandbox limity ────────────────────────────────
 
 
@@ -172,6 +221,17 @@ def test_discover_real_sample_plugins():
     # ukázkové pluginy musí mít validní manifesty bez issues (verze 2.0.0 OK)
     for p in found.values():
         assert not p.issues, f"{p.name}: {p.issues}"
+
+
+def test_discover_exposes_api_version(tmp_path):
+    """P4-3: discover průchodem api_version z manifestu (explicitní deklarace)."""
+    d = tmp_path / "api-explicit"
+    d.mkdir()
+    (d / "plugin.json").write_text(
+        json.dumps(_manifest(name="api-explicit", api_version="1")), encoding="utf-8"
+    )
+    found = discover_plugins(dirs=[tmp_path], settings={}, stopa_version="2.0.0")
+    assert found["api-explicit"].api_version == "1"
 
 
 def test_discover_verified_allowlist():
@@ -384,6 +444,8 @@ def test_cli_plugin_list_json(cli_env, capsys):
     assert env_data["ok"] is True and env_data["count"] == 3
     names = {p["name"] for p in env_data["plugins"]}
     assert names == {"example-accesslog", "example-crypto-triage", "example-ai-tool"}
+    # P4-3: api_version v JSON payloadi (ukázkové pluginy bez explicitního pole → default)
+    assert all(p["api_version"] == "1" for p in env_data["plugins"])
 
 
 def test_cli_plugin_verify_add_remove(cli_env):
@@ -435,3 +497,5 @@ def test_web_api_plugins(tmp_path, monkeypatch):
     assert names == {"example-accesslog", "example-crypto-triage", "example-ai-tool"}
     # bez allowlistu v settings → žádné ověřené pluginy
     assert all(p["verified"] is False for p in data["plugins"])
+    # P4-3: api_version i ve Web payloadi (default "1")
+    assert all(p["api_version"] == "1" for p in data["plugins"])

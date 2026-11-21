@@ -411,6 +411,7 @@ def register(app, ctx) -> None:
                 "description": p.description,
                 "author": p.author,
                 "min_stopa_version": p.min_stopa_version,
+                "api_version": p.api_version,  # P4-3
                 "verified": p.verified,
                 "capabilities": list(p.capabilities),
                 "issues": list(p.issues),

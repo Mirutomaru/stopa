@@ -28,6 +28,7 @@ plugins/muj-plugin/
 | `description` | | `""` | lidský popis |
 | `author` | | `""` | autor |
 | `min_stopa_version` | | `"2.0.0"` | kompatibilita; vyšší = upozornění v `plugin list` |
+| `api_version` | | `"1"` | **P4-3** — verze plugin API, na kterou manifest cílí; podporovaný rozsah `[1, 1]`, mimo něj / nečíselné = upozornění v `plugin list`; součást podepsaného digestu (viz sekce „Contract stability") |
 | `extractors` | | `[]` | seznam extractor kapacit (max 50) |
 | `triage_profiles` | | `[]` | seznam triage profilů (max 50) |
 | `ai_tools` | | `[]` | seznam AI toolů (max 50) |
@@ -150,7 +151,44 @@ Web: `GET /api/plugins` — stejný payload jako `plugin list --json`.
 
 ---
 
-## 6. Doporučení pro autory pluginů
+## 6. Contract stability (P4-3)
+
+Plugin API se verzionuje major číslem v manifestu (`api_version`; aktuálně **1**, podporovaný
+rozsah `[1, 1]`). Upozornění z `plugin list` znamená: STOPA plugin umí načíst a spustit, ale
+plný kontrakt pro jeho cílovou verzi API není garantován.
+
+### Stabilní povrch (API v1)
+
+Co pluginy deklarují nebo importují — změna vyžaduje novou major verzi:
+
+| Povrch | Kontrakt |
+|---|---|
+| Manifestová pole | `name`, `version`, `description`, `author`, `min_stopa_version`, `api_version` + sekce kapacit; chybová sémantika (typ = TypeError, semantik = ValueError) |
+| extractor | `detect_fn(path: Path) -> bool`, `extract_fn(path: Path) -> list[Artifact]`, deklarované `parser_version`; detekce magic a/nebo extensí |
+| triage_profile | factory → `stopa.intelligence.triage.TriageProfile` (frozen dataclass) |
+| ai_tool | factory → `list[ToolSpec]` (F3.1); `handler(db, case_id, params)` → JSON; chybová sémantika přes `ToolError` |
+| Marketplace podpis | manifest digest = SHA-256 kanonického tvaru všech polí **včetně `api_version`**; Ed25519 nad digestem (P2-7) |
+
+### Experimentální povrch
+
+Změny bez major bumpu, ale s poznámkou v CHANGELOG: sandbox limity a jejich detaily
+(`plugin_sandbox` nastavení), izolovaný working dir, síťová izolace `unshare --net`, tvar
+CLI/Web payloadů za dokumentovanými klíči.
+
+### Klasifikační pravidla (breaking vs non-breaking)
+
+* **Breaking** (→ nové `api_version`): změna signatury nebo návratového typu stabilních entry point,
+  přejmenování/odstranění manifestového pole, změna sémantiky `ToolError`, změna modelu `Artifact`
+  ve výstupu extractorů.
+* **Non-breaking**: nová volitelná manifestová pole, nový typ kapacity, dokumentace, vnitřní
+  vylepšení (loader, sandbox interiéry), experimentální povrch.
+
+### Pravidlo breaking change logu
+
+Commity měnící plugin kontrakt používají subjekt marker **`!plugins:`** a hromadí se do sekce
+„Plugin API" v `STOPA_CHANGELOG.md`. První záznam: P4-3 (2.4) — viz CHANGELOG.
+
+## 7. Doporučení pro autory pluginů
 
 * **Defenzivní parsing** — entrypoint nikdy nevyhazuje výjimku doven
   (OSError/ValueError → log + prázdný výsledek), viz vestavěné parsery.

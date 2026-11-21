@@ -35,6 +35,11 @@ NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,63}$")
 #: Maximální počet kapacit jednoho typu na manifest (guard proti bloatu)
 MAX_CAPS_PER_TYPE = 50
 
+# P4-3 — plugin API verzirování: aktuálně podporovaný rozsah (včetně, celá čísla)
+# a výchozí hodnota pole ``api_version`` (manifest bez pole cílí na aktuální API).
+API_VERSION_DEFAULT = "1"
+SUPPORTED_API_RANGE = (1, 1)
+
 
 @dataclass(frozen=True)
 class ExtractorSpec:
@@ -79,6 +84,7 @@ class PluginManifest:
     description: str = ""
     author: str = ""
     min_stopa_version: str = "2.0.0"
+    api_version: str = API_VERSION_DEFAULT  # P4-3: verze plugin API, na kterou manifest cílí
     extractors: tuple[ExtractorSpec, ...] = ()
     triage_profiles: tuple[TriageProfileSpec, ...] = ()
     ai_tools: tuple[AiToolSpec, ...] = ()
@@ -230,6 +236,7 @@ def parse_manifest(data: object) -> PluginManifest:
         description=_opt_str(data, "description", "manifest"),
         author=_opt_str(data, "author", "manifest"),
         min_stopa_version=_opt_str(data, "min_stopa_version", "manifest", default="2.0.0"),
+        api_version=_opt_str(data, "api_version", "manifest", default=API_VERSION_DEFAULT),
         extractors=extractors,
         triage_profiles=triage_profiles,
         ai_tools=ai_tools,
@@ -247,6 +254,19 @@ def validate_manifest(m: PluginManifest, stopa_version: str) -> list[str]:
         issues.append(
             f"min_stopa_version {m.min_stopa_version} > aktuální {stopa_version}"
         )
+    # P4-3 — API verzirování: manifest cílící na nepodporovaný rozsah plugin API
+    # = upozornění (ne odmítnutí — konzistentní s min_stopa_version sémantikou).
+    try:
+        api = int(m.api_version.strip())
+    except ValueError:
+        issues.append(f"api_version {m.api_version!r} — očekáváno nezáporné celé číslo")
+    else:
+        lo, hi = SUPPORTED_API_RANGE
+        if not (lo <= api <= hi):
+            issues.append(
+                f"api_version {m.api_version} mimo podporovaný rozsah [{lo}, {hi}] "
+                "(plugin cílí jinou verzi plugin API)"
+            )
     if not m.capabilities:
         issues.append("plugin nedeklaruje žádné kapacity (extractors/triage_profiles/ai_tools)")
     return issues
@@ -303,6 +323,7 @@ def _manifest_canonical(m: PluginManifest) -> dict[str, Any]:
         "description": m.description,
         "author": m.author,
         "min_stopa_version": m.min_stopa_version,
+        "api_version": m.api_version,  # P4-3: součást podepsaného kontraktu (digest)
         "extractors": [asdict(e) for e in m.extractors],
         "triage_profiles": [asdict(t) for t in m.triage_profiles],
         "ai_tools": [asdict(a) for a in m.ai_tools],

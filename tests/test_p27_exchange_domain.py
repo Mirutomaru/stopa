@@ -215,7 +215,7 @@ class TestManifestDigest:
         int(d, 16)
 
     @pytest.mark.parametrize(
-        "field", ["name", "version", "description", "author", "min_stopa_version"]
+        "field", ["name", "version", "description", "author", "min_stopa_version", "api_version"]
     )
     def test_sensitive_to_each_field(self, field: str) -> None:
         base = manifest_digest(parse_manifest(dict(MINIMAL_MANIFEST)))

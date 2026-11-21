@@ -31,9 +31,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from stopa.domain.plugins import (
-    AiToolSpec as _AiToolSpec,
-)
-from stopa.domain.plugins import (
+    API_VERSION_DEFAULT,
     ExtractorSpec,
     PluginManifest,
     SandboxLimits,
@@ -41,6 +39,9 @@ from stopa.domain.plugins import (
     parse_manifest,
     sandbox_limits,
     validate_manifest,
+)
+from stopa.domain.plugins import (
+    AiToolSpec as _AiToolSpec,
 )
 
 MANIFEST_NAME = "plugin.json"
@@ -57,6 +58,7 @@ class LoadedPlugin:
     description: str = ""
     author: str = ""
     min_stopa_version: str = "2.0.0"
+    api_version: str = API_VERSION_DEFAULT  # P4-3: verze plugin API z manifestu
     capabilities: tuple[str, ...] = ()
     issues: tuple[str, ...] = ()
 
@@ -154,6 +156,7 @@ def discover_plugins(
                 description=manifest.description,
                 author=manifest.author,
                 min_stopa_version=manifest.min_stopa_version,
+                api_version=manifest.api_version,
                 capabilities=tuple(manifest.capabilities),
                 issues=issues,
             )
