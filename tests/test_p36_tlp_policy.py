@@ -356,6 +356,17 @@ class TestRepositoryTlp:
 # ── CLI pack/verify s TLP ─────────────────────────────────────────────
 
 
+# cryptography je volitelná ([fde]) — RS256 TLP testy se bez ní přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
+
 class TestCliTlp:
     def test_pack_tlp_summary_and_json(self, dbdir):
         from stopa.cli.commands.exchange import cmd_exchange_pack
@@ -371,6 +382,7 @@ class TestCliTlp:
         data = json.loads(out3)
         assert data["tlp"] == "AMBER" and data["counts"]["entities"] == 4
 
+    @requires_crypto
     def test_verify_tlp_violation_exit0_with_warning(self, dbdir, tmp_path):
         """AK: TLP porušení = varování; exit kód zůstává 0 (ok=True)."""
         from stopa.cli.commands.exchange import cmd_exchange_verify
@@ -390,6 +402,7 @@ class TestCliTlp:
         assert rc2 == 0 and data["ok"] is True
         assert data["warnings"] == ["tlp_violation:ip=10.42.0.7"]
 
+    @requires_crypto
     def test_verify_without_declared_tlp_no_warnings(self, dbdir, tmp_path):
         from stopa.cli.commands.exchange import cmd_exchange_verify
 
@@ -419,6 +432,7 @@ class TestWebTlp:
         assert r.status_code == 200
         assert "tlp" not in r.json()["bundle"]
 
+    @requires_crypto
     def test_verify_violation_ok_with_warnings(self, client):
         signed, issuer, pub = _signed(_tlp_bundle(tlp="GREEN", entity_tlp="RED"))
         r = client.post(

@@ -246,6 +246,18 @@ class TestManifestDigest:
         assert manifest_digest(with_cap) != base
 
 
+# cryptography je volitelná ([fde]) — šifrovací testy se bez ní přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
+
+@requires_crypto
 class TestPluginSignature:
     def test_sign_verify_roundtrip(self, kp: tuple[str, str], manifest: PluginManifest) -> None:
         priv, pub = kp
@@ -274,6 +286,7 @@ class TestPluginSignature:
         assert not verify_plugin_signature(pub, "xy", sign_plugin(manifest, kp[0]))
 
 
+@requires_crypto
 class TestTrustModel:
     def test_trusted_root_confirms(self, manifest: PluginManifest) -> None:
         priv, pub = generate_keypair()

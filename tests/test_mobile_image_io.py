@@ -23,6 +23,16 @@ from stopa.data.image_pipeline import process_mobile_image
 from stopa.domain.fde import encrypt_image, is_fde_image
 from stopa.models import Case, EvidenceSource, ProcessingProfile
 
+# cryptography je volitelná ([fde]) — FDE unlock testy se bez ní přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
 
 @pytest.fixture()
 def case_db(tmp_path: Path) -> tuple[CaseDB, str]:
@@ -46,6 +56,7 @@ def _fat16_fde_image(tmp_path: Path, password: str = "hlasovka") -> Path:
 
 
 @requires_tsk
+@requires_crypto
 def test_mobile_fde_unlock(tmp_path: Path, case_db):
     """FDE obraz → dešifrován heslem → TSK najde soubory."""
     db, src_id = case_db
@@ -64,6 +75,7 @@ def test_mobile_fde_unlock(tmp_path: Path, case_db):
 
 
 @requires_tsk
+@requires_crypto
 def test_mobile_fde_wrong_password(tmp_path: Path, case_db):
     """Špatné heslo → chyba v errors, fde_unlocked=False."""
     db, src_id = case_db

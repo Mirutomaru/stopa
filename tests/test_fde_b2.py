@@ -266,6 +266,7 @@ def _fat16_fbe_image(tmp_path: Path, password: str = "hlasovka") -> Path:
 
 
 @requires_tsk
+@requires_crypto
 def test_pipeline_fbe_unlock(tmp_path: Path, case_db):
     """FBE obraz → dešifrován heslem (AES-XTS) → TSK najde soubory."""
     from stopa.models import ProcessingProfile
@@ -284,6 +285,7 @@ def test_pipeline_fbe_unlock(tmp_path: Path, case_db):
 
 
 @requires_tsk
+@requires_crypto
 def test_pipeline_fbe_wrong_password(tmp_path: Path, case_db):
     """Špatné heslo → chyba v errors, fde_unlocked=False."""
     from stopa.models import ProcessingProfile
@@ -299,6 +301,7 @@ def test_pipeline_fbe_wrong_password(tmp_path: Path, case_db):
 
 
 @requires_tsk
+@requires_crypto
 def test_pipeline_fbe_no_password(tmp_path: Path, case_db):
     """Bez hesla → FBE obraz se nedešifruje (chyba)."""
     from stopa.models import ProcessingProfile
@@ -350,6 +353,7 @@ def test_key_material_missing_keyfile_raises(tmp_path: Path):
 
 
 @requires_tsk
+@requires_crypto
 def test_pipeline_fbe_unlock_via_keyfile(tmp_path: Path, case_db):
     """FBE obraz → dešifrován importovaným klíčem (keyfile), bez --password."""
     from stopa.models import ProcessingProfile
@@ -371,6 +375,7 @@ def test_pipeline_fbe_unlock_via_keyfile(tmp_path: Path, case_db):
 
 
 @requires_tsk
+@requires_crypto
 def test_pipeline_fbe_keyfile_beats_password(tmp_path: Path, case_db):
     """Keyfile má prioritu — špatné heslo + správný keyfile → unlock."""
     from stopa.models import ProcessingProfile

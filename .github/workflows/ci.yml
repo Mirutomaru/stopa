@@ -81,6 +81,35 @@ jobs:
           pip freeze | grep -v "^-e \|^stopa @\|^stopa==" > requirements.txt
           pip-audit --no-deps -r requirements.txt
 
+  # P4-1 — full profil: všechny volitelné extras + yara-python (funkční cesty „s X“).
+  # Min profil je výše (`test`, jen dev+web); skip matice: docs/EXTRAS_COVERAGE.md.
+  test-full:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # weasyprint (extra [pdf]) potřebuje system pango; ostatní extras jsou čisté Python/C wheels
+      - name: System deps (weasyprint)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+            libfontconfig1 fonts-dejavu-core
+
+      - name: Install (all extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,web,pdf,fde,tsk,stix,rules,xlsx,meta,net,analytics]"
+
+      - name: Test suite (full profile — bez skipů volitelných extras)
+        run: python -m pytest -q
+
   # ETAPA D vlna 1 (STP-043): benchmark proti baseline — fail na regresi >20 %
   # a ≥0.5 ms absolutního rozdílu (CI noise guard pro sub-ms položky).
   benchmark:

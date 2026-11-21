@@ -18,6 +18,16 @@ from pathlib import Path
 
 import pytest
 
+# cryptography je volitelná ([fde]) — integrity checkpointy (Ed25519) se bez ní
+# degradují na None; příslušné testy se přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
 
 @pytest.fixture()
 def client(tmp_path: Path):
@@ -99,6 +109,7 @@ class TestPlasoImportEndpoint:
         )
         assert r.status_code == 422
 
+    @requires_crypto
     def test_success_imports_and_audits(self, client, tmp_path):
         cid = _make_case(client)["id"]
         rows = [

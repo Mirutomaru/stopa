@@ -10,8 +10,21 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+import pytest
+
 # sdílený fixture — case DB s artifactem, timeline eventem a korelací
 from test_e10 import e10_case  # noqa: F401
+
+# cryptography je volitelná ([fde]) — integrity checkpointy (Ed25519) se bez ní
+# degradují na None; příslušné testy se přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
 
 
 def _l2t_text(rows: list[dict]) -> str:
@@ -180,6 +193,7 @@ class TestCliPlasoImport:
         assert len(db.list_artifacts(source_id=imp[0].id)) == 1
         assert len(db.list_timeline_events(source_id=imp[0].id)) == 1
 
+    @requires_crypto
     def test_cli_audit_and_checkpoint(self, e10_case, tmp_path):  # noqa: F811
         from stopa import cli
 

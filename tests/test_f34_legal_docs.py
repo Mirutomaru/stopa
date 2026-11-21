@@ -37,6 +37,17 @@ SRC_ID = "src-f34"
 # ── stavba case DB ───────────────────────────────────────────────────
 
 
+# cryptography je volitelná ([fde]) — testy s Ed25519 podpisem se bez ní přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
+
 def _fresh_db(root: Path):
     from stopa.data.db import CaseDB
 
@@ -137,6 +148,7 @@ class FakeLLM:
 
 
 @pytest.mark.parametrize("doc_type", LEGAL_DOC_TYPES)
+@requires_crypto
 def test_ak_all_three_templates_generate(db, doc_type):
     res = generate_legal_doc(db, CASE_ID, doc_type)
     assert res.doc_type == doc_type
@@ -154,6 +166,7 @@ def test_ak_all_three_templates_generate(db, doc_type):
     assert "Právní review" in res.body_markdown
 
 
+@requires_crypto
 def test_ak_generation_under_30_seconds(db):
     llm = FakeLLM("AI generovaný text pro rychlostní test.")
     for doc_type in LEGAL_DOC_TYPES:
@@ -199,12 +212,14 @@ def test_llm_narrative_injected(db):
     assert len(llm.calls) >= 1
 
 
+@requires_crypto
 def test_deterministic_fallback_without_llm(db):
     res = generate_legal_doc(db, CASE_ID, "forensic_methodology")  # llm_call=None
     assert "deterministickými STOPA parsery" in res.body_markdown
     assert verify_legal_doc(res) is True
 
 
+@requires_crypto
 def test_llm_failure_falls_back_to_template(db):
     def broken(prompt: str) -> str:
         raise RuntimeError("LM Studio offline")

@@ -27,6 +27,16 @@ from stopa.domain.anonymize import AnonKey, anonymize, new_key
 from stopa.domain.exchange import FORMAT_V1, build_bundle, sign_bundle
 from stopa.domain.integrity import generate_keypair
 
+# cryptography je volitelná ([fde]) — šifrovací testy se bez ní přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
 CASE_ID = "p27-case"
 NOW = "2026-11-19T12:00:00Z"
 EMAIL = "alice@example.com"
@@ -278,6 +288,7 @@ def _signed_bundle() -> tuple[dict, str, str]:
 
 
 class TestCliVerify:
+    @requires_crypto
     def test_verify_ok_exit0(self, dbdir, tmp_path):
         from stopa.cli.commands.exchange import cmd_exchange_verify
 
@@ -288,6 +299,7 @@ class TestCliVerify:
         assert rc == 0
         assert "ověřeno" in out
 
+    @requires_crypto
     def test_verify_tamper_exit1_signature_mismatch(self, dbdir, tmp_path):
         """AK: tamperovaný podpis → exit 1 s důvodem signature_mismatch."""
         from stopa.cli.commands.exchange import cmd_exchange_verify
@@ -301,6 +313,7 @@ class TestCliVerify:
         assert rc == 1
         assert "signature_mismatch" in out
 
+    @requires_crypto
     def test_verify_signed_without_roots_json_reasons(self, dbdir, tmp_path):
         from stopa.cli.commands.exchange import cmd_exchange_verify
 
@@ -312,6 +325,7 @@ class TestCliVerify:
         data = json.loads(out)
         assert data["ok"] is False and "no_trust_roots" in data["reasons"]
 
+    @requires_crypto
     def test_verify_deformed_root_exit1(self, dbdir, tmp_path):
         from stopa.cli.commands.exchange import cmd_exchange_verify
 
@@ -364,6 +378,7 @@ class TestExchangeWeb:
         expected = {rec.pseudonym for rec in anonymize(gen_key, RAW_ENTITIES).records}
         assert {e["value"] for e in data["bundle"]["entities"]} == expected
 
+    @requires_crypto
     def test_verify_roundtrip_200(self, client):
         bundle, issuer, pub = _signed_bundle()
         r = client.post(

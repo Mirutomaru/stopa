@@ -371,6 +371,7 @@ class TestVerifyManifestFailClosed:
         result = verify_manifest(m)
         assert not result.ok and "duplicitní" in (result.reason or "")
 
+    @requires_crypto
     def test_bad_public_key_encoding_fail_closed(self):
         # strukturně validní manifest; "K" není base64 kódovaný 32-bytový Ed25519 klíč
         m = {

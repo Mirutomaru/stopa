@@ -34,6 +34,8 @@ try:  # cryptography je volitelná závislost (extra 'fde') — v .venv nainstal
 except ImportError:  # pragma: no cover
     HAS_CRYPTO = False
 
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
 
 @pytest.fixture()
 def db(tmp_path: Path) -> Iterator[CaseDB]:
@@ -102,6 +104,7 @@ class TestDomain:
             assert section in p
         assert p["case"]["id"] == "case-x"
 
+    @requires_crypto
     def test_sign_verify_roundtrip(self) -> None:
         from stopa.domain.integrity import generate_keypair, verify_signature
 
@@ -112,6 +115,7 @@ class TestDomain:
         # stejná sémantika jako C4/F5.1 — podpisuje se hex digest kanonického JSON
         assert verify_signature(pub_b64, report_digest(canonical_json(payload)), sig)
 
+    @requires_crypto
     def test_tampered_payload_fails_verify(self) -> None:
         from stopa.domain.integrity import generate_keypair
 
@@ -128,6 +132,7 @@ class TestDomain:
         assert verify_report(p, "pub", None) is False
         assert verify_report(p, None, "sig") is False
 
+    @requires_crypto
     def test_render_html_sections_and_determinism(self) -> None:
         from stopa.domain.integrity import generate_keypair
 
@@ -193,6 +198,7 @@ class TestPresentation:
         # bez pečetí → None; po seal_case → sekce s rootem
         assert data["merkle_seal"] is None
 
+    @requires_crypto
     def test_merkle_seal_section_after_seal(self, db: CaseDB) -> None:
         _seed(db)
         assert db.seal_case(actor="znalec@x.cz") is not None
@@ -203,6 +209,7 @@ class TestPresentation:
         assert seal is not None and seal["seals_total"] == 1
         assert seal["seals_valid"] == 1 and len(seal["latest_root_hash"]) == 64
 
+    @requires_crypto
     def test_generate_writes_signed_report(self, db: CaseDB, tmp_path: Path) -> None:
         _seed(db)
         from stopa.presentation.compliance_report import generate_compliance_report

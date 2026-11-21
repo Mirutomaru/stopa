@@ -170,6 +170,7 @@ class TestReportApi:
         assert "Web test" in body
 
     def test_report_pdf_download(self, client, evidence):
+        pytest.importorskip("weasyprint")  # volitelné extra [pdf] (P4-1 min profil)
         cid = _make_case(client)["id"]
         client.post(f"/api/cases/{cid}/sources", json={"path": str(evidence)})
         r = client.get(f"/api/cases/{cid}/report", params={"format": "pdf"})

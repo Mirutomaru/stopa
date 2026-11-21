@@ -38,6 +38,16 @@ from stopa.domain.multitenant import (
 )
 from stopa.web.app import create_app
 
+# cryptography je volitelná ([fde]) — RS256/JWT testy se bez ní přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
 ISSUER = "https://idp.example.com/realms/stopa"
 OIDC_SECRET = "oidc-hs256-test-secret"
 
@@ -250,6 +260,7 @@ class TestVerifyJwt:
             verify_jwt(tok, secret=OIDC_SECRET, issuer=ISSUER,
                        audience="stopa-web")
 
+    @requires_crypto
     def test_rs256_with_jwks(self):
         # standardní JWT RS256 signatura (Keycloak/Okta kompatibilní)
         from cryptography.hazmat.primitives import hashes
@@ -270,6 +281,7 @@ class TestVerifyJwt:
         out = verify_jwt(tok, jwks=jwks, issuer=ISSUER)
         assert out["sub"] == "alice"
 
+    @requires_crypto
     def test_rs256_bad_signature(self):
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -709,6 +721,7 @@ class TestF_SsoJwtEdgeCases:
         r = client.post("/auth/login", json={"id_token": sso_token("x")})
         assert r.status_code == 400, r.text
 
+    @requires_crypto
     def test_rs256_via_jwks_hook(self, tmp_path, monkeypatch):
         # F5 — RS256 (Keycloak/Okta) s JWKS přes sso_fetcher hook (bez sítě)
         from cryptography.hazmat.primitives import hashes

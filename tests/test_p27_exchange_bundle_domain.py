@@ -146,6 +146,17 @@ class TestBuildBundle:
         assert a == b
 
 
+# cryptography je volitelná ([fde]) — šifrovací testy se bez ní přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
+
 class TestDigest:
     def test_stable(self):
         b = _bundle()
@@ -156,6 +167,7 @@ class TestDigest:
         c = _bundle(case_id="case-y")
         assert bundle_digest(a) != bundle_digest(c)
 
+    @requires_crypto
     def test_excludes_signature_block(self):
         b = _bundle()
         priv, _ = generate_keypair()
@@ -173,6 +185,7 @@ class TestDigest:
             bundle_digest([1, 2])  # type: ignore[arg-type]
 
 
+@requires_crypto
 class TestSignBundle:
     def test_signature_block_shape(self, kp):
         priv, _ = kp
@@ -219,17 +232,20 @@ class TestVerifyBundle:
         res = verify_bundle(_bundle())
         assert res.ok and res.reasons == ()
 
+    @requires_crypto
     def test_signed_with_matching_root_ok(self, kp):
         priv, pub = kp
         signed = sign_bundle(_bundle(), priv)
         res = verify_bundle(signed, {"stopa-marketplace": pub})
         assert res.ok, res.reasons
 
+    @requires_crypto
     def test_roots_as_sequence(self, kp):
         priv, pub = kp
         signed = sign_bundle(_bundle(), priv)
         assert verify_bundle(signed, [("stopa-marketplace", pub)]).ok
 
+    @requires_crypto
     def test_tampered_content_mismatch(self, kp):
         priv, pub = kp
         signed = sign_bundle(_bundle(), priv)
@@ -238,6 +254,7 @@ class TestVerifyBundle:
         res = verify_bundle(tampered, {"stopa-marketplace": pub})
         assert not res.ok and "signature_mismatch" in res.reasons
 
+    @requires_crypto
     def test_tampered_signature_mismatch(self, kp):
         priv, pub = kp
         signed = sign_bundle(_bundle(), priv)
@@ -248,18 +265,21 @@ class TestVerifyBundle:
         res = verify_bundle(tampered, {"stopa-marketplace": pub})
         assert not res.ok and "signature_mismatch" in res.reasons
 
+    @requires_crypto
     def test_signed_without_roots_fail_closed(self, kp):
         priv, _ = kp
         signed = sign_bundle(_bundle(), priv)
         res = verify_bundle(signed)
         assert not res.ok and res.reasons == ("no_trust_roots",)
 
+    @requires_crypto
     def test_unknown_issuer_untrusted(self, kp):
         priv, pub = kp
         signed = sign_bundle(_bundle(), priv, issuer="other-org")
         res = verify_bundle(signed, {"stopa-marketplace": pub})
         assert not res.ok and "untrusted_signature" in res.reasons
 
+    @requires_crypto
     def test_deformed_root_key_fail_closed(self, kp):
         priv, _ = kp
         signed = sign_bundle(_bundle(), priv)
@@ -349,6 +369,7 @@ class TestVerifyBundle:
         assert not res.ok
         assert set(res.reasons) == {"unknown_format", "missing_case_id", "bad_packed_at", "bad_counts", "bad_entities"}
 
+    @requires_crypto
     def test_roundtrip_sign_verify(self, kp):
         priv, pub = kp
         signed = sign_bundle(_bundle(title="Případ s diakritikou"), priv)

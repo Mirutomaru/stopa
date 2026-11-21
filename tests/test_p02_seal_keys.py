@@ -68,6 +68,7 @@ def _stored_priv(db: CaseDB) -> str | None:
 
 # ── Doména: wrap/unwrap soukromého klíče ────────────────────────────────
 class TestWrapUnwrap:
+    @pytest.mark.skipif(not HAS_CRYPTO, reason="cryptography není nainstalována")
     def test_roundtrip_hides_plaintext(self):
         raw = base64.b64encode(b"p" * 32).decode()
         wrapped = wrap_private_key(raw, b"s" * 32)
@@ -75,6 +76,7 @@ class TestWrapUnwrap:
         assert raw not in wrapped  # plaintext se v obalu neobjevuje
         assert unwrap_private_key(wrapped, b"s" * 32) == raw
 
+    @pytest.mark.skipif(not HAS_CRYPTO, reason="cryptography není nainstalována")
     def test_wrapped_is_deterministic_shape(self):
         obj = _json.loads(wrap_private_key(base64.b64encode(b"x").decode(), b"a" * 32))
         assert set(obj.keys()) == {"v", "nonce", "ct"} and obj["v"] == 1
@@ -89,6 +91,7 @@ class TestWrapUnwrap:
         # secret přítomen, ale formát je legacy → bez změny (backward compat)
         assert unwrap_private_key(legacy, b"s" * 32) == legacy
 
+    @pytest.mark.skipif(not HAS_CRYPTO, reason="cryptography není nainstalována")
     def test_wrapped_without_secret_valueerror(self):
         wrapped = wrap_private_key(base64.b64encode(b"x").decode(), b"a" * 32)
         with pytest.raises(ValueError, match="STOPA_INTEGRITY_MASTER_KEY"):
@@ -107,6 +110,7 @@ class TestWrapUnwrap:
         with pytest.raises(ValueError, match="neznámá verze"):
             unwrap_private_key(bad, b"a" * 32)
 
+    @pytest.mark.skipif(not HAS_CRYPTO, reason="cryptography není nainstalována")
     def test_wrong_secret_decrypt_fails(self):
         wrapped = wrap_private_key(base64.b64encode(b"x").decode(), b"a" * 32)
         with pytest.raises(ValueError, match="dešifrování selhalo"):

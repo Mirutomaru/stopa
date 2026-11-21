@@ -244,6 +244,8 @@ def test_cli_attack_map_json_mode(case_env: dict, capsys):
 
 
 def test_cli_attack_map_human_and_stix_out(case_env: dict, tmp_path: Path, capsys):
+    pytest.importorskip("stix2")  # volitelné extra [stix] — validátor (P4-1 min profil)
+
     from stopa.cli import cmd_attack_map
 
     out_file = tmp_path / "map" / "attack.json"

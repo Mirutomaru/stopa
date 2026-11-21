@@ -488,6 +488,17 @@ def case_env(tmp_path, monkeypatch):
     db.close()
 
 
+# cryptography je volitelná ([fde]) — Ed25519 podpisové testy se bez ní přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
+
 class TestK45Report:
     def test_all_ten_sections_present_and_nonempty(self, case_env):
         from stopa.presentation.crypto_report import REPORT_SECTIONS, build_crypto_report_data
@@ -552,6 +563,7 @@ class TestK45Report:
         assert len(res.sha256_hex or "") == 64
         assert hashlib.sha256(res.content.encode()).hexdigest() == res.sha256_hex
 
+    @requires_crypto
     def test_ed25519_signature_roundtrip(self, case_env):
         from stopa.domain import integrity
         from stopa.presentation.crypto_report import generate_crypto_report
@@ -561,6 +573,7 @@ class TestK45Report:
         assert res.signature_b64 and res.public_key_b64
         assert integrity.verify_signature(res.public_key_b64, res.sha256_hex, res.signature_b64)
 
+    @requires_crypto
     def test_tampered_digest_rejected(self, case_env):
         from stopa.domain import integrity
         from stopa.presentation.crypto_report import generate_crypto_report

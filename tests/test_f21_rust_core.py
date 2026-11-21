@@ -19,6 +19,10 @@ import pytest
 from stopa.data import rust_core as rc
 from stopa.domain import carving, hashing
 
+# Rust wheel (stopa_core) je volitelný — parity testy se bez něj přeskočí (P4-1 min profil)
+HAS_CORE = rc.is_available()
+requires_core = pytest.mark.skipif(not HAS_CORE, reason="Rust wheel stopa_core není nainstalován")
+
 
 def _deterministic_blob(n: int = 3 * 1024 * 1024) -> bytes:
     """Deterministický pseudo-náhodný blob (SHA-256 counter mode)."""
@@ -42,6 +46,7 @@ def _python_hash(path: Path, algs: list[str]) -> dict[str, str]:
 
 # ── facada ────────────────────────────────────────────────────────────────
 
+@requires_core
 def test_facade_available_in_venv(tmp_path: Path):
     """Wheel je v .venv nainstalovaný → facada hlásí dostupnost + verzi."""
     assert rc.is_available() is True
@@ -56,6 +61,7 @@ def test_facade_fallback_when_unavailable(monkeypatch):
     assert rc.find_offsets(b"xxPNGxx", [b"PNG"]) is None
 
 
+@requires_core
 def test_facade_reset_cache(monkeypatch):
     """reset_cache() vynutí znovuzkoušení importu (wheel se znovu načte)."""
     monkeypatch.setattr(rc, "_mod", None)
@@ -67,6 +73,7 @@ def test_facade_reset_cache(monkeypatch):
 # ── hashing parity ────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("algs", [["md5"], ["sha256"], ["md5", "sha1", "sha256"]])
+@requires_core
 def test_hash_parity_rust_vs_python(tmp_path: Path, algs: list[str]):
     """Rust one-pass hash == hashlib (bitová shoda na 3 MiB dat)."""
     p = tmp_path / "blob.bin"
@@ -77,6 +84,7 @@ def test_hash_parity_rust_vs_python(tmp_path: Path, algs: list[str]):
     assert via_rust == expected
 
 
+@requires_core
 def test_hash_parity_empty_file(tmp_path: Path):
     """Prázdný soubor → platné prázdné digesty (SHA-256 e3b0c442…)."""
     p = tmp_path / "empty.bin"

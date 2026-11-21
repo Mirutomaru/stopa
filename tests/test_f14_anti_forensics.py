@@ -22,6 +22,14 @@ import pytest
 
 from stopa.domain import anti_forensics as af
 
+# PIL je volitelné ([meta]) — LSB stego testy se bez něj přeskočí (P4-1 min profil)
+try:
+    from PIL import Image  # noqa: F401
+
+    HAS_PIL = True
+except ImportError:  # profil bez extra [meta] (min CI)
+    HAS_PIL = False
+
 # ════════════════════════ helpers: syntetické záznamy ═════════════════════
 
 REF = "2026-11-10T12:00:00+00:00"  # referenční čas pro timestomping
@@ -177,17 +185,21 @@ def noisy_png(tmp_path: Path):
 
 
 class TestLsbStego:
+    @pytest.mark.skipif(not HAS_PIL, reason="volitelné extra [meta] (Pillow) chybí")
     def test_flat_odd_png_flagged(self, flat_odd_png):
         hits = af.detect_lsb_steganography(str(flat_odd_png))
         assert len(hits) == 1 and hits[0].check == "steganography"
         assert hits[0].evidence["lsb_skew"] >= 0.9
 
+    @pytest.mark.skipif(not HAS_PIL, reason="volitelné extra [meta] (Pillow) chybí")
     def test_noisy_png_not_flagged(self, noisy_png):
         assert af.detect_lsb_steganography(str(noisy_png)) == []
 
     def test_missing_path_returns_empty(self):
         assert af.detect_lsb_steganography(None) == []
-        assert af.detect_lsb_steganography("/neexistuje/x.png") == []
+        # s PIL: prázdné; bez PIL (min profil): explicitní no_pil skip finding, ne crash
+        res = af.detect_lsb_steganography("/neexistuje/x.png")
+        assert res == [] or all(f.evidence.get("skipped") == "no_pil" for f in res)
 
 
 # ═══════════════════ 6. Tool signatures + image integrity ==================
@@ -237,6 +249,7 @@ class TestOrchestrator:
         assert set(rep) >= {"findings_count", "risk_score", "checks_run",
                             "by_check"}
 
+    @pytest.mark.skipif(not HAS_PIL, reason="volitelné extra [meta] (Pillow) chybí")
     def test_all_checks_aggregated(self, flat_odd_png):
         fs = [_file("/t/fslint.exe", mtime="2030-01-01T00:00:00+00:00")]
         evs = [{"event_id": 1102, "record_id": 500}]

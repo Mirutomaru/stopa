@@ -14,9 +14,16 @@ import random
 from typing import Any
 
 import pytest
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+
+# cryptography je volitelná ([fde]) — bez ní se celý soubor přeskočí (P4-1 min profil)
+try:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+
+    HAS_CRYPTO = True
+except ImportError:  # profil bez extra [fde] (min CI)
+    HAS_CRYPTO = False
 
 from stopa.domain.crypto.wallets import (
     _SECP256K1_N,
@@ -31,6 +38,8 @@ from stopa.domain.crypto.wallets import (
     parse_electrum_wallet,
     parse_metamask_vault,
 )
+
+pytestmark = pytest.mark.skipif(not HAS_CRYPTO, reason="volitelné extra [fde] (cryptography) chybí")
 
 # ── konstanty / vektory ───────────────────────────────────────────────────
 
@@ -386,14 +395,23 @@ class TestEthAddressFromPrivateKey:
 
 # ── MetaMask heuristika ───────────────────────────────────────────────────
 
+# Parametrická lista se hodnotí při definici třídy — potřebuje cryptography ([fde]);
+# v min profilu (bez extra) je celý soubor přeskočen pytestmarkem (P4-1).
+_HEURISTIC_VAULTS = (
+    [
+        make_top_vault([KEY_ONE_HEX]),
+        make_nested_vault([KEY_ONE_HEX]),
+        {"dat": "A" * 40, "salt": base64.b64encode(b"salt-123456789").decode()},
+    ]
+    if HAS_CRYPTO
+    else []
+)
+
+
 class TestMetaMaskHeuristic:
     @pytest.mark.parametrize(
         "obj",
-        [
-            make_top_vault([KEY_ONE_HEX]),
-            make_nested_vault([KEY_ONE_HEX]),
-            {"dat": "A" * 40, "salt": base64.b64encode(b"salt-123456789").decode()},
-        ],
+        _HEURISTIC_VAULTS,
     )
     def test_positive(self, obj: dict[str, Any]) -> None:
         assert is_metamask_vault(obj)

@@ -196,6 +196,7 @@ class TestIoWrapper:
 
     def test_generate_pdf_file(self, populated_case, tmp_path):
         db, case_id = populated_case
+        pytest.importorskip("weasyprint")  # volitelné extra [pdf] (P4-1 min profil)
         out = generate_pdf_report(db, case_id, tmp_path / "rep.pdf")
         assert out.exists()
         head = out.read_bytes()[:5]

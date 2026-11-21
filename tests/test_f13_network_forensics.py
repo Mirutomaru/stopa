@@ -19,10 +19,17 @@ import json
 from pathlib import Path
 
 import pytest
-from scapy.layers.dns import DNS, DNSQR
-from scapy.layers.inet import IP, TCP, UDP
-from scapy.packet import Raw
-from scapy.utils import wrpcap
+
+# scapy je volitelné ([net]) — bez něj se celý soubor přeskočí (P4-1 min profil)
+try:
+    from scapy.layers.dns import DNS, DNSQR
+    from scapy.layers.inet import IP, TCP, UDP
+    from scapy.packet import Raw
+    from scapy.utils import wrpcap
+
+    HAS_SCAPY = True
+except ImportError:  # profil bez extra [net] (min CI)
+    HAS_SCAPY = False
 
 # ── domain imports (bez scapy) ─────────────────────────────────────────────
 from stopa.domain.net_forensics import (
@@ -44,6 +51,8 @@ from stopa.domain.net_forensics import (
     statistics_median,
     summarize,
 )
+
+pytestmark = pytest.mark.skipif(not HAS_SCAPY, reason="volitelné extra [net] (scapy) chybí")
 
 # ════════════════════════ helpers: syntetické záznamy ═════════════════════
 

@@ -30,6 +30,18 @@ import pytest
 # ── fixtury + seed pomocníci (stejný vzor jako STP-067) ─────────────
 
 
+
+# cryptography je volitelná ([fde]) — integrity checkpointy (Ed25519) se bez ní
+# degradují na None; příslušné testy se přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
 @pytest.fixture()
 def client(tmp_path: Path):
     from fastapi.testclient import TestClient
@@ -278,6 +290,7 @@ class TestLimitAndValidation:
 
 
 class TestAuditAndCheckpoint:
+    @requires_crypto
     def test_export_writes_audit_and_checkpoint(self, client, evidence):
         """Export zapíše audit 'interop_bundle_exported' + checkpoint 'export'."""
         c, _tmp = client

@@ -373,6 +373,7 @@ class TestCli:
         with pytest.raises(SystemExit):
             self._run(["evidence-storage", "report", CASE_ID, "--export", "x.json"], capsys)
 
+    @REQUIRES_CRYPTO
     def test_export_cli_writes_signed_manifest(
         self, clean_env: dict[str, object], tmp_path: Path, capsys
     ):
@@ -386,6 +387,7 @@ class TestCli:
         manifest = json.loads(out_file.read_text(encoding="utf-8"))
         assert verify_manifest(manifest).ok is True
 
+    @REQUIRES_CRYPTO
     def test_import_cli_roundtrip_and_drift_exit2(
         self, env: dict[str, object], tmp_path: Path, capsys
     ):

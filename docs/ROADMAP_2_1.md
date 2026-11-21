@@ -153,11 +153,14 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > P4-6 Sealing v2 (time hash chain + external witness) → P4-5 AI production robustness →
 > P4-4 Frontend sjednocení (SPA kanonická) → P4-9 Cross-platform a stabilita → P4-8 i18n CLI/legacy →
 > P4-7 Multi-node readiness → P4-10 Rust distribuce.
-> **Stav 2026-11-20: všech 10 položek = návrhy k schválení** (implementace až po explicitním pokynu).
+> **Schváleno uživatelem 2026-11-21**, doporučené pořadí se dodržuje.
+> **Stav 2026-11-21: P4-1 hotová** — CI profily `test` (min) + nový `test-full` (všechny extras),
+> `docs/EXTRAS_COVERAGE.md`, fail-closed opravy v 24 test souborech (test-only, src beze změny);
+> min suite exit 0. Zbývá 9 položek = návrhy k implementaci.
 
 | # | Položka | Priorita | Velikost | Pozn. |
 |---|---------|----------|----------|-------|
-| P4-1 | CI matrix pro volitelné extras („bez X“ + „s X“) | **P0** | S | 3 dependency profily v ci.yml (min/full), EXTRAS_COVERAGE.md; bez src změn |
+| P4-1 | CI matrix pro volitelné extras („bez X“ + „s X“) | **P0** | S | ✅ **hotová**: profily min+full v ci.yml (nový job `test-full`), EXTRAS_COVERAGE.md; fail-closed opravy v 24 test souborech, bez src změn |
 | P4-2 | Plugin sandbox hardening (rlimits + seccomp strict profil) | **P0** | M | default backward compatible; adversariální testy (fork bomb/fd/CPU/write-outside-dir) |
 | P4-3 | Plugin API semvering + breaking change log | **P0** | S | api_version v manifestu, tabulka stabilních povrchů, marker `!plugins:` |
 | P4-6 | Sealing v2 — time hash chain + external witness | **P1** | S–M | domain seal_chain.py (H(prev_root‖case_id‖ts‖merkle_root)), aditivní v27, CLI `seal --chain` + witness |

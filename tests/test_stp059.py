@@ -26,6 +26,18 @@ LOGIN_HTML_META = (
 )
 
 
+# cryptography je volitelná ([fde]) — integrity checkpointy (Ed25519) se bez ní
+# degradují na None; příslušné testy se přeskočí (P4-1 min profil)
+try:
+    import cryptography  # noqa: F401
+
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+requires_crypto = pytest.mark.skipif(not HAS_CRYPTO, reason="chybí cryptography (extra [fde])")
+
+
 def _settings(**kw):
     from stopa.data.timesketch_client import TsSettings
 
@@ -448,6 +460,7 @@ class TestTimesketchPushWeb:
         assert r.status_code == 503
         assert "nedostupná" in r.json()["detail"].lower()
 
+    @requires_crypto
     def test_push_success_audit_and_checkpoint(self, client, evidence, monkeypatch):
 
         monkeypatch.setattr("stopa.web.routers.system.TimesketchClient", _OkTsClient)
