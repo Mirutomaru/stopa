@@ -50,6 +50,7 @@ from ._util import (
 
 # P1-4 — kvalita parserů/AI/reparse přesunuty do cli/commands/analysis.py (re-export)
 from .commands.analysis import (
+    cmd_ai_eval,
     cmd_ai_run,
     cmd_parser_quality,
     cmd_parser_status,
@@ -191,6 +192,7 @@ _SUBCOMMAND_EXAMPLES = {
     "parser-status": "stopa parser-status --format json",
     "parser-quality": "stopa parser-quality --json",
     "ai-run": "stopa ai-run <case_id> --role evidence --artifact art-1 --json",
+    "ai-eval": "stopa ai-eval --suite gold --json   # P4-5 — AI eval gate (zlatá suita rolí, offline)",
     "provenance": "stopa provenance case-abc art-123 --json",
     "graph": "stopa graph case-abc --json   # P1-3 — Evidence Graph (hrany s důvodem a polaritou)",
     "compliance": "stopa compliance case-abc --out ./reports   # SWGDE/ISO 27037 report",
@@ -430,6 +432,16 @@ def build_parser() -> argparse.ArgumentParser:
                            "default = poslední 5 artefaktů chronologicky)")
     _add_json_flag(ai_p)
     ai_p.set_defaults(func=cmd_ai_run)
+
+    # P4-5 — AI eval gate (offline zlatá suita rolí; nevyžaduje case DB ani LM Studio)
+    ai_e_p = _ex_sub(
+        sub, "ai-eval",
+        help="P4-5 — AI eval gate: zlatá suita rolí orchestrátoru (offline; exit 1 = regrese)",
+    )
+    ai_e_p.add_argument("--suite", default="gold", choices=["gold"],
+                        help="eval suita (zatím jen 'gold' = P1-2 zlaté scénáře)")
+    _add_json_flag(ai_e_p)
+    ai_e_p.set_defaults(func=cmd_ai_eval)
 
     ps_p = _ex_sub(sub, "parser-status",
                    help="P0-4 validation lab — per-parser validační status (C3 registry + testy)")

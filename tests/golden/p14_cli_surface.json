@@ -29,6 +29,14 @@
       "-h"
     ]
   },
+  "ai-eval": {
+    "opts": [
+      "--help",
+      "--json",
+      "--suite",
+      "-h"
+    ]
+  },
   "ai-run": {
     "opts": [
       "--artifact",

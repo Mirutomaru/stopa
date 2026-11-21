@@ -47,6 +47,11 @@
   [
     "http",
     "GET",
+    "/api/cases/{case_id}/ai/run/stream"
+  ],
+  [
+    "http",
+    "GET",
     "/api/cases/{case_id}/analytics"
   ],
   [

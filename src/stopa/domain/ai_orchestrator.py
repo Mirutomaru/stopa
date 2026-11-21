@@ -106,6 +106,52 @@ def backoff_delay(policy: RetryPolicy, attempt: int, rng: random.Random) -> floa
     return round(base + rng.uniform(-spread, spread), 6)
 
 
+# ── P4-5 — klasifikace chyb LLM volání (transient vs. permanent) ────────────
+
+#: Značky ve zprávě chyby → transientní chyba (retry může pomoct: timeout,
+#: přerušené spojení, rate limit). Hledá se lowercase substring v ``str(exc)``.
+TRANSIENT_ERROR_MARKERS: tuple[str, ...] = (
+    "timeout",
+    "timed out",
+    "connection",
+    "connecterror",
+    "remote disconnected",
+    "rate limit",
+    "too many requests",
+    "temporarily unavailable",
+)
+
+_HTTP_CODE_RE = re.compile(r"http\s+(\d{3})")  # lowercase — vstup je už .lower()
+
+
+def classify_llm_error(exc: BaseException) -> str:
+    """P4-5 — klasifikuje chybu LLM volání jako ``"transient"`` / ``"permanent"``.
+
+    Čistá funkce (bez I/O a importů z data vrstvy):
+
+    - nedostupný server/model → transient (název třídy končí na
+      ``Unavailable``, např. ``LmStudioUnavailable``) — může se obnovit;
+    - explicitní HTTP kód ve zprávě: 5xx a 429 (rate limit) → transient,
+      ostatní → permanent;
+    - známé značky (:data:`TRANSIENT_ERROR_MARKERS`) → transient;
+    - vše ostatní → permanent (retry nepomůže, např. nevalidní požadavek).
+
+    Nevýjimečný vstup → ``TypeError``.
+    """
+    if not isinstance(exc, BaseException):
+        raise TypeError(f"exc musí být instance výjimky, got {type(exc).__name__}")
+    if type(exc).__name__.endswith("Unavailable"):
+        return "transient"
+    msg = str(exc).lower()
+    m = _HTTP_CODE_RE.search(msg)
+    if m:
+        code = int(m.group(1))
+        return "transient" if 500 <= code < 600 or code == 429 else "permanent"
+    if any(marker in msg for marker in TRANSIENT_ERROR_MARKERS):
+        return "transient"
+    return "permanent"
+
+
 @dataclass
 class TokenBudget:
     """Token limit AI relace (např. per case/session)."""

@@ -104,6 +104,42 @@ def cmd_ai_run(args: argparse.Namespace) -> int:
     return 0 if call.payload is not None else 2
 
 
+def cmd_ai_eval(args: argparse.Namespace) -> int:
+    """P4-5 — AI eval gate: zlatá suita rolí orchestrátoru (offline, deterministická).
+
+    Spustí každou roli přes produkční cestu (prompt build → validace výstupu
+    podle ROLE_OUTPUT_SCHEMA) na deterministickém klientovi s přehráváním
+    zlatých odpovědí. Regrese (rozbitý scénář) → exit 1; vše zelené → 0.
+
+    Příklad::
+
+        stopa ai-eval --suite gold [--json]
+    """
+    json_mode = getattr(args, "json", False)
+    suite = getattr(args, "suite", None) or "gold"
+    if suite != "gold":
+        print(f"Chyba: neznámá suita {suite!r} (očekáváno 'gold')", file=sys.stderr)
+        return 1
+
+    from stopa.intelligence.ai_eval import run_gold_suite, suite_summary
+
+    summary = suite_summary(run_gold_suite())
+    if json_mode:
+        print(json.dumps(summary, ensure_ascii=False))
+    else:
+        for r in summary["results"]:
+            mark = "OK  " if r["ok"] else "FAIL"
+            line = f"{mark} {r['role_id']}"
+            if not r["ok"]:
+                line += f" — {r['error']}"
+            print(line)
+        print(
+            f"\nSUITA gold: {summary['passed']}/{summary['total']} rolí OK"
+            + (f", selhaly: {', '.join(summary['failed'])}" if summary["failed"] else "")
+        )
+    return 0 if not summary["failed"] else 1
+
+
 def cmd_parser_status(args: argparse.Namespace) -> int:
     """P0-4 validation lab — per-parser validační status (registry level).
 

@@ -25,16 +25,19 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 import time
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterator
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
+from stopa.data.ai_orchestrator_service import estimate_tokens
 from stopa.data.db import CaseDB
+from stopa.domain.ai_orchestrator import RetryPolicy, backoff_delay, classify_llm_error
 from stopa.intelligence.ai_orchestrator import extract_citations
 
 logger = logging.getLogger(__name__)
@@ -380,6 +383,15 @@ def _extract_json_object(raw: str) -> dict[str, Any]:
 # ── audit kroků + výsledek ───────────────────────────────────────────────────
 
 
+#: P4-5 — stavy běhu agenta (``budget_exceeded`` = token budget vyčerpán,
+#: explicitní status místo exception; AK P4-5).
+AGENT_STATUS_OK = "ok"
+AGENT_STATUS_BUDGET_EXCEEDED = "budget_exceeded"
+
+#: Truncation marker ve final answer při vyčerpání token budgetu (P4-5).
+BUDGET_TRUNCATION_MARKER = "…[token budget vyčerpán — odpověď rozpracovaná]"
+
+
 @dataclass(frozen=True)
 class AgentStep:
     """Jeden krok ReAct smyčky (auditovatelný záznam)."""
@@ -403,7 +415,8 @@ class ToolAgentResult:
     llm_calls: int
     prompt_chars_total: int
     duration_ms: float
-    grounding_total: int  # počet citací ve final answer
+    grounding_total: int  # počet citací ve finální odpovědi
+    status: str = AGENT_STATUS_OK  # P4-5: ok | budget_exceeded (truncation marker)
 
 
 # ── ReAct smyčka ─────────────────────────────────────────────────────────────
@@ -424,7 +437,51 @@ def _file_exists(db: CaseDB, file_id: str) -> bool:
     return row is not None
 
 
-def run_tool_agent(
+def _validate_token_budget(token_budget: int | None) -> int | None:
+    """P4-5 — validace token budgetu (typ = ``TypeError``, sémantika = ``ValueError``)."""
+    if token_budget is None:
+        return None
+    if isinstance(token_budget, bool) or not isinstance(token_budget, int):
+        raise TypeError(
+            f"token_budget musí být kladné celé číslo nebo None, got {token_budget!r}"
+        )
+    if token_budget <= 0:
+        raise ValueError(f"token_budget musí být kladné, got {token_budget}")
+    return token_budget
+
+
+def _llm_call_with_retry(
+    llm_call: Callable[[list[dict[str, str]], int], str],
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    *,
+    policy: RetryPolicy | None,
+    rng: random.Random,
+    sleep_fn: Callable[[float], None],
+) -> str:
+    """P4-5 — LLM volání s retry+backoff+jitter.
+
+    Retrují se jen transientní chyby (:func:`classify_llm_error`); permanentní
+    propaguje okamžitě (bez spotřeby dalších pokusů a bez zpoždění).
+    ``policy=None`` = jediný pokus (chování před P4-5). Při vyčerpání pokusů
+    propaguje poslední chybu. Zpoždění je deterministické per seed RNG.
+    """
+    if policy is None:
+        return llm_call(messages, max_tokens)
+    for attempt in range(1, policy.max_attempts + 1):
+        try:
+            return llm_call(messages, max_tokens)
+        except Exception as exc:
+            exhausted = attempt >= policy.max_attempts
+            if classify_llm_error(exc) == "transient" and not exhausted:
+                sleep_fn(backoff_delay(policy, attempt, rng))
+                continue
+            raise
+    # RetryPolicy.__post_init__ garantuje max_attempts ≥ 1 → nedosažitelné.
+    raise AssertionError("retry smyčka skončila bez pokusu")  # pragma: no cover
+
+
+def _agent_loop(
     llm_call: Callable[[list[dict[str, str]], int], str],
     db: CaseDB,
     case_id: str,
@@ -434,27 +491,19 @@ def run_tool_agent(
     actor: str | None = None,
     max_steps: int = 8,
     redact_pii: bool = True,
-) -> ToolAgentResult:
-    """Spustí ReAct smyčku agenta nad živým case DB.
+    retry_policy: RetryPolicy | None = None,
+    rng: random.Random | None = None,
+    sleep_fn: Callable[[float], None] | None = None,
+    token_budget: int | None = None,
+) -> Iterator[tuple[str, Any]]:
+    """P4-5 — jádro ReAct smyčky jako generátor (sdílené run_tool_agent/run_stream).
 
-    Args:
-        llm_call: ``(messages, max_tokens) -> text odpovědi`` (IO vrstva;
-            testovatelně injektovatelná — offline bez LM Studio).
-        db: CaseDB s načteným případem.
-        case_id: ID případu (entity korelace jsou per-case).
-        question: dotaz uživatele.
-        tools: sada nástrojů (default = ``build_tools()``).
-        actor: atribuce audit logu (explicitní > case examiner, viz STP-022).
-        max_steps: limit kroků smyčky (bez final_answer → ``MaxStepsError``).
-        redact_pii: maskovat PII v messages před každým LLM voláním (default ON).
-
-    Returns:
-        ``ToolAgentResult`` s finální odpovědí, kroky a auditními metadaty.
-
-    Raises:
-        ToolAgentError: nevalidní JSON/krok od LLM.
-        GroundingError: final answer cituje neexistující záznam (100 % validace).
-        MaxStepsError: smyčka dosáhla limitu kroků bez finální odpovědi.
+    Vydává tuple ``(kind, payload)``: pro každý krok smyčky ``("step", AgentStep)``,
+    na závěr přesně jeden ``("final", ToolAgentResult)``. Chyby smyčky
+    (ToolAgentError/GroundingError/MaxStepsError) propaguje výjimkou — fail-closed,
+    sémantika identická s chováním před P4-5. Token budget = hard limit per běh →
+    explicitní ``status="budget_exceeded"`` + truncation marker (ne crash); počítá
+    odhadované tokeny každého LLM volání (celý prompt + completion, char//4).
     """
     tool_list = tools if tools is not None else build_tools()
     registry: dict[str, ToolSpec] = {t.name: t for t in tool_list}
@@ -467,16 +516,40 @@ def run_tool_agent(
     prompt_chars_total = 0
     t_start = time.monotonic()
     final_answer: str | None = None
+    remaining = _validate_token_budget(token_budget)
+    rng = rng if rng is not None else random.Random()
+    sleep_fn = sleep_fn if sleep_fn is not None else time.sleep
 
     for step_no in range(1, max_steps + 1):
+        # P4-5 — token budget: hard limit per běh → explicitní status (ne crash).
+        if remaining is not None and remaining <= 0:
+            yield "final", ToolAgentResult(
+                question=question,
+                final_answer=BUDGET_TRUNCATION_MARKER,
+                steps=steps,
+                llm_calls=len(steps),
+                prompt_chars_total=prompt_chars_total,
+                duration_ms=(time.monotonic() - t_start) * 1000.0,
+                grounding_total=0,
+                status=AGENT_STATUS_BUDGET_EXCEEDED,
+            )
+            return
+
         if redact_pii:
             from stopa.domain.pii_redaction import redact_messages
 
             messages, _ = redact_messages(messages)
 
         t0 = time.monotonic()
-        raw = llm_call(messages, 2048)
+        raw = _llm_call_with_retry(
+            llm_call, messages, 2048, policy=retry_policy, rng=rng, sleep_fn=sleep_fn
+        )
         duration_ms = (time.monotonic() - t0) * 1000.0
+
+        # P4-5 — token accounting: odhad celého promptu + completion per volání.
+        if remaining is not None:
+            used = sum(estimate_tokens(m["content"]) for m in messages)
+            remaining -= used + estimate_tokens(raw)
         prompt_chars_total += sum(len(m["content"]) for m in messages)
 
         data = _extract_json_object(raw)
@@ -514,31 +587,31 @@ def run_tool_agent(
             )
 
         if step.final_answer is not None:
-            steps.append(
-                AgentStep(
-                    step_no=step_no,
-                    thought=step.thought,
-                    action=None,
-                    params={},
-                    observation_chars=None,
-                    duration_ms=duration_ms,
-                    audit_row_id=audit_row_id,
-                )
-            )
-            final_answer = step.final_answer
-            break
-
-        steps.append(
-            AgentStep(
+            rec = AgentStep(
                 step_no=step_no,
                 thought=step.thought,
-                action=step.action,
-                params=dict(step.params),
-                observation_chars=observation_chars,
+                action=None,
+                params={},
+                observation_chars=None,
                 duration_ms=duration_ms,
                 audit_row_id=audit_row_id,
             )
+            steps.append(rec)
+            yield "step", rec
+            final_answer = step.final_answer
+            break
+
+        rec = AgentStep(
+            step_no=step_no,
+            thought=step.thought,
+            action=step.action,
+            params=dict(step.params),
+            observation_chars=observation_chars,
+            duration_ms=duration_ms,
+            audit_row_id=audit_row_id,
         )
+        steps.append(rec)
+        yield "step", rec
         messages.append(
             {
                 "role": "user",
@@ -555,7 +628,7 @@ def run_tool_agent(
             f"grounding selhalo — nevalidní citace ve finální odpovědi: {invalid}"
         )
 
-    return ToolAgentResult(
+    yield "final", ToolAgentResult(
         question=question,
         final_answer=final_answer,
         steps=steps,
@@ -564,3 +637,122 @@ def run_tool_agent(
         duration_ms=(time.monotonic() - t_start) * 1000.0,
         grounding_total=total_citations,
     )
+
+
+def run_tool_agent(
+    llm_call: Callable[[list[dict[str, str]], int], str],
+    db: CaseDB,
+    case_id: str,
+    question: str,
+    *,
+    tools: list[ToolSpec] | None = None,
+    actor: str | None = None,
+    max_steps: int = 8,
+    redact_pii: bool = True,
+    retry_policy: RetryPolicy | None = None,
+    rng: random.Random | None = None,
+    sleep_fn: Callable[[float], None] | None = None,
+    token_budget: int | None = None,
+) -> ToolAgentResult:
+    """Spustí ReAct smyčku agenta nad živým case DB.
+
+    Args:
+        llm_call: ``(messages, max_tokens) -> text odpovědi`` (IO vrstva;
+            testovatelně injektovatelná — offline bez LM Studio).
+        db: CaseDB s načteným případem.
+        case_id: ID případu (entity korelace jsou per-case).
+        question: dotaz uživatele.
+        tools: sada nástrojů (default = ``build_tools()``).
+        actor: atribuce audit logu (explicitní > case examiner, viz STP-022).
+        max_steps: limit kroků smyčky (bez final_answer → ``MaxStepsError``).
+        redact_pii: maskovat PII v messages před každým LLM voláním (default ON).
+        retry_policy: P4-5 — retry+backoff+jitter politika; ``None`` = jediný pokus.
+        rng: P4-5 — injektovatelný RNG pro jitter (determinismus per seed).
+        sleep_fn: P4-5 — zpoždění mezi pokusy (testy injektují sběrač).
+        token_budget: P4-5 — hard limit odhadovaných tokenů na běh; vyčerpání →
+            ``status="budget_exceeded"`` + truncation marker (ne exception).
+
+    Returns:
+        ``ToolAgentResult`` s finální odpovědí, kroky a auditními metadaty.
+
+    Raises:
+        ToolAgentError: nevalidní JSON/krok od LLM.
+        GroundingError: final answer cituje neexistující záznam (100 % validace).
+        MaxStepsError: smyčka dosáhla limitu kroků bez finální odpovědi.
+    """
+    for kind, payload in _agent_loop(
+        llm_call,
+        db,
+        case_id,
+        question,
+        tools=tools,
+        actor=actor,
+        max_steps=max_steps,
+        redact_pii=redact_pii,
+        retry_policy=retry_policy,
+        rng=rng,
+        sleep_fn=sleep_fn,
+        token_budget=token_budget,
+    ):
+        if kind == "final":
+            return payload  # type: ignore[return-value]
+    raise AssertionError("_agent_loop skončil bez 'final' události")  # pragma: no cover
+
+
+def run_stream(
+    llm_call: Callable[[list[dict[str, str]], int], str],
+    db: CaseDB,
+    case_id: str,
+    question: str,
+    *,
+    tools: list[ToolSpec] | None = None,
+    actor: str | None = None,
+    max_steps: int = 8,
+    redact_pii: bool = True,
+    retry_policy: RetryPolicy | None = None,
+    rng: random.Random | None = None,
+    sleep_fn: Callable[[float], None] | None = None,
+    token_budget: int | None = None,
+) -> Iterator[dict[str, Any]]:
+    """P4-5 — streamovací varianta běhu agenta (SSE-ready události).
+
+    Vydává JSON-serializovatelné event dict v tomto pořadí::
+
+        {"type": "start",  "max_steps": int}
+        {"type": "step",   "step_no": int, "thought": str, "action": str | None,
+         "observation_chars": int | None}          # jeden za každý krok smyčky
+        {"type": "final",  "result": <ToolAgentResult jako dict>}
+
+    Při chybě přesně jeden ``{"type": "error", "error": str, "exc_type": str}``
+    a stream končí. Finální výsledek je identický s :func:`run_tool_agent` —
+    stejná jádrová smyčka (AK P4-5).
+    """
+    yield {"type": "start", "max_steps": max_steps}
+    try:
+        for kind, payload in _agent_loop(
+            llm_call,
+            db,
+            case_id,
+            question,
+            tools=tools,
+            actor=actor,
+            max_steps=max_steps,
+            redact_pii=redact_pii,
+            retry_policy=retry_policy,
+            rng=rng,
+            sleep_fn=sleep_fn,
+            token_budget=token_budget,
+        ):
+            if kind == "step":
+                step = payload  # AgentStep
+                yield {
+                    "type": "step",
+                    "step_no": step.step_no,
+                    "thought": step.thought,
+                    "action": step.action,
+                    "observation_chars": step.observation_chars,
+                }
+            else:
+                yield {"type": "final", "result": asdict(payload)}  # type: ignore[arg-type]
+    except ToolAgentError as exc:  # Grounding/MaxSteps jsou podtřídy
+        yield {"type": "error", "error": str(exc), "exc_type": type(exc).__name__}

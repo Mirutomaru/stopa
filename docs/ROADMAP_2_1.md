@@ -154,7 +154,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > P4-4 Frontend sjednocení (SPA kanonická) → P4-9 Cross-platform a stabilita → P4-8 i18n CLI/legacy →
 > P4-7 Multi-node readiness → P4-10 Rust distribuce.
 > **Schváleno uživatelem 2026-11-21**, doporučené pořadí se dodržuje.
-> **Stav 2026-11-21: P4-1 + P4-3 + P4-2 + P4-6 hotové** — CI profily `test` (min) + nový `test-full` (všechny extras),
+> **Stav 2026-11-21: P4-1 + P4-3 + P4-2 + P4-6 + P4-5 hotové** — CI profily `test` (min) + nový `test-full` (všechny extras),
 > `docs/EXTRAS_COVERAGE.md`, fail-closed opravy v 24 test souborech (test-only, src beze změny);
 > min suite exit 0. P4-3: volitelné manifest pole `api_version` + validace, sekce „Contract stability"
 > v PLUGINS_API.md, breaking change log marker `!plugins:`. P4-2: NPROC/FSIZE rlimity + strict
@@ -162,7 +162,12 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > user ns wrapper, CLI `plugin run --sandbox {default,strict}`, 33 nových testů. P4-6: time hash chain
 > F5.1 pečetí (domain seal_chain.py, genesis self-binding, fail-closed ověření), aditivní v27 tabulka
 > seal_chain 1:1 s pečetí, externí witness url/file + inline b64 ≤ 32 kB, CLI `seal --witness` +
-> `seal-chain`, Web GET /api/cases/{id}/seals/chain (120→121 rout), 26 nových testů. Zbývá 6 položek = návrhy k implementaci.
+> `seal-chain`, Web GET /api/cases/{id}/seals/chain (120→121 rout), 26 nových testů. P4-5: AI production
+> robustness — retry+backoff+jitter v ReAct agentu (deterministický per seed, jen transientní chyby,
+> HTTP 5xx/429 = transient), token budget → explicitní `status="budget_exceeded"` + truncation marker
+> (ne exception), stream/non-stream identita by construction (sdílená smyčka `_agent_loop`), SSE endpoint
+> GET /api/cases/{id}/ai/run/stream (121→122 rout), eval gate CLI `stopa ai-eval --suite gold [--json]`
+> (exit 0/1, zlaté scénáře v src jako single source of truth); 23 nových testů. Zbývá 5 položek = návrhy k implementaci.
 
 | # | Položka | Priorita | Velikost | Pozn. |
 |---|---------|----------|----------|-------|
@@ -170,7 +175,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 | P4-2 | Plugin sandbox hardening (rlimits + seccomp strict profil) | **P0** | M | ✅ **hotová**: NPROC/FSIZE rlimity + `profile` v SandboxLimits; strict = seccomp-bpf allowlist (ctypes, fail-closed per-arch tabulky x86_64/aarch64) + volitelný user ns wrapper; CLI `--sandbox {default,strict}`; 33 testů |
 | P4-3 | Plugin API semvering + breaking change log | **P0** | S | ✅ **hotová**: volitelné `api_version` (default "1", rozsah [1, 1]) + validace; průchod digest/CLI/Web; sekce „Contract stability" v PLUGINS_API.md + marker `!plugins:` |
 | P4-6 | Sealing v2 — time hash chain + external witness | **P1** | S–M | ✅ **hotová**: domain seal_chain.py (chain_hash z prev_root+case_id+ts+merkle_root, genesis self-binding, fail-closed ověření seq 1..N), aditivní v27 tabulka seal_chain 1:1 s pečetí (stejná transakce); CLI `seal --witness {url\|file}` + subpříkaz `seal-chain`; Web GET /api/cases/{id}/seals/chain (120→121 rout); witness inline b64 ≤ 32 kB; 26 testů |
-| P4-5 | AI production robustness (streaming/retry/token budget/eval gate) | **P1** | M | nad P1-2 orchestrátorem; SSE endpoint, deterministický jitter, CLI ai-eval |
+| P4-5 | AI production robustness (streaming/retry/token budget/eval gate) | **P1** | M | ✅ **hotová**: `classify_llm_error` v doméně (transient = 5xx/429/markery; permanent propaguje), retry+backoff+jitter v `_agent_loop` (deterministický per seed RNG, injektovatelný sleep); token budget → `status="budget_exceeded"` + truncation marker (ne exception); stream/non-stream identita by construction; SSE GET /api/cases/{id}/ai/run/stream (121→122 rout); eval gate CLI `stopa ai-eval --suite gold [--json]` exit 0/1, zlaté scénáře v src (single source of truth); 23 testů |
 | P4-4 | Frontend sjednocení — SPA kanonická, legacy za flagem | **P1** | L | W1 parity gap audit → W2 chybějící view v SPA → W3 `?ui=legacy` + warning; odstranění = P5 |
 | P4-9 | Cross-platform a long-running stabilita (Win/macOS CI + leak canary) | **P2** | M | windows job na Rust-fallback cestě, tracemalloc canary, PLATFORM_MATRIX.md |
 | P4-8 | i18n CLI (+ legacy UI katalog) | **P2** | M | cs/en JSON katalogy, STOPA_LANG/--lang default cs byte-kompatibilní; vlny per command rodina |

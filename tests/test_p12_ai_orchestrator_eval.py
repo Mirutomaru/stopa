@@ -43,77 +43,9 @@ from stopa.domain.ai_orchestrator import (
 )
 
 # ── syntetická data + fake klient (deterministické) ─────────────────────────
-
-EVIDENCE: list[dict[str, Any]] = [
-    {
-        "id": "a1",
-        "title": "SMS od anonymizované osoby",
-        "text": json.dumps(
-            {"address": "+420777000111", "body": "Heslo je 123456", "sent": True},
-            ensure_ascii=False,
-        ),
-    },
-    {
-        "id": "a2",
-        "title": "Browser history — pošta",
-        "text": json.dumps(
-            {"url": "https://mail.example.com/inbox", "visited_at": "2024-03-15T10:00:00Z"},
-            ensure_ascii=False,
-        ),
-    },
-]
-
-#: Zlaté odpovědi per role — splňují ``ROLE_OUTPUT_SCHEMA`` (validace výstupů).
-GOLDEN_RESPONSES: dict[str, str] = {
-    "evidence": json.dumps(
-        {"findings": [{"artifact_id": "a1", "note": "Zpráva obsahuje heslo."}]},
-        ensure_ascii=False,
-    ),
-    "timeline": json.dumps(
-        {
-            "events": [
-                {
-                    "timestamp": "2024-03-15T10:00:00Z",
-                    "description": "Odeslání SMS.",
-                    "citation": "[art:a1]",
-                }
-            ]
-        },
-        ensure_ascii=False,
-    ),
-    "network": json.dumps(
-        {
-            "entities": [{"id": "e1", "type": "ip", "value": "192.168.1.10"}],
-            "edges": [{"src": "e1", "dst": "e2", "rel": "connects_to"}],
-        },
-    ),
-    "memory": json.dumps(
-        {"matches": [{"needle": "flag{test}", "offset": 4096, "context": "..."}]},
-    ),
-    "intelligence": json.dumps(
-        {
-            "enrichments": [
-                {"entity": "8.8.8.8", "type": "ip", "tactic_id": "TA0010", "note": "exfil"}
-            ]
-        },
-    ),
-    "hypothesis": json.dumps(
-        {
-            "statement": "Uživatel poslal soubor přes e-mail.",
-            "confidence": 0.7,
-            "citations": ["a1"],
-        },
-        ensure_ascii=False,
-    ),
-    "report": json.dumps(
-        {
-            "title": "Forenzní zpráva — případ C123",
-            "sections": [{"heading": "Nálezy", "body": "Viz citace [art:a1]."}],
-        },
-        ensure_ascii=False,
-    ),
-    "qa": json.dumps({"verdict": "pass", "issues": []}),
-}
+# P4-5: zlaté scénáře jsou single source of truth v src/stopa/intelligence/ai_eval.py
+# (eval gate CLI); odtud je importujeme pro kompatibilitu starších testů.
+from stopa.intelligence.ai_eval import EVIDENCE, GOLDEN_RESPONSES
 
 
 class FakeClient:

@@ -5,10 +5,10 @@ facade ``stopa.web.app`` volá ``register(app, ctx)`` pro kompatibilitu.
 """
 
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 from fastapi import HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 from stopa.data.lmstudio_client import LmStudioClient, LmStudioUnavailable
 
@@ -82,6 +82,47 @@ def register(app, ctx) -> None:
             "attempts": call.attempts,
             "evidence": used_ids,
         }
+
+    # ── P4-5 — AI agent stream (SSE) ─────────────────────────────────────
+    @app.get("/api/cases/{case_id}/ai/run/stream")
+    def ai_run_stream(case_id: str, question: str = Query(...)) -> Response:
+        """P4-5 — streaming běh AI agenta (ReAct) nad případem.
+
+        SSE události ``data: {json}`` v pořadí ``start`` → ``step``* →
+        ``final`` (při chybě přesně jeden ``error``). Finální výsledek je
+        identický s nestreamovacím během — stejná jádrová smyčka (AK P4-5).
+
+        404 = případ neexistuje; 503 = LM Studio nedostupný. DB se zavírá až
+        po skončení streamu (ne před ním).
+        """
+        import json as _json
+
+        from stopa.intelligence.tool_agent import run_stream
+
+        db = open_db(case_id)
+        try:
+            if db.get_case(case_id) is None:
+                raise HTTPException(404, "případ neexistuje")
+            client = LmStudioClient()
+            health = client.health()
+            if not health["available"]:
+                raise HTTPException(503, "AI nedostupná — spusťte LM Studio (localhost:1234)")
+            redact_pii = bool(_load_settings().get("ai_redact_pii", True))
+
+            def _llm(messages: list[dict[str, str]], max_tokens: int) -> str:
+                return client.chat(messages, max_tokens=max_tokens)
+
+            def gen() -> Iterator[str]:
+                try:
+                    for ev in run_stream(_llm, db, case_id, question, redact_pii=redact_pii):
+                        yield f"data: {_json.dumps(ev, ensure_ascii=False)}\n\n"
+                finally:
+                    db.close()  # P4-5: DB zavřená až po skončení streamu
+
+            return StreamingResponse(gen(), media_type="text/event-stream")
+        except Exception:
+            db.close()
+            raise
     @app.get("/api/ai/status")
     def ai_status() -> dict:
         """Dostupnost LM Studio — GUI ukáže „AI nedostupná“ bez chyb."""
