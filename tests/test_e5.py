@@ -69,7 +69,8 @@ class TestStaticFiles:
             assert f"function {fn}" in body, f"{fn} chybí v graph.js"
 
     def test_index_html_has_e5_sections(self, client):
-        r = client.get("/")
+        # P4-4 W3 — legacy GUI pod ?ui=legacy (root = kanonická SPA)
+        r = client.get("/?ui=legacy")
         assert r.status_code == 200
         html = r.text
         assert 'id="mod-entity-graph"' in html, "chybí sekce Entity Graph"

@@ -126,6 +126,37 @@ interface PageOpts {
   [k: string]: string | number | boolean | undefined;
 }
 
+/** F6.3 — ATT&CK heat-mapa: technika s taktikou a počtem artefaktů (P4-4 W2). */
+export interface AttackTechnique {
+  id: string;
+  name: string;
+  tactic: string;
+  count: number;
+}
+
+/** F6.3 — vzorek artefaktu v heat-mapa buňce (tooltip parity s legacy). */
+export interface AttackCellSample {
+  artifact_type?: string | null;
+  title?: string | null;
+  rel_path?: string | null;
+  [key: string]: unknown;
+}
+
+/** F6.3 — payload GET /api/cases/{id}/attack-map (P4-4 W2). */
+export interface AttackHeatmapData {
+  tactics: { id: string; name: string }[];
+  techniques: AttackTechnique[];
+  cells: Record<string, AttackCellSample[]>;
+  summary: {
+    artifacts_total: number;
+    mapped_artifacts: number;
+    unmapped_artifacts: number;
+    techniques_hit: number;
+    tactics_hit: number;
+    coverage_pct: number;
+  };
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
@@ -208,5 +239,17 @@ export const api = {
   },
   hypothesisExportUrl(caseId: string, format: "json" | "pdf"): string {
     return `/api/cases/${encodeURIComponent(caseId)}/hypotheses/export?format=${format}`;
+  },
+  /** P4-4 W2 — MITRE ATT&CK heat-mapa (F6.3 API). */
+  attackMap(caseId: string): Promise<AttackHeatmapData> {
+    return req(`/api/cases/${encodeURIComponent(caseId)}/attack-map`);
+  },
+  /** P4-4 W2 — STIX intrusion-set export URL heat-mapy (F6.3). */
+  attackMapStixUrl(caseId: string): string {
+    return `/api/cases/${encodeURIComponent(caseId)}/attack-map?format=stix`;
+  },
+  /** P4-4 W2 — Daubert challenge preparedness pack, JSON pro soud (F5.5 API). */
+  daubertPackUrl(caseId: string): string {
+    return `/api/cases/${encodeURIComponent(caseId)}/daubert-pack`;
   },
 };

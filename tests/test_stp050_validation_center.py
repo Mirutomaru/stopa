@@ -135,7 +135,8 @@ class TestValidationGuiAssets:
     """SPA obsahuje sekci + renderer modulu (smoke — bez jsdom)."""
 
     def test_index_has_validation_section(self, client):
-        html = client.get("/").text
+        # P4-4 W3 — legacy GUI pod ?ui=legacy (root = kanonická SPA)
+        html = client.get("/?ui=legacy").text
         assert 'id="mod-validation"' in html
         assert "val-stats" in html and "val-parsers" in html and "val-artifacts" in html
 

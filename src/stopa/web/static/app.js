@@ -5,6 +5,9 @@
    ════════════════════════════════════════════════════════════ */
 "use strict";
 
+/* P4-4 W3 — legacy GUI je non-kanonické; kanonická verze = SPA na root URL (/). */
+console.warn("STOPA: legacy GUI je non-kanonické (P4-4 W3) — kanonická verze = SPA na /");
+
 function wire() {
   renderSidebarNav();
   wireSidebar();

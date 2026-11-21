@@ -84,3 +84,10 @@ button.primary:hover { filter: brightness(1.1); }
 .live-badge.live-online { color: #3ecf8e; border-color: currentColor; }
 .live-badge.live-online::before { background: #3ecf8e; box-shadow: 0 0 6px #3ecf8e; animation: live-pulse 2s infinite; }
 @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+/* P4-4 W2 — MITRE ATT&CK heat-mapa (parita s legacy F6.3) */
+.attack-tactic { margin-bottom: 10px; line-height: 2.1; }
+.attack-cell {
+  display: inline-block; padding: 2px 8px; margin: 2px 4px 2px 0;
+  border-radius: 6px; font-size: 13px; cursor: default;
+}

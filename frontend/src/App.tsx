@@ -6,6 +6,8 @@ import TimelineIntelPage from "./pages/TimelineIntel";
 import EntitiesPage from "./pages/Entities";
 import AiPanelPage from "./pages/AiPanel";
 import HypothesesPage from "./pages/Hypotheses";
+import AttackMapPage from "./pages/AttackMap";
+import ReportsPage from "./pages/Reports";
 import ArtifactDetailPage from "./pages/ArtifactDetail";
 import LiveBadge from "./components/LiveBadge";
 import { useI18n } from "./i18n";
@@ -37,6 +39,12 @@ export default function App() {
         <NavLink to="/hypotheses" className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
           {t("nav_hypotheses")}
         </NavLink>
+        <NavLink to="/attack" className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
+          {t("nav_attack")}
+        </NavLink>
+        <NavLink to="/reports" className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}>
+          {t("nav_reports")}
+        </NavLink>
         <div style={{ marginTop: "auto" }}>
           <LiveBadge />
           <button onClick={() => setLang(lang === "cs" ? "en" : "cs")} aria-label="Jazyk / Language">
@@ -54,6 +62,8 @@ export default function App() {
           <Route path="/entities" element={<EntitiesPage />} />
           <Route path="/ai" element={<AiPanelPage />} />
           <Route path="/hypotheses" element={<HypothesesPage />} />
+          <Route path="/attack" element={<AttackMapPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

@@ -28,7 +28,7 @@ from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -848,8 +848,17 @@ def create_app(
     system.register(app, ctx)
 
     @app.get("/")
-    def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html")
+    def index(request: Request) -> FileResponse:
+        """P4-4 W3 — root URL = kanonická SPA; ?ui=legacy → legacy GUI (non-kanonické).
+
+        Graceful degradation: pokud chybí SPA build v static/spa/ (minimální instalace),
+        fallback na legacy index."""
+        if request.query_params.get("ui") == "legacy":
+            return FileResponse(STATIC_DIR / "index.html")
+        spa_index = STATIC_DIR / "spa" / "index.html"
+        if spa_index.is_file():
+            return FileResponse(spa_index)
+        return FileResponse(STATIC_DIR / "index.html")  # fallback — chybí SPA build
 
     # ── STP-070 — periodický plánovač auto-bundle (daemon thread) ──
     # Spouští se vždy s app factory; tick každou minutu, sleep-first.
