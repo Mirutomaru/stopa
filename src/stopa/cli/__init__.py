@@ -600,6 +600,15 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--params", default="{}", help="JSON parametry AI toolu")
 
     _plg_cap_args(plg_run)
+    plg_run.add_argument(
+        "--sandbox",
+        choices=["default", "strict"],
+        default="default",
+        help=(
+            "P4-2 — profil izolace sandboxu (jen neověřené pluginy): "
+            "strict = seccomp-bpf allowlist + user namespace wrapper"
+        ),
+    )
     _add_json_flag(plg_run)
     plg_run.set_defaults(func=cmd_plugin_run)
 

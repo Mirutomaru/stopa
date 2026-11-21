@@ -448,6 +448,7 @@
       "--json",
       "--key",
       "--params",
+      "--sandbox",
       "--tool",
       "-h"
     ]

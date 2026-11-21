@@ -240,12 +240,18 @@ def resolve_ai_tools(
 
 
 def _rlimit_factory(
-    max_mem_mb: int, cpu_seconds: int | None = None, max_fds: int = 1024
+    max_mem_mb: int,
+    cpu_seconds: int | None = None,
+    max_fds: int = 1024,
+    max_procs: int | None = None,
+    max_file_mb: int | None = None,
 ) -> Callable[[], None]:
-    """preexec_fn: stropy subprocessu (Linux RLIMIT_AS + P0-3: CPU, NOFILE).
+    """preexec_fn: stropy subprocessu (Linux RLIMIT_AS + P0-3: CPU, NOFILE + P4-2).
 
     RLIMIT_NOFILE chrání proti file-descriptor exhaust; na systémech bez práva
     zvýšit limit se ticho ignoruje (limit může být i nižší než požadovaný).
+    P4-2: ``RLIMIT_NPROC`` (fork bomb; pozor — Linux počítá per UID napříč systémem)
+    a ``RLIMIT_FSIZE`` (obrovský soubor); tichá degradace jako NOFILE.
     """
 
     def factory() -> None:  # pragma: no cover - běží v dětském procesu
@@ -261,6 +267,17 @@ def _rlimit_factory(
             resource.setrlimit(resource.RLIMIT_NOFILE, (max_fds, max_fds))
         except (ValueError, OSError):
             pass
+        if max_procs is not None and max_procs > 0:
+            try:
+                resource.setrlimit(resource.RLIMIT_NPROC, (max_procs, max_procs))
+            except (ValueError, OSError):
+                pass
+        if max_file_mb is not None and max_file_mb > 0:
+            fsize = max_file_mb * 1024 * 1024
+            try:
+                resource.setrlimit(resource.RLIMIT_FSIZE, (fsize, fsize))
+            except (ValueError, OSError):
+                pass
 
     return factory
 
@@ -294,6 +311,301 @@ def _unshare_net_available() -> bool:
     return proc.returncode == 0
 
 
+def _unshare_userns_available() -> bool:
+    """P4-2: probe přesné kombinace, kterou ``sandbox_exec`` skutečně použije.
+
+    Pozor: stačí `unshare --user true` (vznikne user ns), ale `--map-root-user`
+    navíc píše do /proc/self/uid_map — při nepřivilegovaném usernsu musí být
+    mapovány VŠECHNY GIDy procesu (kernel rule), jinak EPERM. Proto probe testuje
+    kompletní příkaz; selže-li → strict degraduje na seccomp-only (graceful).
+    """
+    if os.name != "posix" or not sys.platform.startswith("linux"):
+        return False
+    try:
+        proc = subprocess.run(
+            ["unshare", "--user", "--map-root-user", "--mount", "true"],
+            capture_output=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# P4-2 — strict profil: seccomp-bpf allowlist přes ctypes (bez nové závislosti)
+# ---------------------------------------------------------------------------
+
+#: AUDIT_ARCH_* konstanty — stabilní kernel ABI per architektura.
+_AUDIT_ARCHS = {"x86_64": 0xC000003E, "aarch64": 0xC00000B7}
+
+#: SYS_seccomp / SYS_prctl čísla (stabilní kernel ABI) — glibc ≥2.41 už
+#: `seccomp()` neexportuje jako dynamický symbol, proto raw syscall přes libc.syscall().
+_SYS_SECCOMP_NR = {"x86_64": 317, "aarch64": 277}
+_SYS_PRCTL_NR = {"x86_64": 157, "aarch64": 167}
+
+# BPF instrukce — CLASSIC seccomp-bpf opcodey (uapi linux/bpf.h, ne eBPF!):
+_BPF_LD_ABS_W = 0x20   # BPF_LD|BPF_W|BPF_ABS — load absolute word (k = offset v seccomp_data)
+_BPF_JMP_EQ_K = 0x15   # BPF_JMP|BPF_JEQ|BPF_K — jump if == k
+_BPF_RET_K = 0x06      # BPF_RET|BPF_K — return constant (eBPF exit 0x95 tady nefunguje!)
+
+#: CORE syscally — CPython runtime + základní file I/O; chybí-li některý v
+#: tabulce → fail-closed ValueError (audit per Python verze, viz
+#: SECURITY_THREAT_MODEL.md). Názvy se řeší v runtime → žádné hardcoded čísla
+#: (kromě fallback tabulek níže = stabilní kernel ABI).
+_STRICT_CORE_SYSCALLS: tuple[str, ...] = (
+    # interpret / glibc základy
+    "read", "write", "close", "stat", "fstat", "lseek", "mmap", "mprotect",
+    "munmap", "brk", "rt_sigaction", "rt_sigprocmask", "sigaltstack",
+    "exit_group", "wait4", "getrandom", "clock_gettime", "nanosleep",
+    "futex", "getdents64",
+    # bootstrap dynamicky linkovaného bináře (ld.so + glibc start — bez nich
+    # umírá KAŽDÉ čerstvé dětské binárko; empiricky ověřeno strace 2026-11):
+    # execve = preexec vždy execne nový binář, access/pread64 = ld.so preload
+    # check + čtení ELF dat, fcntl = CPython F_GETFD po open.
+    "execve", "access", "pread64", "fcntl",
+    # lstat: site.py `addpackage` před otevřením .pth volá os.lstat a při OSError
+    # ticho vrátí → pod filtrem bez lstat umírá celý mechanismus .pth (editable
+    # instalace, distutils-precedence apod.) — empiricky ověřeno strace 2026-11.
+    "lstat",
+    # uname: os.uname() / platform.machine() — běžné plugin API; pod filtrem bez
+    # něj padá `import platform` v dětském procesu (EPERM) — empiricky 2026-11.
+    "uname",
+    # mkdir: glibc mkdir() na x86_64 = přímý syscall (ne mkdirat!) — _db_dir()
+    # vždy volá Path.mkdir → bez něj EPERM v dětském procesu; na aarch64 ho kernel
+    # nemá samostatně (glibc → mkdirat AT_FDCWD, viz AARCH64_CORE výjimka).
+    "mkdir",
+    # file I/O (pathlib, json dump, workdir)
+    "openat", "newfstatat", "readlinkat", "faccessat", "pipe", "dup", "dup3",
+    "chdir", "getcwd", "mkdirat", "unlinkat", "renameat", "symlinkat",
+    "truncate", "ftruncate", "fchmod", "utimensat",
+)
+
+#: OPTIONAL syscally — legitimní pro pluginy, ale ne každý je na každé arch;
+#: chybějící se ticho vynechávají (nikdo jich v CORE cestě nepotřebuje).
+_STRICT_OPTIONAL_SYSCALLS: tuple[str, ...] = (
+    "arch_prctl",          # x86_64: CPython thread-local storage
+    "set_robust_list",     # glibc robust futexy
+    "set_tid_address",     # glibc thread cleanup
+    "prctl",               # glibc PR_SET_NAME (thread names)
+    "rt_sigreturn",        # explicitní signálový return
+    "fork", "vfork", "clone",   # pluginy, které spouštějí subprocessy
+    "waitid", "kill", "tgkill", "exit",
+    "clock_nanosleep",     # time.sleep (alternativa k nanosleep)
+    "gettimeofday",        # starší časové API
+    "pipe2",               # glibc fallback pro pipe (aarch64 nemá __NR_pipe)
+    "socket", "bind", "connect", "accept", "sendto", "recvfrom",
+    "sendmsg", "recvmsg", "shutdown", "listen",   # síťová izolace = unshare --net
+    # runtime convenience pro pluginy (glibc ≥2.35 / běžné Python API):
+    "gettid",              # os.gettid, glibc thread registry
+    "prlimit64",           # resource module, RLIMIT dotazy
+    "pwrite64",            # os.pwrite (symetrie k CORE pread64)
+    "readlink",            # os.readlink (x86_64; aarch64 řeší readlinkat)
+    "rseq",                # glibc ≥2.35 restartable sequences
+)
+
+#: aarch64 kernel ABI — neexistuje samostatný `stat`/`lstat` (pokrývá newfstatat),
+#: `pipe` (jen pipe2), `access` (glibc ho řeší přes faccessat) ani `mkdir`
+#: (ARM64 číslo 39 = umount2; glibc mkdir() → mkdirat AT_FDCWD); CPython na arm64
+#: funguje přes tyto alternativy.
+_STRICT_AARCH64_CORE = tuple(
+    n for n in _STRICT_CORE_SYSCALLS if n not in ("stat", "lstat", "pipe", "access", "mkdir")
+) + ("pipe2",)
+
+#: P4-2 — fallback tabulky syscallů (stabilní kernel ABI; zdroj: glibc unistd_64.h
+#: a kernel v6.1 include/uapi/asm-generic/unistd.h). Používají se jen při
+#: nedostupnosti ``os.syscalls`` (některé CPython buildy je nemají).
+_STRICT_FALLBACK_SYSCALLS: dict[str, dict[str, int]] = {
+    "x86_64": {
+        # CORE
+        "read": 0, "write": 1, "close": 3, "stat": 4, "fstat": 5, "lseek": 8,
+        "mmap": 9, "mprotect": 10, "munmap": 11, "brk": 12, "rt_sigaction": 13,
+        "rt_sigprocmask": 14, "sigaltstack": 131, "exit_group": 231, "wait4": 61,
+        "getrandom": 318, "clock_gettime": 228, "nanosleep": 35, "futex": 202,
+        "getdents64": 217, "openat": 257, "newfstatat": 262, "readlinkat": 267,
+        "faccessat": 269, "pipe": 22, "dup": 32, "dup3": 292, "chdir": 80,
+        "getcwd": 79, "mkdirat": 258, "unlinkat": 263, "renameat": 264,
+        "symlinkat": 266, "truncate": 76, "ftruncate": 77, "fchmod": 91,
+        "utimensat": 280,
+        # CORE bootstrap (ld.so/glibc start) — lstat: site.py addpackage .pth check,
+        # uname: os.uname()/platform.machine() v dětském procesu,
+        # mkdir: glibc mkdir() = přímý syscall 83 (_db_dir → Path.mkdir)
+        "execve": 59, "access": 21, "pread64": 17, "fcntl": 72, "lstat": 6,
+        "uname": 63, "mkdir": 83,
+        # OPTIONAL
+        "rt_sigreturn": 15, "socket": 41, "connect": 42, "accept": 43,
+        "sendto": 44, "recvfrom": 45, "sendmsg": 46, "recvmsg": 47,
+        "shutdown": 48, "bind": 49, "listen": 50, "clone": 56, "fork": 57,
+        "vfork": 58, "exit": 60, "kill": 62, "gettimeofday": 96,
+        "prctl": 157, "arch_prctl": 158, "set_tid_address": 218,
+        "clock_nanosleep": 230, "tgkill": 234, "waitid": 247,
+        "set_robust_list": 273, "pipe2": 293,
+        # runtime convenience (glibc ≥2.35 / Python API)
+        "pwrite64": 18, "readlink": 89, "gettid": 186, "prlimit64": 302,
+        "rseq": 334,
+    },
+    "aarch64": {
+        # CORE (kernel ABI: bez `stat`, s pipe2)
+        "read": 63, "write": 64, "close": 57, "fstat": 80, "lseek": 62,
+        "mmap": 222, "mprotect": 226, "munmap": 215, "brk": 214,
+        "rt_sigaction": 134, "rt_sigprocmask": 135, "sigaltstack": 132,
+        "exit_group": 94, "wait4": 260, "getrandom": 278, "clock_gettime": 113,
+        "nanosleep": 101, "futex": 98, "getdents64": 61, "openat": 56,
+        "newfstatat": 79, "readlinkat": 78, "faccessat": 48, "dup": 23,
+        "dup3": 24, "chdir": 49, "getcwd": 17, "mkdirat": 34, "unlinkat": 35,
+        "renameat": 38, "symlinkat": 36, "truncate": 45, "ftruncate": 46,
+        "fchmod": 52, "utimensat": 88, "pipe2": 59,
+        # CORE bootstrap (ld.so/glibc start) — aarch64 bez `access`/`lstat`
+        # (glibc → faccessat/newfstatat); uname = os.uname()/platform.machine()
+        "pread64": 67, "fcntl": 25, "uname": 160,
+        # OPTIONAL (aarch64 nemá fork/vfork/arch_prctl/readlink → ticho vynechány)
+        "set_robust_list": 99, "set_tid_address": 96, "prctl": 167,
+        "rt_sigreturn": 139, "clone": 220, "execve": 221, "waitid": 95,
+        "kill": 129, "tgkill": 131, "exit": 93, "clock_nanosleep": 115,
+        "gettimeofday": 169, "socket": 198, "bind": 200, "connect": 203,
+        "accept": 202, "sendto": 206, "recvfrom": 207, "sendmsg": 211,
+        "recvmsg": 212, "shutdown": 210, "listen": 201,
+        # runtime convenience (glibc ≥2.35 / Python API)
+        "pwrite64": 68, "gettid": 178, "prlimit64": 261, "rseq": 293,
+    },
+}
+
+
+def _build_seccomp_strict_filter() -> tuple[list[tuple[int, int, int, int]], int]:
+    """P4-2: sestaví BPF allowlist (rodič — deterministické, testovatelné).
+
+    Program: kontrola architektury → allow seznam syscallů → default ERRNO(EPERM)
+    (blokováný syscall selže s EPERM místo SIGSYS killu = lepší diagnostika).
+
+    Returns:
+        (instrukce jako 4-tice code/jt/jf/k, očekávaná AUDIT_ARCH konstanta)
+
+    Raises:
+        ValueError: nepodporovaná architektura / chybějící CORE syscall / os.syscalls.
+    """
+    import platform as _platform
+
+    arch = _platform.machine()
+    audit_arch = _AUDIT_ARCHS.get(arch)
+    if audit_arch is None:
+        raise ValueError(
+            f"strict profil podporuje jen x86_64/aarch64, aktuální architektura {arch!r}"
+        )
+    table: dict[str, int] | None = getattr(os, "syscalls", None)
+    if not isinstance(table, dict):  # některé CPython buildy nemají os.syscalls
+        table = _STRICT_FALLBACK_SYSCALLS.get(arch)
+        if table is None:
+            raise ValueError(f"strict profil — žádná tabulka syscallů pro arch {arch!r}")
+    core_names = (
+        _STRICT_AARCH64_CORE if arch == "aarch64" else _STRICT_CORE_SYSCALLS
+    )
+    missing_core = [n for n in core_names if n not in table]
+    if missing_core:
+        raise ValueError(
+            f"strict profil — chybějící CORE syscally v tabulce pro {arch}: {missing_core}"
+        )
+    allowed = list(core_names) + [
+        n for n in _STRICT_OPTIONAL_SYSCALLS if n in table
+    ]
+    nums = sorted({table[n] for n in allowed})
+
+    # Layout: [0]=load arch, [1]=arch EQ, [2]=load nr, [3..n]=allow EQ chain,
+    # [idx_errno]=RET ERRNO(EPERM), [idx_allow]=RET ALLOW.
+    idx_errno = 3 + len(nums)
+    idx_allow = idx_errno + 1
+    insns: list[tuple[int, int, int, int]] = []
+    insns.append((_BPF_LD_ABS_W, 0, 0, 4))            # seccomp_data.arch (offset 4)
+    insns.append((_BPF_JMP_EQ_K, 0, idx_errno - 2, audit_arch))  # arch OK → další; jf → errno
+    insns.append((_BPF_LD_ABS_W, 0, 0, 0))            # seccomp_data.nr (offset 0)
+    for num in nums:
+        p = len(insns)
+        # jt → RET ALLOW; jf=0 → fall-through na další EQ (skok N znamená
+        # cíl i+N+1 — viz bpf_convert_filter).
+        insns.append((_BPF_JMP_EQ_K, idx_allow - p - 1, 0, num))
+    insns.append((_BPF_RET_K, 0, 0, 0x00050001))      # default: ERRNO|EPERM (uapi: RET_ERRNO=0x50000)
+    insns.append((_BPF_RET_K, 0, 0, 0x7FFF0000))      # SECCOMP_RET_ALLOW
+    return insns, audit_arch
+
+
+def _seccomp_strict_preexec(insns: list[tuple[int, int, int, int]]) -> Callable[[], None]:
+    """P4-2: preexec_fn — v dětském procesu NO_NEW_PRIVS + seccomp filter.
+
+    Raw syscall přes ``libc.syscall()`` (glibc ≥2.41 neexportuje `seccomp()` jako
+    dynamický symbol); čísla SYS_seccomp/SYS_prctl = stabilní kernel ABI per arch.
+    """
+
+    import ctypes as _ct
+    import platform as _platform
+
+    arch = _platform.machine()  # stejný proces, kde běžel _build_seccomp_strict_filter
+    sys_seccomp_nr = _SYS_SECCOMP_NR.get(arch)
+    sys_prctl_nr = _SYS_PRCTL_NR.get(arch)
+    if sys_seccomp_nr is None or sys_prctl_nr is None:
+        raise ValueError(f"seccomp strict — žádná SYS čísla pro arch {arch!r}")
+
+    class _sock_filter(_ct.Structure):
+        _fields_ = [
+            ("code", _ct.c_ushort),
+            ("jt", _ct.c_ubyte),
+            ("jf", _ct.c_ubyte),
+            ("k", _ct.c_uint),
+        ]
+
+    arr = (_sock_filter * len(insns))()
+    for i, (code, jt, jf, k) in enumerate(insns):
+        arr[i].code, arr[i].jt, arr[i].jf, arr[i].k = code, jt, jf, k
+
+    def factory() -> None:  # pragma: no cover - běží v dětském procesu
+        lib = _ct.CDLL(None, use_errno=True)
+        lib.syscall.restype = _ct.c_long
+        c = _ct.c_long  # explicitní 64-bit argy (bez argtypes by ctypes poslal int32 → špinavé horní bity registrů)
+        PR_SET_NO_NEW_PRIVS = 0x26
+        # kernel ≥6.x validuje i nevyužité arg3/arg4/arg5 (musí být 0) — explicitní nuly!
+        if int(lib.syscall(c(sys_prctl_nr), c(PR_SET_NO_NEW_PRIVS), c(1), c(0), c(0), c(0))) != 0:
+            raise ValueError(
+                f"seccomp strict: prctl(NO_NEW_PRIVS) selhal errno={_ct.get_errno()}"
+            )
+
+        class _sock_fprog(_ct.Structure):
+            _fields_ = [
+                ("len", _ct.c_uint),
+                ("filter", _ct.POINTER(_sock_filter)),
+            ]
+
+        prog = _sock_fprog(len(arr), arr)
+        # uapi linux/seccomp.h: SET_MODE_STRICT=0, SET_MODE_FILTER=**1**,
+        # GET_ACTION_AVAIL=2 (častá past — 2 by instalaci dekodovalo jako
+        # dotaz na dostupnost akce).
+        SECCOMP_SET_MODE_FILTER = 1
+        if int(lib.syscall(c(sys_seccomp_nr), c(SECCOMP_SET_MODE_FILTER), c(0), _ct.byref(prog))) != -1:
+            return
+        raise ValueError(
+            f"seccomp strict: instalace filteru selhala errno={_ct.get_errno()}"
+        )
+
+    return factory
+
+
+def _strict_mount_setup() -> None:
+    """P4-2 strict: soukromá mount namespace — / read-only, workdir (cwd) rw bind.
+
+    Běží v dětském procesu před plugin kódem (mapped root uvnitř user ns).
+    Fail-closed: selže-li jakýkoli mount → ValueError (host požadoval izolaci a
+    nemohl ji dát — konzistentní s P0-3 síťovou izolací).
+    """
+    wd = os.getcwd()
+    steps = (
+        ("make-rprivate", ["--make-rprivate", "/"]),
+        ("bind /", ["--bind", "/", "/"]),
+        ("ro-bind /", ["-o", "remount,ro,bind", "/", "/"]),
+        ("rw-workdir", ["--bind", wd, wd]),
+    )
+    for label, argv in steps:
+        proc = subprocess.run(["mount", *argv], capture_output=True, timeout=10, check=False)
+        if proc.returncode != 0:
+            err = (proc.stderr or b"").decode(errors="replace").strip()[:200]
+            raise ValueError(f"strict mount setup selhal ({label}): {err}")
+
+
 def sandbox_exec(
     argv: list[str],
     limits: SandboxLimits | None = None,
@@ -312,6 +624,13 @@ def sandbox_exec(
     - strop velikosti stdout+stderr (``max_output_mb``).
     - volitelná síťová izolace ``network_isolated`` přes obal ``unshare --net``
       (Linux; při nedostupnosti probe → ValueError, host požadoval izolaci a nemohl ji dát).
+
+    P4-2 hardening:
+    - default profil: navíc RLIMIT_NPROC (fork bomb) + RLIMIT_FSIZE (obrovský soubor);
+    - ``profile="strict"``: seccomp-bpf allowlist přes ctypes (fail-closed na
+      nepodporované architektuře) + volitelný user namespace wrapper
+      (``unshare --user --map-root-user --mount``; při dostupnosti → child dělá
+      / read-only + workdir rw bind, env STOPA_SANDBOX_STRICT_MOUNTS).
     """
     lim = limits or sandbox_limits({})
     env = dict(os.environ)
@@ -325,6 +644,38 @@ def sandbox_exec(
             )
         cmd = ["unshare", "--net"] + cmd
 
+    def _base_rlimits() -> Callable[[], None] | None:
+        return (
+            _rlimit_factory(
+                lim.max_mem_mb,
+                lim.cpu_seconds,
+                max_procs=lim.max_procs,
+                max_file_mb=lim.max_file_mb,
+            )
+            if os.name == "posix"
+            else None
+        )
+
+    # P4-2 — strict profil: seccomp-bpf allowlist (rodič sestaví BPF program;
+    # fail-closed na nepodporované architektuře / chybějících CORE syscallích)
+    # + volitelný user namespace wrapper.
+    if lim.profile == "strict":
+        insns, _audit_arch = _build_seccomp_strict_filter()
+        seccomp_fn = _seccomp_strict_preexec(insns)
+        base = _base_rlimits()
+
+        def _strict_preexec() -> None:  # P4-2: rlimity + seccomp v dětském procesu
+            if base is not None:
+                base()
+            seccomp_fn()
+
+        preexec = _strict_preexec
+        if _unshare_userns_available():
+            cmd = ["unshare", "--user", "--map-root-user", "--mount"] + cmd
+            env["STOPA_SANDBOX_STRICT_MOUNTS"] = "1"  # child: / ro + workdir rw bind
+    else:
+        preexec = _base_rlimits()
+
     isolated = workdir is None
     plugin_name = argv[0] if argv and isinstance(argv[0], str) else "plugin"
     wd = Path(workdir) if not isolated else _isolated_workdir(plugin_name)
@@ -337,9 +688,7 @@ def sandbox_exec(
             timeout=lim.timeout_s,
             env=env,
             cwd=str(wd),
-            preexec_fn=(
-                _rlimit_factory(lim.max_mem_mb, lim.cpu_seconds) if os.name == "posix" else None
-            ),
+            preexec_fn=preexec if os.name == "posix" else None,
         )
     except subprocess.TimeoutExpired as exc:
         raise ValueError(

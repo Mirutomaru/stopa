@@ -154,15 +154,17 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > P4-4 Frontend sjednocení (SPA kanonická) → P4-9 Cross-platform a stabilita → P4-8 i18n CLI/legacy →
 > P4-7 Multi-node readiness → P4-10 Rust distribuce.
 > **Schváleno uživatelem 2026-11-21**, doporučené pořadí se dodržuje.
-> **Stav 2026-11-21: P4-1 + P4-3 hotové** — CI profily `test` (min) + nový `test-full` (všechny extras),
+> **Stav 2026-11-21: P4-1 + P4-3 + P4-2 hotové** — CI profily `test` (min) + nový `test-full` (všechny extras),
 > `docs/EXTRAS_COVERAGE.md`, fail-closed opravy v 24 test souborech (test-only, src beze změny);
 > min suite exit 0. P4-3: volitelné manifest pole `api_version` + validace, sekce „Contract stability"
-> v PLUGINS_API.md, breaking change log marker `!plugins:`. Zbývá 8 položek = návrhy k implementaci.
+> v PLUGINS_API.md, breaking change log marker `!plugins:`. P4-2: NPROC/FSIZE rlimity + strict
+> seccomp-bpf profil (ctypes raw syscall, fail-closed per-arch tabulky x86_64/aarch64) + volitelný
+> user ns wrapper, CLI `plugin run --sandbox {default,strict}`, 33 nových testů. Zbývá 7 položek = návrhy k implementaci.
 
 | # | Položka | Priorita | Velikost | Pozn. |
 |---|---------|----------|----------|-------|
 | P4-1 | CI matrix pro volitelné extras („bez X“ + „s X“) | **P0** | S | ✅ **hotová**: profily min+full v ci.yml (nový job `test-full`), EXTRAS_COVERAGE.md; fail-closed opravy v 24 test souborech, bez src změn |
-| P4-2 | Plugin sandbox hardening (rlimits + seccomp strict profil) | **P0** | M | default backward compatible; adversariální testy (fork bomb/fd/CPU/write-outside-dir) |
+| P4-2 | Plugin sandbox hardening (rlimits + seccomp strict profil) | **P0** | M | ✅ **hotová**: NPROC/FSIZE rlimity + `profile` v SandboxLimits; strict = seccomp-bpf allowlist (ctypes, fail-closed per-arch tabulky x86_64/aarch64) + volitelný user ns wrapper; CLI `--sandbox {default,strict}`; 33 testů |
 | P4-3 | Plugin API semvering + breaking change log | **P0** | S | ✅ **hotová**: volitelné `api_version` (default "1", rozsah [1, 1]) + validace; průchod digest/CLI/Web; sekce „Contract stability" v PLUGINS_API.md + marker `!plugins:` |
 | P4-6 | Sealing v2 — time hash chain + external witness | **P1** | S–M | domain seal_chain.py (H(prev_root‖case_id‖ts‖merkle_root)), aditivní v27, CLI `seal --chain` + witness |
 | P4-5 | AI production robustness (streaming/retry/token budget/eval gate) | **P1** | M | nad P1-2 orchestrátorem; SSE endpoint, deterministický jitter, CLI ai-eval |

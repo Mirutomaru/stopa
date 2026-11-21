@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -177,12 +178,15 @@ def cmd_plugin_run(args: argparse.Namespace) -> int:
         argv += ["--params", args.params or "{}"]
 
     sandboxed = not plugin.verified
+    limits_cfg = parse_sandbox_limits(settings.get("plugin_sandbox"))
+    if sandboxed and args.sandbox != "default":  # P4-2 — CLI flag přepíše profil ze settings
+        import dataclasses as _dc
+
+        limits_cfg = _dc.replace(limits_cfg, profile=args.sandbox)
     try:
         if sandboxed:
             # P0-3: workdir=None → sandbox_exec sám vytvoří izolovaný jednorázový workdir
-            payload = sandbox_exec(
-                argv, limits=parse_sandbox_limits(settings.get("plugin_sandbox")), workdir=None
-            )
+            payload = sandbox_exec(argv, limits=limits_cfg, workdir=None)
             result = payload.get("result")
         else:
             result = _plugin_exec_cap_in_process(plugin, args.cap, args)
@@ -190,7 +194,11 @@ def cmd_plugin_run(args: argparse.Namespace) -> int:
         print(f"Plugin běh selhal: {exc}", file=sys.stderr)
         return 1
     if getattr(args, "json", False):
-        _print_json({"ok": True, "name": plugin.name, "cap": args.cap, "sandboxed": sandboxed, "result": result})
+        out = {"ok": True, "name": plugin.name, "cap": args.cap, "sandboxed": sandboxed}
+        if sandboxed:
+            out["profile"] = limits_cfg.profile  # P4-2 — aktivní profil izolace
+        out["result"] = result
+        _print_json(out)
     else:
         mode = "sandbox" if sandboxed else "in-process"
         print(f"{plugin.name} / {args.cap} ({mode}):")
@@ -200,6 +208,16 @@ def cmd_plugin_run(args: argparse.Namespace) -> int:
 
 def cmd_plugin_run_entry(args: argparse.Namespace) -> int:
     """F6.4 — interní entry point sandbox subprocessu (přímý běh, JSON stdout)."""
+    # P4-2 strict: soukromá mount namespace (/ read-only + workdir rw bind)
+    # před plugin kódem — jen pokud rodič nastavil env (user ns wrapper).
+    if os.environ.get("STOPA_SANDBOX_STRICT_MOUNTS"):
+        from stopa.data.plugin_loader import _strict_mount_setup
+
+        try:
+            _strict_mount_setup()
+        except (ValueError, OSError) as exc:
+            print(json.dumps({"ok": False, "error": f"strict mount setup selhal: {exc}"}))
+            return 1
     plugin, _ = _discover_plugin(args.name)
     if plugin is None:
         print(json.dumps({"ok": False, "error": f"plugin nenalezen: {args.name}"}))

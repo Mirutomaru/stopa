@@ -108,6 +108,8 @@ class SandboxLimits:
 
     P0-3 hardening: k RLIMIT_AS+wall-clock timeout přibyly CPU limit,
     omezení velikosti výstupu a volitelná síťová izolace (Linux unshare --net).
+    P4-2 sandbox hardening: nové rlimity (fork bomb / obrovský soubor) a profil
+    ``strict`` (seccomp-bpf allowlist + user namespace wrapper, viz SECURITY_THREAT_MODEL.md).
     """
 
     timeout_s: int = 120          # wall-clock strop (s)
@@ -115,6 +117,10 @@ class SandboxLimits:
     cpu_seconds: int | None = 60  # RLIMIT_CPU — strop CPU času; None = bez limitu
     max_output_mb: int = 32       # strop stdout+stderr (MB); překrok → ValueError
     network_isolated: bool = False  # Linux: obal `unshare --net` (vyžaduje práva/user ns)
+    # P4-2 — default profil rozšířen o další rlimity (None = bez limitu):
+    max_procs: int | None = 256   # RLIMIT_NPROC — strop procesů per UID (fork bomb)
+    max_file_mb: int | None = 1024  # RLIMIT_FSIZE — strop velikosti jednoho souboru (MB)
+    profile: str = "default"      # P4-2 — "default" | "strict" (seccomp-bpf + user ns)
     extra_env: dict[str, str] = field(default_factory=dict)
 
 
@@ -276,8 +282,9 @@ def sandbox_limits(data: object) -> SandboxLimits:
     """Parse limitů sandboxu z settings slovníku (defaulty 120 s / 512 MB / 60 CPU s).
 
     P0-3: nové klíče ``cpu_seconds`` (None = bez limitu), ``max_output_mb``,
-    ``network_isolated``. Typový nesoulad → TypeError, semantická chyba → ValueError
-    (konzistentní s F6.4 manifest sémantikou).
+    ``network_isolated``. P4-2: ``max_procs`` / ``max_file_mb`` (int nebo null) a
+    ``profile`` ("default" | "strict"). Typový nesoulad → TypeError, semantická chyba
+    → ValueError (konzistentní s F6.4 manifest sémantikou).
     """
     if not isinstance(data, dict):
         data = {}
@@ -297,6 +304,26 @@ def sandbox_limits(data: object) -> SandboxLimits:
     net_raw = data.get("network_isolated", False)
     if not isinstance(net_raw, bool):
         raise TypeError("sandbox.network_isolated musí být boolean")
+    # P4-2 — nové rlimity (sémantika jako cpu_seconds: int > 0 nebo null = bez limitu)
+    procs_raw = data.get("max_procs", 256)
+    if procs_raw is not None:
+        if isinstance(procs_raw, bool) or not isinstance(procs_raw, int):
+            raise TypeError("sandbox.max_procs musí být integer (nebo null)")
+        if procs_raw <= 0:
+            raise ValueError("sandbox.max_procs musí být kladné číslo")
+    file_raw = data.get("max_file_mb", 1024)
+    if file_raw is not None:
+        if isinstance(file_raw, bool) or not isinstance(file_raw, int):
+            raise TypeError("sandbox.max_file_mb musí být integer (nebo null)")
+        if file_raw <= 0:
+            raise ValueError("sandbox.max_file_mb musí být kladné číslo")
+    profile_raw = data.get("profile", "default")
+    if not isinstance(profile_raw, str):
+        raise TypeError("sandbox.profile musí být string")
+    if profile_raw not in ("default", "strict"):
+        raise ValueError(
+            f"sandbox.profile musí být 'default' nebo 'strict', dostalo {profile_raw!r}"
+        )
     extra_raw = data.get("extra_env", {})
     if not isinstance(extra_raw, dict):
         raise TypeError("sandbox.extra_env musí být objekt")
@@ -306,6 +333,9 @@ def sandbox_limits(data: object) -> SandboxLimits:
         cpu_seconds=cpu_raw,
         max_output_mb=max_output_mb,
         network_isolated=net_raw,
+        max_procs=procs_raw,
+        max_file_mb=file_raw,
+        profile=profile_raw,
         extra_env={str(k): str(v) for k, v in extra_raw.items()},
     )
 
