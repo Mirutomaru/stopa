@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from stopa.data.db import CaseDB
+from stopa.i18n import t  # P4-8 — katalogizace --json help textu
 
 _log = logging.getLogger("stopa.cli")
 
@@ -99,7 +100,7 @@ def case_examiner(db: CaseDB, case_id: str) -> str | None:
 def _add_json_flag(p: argparse.ArgumentParser) -> None:
     """Přidá standardní `--json` flag (R0.4 — strojově čitelný výstup)."""
     p.add_argument(
-        "--json", action="store_true", help="strojově čitelný výstup (validní JSON na stdout)"
+        "--json", action="store_true", help=t("cli.opt.json.help")  # P4-8 i18n
     )
 
 

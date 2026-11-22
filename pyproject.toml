@@ -36,6 +36,7 @@ where = ["src"]
 # chybí static files a `stopa serve` servíruje prázdné UI.
 [tool.setuptools.package-data]
 "stopa.web" = ["static/**/*"]
+"stopa.i18n" = ["*.json"]
 
 [tool.ruff]
 line-length = 100

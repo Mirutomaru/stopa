@@ -154,7 +154,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > P4-4 Frontend sjednocení (SPA kanonická) → P4-9 Cross-platform a stabilita → P4-8 i18n CLI/legacy →
 > P4-7 Multi-node readiness → P4-10 Rust distribuce.
 > **Schváleno uživatelem 2026-11-21**, doporučené pořadí se dodržuje.
-> **Stav 2026-11-22: P4-1 + P4-3 + P4-2 + P4-6 + P4-5 + P4-4 + P4-9 hotové** — CI profily `test` (min) + nový `test-full` (všechny extras),
+> **Stav 2026-11-22: P4-1 + P4-3 + P4-2 + P4-6 + P4-5 + P4-4 + P4-9 + P4-8 hotové** — CI profily `test` (min) + nový `test-full` (všechny extras),
 > `docs/EXTRAS_COVERAGE.md`, fail-closed opravy v 24 test souborech (test-only, src beze změny);
 > min suite exit 0. P4-3: volitelné manifest pole `api_version` + validace, sekce „Contract stability"
 > v PLUGINS_API.md, breaking change log marker `!plugins:`. P4-2: NPROC/FSIZE rlimity + strict
@@ -174,7 +174,10 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > graceful degradation na legacy bez SPA buildu; frontend vitest 20 testů + tsc clean + vite build. P4-9: cross-platform —
 > leak canary `test_p49_leak_canary.py` (deterministický ingest loop, prah < 100 MiB tracemalloc), CI jobs `windows`/`macos`
 > (portability core = kurátorovaný domain+data subset bez Rust wheelu → referenční carving cesta) a `docs/PLATFORM_MATRIX.md`;
-> portability core 546p + canary 1p. Zbývá 3 položek = návrhy k implementaci.
+> portability core 546p + canary 1p. P4-8: i18n CLI — cs/en JSON katalogy (`src/stopa/i18n/{cs,en}.json`, 339 klíčů),
+> fail-open helper `t(key, **params)`; priorita flag --lang > env STOPA_LANG > default cs (byte-kompatibilní — nová zlatá
+> `p48_cli_help_cs.json`); EN akceptační kritéria = top-level help + 100 % epilogů v angličtině; Web GET `/api/i18n/{lang}`
+> pro legacy UI (web povrch 122→123 rout); 23 testů. Zbývá 2 položky = návrhy k implementaci.
 
 | # | Položka | Priorita | Velikost | Pozn. |
 |---|---------|----------|----------|-------|
@@ -185,7 +188,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 | P4-5 | AI production robustness (streaming/retry/token budget/eval gate) | **P1** | M | ✅ **hotová**: `classify_llm_error` v doméně (transient = 5xx/429/markery; permanent propaguje), retry+backoff+jitter v `_agent_loop` (deterministický per seed RNG, injektovatelný sleep); token budget → `status="budget_exceeded"` + truncation marker (ne exception); stream/non-stream identita by construction; SSE GET /api/cases/{id}/ai/run/stream (121→122 rout); eval gate CLI `stopa ai-eval --suite gold [--json]` exit 0/1, zlaté scénáře v src (single source of truth); 23 testů |
 | P4-4 | Frontend sjednocení — SPA kanonická, legacy za flagem | **P1** | L | ✅ **hotová**: W2 — nové SPA view `/attack` (ATT&CK heat-mapa F6.3 parita + STIX) a `/reports` (Daubert pack F5.5); W3 — `GET /` = kanonická SPA, legacy pod `?ui=legacy` s deprecation bannerem + console.warn, `/spa/` alias (dynamický basename, SW scope „/" ), fallback na legacy bez SPA buildu; web povrch beze změny (bez nových rout); frontend vitest 20 testů, tsc clean |
 | P4-9 | Cross-platform a long-running stabilita (Win/macOS CI + leak canary) | **P2** | M | ✅ **hotová**: W1 audit readiness; W2 leak canary `test_p49_leak_canary.py` (deterministický ingest loop ~5 MB/23k záznamů, 16 iterací, prah < 100 MiB tracemalloc); W3 CI jobs `windows` + `macos` (portability core = kurátorovaný domain+data subset bez Rust wheelu → referenční carving cesta; full suite jen ubuntu); W4 `docs/PLATFORM_MATRIX.md` (matice × pokrytí, platformově omezené cesty, known gaps) |
-| P4-8 | i18n CLI (+ legacy UI katalog) | **P2** | M | cs/en JSON katalogy, STOPA_LANG/--lang default cs byte-kompatibilní; vlny per command rodina |
+| P4-8 | i18n CLI (+ legacy UI katalog) | **P2** | M | ✅ **hotová**: cs/en JSON katalogy (339 klíčů) + fail-open helper `t(key, **params)`; priorita flag --lang > env STOPA_LANG > default cs (byte-kompatibilní — zlatá `p48_cli_help_cs.json`); EN akceptační kritéria = top-level help + 100 % epilogů v angličtině; Web GET /api/i18n/{lang} pro legacy UI (web povrch 122→123 rout); 23 testů |
 | P4-7 | Multi-node readiness (DB event bus + registry lease) | **P2** | L | events tabulka v instance DB, long-poll worker, node liveness přes lease; bez Redis |
 | P4-10 | Rust distribuce — manylinux wheels | **P2** | M | GHA matrix x86_64/aarch64, extra `[carving]`, wheel parity gate |
 

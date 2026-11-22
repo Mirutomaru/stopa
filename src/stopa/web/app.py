@@ -796,6 +796,7 @@ def create_app(
         collab,
         exchange,
         files,
+        i18n,
         intel,
         investigation,
         registry,
@@ -846,6 +847,7 @@ def create_app(
     xcorr.register(app, ctx)  # P2-6 — cross-case correlation (instance DB)
     exchange.register(app, ctx)  # P2-7 — case exchange bundle v1 (pack/verify marketplace)
     system.register(app, ctx)
+    i18n.register(app, ctx)  # P4-8 — /api/i18n/{lang} katalogy (legacy UI)
 
     @app.get("/")
     def index(request: Request) -> FileResponse:

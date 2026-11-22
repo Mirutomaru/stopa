@@ -307,6 +307,11 @@
   [
     "http",
     "GET",
+    "/api/i18n/{lang}"
+  ],
+  [
+    "http",
+    "GET",
     "/api/orgs"
   ],
   [
