@@ -17,7 +17,11 @@ import argparse
 import os
 from pathlib import Path
 
-from stopa.data.case_registry_repository import list_entries, sync_case_entry
+from stopa.data.case_registry_repository import (
+    heartbeat,
+    list_entries,
+    sync_case_entry,
+)
 from stopa.data.cross_case_repository import (
     get_user_by_username,
     multi_user_mode,
@@ -36,6 +40,15 @@ def cmd_registry(args: argparse.Namespace) -> int:
     db_dir = _db_dir()
     inst = open_instance(db_dir)
     try:
+        # ── 1a. P4-7 — lease heartbeat uzlu (headless; monotónní seq beat) ──
+        hb_node = getattr(args, "heartbeat", None)  # test Namespace bez parseru nemá flag
+        if hb_node:
+            if args.sync:
+                raise ValueError("--sync a --heartbeat jsou vzájemně výhradní")
+            gen = heartbeat(inst, node_id=str(hb_node))
+            _print_heartbeat(str(hb_node), gen, json_mode=bool(args.json))
+            return 0
+
         # ── 1. Explicitní sync jednoho případu (idempotentní upsert) ────────
         if args.sync:
             entry = sync_case_entry(inst, db_dir, str(args.sync))
@@ -83,6 +96,16 @@ def cmd_registry(args: argparse.Namespace) -> int:
         raise SystemExit(str(exc))
     finally:
         inst.close()
+
+
+def _print_heartbeat(node_id: str, generation: int, *, json_mode: bool) -> None:
+    """P4-7 — výsledek lease heartbeatu (JSON nebo plain řádek)."""
+    if json_mode:
+        from .._util import _print_json
+
+        _print_json({"node_id": node_id, "generation": generation})
+        return
+    print(f"heartbeat: node={node_id} | generation={generation}")
 
 
 def _print_entry(entry: dict, *, json_mode: bool) -> None:

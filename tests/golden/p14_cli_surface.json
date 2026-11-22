@@ -497,6 +497,7 @@
   },
   "registry": {
     "opts": [
+      "--heartbeat",
       "--help",
       "--json",
       "--sync",

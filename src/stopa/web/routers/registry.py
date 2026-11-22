@@ -24,6 +24,7 @@ from stopa.data.case_registry_repository import (
     sync_case_entry,
 )
 from stopa.data.cross_case_repository import list_case_ids, open_instance, user_org
+from stopa.domain.case_registry import lease_status  # P4-7 — liveness výpočet (čistá funkce)
 
 
 class StatusIn(BaseModel):
@@ -60,15 +61,15 @@ def register(app, ctx) -> None:
         ident = _identity()
         inst = open_instance(base)
         try:
-            return {
-                "entries": list_entries(
-                    inst,
-                    tenant=tenant,
-                    user_org=ident["uorg"],
-                    multi_user=not ident["legacy"],
-                    role=ident["role"],
-                )
-            }
+            entries = list_entries(
+                inst,
+                tenant=tenant,
+                user_org=ident["uorg"],
+                multi_user=not ident["legacy"],
+                role=ident["role"],
+            )
+            # P4-7 — lease liveness (domain čistá funkce; stav alive/expired/unknown)
+            return {"entries": entries, "lease": lease_status(entries)}
         finally:
             inst.close()
 

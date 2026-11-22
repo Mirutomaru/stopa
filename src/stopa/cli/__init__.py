@@ -860,6 +860,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help=t("cli.h.228"))
     reg_p.add_argument("--sync", metavar="CASE_ID", default=None,
                        help=t("cli.h.232"))
+    reg_p.add_argument("--heartbeat", metavar="NODE_ID", default=None,
+                       help=t("cli.h.331"))  # P4-7 — lease beat uzlu (headless)
     _add_json_flag(reg_p)
     reg_p.set_defaults(func=cmd_registry)
 

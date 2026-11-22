@@ -35,6 +35,9 @@ def _now_iso() -> str:
 
 def _row_to_entry(row: sqlite3.Row) -> dict:
     """Řádek registru → plain dict s rozparsovaným stats snapshotem."""
+    # P4-7 — registry lease (multi-node liveness). sqlite3.Row iteruje HODNOTY
+    # (ne klíče!) a nemá bezpečné .get() → membership test přes .keys().
+    cols = row.keys()
     return {
         "case_id": row["case_id"],
         "name": row["name"],
@@ -44,6 +47,8 @@ def _row_to_entry(row: sqlite3.Row) -> dict:
         "status": row["status"],
         "stats": json.loads(row["stats_json"]),
         "synced_at": row["synced_at"],
+        "node_id": row["node_id"] if "node_id" in cols else None,
+        "last_heartbeat": int(row["last_heartbeat"]) if "last_heartbeat" in cols else 0,
     }
 
 
@@ -124,6 +129,50 @@ def set_status(inst: sqlite3.Connection, case_id: str, status: str) -> dict:
     if entry is None:  # defenzivní větev — nemůže nastat po úspěšném UPDATE
         raise ValueError(f"Případ {case_id!r} není v registru")
     return entry
+
+
+def heartbeat(
+    inst: sqlite3.Connection, *, node_id: str, case_ids: list[str] | None = None
+) -> int:
+    """P4-7 — lease heartbeat uzlu; vrací novou globální generaci (max seq).
+
+    Jeden beat = jedno atomické zvýšení: ``BEGIN IMMEDIATE`` + max+1 pod
+    SQLite writer lockem → napříč procesy přísně rostoucí, bez duplicit a bez
+    clock driftu. Beat pokrývá buď zadané případy nebo (None) všechny řádky
+    registru; pokryté řádky dostanou ``node_id`` + novou sekvenci najednou.
+
+    :param inst: Konekce na instance DB.
+    :param node_id: Identifikátor heartbeatujícího uzlu (prázdný → ValueError).
+    :param case_ids: Konkrétní případy; ``None`` = všechny řádky registru.
+    :return: Generace po beatu (max last_heartbeat napříč tabulkou).
+    """
+    if not isinstance(node_id, str) or not node_id:
+        raise ValueError(f"node_id musí být neprázdný string (dostalo {node_id!r})")
+    max_query = "SELECT COALESCE(MAX(last_heartbeat), 0) FROM case_registry"
+    inst.execute("BEGIN IMMEDIATE")  # atomarita read-max + update napříč procesy
+    try:
+        gen = int(inst.execute(max_query).fetchone()[0]) + 1
+        if case_ids is None:
+            cur = inst.execute(
+                "UPDATE case_registry SET node_id = ?, last_heartbeat = ?", (node_id, gen)
+            )
+        else:
+            placeholders = ",".join("?" * len(case_ids)) or "NULL"
+            cur = inst.execute(
+                "UPDATE case_registry SET node_id = ?, last_heartbeat = ? "
+                f"WHERE case_id IN ({placeholders})",
+                [node_id, gen, *case_ids],
+            )
+        if cur.rowcount == 0:
+            inst.rollback()  # nic nebylo pokryto → generace se neposunula
+            return int(inst.execute(max_query).fetchone()[0])
+        inst.commit()
+    except sqlite3.Error:
+        if not inst.in_transaction:  # commit/rollback už proběhl
+            raise
+        inst.rollback()
+        raise
+    return gen
 
 
 def auto_sync(base: str | Path, case_id: str) -> dict | None:

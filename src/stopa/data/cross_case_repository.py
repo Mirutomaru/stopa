@@ -20,7 +20,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from stopa.data.schema import CASE_REGISTRY_DDL, CROSS_CASE_DDL, MULTITENANT_DDL
+from stopa.data.schema import CASE_REGISTRY_DDL, CROSS_CASE_DDL, EVENT_BUS_DDL, MULTITENANT_DDL
 from stopa.domain.cross_case import next_audit_record, verify_chain
 
 
@@ -31,19 +31,42 @@ def _utc_now() -> str:
 # ── Otevírání databází ────────────────────────────────────────
 
 
-def open_instance(db_dir: str | Path) -> sqlite3.Connection:
+def open_instance(db_dir: str | Path, *, check_same_thread: bool = True) -> sqlite3.Connection:
     """Instance DB s P2-6/P2-2 tabulkami (idempotentní, soubor vytvoří pokud chybí).
 
     Legacy single-operator nasazení bez F4.4 nemá instance DB — oba skripty DDL
     používají ``CREATE TABLE IF NOT EXISTS``, takže volání je vždy bezpečné.
+    ``check_same_thread=False`` pro vláknité konzumenty (P4-7 event poller),
+    kde je synchronizace zajištěna lockem volajícího.
     """
     path = Path(db_dir) / "stopa_instance.db"
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
+    # P4-7 (WAL audit): instance DB sdílejí procesy → WAL (čtení nezamyká zápis)
+    # + busy_timeout proti krátké lock contention; oba PRAGMA idempotentní.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.executescript(MULTITENANT_DDL)
     conn.executescript(CROSS_CASE_DDL)
     conn.executescript(CASE_REGISTRY_DDL)  # P2-2 — centrální registr případů
+    conn.executescript(EVENT_BUS_DDL)  # P4-7 — cross-process event bus
+    apply_registry_lease_migration(conn)  # P4-7 — idempotentní doplnění lease sloupců
     return conn
+
+
+def apply_registry_lease_migration(conn: sqlite3.Connection) -> None:
+    """P4-7 — doplní lease sloupce ``case_registry`` do existujících instance DB.
+
+    Instance DB nemá migrace jako case DB → idempotentní ALTER (no-op, když
+    sloupce už jsou). Nové instance dostanou sloupce přímo z CASE_REGISTRY_DDL.
+    """
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(case_registry)")}
+    if "node_id" not in cols:
+        conn.execute("ALTER TABLE case_registry ADD COLUMN node_id TEXT")
+    if "last_heartbeat" not in cols:
+        conn.execute(
+            "ALTER TABLE case_registry ADD COLUMN last_heartbeat INTEGER NOT NULL DEFAULT 0"
+        )
 
 
 def open_case_readonly(db_dir: str | Path, case_id: str) -> sqlite3.Connection:

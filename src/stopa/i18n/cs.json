@@ -337,5 +337,6 @@
   "cli.h.327": "jméno AI toolu (pro --cap ai_tool)",
   "cli.h.328": "case ID (vyžadováno pro --cap ai_tool)",
   "cli.h.330": "vol plugin (lze opakovat; bez = výchozí {defaults})",
-  "cli.h.329": "JSON parametry AI toolu"
+  "cli.h.329": "JSON parametry AI toolu",
+  "cli.h.331": "P4-7 — lease heartbeat uzlu: beat registru pod NODE_ID a tisk generace"
 }

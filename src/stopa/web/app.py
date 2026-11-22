@@ -19,13 +19,14 @@ import json
 import logging
 import os
 import re
+import socket  # P4-7 — node_id default (hostname) pro registry lease
 import sqlite3
 import threading
 import time
 import uuid
 from collections.abc import Callable
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -34,7 +35,17 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from stopa import __version__
+from stopa.data.case_registry_repository import (
+    heartbeat as _registry_heartbeat,  # P4-7 — lease beat
+)
+from stopa.data.cross_case_repository import open_instance  # P4-7 — instance DB (event bus)
 from stopa.data.db import CaseDB
+
+# P4-7 — DB event bus I/O (cross-process distribuce LiveEvent)
+from stopa.data.event_repository import max_event_id as _bus_max_id
+from stopa.data.event_repository import poll_events as _bus_poll
+from stopa.data.event_repository import prune_old_events as _bus_prune
+from stopa.data.event_repository import publish_event as _bus_publish
 from stopa.data.lmstudio_client import LmStudioClient
 from stopa.data.schema import MULTITENANT_DDL  # F4.4 — instance DB DDL
 from stopa.data.user_repository import UserRepository  # F4.4
@@ -352,11 +363,20 @@ def _auto_export_scheduler_loop(db_dir: Path) -> None:
             log.warning("STP-070 scheduler tick selhal", exc_info=True)
 
 
+# P4-7 — výchozí interval polling workeru cross-process event busu (produkce);
+# unit testy používají default ``None`` = vypnuto.
+EVENT_POLL_INTERVAL_S: float = 0.25
+# P4-7 — retence událostí v tabulce events a frekvence pruningu (cykly workeru).
+EVENT_BUS_RETENTION_H: float = 2.0  # starší řádky se mažou
+PRUNE_EVERY_CYCLES: int = 240  # při 0,25 s ≈ jednou za 60 s
+
+
 def create_app(
     db_dir: Path | None = None,
     ws_heartbeat_s: float = 15.0,
     sso_fetcher: Callable[[str], dict] | None = None,  # F4.4 — test hook for JWKS
     mail_backend: Callable[[dict], None] | None = None,  # F4.5 — email transport (injektovatelný)
+    event_poll_interval_s: float | None = None,  # P4-7 — DB→bus polling worker (None = vypnuto)
 ) -> FastAPI:
     """App factory — `db_dir` pro testy (tmp), default z env STOPA_DB_DIR.
 
@@ -366,6 +386,9 @@ def create_app(
     ``mail_backend`` (F4.5): volitelný email transport pro notifikace; payload =
     ``{"to": username, "subject": str, "body": str}``. Bez backendu zůstávají
     notifikace in-app (graceful degradation — mail nesmí rozbít API cestu).
+    ``event_poll_interval_s`` (P4-7): interval polling workeru, který distribuuje
+    LiveEvent události napříč procesy přes instance DB (tabulka ``events``);
+    ``None`` = vypnuto (výchozí pro unit testy; produkční serve zapíná 0.25 s).
     """
     app = FastAPI(title="STOPA", version=__version__)
     base = db_dir or _db_dir()
@@ -388,22 +411,112 @@ def create_app(
     def _now_iso() -> str:
         return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
+    # P4-7 — cross-process distribuce LiveEvent přes instance DB (tabulka events).
+    # Publisher: insert do DB + lokální bus publish (dedupace podle _pid).
+    # Subscriber: polling worker čte nové řádky a forwarduje cizí události.
+    _inst_conn: sqlite3.Connection | None = None
+    _inst_lock = threading.Lock()
+
+    def _instance_db() -> sqlite3.Connection | None:
+        """Lazy instance DB (event bus); chyba → ``None`` (defenzivní)."""
+        nonlocal _inst_conn
+        with _inst_lock:
+            if _inst_conn is None:
+                try:
+                    _inst_conn = open_instance(base, check_same_thread=False)
+                except sqlite3.Error:  # bus nesmí rozbít API cestu (jen debug log)
+                    log.debug("instance DB se nepodařilo otevřít", exc_info=True)
+                    return None
+            return _inst_conn
+
     def _publish_case(case_id: str, etype: str, **payload) -> None:
         """Publikuje událost na téma case; chyby jen loguje (defenzivní).
 
         Parametr ``etype`` (ne ``event_type``): payload timeline eventu má
         vlastní klíč ``event_type`` (typ záznamu), který by do kolize s
-        pozičním parametrem a hook ho potichu polkal.
+        pozičním parametrem a hook ho potichu polkl. P4-7: zároveň perzistentuje
+        událost do instance DB pro cross-process distribuci (polling worker).
         """
         ev = {"type": etype, "case_id": case_id, "ts": _now_iso(), **payload}
+        topic = case_topic(case_id)
         try:
-            _bus.publish(case_topic(case_id), ev)
+            conn = _instance_db()
+            if conn is not None:
+                with _inst_lock:
+                    _bus_publish(conn, topic, ev)
+        except (sqlite3.Error, ValueError, TypeError):  # DB cesta je volitelná
+            log.debug("DB bus publish selhal pro %s", etype, exc_info=True)
+        try:
+            # _pid = dedupace polling workeru (vlastní události se ne-forwardují)
+            ev["_pid"] = os.getpid()
+            _bus.publish(topic, ev)
         except Exception:  # live kanál nesmí rozbít API cestu (jen debug log)
             log.debug("live publish selhal pro %s", etype, exc_info=True)
 
     def _attach_live_events(db: CaseDB, case_id: str) -> None:
         """F4.2 — naváže ``db.on_event`` na bus (timeline + AI akce)."""
         db.on_event = lambda etype, payload: _publish_case(case_id, etype, **payload)
+
+    if event_poll_interval_s is not None and event_poll_interval_s > 0:
+        _stop_event_poller = threading.Event()
+
+        def _event_poller_worker() -> None:
+            """P4-7 — polling worker instance DB → lokální bus (cross-process).
+
+            Startuje s kurzorem na aktuálním max id (bez replaye historie);
+            cizí události (jiný ``_pid``) forwarduje do LiveEventBus. Chyby jen
+            loguje a cyklus pokračuje (worker nesmí umřít na jedné výjimce).
+            """
+            own_pid = os.getpid()
+            own_node = os.environ.get("STOPA_NODE_ID") or socket.gethostname()
+            conn: sqlite3.Connection | None = None
+            cycle = 0
+            try:
+                conn = open_instance(base, check_same_thread=False)
+                cursor = _bus_max_id(conn)
+                while True:
+                    # P4-7 — lease heartbeat: běh workeru = liveness uzlu registru.
+                    # Monotónní seq (bez wall-clock); expirace po LEASE_WINDOW beatů.
+                    try:
+                        _registry_heartbeat(conn, node_id=own_node)
+                    except sqlite3.Error:  # busy/locked — příští cyklus
+                        log.debug("registry heartbeat selhal", exc_info=True)
+                    cycle += 1
+                    if cycle % PRUNE_EVERY_CYCLES == 0:
+                        cutoff = (
+                            datetime.now(timezone.utc) - timedelta(hours=EVENT_BUS_RETENTION_H)
+                        ).isoformat(timespec="seconds")
+                        try:
+                            _bus_prune(conn, older_than_iso=cutoff)
+                        except sqlite3.Error:  # pruning nesmí zastavit bus
+                            log.debug("event bus pruning selhal", exc_info=True)
+                    try:
+                        batch = _bus_poll(conn, after_id=cursor, limit=500)
+                    except sqlite3.Error:  # např. busy/locked — příští cyklus
+                        log.debug("event poll selhal", exc_info=True)
+                        batch = []
+                    for item in batch:
+                        cursor = max(cursor, int(item["id"]))
+                        if int(item["event"].get("_pid", -1)) == own_pid:
+                            continue  # lokálně už doručeno přímo přes bus
+                        _bus.publish(item["topic"], item["event"])
+                    if _stop_event_poller.wait(event_poll_interval_s):
+                        break
+            except Exception:  # worker se sám nespustil (např. DB nedostupná)
+                log.debug("event poller worker skončil", exc_info=True)
+            finally:
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except sqlite3.Error:  # defenzivní close při shutdownu
+                        pass
+
+        _event_poller_thread = threading.Thread(
+            target=_event_poller_worker, name="stopa-event-poller", daemon=True
+        )
+        _event_poller_thread.start()
+    else:
+        _stop_event_poller = None  # type: ignore[assignment]
 
     def _job_update(job_id: str, **fields) -> None:
         with _jobs_lock:
@@ -810,6 +923,7 @@ def create_app(
         "_jobs": _jobs,
         "_jobs_lock": _jobs_lock,
         "_bus": _bus,
+        "_stop_event_poller": _stop_event_poller,  # P4-7 — clean stop polling workeru (testy)
         "_ws_heartbeat_s": _ws_heartbeat_s,
         "_last_ingest_pub": _last_ingest_pub,
         "_now_iso": _now_iso,
@@ -834,6 +948,9 @@ def create_app(
         "_current_role": _current_role,
         "_require": _require,
     }
+    # P4-7 — test hook: interní stav (bus, poller stop) dostupný přes app.state.ctx
+    app.state.ctx = ctx
+
     cases.register(app, ctx)
     files.register(app, ctx)
     analysis.register(app, ctx)
@@ -1116,4 +1233,4 @@ def _hex_dump(data: bytes) -> list[str]:
     return lines
 
 
-app = create_app()
+app = create_app(event_poll_interval_s=EVENT_POLL_INTERVAL_S)  # P4-7 — cross-process bus ON

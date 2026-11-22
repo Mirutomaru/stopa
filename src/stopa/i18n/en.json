@@ -337,5 +337,6 @@
   "cli.h.327": "AI tool name (for --cap ai_tool)",
   "cli.h.328": "case ID (required for --cap ai_tool)",
   "cli.h.330": "plugin to run (repeatable; when omitted the defaults are used: {defaults})",
-  "cli.h.329": "JSON parameters of the AI tool"
+  "cli.h.329": "JSON parameters of the AI tool",
+  "cli.h.331": "P4-7 — node lease heartbeat: beat the registry under NODE_ID and print generation"
 }

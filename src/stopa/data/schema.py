@@ -341,9 +341,26 @@ CREATE TABLE IF NOT EXISTS case_registry (
     created_at TEXT,                 -- ISO UTC z case DB (cases.created_at)
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
     stats_json TEXT NOT NULL DEFAULT '{}',  -- {"files": N, "artifacts": M, "size_bytes": K}
-    synced_at TEXT NOT NULL          -- poslední sync ISO UTC
+    synced_at TEXT NOT NULL,                -- poslední sync ISO UTC
+    node_id TEXT,                           -- P4-7: který uzel naposledy heartbeatnul řádek
+    last_heartbeat INTEGER NOT NULL DEFAULT 0  -- P4-7: monotónní seq lease (bez clock driftu)
 );
 CREATE INDEX IF NOT EXISTS idx_case_registry_tenant ON case_registry(tenant);
+"""
+
+#: P4-7 — DB event bus (instance DB): cross-process distribuce LiveEvent událostí
+# bez Redis. ``id`` = monotónní sekvence → deterministický pořad napříč procesy
+# (pořadí = id, ne čas; ``ts_utc`` je jen diagnostika). Polling worker čte
+# ``WHERE id > ? ORDER BY id`` (viz :mod:`stopa.data.event_repository`).
+EVENT_BUS_DDL = """
+-- P4-7: Cross-process event bus v instance DB (polling worker, bez Redis).
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,  -- monotónní sekvence — deterministický pořad
+    topic TEXT NOT NULL,                   -- case:{case_id} (domain.events.case_topic)
+    payload_json TEXT NOT NULL,            -- kanonické JSON události (sort_keys, bez mezer)
+    ts_utc TEXT NOT NULL                   -- ISO UTC (diagnostika; pořadí = id)
+);
+CREATE INDEX IF NOT EXISTS idx_events_topic_id ON events(topic, id);
 """
 
 #: F4.5 — Case sharing & collaboration DDL (case DB): comments na artefaktech

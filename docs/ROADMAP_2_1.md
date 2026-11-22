@@ -154,7 +154,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > P4-4 Frontend sjednocení (SPA kanonická) → P4-9 Cross-platform a stabilita → P4-8 i18n CLI/legacy →
 > P4-7 Multi-node readiness → P4-10 Rust distribuce.
 > **Schváleno uživatelem 2026-11-21**, doporučené pořadí se dodržuje.
-> **Stav 2026-11-22: P4-1 + P4-3 + P4-2 + P4-6 + P4-5 + P4-4 + P4-9 + P4-8 hotové** — CI profily `test` (min) + nový `test-full` (všechny extras),
+> **Stav 2026-11-22: P4-1 + P4-3 + P4-2 + P4-6 + P4-5 + P4-4 + P4-9 + P4-8 + P4-7 hotové** — CI profily `test` (min) + nový `test-full` (všechny extras),
 > `docs/EXTRAS_COVERAGE.md`, fail-closed opravy v 24 test souborech (test-only, src beze změny);
 > min suite exit 0. P4-3: volitelné manifest pole `api_version` + validace, sekce „Contract stability"
 > v PLUGINS_API.md, breaking change log marker `!plugins:`. P4-2: NPROC/FSIZE rlimity + strict
@@ -177,7 +177,13 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > portability core 546p + canary 1p. P4-8: i18n CLI — cs/en JSON katalogy (`src/stopa/i18n/{cs,en}.json`, 339 klíčů),
 > fail-open helper `t(key, **params)`; priorita flag --lang > env STOPA_LANG > default cs (byte-kompatibilní — nová zlatá
 > `p48_cli_help_cs.json`); EN akceptační kritéria = top-level help + 100 % epilogů v angličtině; Web GET `/api/i18n/{lang}`
-> pro legacy UI (web povrch 122→123 rout); 23 testů. Zbývá 2 položky = návrhy k implementaci.
+> pro legacy UI (web povrch 122→123 rout); 23 testů. P4-7: multi-node readiness — DB event bus v instance DB
+> (tabulka `events`, pořadí = monotónní `id`; WAL + busy_timeout centralizovaně v `open_instance()`; web polling
+> worker 0,25 s s deduplikací podle `_pid`, retence 2 h / pruning každých 240 cyklů); registry lease — sloupce
+> node_id/last_heartbeat (idempotentní migrace), liveness nad monotónními sekvencemi beatů bez wall-clocku
+> (alive/expired/unknown, LEASE_WINDOW=8; atomický beat BEGIN IMMEDIATE + max+1), web poller auto-heartbeat
+> (STOPA_NODE_ID/hostname), `GET /api/registry` vrací lease mapu, CLI `stopa registry --heartbeat NODE`;
+> W4 `docs/MULTI_NODE.md`; 24 testů (i na minimálním profilu). Zbývá 1 položka = návrh k implementaci.
 
 | # | Položka | Priorita | Velikost | Pozn. |
 |---|---------|----------|----------|-------|
@@ -189,7 +195,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 | P4-4 | Frontend sjednocení — SPA kanonická, legacy za flagem | **P1** | L | ✅ **hotová**: W2 — nové SPA view `/attack` (ATT&CK heat-mapa F6.3 parita + STIX) a `/reports` (Daubert pack F5.5); W3 — `GET /` = kanonická SPA, legacy pod `?ui=legacy` s deprecation bannerem + console.warn, `/spa/` alias (dynamický basename, SW scope „/" ), fallback na legacy bez SPA buildu; web povrch beze změny (bez nových rout); frontend vitest 20 testů, tsc clean |
 | P4-9 | Cross-platform a long-running stabilita (Win/macOS CI + leak canary) | **P2** | M | ✅ **hotová**: W1 audit readiness; W2 leak canary `test_p49_leak_canary.py` (deterministický ingest loop ~5 MB/23k záznamů, 16 iterací, prah < 100 MiB tracemalloc); W3 CI jobs `windows` + `macos` (portability core = kurátorovaný domain+data subset bez Rust wheelu → referenční carving cesta; full suite jen ubuntu); W4 `docs/PLATFORM_MATRIX.md` (matice × pokrytí, platformově omezené cesty, known gaps) |
 | P4-8 | i18n CLI (+ legacy UI katalog) | **P2** | M | ✅ **hotová**: cs/en JSON katalogy (339 klíčů) + fail-open helper `t(key, **params)`; priorita flag --lang > env STOPA_LANG > default cs (byte-kompatibilní — zlatá `p48_cli_help_cs.json`); EN akceptační kritéria = top-level help + 100 % epilogů v angličtině; Web GET /api/i18n/{lang} pro legacy UI (web povrch 122→123 rout); 23 testů |
-| P4-7 | Multi-node readiness (DB event bus + registry lease) | **P2** | L | events tabulka v instance DB, long-poll worker, node liveness přes lease; bez Redis |
+| P4-7 | Multi-node readiness (DB event bus + registry lease) | **P2** | L | ✅ **hotová**: W1 audit VERIFIED; W2 tabulka `events` v instance DB (pořadí = monotónní id, kanonické JSON, index topic+id), WAL + busy_timeout=5000 ms centralizovaně v `open_instance()`, web polling worker 0,25 s (publisher+subscriber, dedup `_pid`, retence 2 h / pruning 240 cyklů); W3 lease sloupce node_id/last_heartbeat (idempotentní migrace), liveness nad monotónními sekvencemi beatů (alive/expired/unknown, LEASE_WINDOW=8; atomický beat BEGIN IMMEDIATE + max+1 bez clock driftu), poller auto-heartbeat STOPA_NODE_ID/hostname, registry endpoint vrací lease mapu, CLI `stopa registry --heartbeat NODE [--json]`; W4 `docs/MULTI_NODE.md`; 24 testů offline (běží i na min profilu); zlaté povrchy beze změny (CLI 87 cest / CS byte-guard / Web 123 rout) |
 | P4-10 | Rust distribuce — manylinux wheels | **P2** | M | GHA matrix x86_64/aarch64, extra `[carving]`, wheel parity gate |
 
 ---

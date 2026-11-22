@@ -18,12 +18,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
         print("Chybí uvicorn — nainstalujte: pip install 'uvicorn[standard]'", file=sys.stderr)
         return 2
 
-    from stopa.web.app import create_app
+    from stopa.web.app import EVENT_POLL_INTERVAL_S, create_app
 
     # E12: bind address — CLI flag > settings.json > default 127.0.0.1
     host = args.host or _settings_bind_address() or "127.0.0.1"
 
-    app = create_app()
+    app = create_app(event_poll_interval_s=EVENT_POLL_INTERVAL_S)
     print(f"STOPA web GUI → http://{host}:{args.port} (Ctrl+C pro ukončení)")
     uvicorn.run(app, host=host, port=args.port, log_level="warning")
     return 0
