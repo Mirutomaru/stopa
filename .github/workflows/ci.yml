@@ -123,6 +123,11 @@ jobs:
   windows:
     name: "Windows — portability core (domain+data)"
     runs-on: windows-latest
+    # Release 2.4 CI fix: Windows pipe encoding = locale (cp1252) → dětské procesy
+    # s českým výstupem padaly UnicodeEncodeError; UTF-8 mode pokrývá i přímé CLI
+    # subprocessy testů (kromě sandbox _child_env guardu v plugin_loader).
+    env:
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

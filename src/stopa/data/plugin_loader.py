@@ -264,31 +264,35 @@ def _rlimit_factory(
             return
         import resource
 
+        def _deg(name: str, exc: Exception) -> None:
+            # tichá degradace + diagnostika na stderr (macOS/CI hard stropy)
+            print(f"[stopa-sandbox] degradace {name}: {exc!r}", file=sys.stderr)
+
         limit = max_mem_mb * 1024 * 1024
         try:
             resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as exc:
+            _deg("RLIMIT_AS", exc)
         if cpu_seconds is not None and cpu_seconds > 0:
             try:
                 resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
-            except (ValueError, OSError):
-                pass
+            except (ValueError, OSError) as exc:
+                _deg("RLIMIT_CPU", exc)
         try:
             resource.setrlimit(resource.RLIMIT_NOFILE, (max_fds, max_fds))
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as exc:
+            _deg("RLIMIT_NOFILE", exc)
         if max_procs is not None and max_procs > 0:
             try:
                 resource.setrlimit(resource.RLIMIT_NPROC, (max_procs, max_procs))
-            except (ValueError, OSError):
-                pass
+            except (ValueError, OSError) as exc:
+                _deg("RLIMIT_NPROC", exc)
         if max_file_mb is not None and max_file_mb > 0:
             fsize = max_file_mb * 1024 * 1024
             try:
                 resource.setrlimit(resource.RLIMIT_FSIZE, (fsize, fsize))
-            except (ValueError, OSError):
-                pass
+            except (ValueError, OSError) as exc:
+                _deg("RLIMIT_FSIZE", exc)
 
     return factory
 
@@ -617,6 +621,22 @@ def _strict_mount_setup() -> None:
             raise ValueError(f"strict mount setup selhal ({label}): {err}")
 
 
+def _child_env(lim: SandboxLimits) -> dict[str, str]:
+    """Env pro sandbox dětský proces (kopie os.environ + extra_env limitu).
+
+    Release 2.4 CI fix — Windows pipe encoding je locale-based (cp1252):
+    dětský proces s českým výstupem padal ``UnicodeEncodeError`` dřív, než
+    vrátil JSON. UTF-8 mode (PYTHONUTF8) + explicitní IO encoding to řeší;
+    na POSIX hostech se chování nemění.
+    """
+    env = dict(os.environ)
+    env.update(lim.extra_env)
+    if os.name != "posix":
+        env.setdefault("PYTHONUTF8", "1")
+        env.setdefault("PYTHONIOENCODING", "utf-8")
+    return env
+
+
 def sandbox_exec(
     argv: list[str],
     limits: SandboxLimits | None = None,
@@ -644,8 +664,7 @@ def sandbox_exec(
       / read-only + workdir rw bind, env STOPA_SANDBOX_STRICT_MOUNTS).
     """
     lim = limits or sandbox_limits({})
-    env = dict(os.environ)
-    env.update(lim.extra_env)
+    env = _child_env(lim)
     cmd = [sys.executable, "-m", "stopa.cli", "plugin-run", *argv]
 
     if lim.network_isolated:

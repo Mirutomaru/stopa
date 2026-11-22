@@ -49,7 +49,9 @@ jobs:
           python -m pip download --only-binary=:all: -d dist/wheels "fastapi>=0.115" "uvicorn[standard]>=0.30" "httpx>=0.27" "python-multipart>=0.0.9" python-dotenv websockets pyyaml
           python -m pip download --only-binary=:all: -d dist/wheels cryptography openpyxl Pillow
           for pv in 310 311 312 313; do
-            python -m pip download --only-binary=:all: --python-version $${pv:0:1}.$${pv:1} -d dist/wheels pydantic-core pillow httptools uvloop websockets pyyaml cffi || true
+            # Release 2.4 CI fix: $$ v YAML block skalaru = PID v bashi (2310{pv...});
+            # GHA expanduje jen ${{ }} → pro bash stačí jedno $.
+            python -m pip download --only-binary=:all: --python-version ${pv:0:1}.${pv:1} -d dist/wheels pydantic-core pillow httptools uvloop websockets pyyaml cffi || true
           done
 
       # fpm → .deb a .rpm z wheel stromu + postinst (stejný layout jako make deb)
@@ -58,8 +60,13 @@ jobs:
           sudo apt-get update && sudo apt-get install -y ruby
           gem install --no-document fpm
           # Release 2.4 CI fix: Ubuntu 26.04 runner — gem bin dir není v PATH;
-          # GITHUB_PATH ho doplní pro následující kroky (fpm: command not found).
+          # GITHUB_PATH doplní bindir (a gemdir/bin jako fallback) a fpm se ověří
+          # hned, aby případná absence končila zde, ne až v build kroku.
+          echo "$(gem environment bindir)" >> "$GITHUB_PATH"
           echo "$(gem env home)/bin" >> "$GITHUB_PATH"
+          export PATH="$(gem environment bindir):$(gem env home)/bin:$PATH"
+          hash -r || true
+          fpm --version
 
       - name: Sestavit instalační strom (wheels)
         id: tree
@@ -153,6 +160,11 @@ jobs:
             # cross: zig dodává aarch64 libc → bez QEMU / ARM runneru
             rustup target add aarch64-unknown-linux-gnu
             $PY -m pip install "maturin[zig]"
+            # Release 2.4 CI fix: wheel `ziglang` balí binář pod site-packages/ziglang/ —
+            # maturin --zig ho hledá v PATH, bez doplnění končí "Failed to find zig".
+            ZIGDIR=$($PY -c "import site; print(site.getsitepackages()[0] + '/ziglang')")
+            export PATH="$ZIGDIR:$PATH"
+            "$ZIGDIR/zig" version
             $PY -m maturin build --release \
               --compatibility manylinux_2_28 --zig \
               --target aarch64-unknown-linux-gnu -o ../dist-rust/
@@ -252,8 +264,9 @@ jobs:
             exec "$(dirname "$0")/bin/python" -m stopa.cli "$@"
           EOF
           chmod +x AppDir/AppRun
-          # novější appimagetool validuje [Desktop Entry] skupinu (freedesktop spec)
-          printf '[Desktop Entry]\nName=STOPA\nComment=Forenzní workbench\nType=Application\nIcon=stopa\nExec=stopa\n' > AppDir/stopa.desktop
+          # novější appimagetool validuje [Desktop Entry] skupinu (freedesktop spec);
+          # Release 2.4 CI fix: desktop-file-validate dále vyžaduje Categories=
+          printf '[Desktop Entry]\nName=STOPA\nComment=Forenzní workbench\nType=Application\nIcon=stopa\nExec=stopa\nCategories=Utility;Forensics;\n' > AppDir/stopa.desktop
           ./appimagetool-x86_64.AppImage AppDir stopa.AppImage
 
       - name: Upload artifact
