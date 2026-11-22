@@ -122,7 +122,8 @@ class ReportData:
     examiner: str | None
     created_at: datetime
     notes: str | None = None
-    generated_at: datetime | None = None  # None → čas volání build_html()
+    generated_at: datetime | None = None  # None → čas volání build_html() (aware UTC)
+    generated_at_note: str | None = None  # P0.5 — poznámka k nejistotě času (vykreslí se v hlavičce)
     sources: tuple[SourceInfo, ...] = ()
     per_source_stats: dict[str, dict[str, int]] = field(default_factory=dict)
     totals: dict[str, int] = field(default_factory=dict)
@@ -253,19 +254,43 @@ def _evidence_str(evidence: tuple[dict[str, object], ...]) -> str:
     return s or "—"
 
 
-def build_html(data: ReportData, lang: str | None = None) -> str:
+def _utc_now() -> datetime:
+    """P0.5 — výchozí hodiny: vědomý UTC čas stroje (nikdy naive)."""
+    from datetime import timezone
+
+    return datetime.now(timezone.utc)
+
+
+def resolve_generated_at(data: ReportData, now_fn=None) -> tuple[datetime, str]:
+    """P0.5 — vyřeší čas reportu na aware UTC + poznámku o nejistotě.
+
+    Kontrakt: naive vstup = smluvně považován za UTC (legacy data) a fakt se
+    eviduje v poznámce; aware vstup se normalizuje do UTC. ``now_fn`` je
+    injektovatelné hodiny pro deterministické testy (vrací aware datetime).
+    Vrací ``(utc_dt, note)`` — prázdná ``note`` = plná jistota.
+    """
+    from datetime import timezone
+
+    if now_fn is None:
+        now_fn = _utc_now  # výchozí hodiny — injektovatelné pro testy
+    g = data.generated_at
+    if g is None:
+        return now_fn(), ""
+    if g.tzinfo is None:
+        return g.replace(tzinfo=timezone.utc), "naive-timestamp-assumed-utc"
+    return g.astimezone(timezone.utc), ""
+
+
+def build_html(data: ReportData, lang: str | None = None, _clock=None) -> str:
     """Vygeneruje celý HTML dokument reportu (inline CSS, print-friendly).
 
     ``lang`` — jazyk reportu (E10 i18n): "cs" (výchozí) nebo "en".
+    ``_clock`` — injektovatelné hodiny pro deterministické testy (aware UTC).
     """
     from stopa import __version__  # lazy — verze nástroje pro court-ready hlavičku
 
     L = normalize_lang(lang)
-    generated = data.generated_at or datetime.now()
-    from datetime import timezone
-
-    if generated.tzinfo is None:
-        generated = generated.replace(tzinfo=timezone.utc)
+    generated, gen_note = resolve_generated_at(data, now_fn=_clock)
 
     parts: list[str] = []
     parts.append(
@@ -306,9 +331,12 @@ def build_html(data: ReportData, lang: str | None = None) -> str:
         (t("meta_examiner", L), data.examiner or "—"),
         (t("meta_created", L), _fmt_dt(data.created_at)),
         (t("meta_notes", L), data.notes or "—"),
-        (t("meta_generated", L), _fmt_dt(generated)),
+        (t("meta_generated", L), generated.isoformat()),  # P0.5 — ISO 8601 s explicitní TZ
         (t("meta_tool", L), f"STOPA v{__version__} (unifikovaná forenzní workbench)"),
     ]
+    if gen_note or data.generated_at_note:
+        note = " ".join(x for x in (gen_note, data.generated_at_note) if x)
+        rows.append((f"{t('meta_generated', L)} — poznámka", note))
     for k, v in rows:
         parts.append(f"<tr><td>{_esc(k)}</td><td>{_esc(v)}</td></tr>")
     parts.append("</table>")
