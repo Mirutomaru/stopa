@@ -50,7 +50,7 @@ jobs:
           python -m pip download --only-binary=:all: -d dist/wheels cryptography openpyxl Pillow
           for pv in 310 311 312 313; do
             # Release 2.4 CI fix: $$ v YAML block skalaru = PID v bashi (2310{pv...});
-            # GHA expanduje jen ${{ }} → pro bash stačí jedno $.
+            # GHA expanduje jen výrazy s {{ }} → pro bash stačí jedno $.
             python -m pip download --only-binary=:all: --python-version ${pv:0:1}.${pv:1} -d dist/wheels pydantic-core pillow httptools uvloop websockets pyyaml cffi || true
           done
 
@@ -58,13 +58,12 @@ jobs:
       - name: Instalovat fpm (ruby gem)
         run: |
           sudo apt-get update && sudo apt-get install -y ruby
-          gem install --no-document fpm
-          # Release 2.4 CI fix: Ubuntu 26.04 runner — gem bin dir není v PATH;
-          # GITHUB_PATH doplní bindir (a gemdir/bin jako fallback) a fpm se ověří
-          # hned, aby případná absence končila zde, ne až v build kroku.
-          echo "$(gem environment bindir)" >> "$GITHUB_PATH"
-          echo "$(gem env home)/bin" >> "$GITHUB_PATH"
-          export PATH="$(gem environment bindir):$(gem env home)/bin:$PATH"
+          # Release 2.4 CI fix vlna 3: non-root `gem install` jde do user diru
+          # (~/.local/share/gem/...), který se do PATH nedostane — `gem env home`
+          # a `gem environment bindir` hlásí systémový dir, binář tam ale není.
+          # sudo gem → Debian/Ubuntu system bindir = /usr/local/bin (už v PATH);
+          # fpm se ověří hned, aby případná absence končila zde, ne až v build kroku.
+          sudo gem install --no-document fpm
           hash -r || true
           fpm --version
 
