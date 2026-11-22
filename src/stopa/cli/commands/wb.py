@@ -10,32 +10,40 @@ import json
 import sys
 
 from stopa.data.write_blocker_repository import WriteBlockerRepository  # F5.4
-from stopa.domain.write_blocker import (  # F5.4 — write-blocker API
+from stopa.domain.write_blocker import (  # F5.4/P0.4 — write-blocker API
+    MODE_FAIL_CLOSED,
     detect_write_blocker,
-    ingest_gate,
+    gate_with_mode,
     known_vendor_ids,
     vendor_label,
 )
 
-from .._util import _load_require_write_blocker, _open_db, _print_json, case_examiner
+from .._util import _load_wb_gate_mode, _open_db, _print_json, case_examiner
 
 
 def cmd_wb_status(args: argparse.Namespace) -> int:
-    """F5.4 — aktuální WB stav + rozhodnutí brány (exit 2 = blokováno)."""
+    """F5.4/P0.4 — aktuální WB stav + rozhodnutí brány (exit 2 = blokováno).
+
+    P0.4: podsběh ``wb`` nemá --profile → výchozí forenzní profil
+    (fail-closed při chybějících explicitních nastaveních); legacy JSON klíč
+    ``require_wb`` zůstává pro kompatibilitu (= aktivní fail_closed).
+    """
     db = _open_db(args.case_id)
     repo = WriteBlockerRepository(db.conn, db.audit_repo)
     state = repo.latest_state()
-    require = _load_require_write_blocker()
-    gate = ingest_gate(state, require)
+    mode = _load_wb_gate_mode(profile_name="forensic")
+    check = gate_with_mode(state, mode)
     if getattr(args, "json", False):
         print(
             json.dumps(
                 {
                     "case_id": args.case_id,
                     "state": state,
-                    "require_wb": require,
-                    "allowed": gate.allowed,
-                    "warning": gate.warning,
+                    "require_wb": mode == MODE_FAIL_CLOSED,  # F5.4 legacy (backward compat)
+                    "mode": mode,  # P0.4 — fail_closed / warn_only
+                    "protection_class": check.protection_class,  # P0.4 — třída ochrany
+                    "allowed": check.allowed,
+                    "warning": check.warning,
                 },
                 ensure_ascii=False,
             )
@@ -54,10 +62,10 @@ def cmd_wb_status(args: argparse.Namespace) -> int:
         else:
             reason = state.get("reason") or "—"
             print(f"WB: ⚠ odebrán ({reason}) @ {state.get('ts') or '?'}")
-        gate_note = "zapnutá" if require else "vypnutá"
-        verdict = "pouští ingest" if gate.allowed else "blokuje ingest"
-        print(f"Brána (require_write_blocker): {gate_note} → {verdict}")
-    return 0 if gate.allowed else 2
+        gate_note = "fail-closed" if mode == MODE_FAIL_CLOSED else "warn_only (laboratorní)"
+        verdict = "pouští ingest" if check.allowed else "blokuje ingest"
+        print(f"Brána (P0.4, {gate_note}): třída ochrany={check.protection_class} → {verdict}")
+    return 0 if check.allowed else 2
 
 
 def cmd_wb_attach(args: argparse.Namespace) -> int:

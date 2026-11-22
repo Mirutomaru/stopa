@@ -14,15 +14,20 @@ from pathlib import Path
 
 from stopa.data.write_blocker_repository import WriteBlockerRepository  # F5.4
 from stopa.domain.profiles import get_profile
-from stopa.domain.write_blocker import ingest_gate  # F5.4 — write-blocker API
+from stopa.domain.write_blocker import (  # F5.4/P0.4 — write-blocker API + fail-closed brána
+    ACTION_CHECK,
+    ACTION_MODE_EXCEPTION,
+    MODE_WARN_ONLY,
+    gate_with_mode,
+)
 from stopa.models import EvidenceSource
 from stopa.pipeline import load_hash_sets, process_source, run_timeline_intel
 
 _log = logging.getLogger("stopa.cli.core")
 
 from .._util import (
-    _load_require_write_blocker,
     _load_timesketch_auto_push,
+    _load_wb_gate_mode,  # P0.4 — gate režim (fail-closed výchozí)
     _open_db,
     _print_json,
     _rich_progress,
@@ -32,15 +37,42 @@ from .._util import (
 
 def cmd_add(args: argparse.Namespace) -> int:
     db = _open_db(args.case_id)
-    # F5.4 — write-blocker gate (settings.json require_write_blocker, default OFF;
-    # exit 2 = brána blokuje ingest bez připojeného WB)
-    wb_gate = ingest_gate(
-        WriteBlockerRepository(db.conn, db.audit_repo).latest_state(),
-        _load_require_write_blocker(),
+    # F5.4/P0.4 — write-blocker gate (settings.json; forenzní profil má
+    # výchozí fail-closed režim, P0.4: "Forensic profile: fail-closed").
+    # exit 2 = brána blokuje ingest bez potvrzené ochrany proti zápisu.
+    # P0.4: každá kontrola se audituje (wb_check), laboratorní warn_only navíc
+    # jako explicitní výjimka (wb_mode_exception).
+    wb_repo = WriteBlockerRepository(db.conn, db.audit_repo)
+    wb_mode = _load_wb_gate_mode(profile_name=getattr(args, "profile", None) or "forensic")
+    wb_check = gate_with_mode(
+        wb_repo.latest_state(), wb_mode, connection=getattr(args, "method", None)
     )
-    if not wb_gate.allowed:
-        print(f"⛔ {wb_gate.warning}", file=sys.stderr)
+    db.log_operation(
+        ACTION_CHECK,
+        actor=case_examiner(db, args.case_id),
+        details={
+            "allowed": wb_check.allowed,
+            "protection_class": wb_check.protection_class,
+            "mode": wb_mode,
+            "device_id": wb_check.device_id,
+            "connection": wb_check.connection,
+            "extra_warnings": list(wb_check.extra_warnings),
+        },
+    )
+    if wb_mode == MODE_WARN_ONLY:
+        db.log_operation(
+            ACTION_MODE_EXCEPTION, actor=case_examiner(db, args.case_id), details={"mode": wb_mode}
+        )
+    if not wb_check.allowed:
+        print(f"⛔ {wb_check.warning}", file=sys.stderr)
+        for w in wb_check.extra_warnings:
+            print(f"⚠️  {w}", file=sys.stderr)
         return 2
+    if wb_check.warning is not None:
+        # měkké varování (warn_only režim / neznámé VID/PID) — ingest pokračuje
+        print(f"⚠️  {wb_check.warning}", file=sys.stderr)
+        for w in wb_check.extra_warnings:
+            print(f"⚠️  {w}", file=sys.stderr)
     profile = get_profile(args.profile)  # early validace jména profilu
     json_mode = getattr(args, "json", False)
 

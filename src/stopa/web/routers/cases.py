@@ -19,7 +19,13 @@ from stopa.data.db import CaseDB
 from stopa.data.write_blocker_repository import WriteBlockerRepository
 from stopa.domain.events import case_topic
 from stopa.domain.rbac import normalize_role
-from stopa.domain.write_blocker import ingest_gate
+from stopa.domain.write_blocker import (  # F5.4/P0.4 — write-blocker API
+    ACTION_CHECK,
+    ACTION_MODE_EXCEPTION,
+    MODE_WARN_ONLY,
+    gate_with_mode,
+    resolve_gate_mode,
+)
 from stopa.models import Case, EvidenceSource
 from stopa.pipeline import process_source
 
@@ -147,14 +153,33 @@ def register(app, ctx) -> None:
             raise HTTPException(400, f"zdroj neexistuje: {root}")
         db = open_db(case_id)
 
-        # F5.4 — write-blocker gate (settings require_write_blocker, default OFF;
-        # 409 = brána blokuje ingest bez připojeného WB)
-        _wb_gate = ingest_gate(
-            WriteBlockerRepository(db.conn, db.audit_repo).latest_state(),
-            bool(_load_settings().get("require_write_blocker", False)),
+        # F5.4/P0.4 — write-blocker gate (režim z resolve_gate_mode: explicitní
+        # settings > legacy bool require_write_blocker > profilový výchozí;
+        # forensic → fail-closed). 409 = brána blokuje ingest bez potvrzené
+        # ochrany proti zápisu. P0.4: každá kontrola se audituje (wb_check),
+        # laboratorní warn_only navíc jako explicitní výjimka (wb_mode_exception).
+        _wb_repo = WriteBlockerRepository(db.conn, db.audit_repo)
+        _wb_mode = resolve_gate_mode(_load_settings(), profile_name=body.profile or "forensic")
+        _wb_check = gate_with_mode(
+            _wb_repo.latest_state(), _wb_mode, connection="web"
         )
-        if not _wb_gate.allowed:
-            raise HTTPException(409, _wb_gate.warning or "write-blocker gate")
+        db.log_operation(
+            ACTION_CHECK,
+            details={
+                "allowed": _wb_check.allowed,
+                "protection_class": _wb_check.protection_class,
+                "mode": _wb_mode,
+                "device_id": _wb_check.device_id,
+                "connection": _wb_check.connection,
+                "extra_warnings": list(_wb_check.extra_warnings),
+            },
+        )
+        if _wb_mode == MODE_WARN_ONLY:
+            db.log_operation(
+                ACTION_MODE_EXCEPTION, details={"mode": _wb_mode}
+            )
+        if not _wb_check.allowed:
+            raise HTTPException(409, _wb_check.warning or "write-blocker gate")
 
         # STP-021 — Processing Monitor: registrovat běh (sync i async).
         job_id = uuid.uuid4().hex[:12]
@@ -192,6 +217,7 @@ def register(app, ctx) -> None:
                     result = process_source(
                         tdb, source.id, root, body.profile,
                         progress=_progress, resume=body.resume,
+                        resume_mode=body.resume_mode,  # P0.1 — fast (výchozí) / strict
                         pool="threads",  # F2.4 — web běží s pozadím vlákny (uvicorn);
                         # per-request spawn procesů by byl zbytečný + fork riziko
                     )
@@ -216,7 +242,10 @@ def register(app, ctx) -> None:
             _job_update(job_id, source_id=source.id)
             # F2.4 — web běží s pozadím vlákny (uvicorn); per-request spawn procesů
             # by byl zbytečný + fork riziko → explicitně threads (původní E3 režim)
-            result = process_source(db, source.id, root, body.profile, progress=_progress, resume=body.resume, pool="threads")
+            result = process_source(
+                db, source.id, root, body.profile, progress=_progress, resume=body.resume,
+                resume_mode=body.resume_mode, pool="threads",
+            )
             _job_update(job_id, status="done", result=result.model_dump())
             return {
                 "source_id": source.id,

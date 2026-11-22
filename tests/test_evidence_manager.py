@@ -172,6 +172,8 @@ class TestCliAudit:
         from stopa import cli
 
         monkeypatch.setenv("STOPA_DB_DIR", str(tmp_path))
+        import json as _json  # P0.4 — laboratorní WB režim (testy pokrývají evidenci, ne bránu)
+        (tmp_path / "settings.json").write_text(_json.dumps({"wb_gate_mode": "warn_only"}))
         rc = cli.main(["case", "new", "Test case", "--examiner", "JUDr. M."])
         assert rc == 0
         # najdi DB a ověř audit záznam (P2-2: auto-sync přidá stopa_instance.db → filtr)
@@ -188,6 +190,8 @@ class TestCliAudit:
         from stopa import cli
 
         monkeypatch.setenv("STOPA_DB_DIR", str(tmp_path))
+        import json as _json  # P0.4 — laboratorní WB režim (testy pokrývají evidenci, ne bránu)
+        (tmp_path / "settings.json").write_text(_json.dumps({"wb_gate_mode": "warn_only"}))
         src = tmp_path / "src"
         src.mkdir(parents=True, exist_ok=True)
         (src / "f.txt").write_bytes(b"data")
@@ -219,6 +223,8 @@ class TestVerify:
         from stopa import cli
 
         monkeypatch.setenv("STOPA_DB_DIR", str(tmp_path))
+        import json as _json  # P0.4 — laboratorní WB režim (testy pokrývají evidenci, ne bránu)
+        (tmp_path / "settings.json").write_text(_json.dumps({"wb_gate_mode": "warn_only"}))
         src = tmp_path / "src"
         src.mkdir(parents=True, exist_ok=True)
         (src / "ok.txt").write_bytes(b"hello")
@@ -273,6 +279,8 @@ class TestBackup:
         from stopa import cli
 
         monkeypatch.setenv("STOPA_DB_DIR", str(tmp_path))
+        import json as _json  # P0.4 — laboratorní WB režim (testy pokrývají evidenci, ne bránu)
+        (tmp_path / "settings.json").write_text(_json.dumps({"wb_gate_mode": "warn_only"}))
         src = tmp_path / "src"
         src.mkdir(parents=True, exist_ok=True)
         (src / "f.txt").write_bytes(b"data")

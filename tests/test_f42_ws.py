@@ -56,6 +56,10 @@ def _chrome_history_db(root: Path, name: str = "History") -> None:
 
 @pytest.fixture()
 def client(tmp_path: Path):
+    import json as _json  # P0.4 — laboratorní WB režim pro tyto testy
+    (tmp_path / "settings.json").write_text(
+        _json.dumps({"wb_gate_mode": "warn_only"}), encoding="utf-8"
+    )
     app = create_app(db_dir=tmp_path, ws_heartbeat_s=0.3)
     with TestClient(app) as c:
         yield c

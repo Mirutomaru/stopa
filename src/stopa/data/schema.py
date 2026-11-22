@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verzi umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:
@@ -37,7 +37,19 @@ CREATE TABLE IF NOT EXISTS sources (
     kind TEXT NOT NULL CHECK (kind IN ('folder', 'file')),
     path TEXT NOT NULL,
     size_bytes INTEGER,
-    added_at TEXT NOT NULL
+    added_at TEXT NOT NULL,
+    -- P0.4/P1 — source manifest: deterministický snapshot souborového stavu zdroje
+    manifest_sha256 TEXT,  -- SHA-256 kanonické serializace (NULL = dosud nevytvořen)
+    manifest_version INTEGER DEFAULT 1,
+    manifest_json TEXT,  -- kanonická forma položek (historie drží audit chain)
+    created_at_utc TEXT,  -- ISO 8601 UTC — čas vytvoření manifestu
+    file_count INTEGER,
+    total_size_bytes INTEGER,
+    source_type TEXT,
+    source_identifier TEXT,
+    acquisition_method TEXT,
+    filesystem_type TEXT,
+    acquisition_tool_version TEXT
 );
 CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY,

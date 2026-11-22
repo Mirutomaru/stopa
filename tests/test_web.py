@@ -11,8 +11,16 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def client(tmp_path: Path):
+    import json as _json
+
     from stopa.web.app import create_app
 
+    # P0.4 — tyto testy pokrývají ingest/file API (ne WB gate); explicitní
+    # laboratorní režim warn_only, aby forenzní fail-closed výchozí nenechal
+    # POST /sources viset na 409 (WB v těchto testech není předmětem).
+    (tmp_path / "settings.json").write_text(
+        _json.dumps({"wb_gate_mode": "warn_only"}), encoding="utf-8"
+    )
     app = create_app(db_dir=tmp_path)
     with TestClient(app) as c:
         yield c

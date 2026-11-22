@@ -183,8 +183,15 @@ def test_cli_wb_status_exit_codes(cli_env: dict):
     from stopa.cli import cmd_wb_attach, cmd_wb_status
 
     _make_case(cli_env)  # vytvoří f54.db (zavřít pro čisté CLI otevření)
+    # P0.4: settings chybí = forenzní profil → fail-closed výchozí (WB chybí → blokováno)
     rc = cmd_wb_status(Namespace(case_id="f54", json=True))
-    assert rc == 0  # gate OFF (settings chybí) → allowed
+    assert rc == 2
+    # legacy F5.4 konfigurace zůstává validní — explicitní False = laboratorní warn_only
+    (cli_env["db_dir"] / "settings.json").write_text(
+        json.dumps({"require_write_blocker": False}), encoding="utf-8"
+    )
+    rc = cmd_wb_status(Namespace(case_id="f54", json=True))
+    assert rc == 0  # warn_only + WB chybí → allowed (měkké varování)
     # zapnout bránu přes settings.json
     (cli_env["db_dir"] / "settings.json").write_text(
         json.dumps({"require_write_blocker": True}), encoding="utf-8"
@@ -278,7 +285,9 @@ def test_web_wb_endpoints(client):
     r = client.get(f"/api/cases/{cid}/write-blocker")
     assert r.status_code == 200
     body = r.json()
-    assert body["state"] is None and body["allowed"] is True and body["require_wb"] is False
+    # P0.4: settings chybí = forenzní profil → fail-closed výchozí (WB chybí → blokováno)
+    assert body["state"] is None and body["allowed"] is False and body["require_wb"] is True
+    assert body["mode"] == "fail_closed" and body["protection_class"] == "unknown"
     assert len(body["vendors"]) == 3
 
     # attach — auto-detekce z device stringu
@@ -305,7 +314,9 @@ def test_web_wb_endpoints(client):
     )
     assert r.status_code == 200, r.text
     body = client.get(f"/api/cases/{cid}/write-blocker").json()
-    assert body["state"]["attached"] is False and body["allowed"] is True
+    # P0.4: odebráný WB = neověřený zdroj → fail-closed blokuje ingest
+    assert body["state"]["attached"] is False and body["allowed"] is False
+    assert body["protection_class"] == "unknown"
 
 
 def test_web_ingest_409_when_gate_on(client, tmp_path: Path):

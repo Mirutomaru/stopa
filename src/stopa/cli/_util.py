@@ -56,6 +56,21 @@ def _load_require_write_blocker() -> bool:
     return bool(data.get("require_write_blocker", False)) if isinstance(data, dict) else False
 
 
+def _load_wb_gate_mode(profile_name: str = "forensic") -> str:
+    """P0.4 — write-blocker gate režim ze settings.json (tenký wrapper).
+
+    Režim rozliší :func:`stopa.domain.write_blocker.resolve_gate_mode`:
+    explicitní ``wb_gate_mode`` > legacy bool ``require_write_blocker`` (F5.4,
+    zachováno pro existující konfigurace) > výchozí podle profilu
+    (forensic → fail_closed; ediscovery/quick → warn_only). Laboratorní
+    warn_only si administrátor nastavuje explicitně a každá kontrola se
+    eviduje jako výjimka v audit logu.
+    """
+    from stopa.domain.write_blocker import resolve_gate_mode  # lokální — bez cyklu
+
+    return resolve_gate_mode(_load_settings_dict(), profile_name=profile_name)
+
+
 def _load_timesketch_auto_push() -> bool:
     """F6.1 — opt-in auto-push do Timesketch po úspěšném ingestu (settings.json, default OFF)."""
     p = _db_dir() / "settings.json"

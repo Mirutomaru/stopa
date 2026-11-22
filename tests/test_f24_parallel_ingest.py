@@ -230,6 +230,10 @@ def test_f24_sigint_graceful_cli(tmp_path):
     root = tmp_path / "ev"
     _make_tree(root, 120)  # ~7.8 MB, běh > 3 s → signál dopadne mid-ingest
 
+    # P0.4 — test pokrývá SIGINT checkpoint/resume, ne WB bránu; laboratorní warn_only
+    db_dir.mkdir(parents=True, exist_ok=True)
+    (db_dir / "settings.json").write_text(json.dumps({"wb_gate_mode": "warn_only"}))
+
     p = subprocess.Popen(
         [str(stopa), "add", case_id, str(root), "--pool", "threads", "--workers", "4"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,

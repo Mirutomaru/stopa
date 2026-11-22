@@ -13,7 +13,14 @@ from stopa.data.db import CaseDB
 from stopa.data.timesketch_client import TimesketchClient, TimesketchError, TimesketchUnavailable
 from stopa.data.write_blocker_repository import WriteBlockerRepository
 from stopa.domain.rbac import DEFAULT_ROLE, normalize_role, permissions_for
-from stopa.domain.write_blocker import VENDORS, detect_write_blocker, ingest_gate, known_vendor_ids
+from stopa.domain.write_blocker import (  # F5.4/P0.4 — write-blocker API
+    MODE_FAIL_CLOSED,
+    VENDORS,
+    detect_write_blocker,
+    gate_with_mode,
+    known_vendor_ids,
+    resolve_gate_mode,
+)
 
 from ..app import SettingsIn, TimesketchPushIn, WBAttachIn, WBRemoveIn, log
 
@@ -195,18 +202,23 @@ def register(app, ctx) -> None:
     # ── Pluginy (F6.4) ────────────────────────────────────────
     @app.get("/api/cases/{case_id}/write-blocker")
     def wb_status(case_id: str) -> dict:
-        """Aktuální WB stav + rozhodnutí ingest brány pro UI."""
+        """Aktuální WB stav + rozhodnutí ingest brány pro UI (P0.4: režim + třída ochrany)."""
         db = open_db(case_id)
         try:
             repo = WriteBlockerRepository(db.conn, db.audit_repo)
             state = repo.latest_state()
-            require_wb = bool(_load_settings().get("require_write_blocker", False))
-            gate = ingest_gate(state, require_wb)
+            # P0.4: status endpoint nemá kontext profilu → forenzní výchozí zobrazení;
+            # explicitní settings (wb_gate_mode / require_write_blocker) mají prioritu.
+            mode = resolve_gate_mode(_load_settings(), profile_name="forensic")
+            check = gate_with_mode(state, mode)
             return {
                 "state": state,
-                "require_wb": require_wb,
-                "allowed": gate.allowed,
-                "warning": gate.warning,
+                "require_wb": mode == MODE_FAIL_CLOSED,  # F5.4 legacy (backward compat)
+                "mode": mode,  # P0.4 — fail_closed / warn_only
+                "protection_class": check.protection_class,  # P0.4 — třída ochrany
+                "allowed": check.allowed,
+                "warning": check.warning,
+                "extra_warnings": list(check.extra_warnings),  # P0.4 — např. neznámé VID/PID
                 # podporovaní vendori pro UI select (AK: 3 vendori)
                 "vendors": [{"id": v.vendor_id, "label": v.label} for v in VENDORS],
                 "history": repo.history(),

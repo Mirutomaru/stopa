@@ -10,6 +10,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timezone
 
+from stopa.domain import source_manifest as sm  # P0.4/P1 — zdrojový manifest (čistá logika)
 from stopa.models import Case, EvidenceSource
 
 
@@ -216,6 +217,42 @@ class CaseRepository:
             ),
         )
         self.conn.commit()
+
+    def update_source_manifest(self, source_id: str, rows: list[dict]) -> dict:
+        """P0.4/P1 — zdrojový manifest z aktuálního stavu tabulky ``files``.
+
+        Přepočítá kanonickou serializace + SHA-256 a uloží do sloupců
+        ``sources.manifest_*``; původní čas vytvoření (created_at_utc) se u
+        změn nepřepisuje. Historii starých hodnot drží volající v audit chain
+        (details události). Vrací status dict pro audit:
+        ``{"status": "created"|"unchanged"|"changed", "old_sha256",
+        "new_sha256", "file_count"}``.
+
+        rows — dicts s klíči rel_path/size_bytes/mtime/sha256 (SELECT z files).
+        """
+        entries = sm.entries_from_rows(rows)
+        new_json = sm.canonical_json(entries).decode("utf-8")
+        new_sha = sm.manifest_sha256(entries)
+        row = self.conn.execute(
+            "SELECT manifest_sha256 FROM sources WHERE id = ?", (source_id,)
+        ).fetchone()
+        old_sha = row["manifest_sha256"] if row is not None else None
+        total_size = sum(e.size_bytes or 0 for e in entries)
+        now_utc = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            "UPDATE sources SET manifest_sha256 = ?, manifest_version = ?,"
+            " manifest_json = ?, created_at_utc = COALESCE(created_at_utc, ?),"
+            " file_count = ?, total_size_bytes = ? WHERE id = ?",
+            (new_sha, sm.MANIFEST_VERSION, new_json, now_utc, len(entries), total_size, source_id),
+        )
+        self.conn.commit()
+        status = "created" if old_sha is None else ("unchanged" if old_sha == new_sha else "changed")
+        return {
+            "status": status,
+            "old_sha256": old_sha,
+            "new_sha256": new_sha,
+            "file_count": len(entries),
+        }
 
     def get_source(self, source_id: str) -> EvidenceSource | None:
         row = self.conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()

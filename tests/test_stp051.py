@@ -128,8 +128,12 @@ class TestPreviewMediaType:
 
 @pytest.fixture()
 def client(tmp_path: Path):
-    from stopa.web.app import create_app
+    import json as _json  # P0.4 — laboratorní WB režim pro tyto testy
 
+    from stopa.web.app import create_app
+    (tmp_path / "settings.json").write_text(
+        _json.dumps({"wb_gate_mode": "warn_only"}), encoding="utf-8"
+    )
     app = create_app(db_dir=tmp_path)
     with TestClient(app) as c:
         yield c

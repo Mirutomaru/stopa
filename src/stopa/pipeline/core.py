@@ -521,6 +521,27 @@ def process_source(
     result.interrupted = stopped
 
     db.commit()  # F2.4 finální checkpoint (periodické commity už proběhly průběžně)
+    # P0.4/P1 — Source manifest: deterministický snapshot souborového stavu zdroje
+    # (rel_path/size/mtime/SHA-256 → kanonická forma → SHA-256). Změna oproti
+    # uloženému manifestu = auditní událost se starou hodnotou (historie v chain);
+    # fast-skip resume s nezměněnými řádky reprodukuje stejný digest → bez šumu.
+    try:
+        mrows = db.conn.execute(
+            "SELECT rel_path, size_bytes, mtime, sha256 FROM files WHERE source_id = ?",
+            (source_id,),
+        ).fetchall()
+        mres = db.case_repo.update_source_manifest(source_id, [dict(r) for r in mrows])
+        if mres["status"] != "unchanged":
+            db.log_operation(
+                "source_manifest_created"
+                if mres["status"] == "created"
+                else "source_manifest_changed",
+                details={"source_id": source_id, **mres},
+            )
+    except Exception as exc:  # noqa: BLE001 — defenzivní, manifest nepřeruší ingest (data už commitnuta)
+        db.log_operation(
+            "source_manifest_error", details={"source_id": source_id, "error": str(exc)}
+        )
     # E1 Evidence Manager: uzavření běhu — souhrny + verze parserů (reprodukovatelnost).
     # F2.4: přerušený běh se eviduje jako processing_interrupted (checkpoint uložen,
     # pokračování přes resume=True bez ztráty dat).

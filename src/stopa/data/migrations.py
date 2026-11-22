@@ -137,6 +137,7 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     apply_rule_matching_migration(conn)  # P3-5 (v25): intel_matches.match_kind += yara/sigma
     apply_classification_migration(conn)  # P3-3 (v26): tabulka classifications (aditivní)
     apply_seal_chain_migration(conn)  # P4-6 (v27): tabulka seal_chain — sealing v2 chain (aditivní)
+    apply_source_manifest_migration(conn)  # P0.4/P1 (v28): sources manifest sloupce (aditivní)
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).
     if _schema_version(conn) < SCHEMA_VERSION:
@@ -482,4 +483,32 @@ def apply_seal_chain_migration(conn: sqlite3.Connection) -> None:
     """
     conn.executescript(SEAL_CHAIN_DDL)
     conn.commit()
+
+
+def apply_source_manifest_migration(conn: sqlite3.Connection) -> None:
+    """P0.4/P1 (v28): manifest sloupce tabulky ``sources`` — staré case DB.
+
+    Deterministický snapshot souborového stavu zdroje (rel_path, size, mtime,
+    SHA-256 → kanonická serializace → manifest SHA-256). Čistě aditivní:
+    všechen nový obsah je NULL u starých zdrojů = „manifest dosud nevytvořen"
+    (bez ztráty dat; historie starých stavů drží audit chain). Idempotentní —
+    kontrola přes PRAGMA table_info, ALTER TABLE ADD COLUMN.
+    """
+    src_cols = {r["name"] for r in conn.execute("PRAGMA table_info(sources)").fetchall()}
+    for col, decl in (
+        ("manifest_sha256", "TEXT"),
+        ("manifest_version", "INTEGER DEFAULT 1"),
+        ("manifest_json", "TEXT"),
+        ("created_at_utc", "TEXT"),
+        ("file_count", "INTEGER"),
+        ("total_size_bytes", "INTEGER"),
+        ("source_type", "TEXT"),
+        ("source_identifier", "TEXT"),
+        ("acquisition_method", "TEXT"),
+        ("filesystem_type", "TEXT"),
+        ("acquisition_tool_version", "TEXT"),
+    ):
+        if col not in src_cols:
+            conn.execute(f"ALTER TABLE sources ADD COLUMN {col} {decl}")
+            conn.commit()
 
