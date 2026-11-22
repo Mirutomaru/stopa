@@ -17,6 +17,7 @@
       "--pool",
       "--profile",
       "--resume",
+      "--resume-mode",
       "--workers",
       "-h"
     ]

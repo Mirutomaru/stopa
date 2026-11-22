@@ -85,6 +85,7 @@
   "cli.h.075": "kdo nabytí důkazu eviduje (chain of custody)",
   "cli.h.076": "metoda nabytí (např. 'forensic copy', 'USB export')",
   "cli.h.077": "E3 checkpointing — přeskočit soubory už v DB (pokračovat po přerušeném běhu)",
+  "cli.h.332": "P0.1 ověření identity při --resume: fast = size+mtime (výchozí), strict = obsah SHA-256",
   "cli.h.078": "F2.4 počet worker procesů/vláken (default: min(8, jádra CPU))",
   "cli.h.079": "F2.4 typ poolu: auto = procesy pro N>1 (GIL), threads = E3 režim",
   "cli.h.080": "P2-1 disk budget in-flight souborů v MB (kapacitní řízení; 0 = bez limitu)",

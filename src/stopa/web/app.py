@@ -145,6 +145,7 @@ class SourceIn(BaseModel):
     path: str
     profile: str = "forensic"
     resume: bool = False  # E3 checkpointing — přeskočit soubory už v DB
+    resume_mode: str | None = None  # P0.1 — "fast" (výchozí) / "strict"; viz process_source
     background: bool = False  # STP-021 — async ingest (default sync = backward compat)
 
 

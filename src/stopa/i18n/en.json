@@ -85,6 +85,7 @@
   "cli.h.075": "who records the evidence acquisition (chain of custody)",
   "cli.h.076": "acquisition method (e.g. 'forensic copy', 'USB export')",
   "cli.h.077": "E3 checkpointing — skip files already in DB (resume after interrupted run)",
+  "cli.h.332": "P0.1 identity verification for --resume: fast = size+mtime (default), strict = SHA-256 content",
   "cli.h.078": "F2.4 number of worker processes/threads (default: min(8, CPU cores))",
   "cli.h.079": "F2.4 pool type: auto = processes for N>1 (GIL), threads = E3 mode",
   "cli.h.080": "P2-1 disk budget of in-flight files in MB (capacity control; 0 = unlimited)",

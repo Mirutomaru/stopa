@@ -319,6 +319,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help=t("cli.h.076"))
     add_p.add_argument("--resume", action="store_true",
                        help=t("cli.h.077"))
+    add_p.add_argument("--resume-mode", choices=["fast", "strict"], default=None,
+                       metavar="{fast,strict}",
+                       help=t("cli.h.332"))
     add_p.add_argument("--workers", type=int, default=None, metavar="N",
                        help=t("cli.h.078"))
     add_p.add_argument("--pool", choices=["auto", "threads", "processes"], default="auto",

@@ -136,12 +136,14 @@ class ProcessResult(BaseModel):
     source_id: str
     profile: str
     files_total: int = 0
+    skipped: int = 0  # E3/P0.1 — soubory ověřené jako hotové (resume) a přeskočené
     bytes_total: int = 0
     hashed_md5: int = 0
     hashed_sha256: int = 0
     signatures_detected: int = 0
     bad_extensions: int = 0
     duplicates: int = 0
+    modified_during_resume: int = 0  # P0.1 — soubory změněné/smazané mezi resume běhy (audit)
     hash_set_hits: int = 0
     artifacts_extracted: int = 0
     # P0 Core C2: Evidence Lineage — ID extrahovaných artefaktů (output_refs kroku extract)

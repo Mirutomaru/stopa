@@ -119,6 +119,7 @@ def cmd_add(args: argparse.Namespace) -> int:
         result = process_source(
             db, source.id, root, args.profile, hash_sets, _progress,
             resume=getattr(args, "resume", False),
+            resume_mode=getattr(args, "resume_mode", None),  # P0.1 — fast (výchozí) / strict
             max_workers=args.workers,  # F2.4 — CLI --workers (default auto)
             pool=args.pool,  # F2.4 — CLI --pool (auto = procesy pro N>1)
             stop_event=_stop_ev,  # F2.4 — SIGINT/SIGTERM → graceful shutdown

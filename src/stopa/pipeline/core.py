@@ -78,6 +78,44 @@ def summarize_outputs(result: ProcessResult) -> dict:
     }
 
 
+def _resume_meta_matches(row_meta: dict, wf: WalkedFile) -> bool:
+    """P0.1 Fast resume — metadata identity mezi běhy (size + mtime UTC).
+
+    Metadata nejsou důkazem integrity obsahu (viz ``strict``); slouží k levnému
+    vyřazení zjevně neměněných souborů. Neznámá/legacy hodnota (NULL) = nelze
+    ověřit → soubor se znovu zpracuje (bezpečná strana).
+    """
+    if row_meta["size"] != wf.size_bytes:
+        return False
+    stored_mtime = row_meta["mtime"]  # ISO TEXT nebo NULL
+    if stored_mtime is None or wf.mtime is None:
+        return False
+    try:
+        stored = datetime.fromisoformat(stored_mtime)
+    except ValueError:
+        return False
+    if stored.tzinfo is None:
+        stored = stored.replace(tzinfo=timezone.utc)
+    return stored == wf.mtime
+
+
+def _sha256_stream(path: Path, chunk_size: int = 4 * 1024 * 1024) -> str | None:
+    """P0.1 Strict resume — streaming SHA-256 (peak RAM = jeden chunk).
+
+    Vrací ``None`` při read chybě (soubor zmizel mezi běhy → volající ho
+    re-processuje; bezpečná strana, protože hashing v normální pipeline
+    workeru stejně proběhne).
+    """
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as f:
+            while chunk := f.read(chunk_size):
+                h.update(chunk)
+    except OSError:
+        return None
+    return h.hexdigest()
+
+
 def process_source(
     db: CaseDB,
     source_id: str,
@@ -86,6 +124,7 @@ def process_source(
     hash_sets: dict[str, set[str]] | None = None,
     progress: Callable[[int, int], None] | None = None,
     resume: bool = False,
+    resume_mode: str | None = None,  # P0.1 — "fast" (výchozí) / "strict"; viz docstring
     max_workers: int | None = None,
     pool: str = "auto",
     commit_every: int = 256,
@@ -102,6 +141,11 @@ def process_source(
     `resume` — E3 checkpointing: přeskočí soubory už v DB pro tento zdroj
         (předchozí běh byl dokončený); doplní jen nové soubory a timeline se
         nečistí. Default False = plný re-ingest (idempotentní upsert).
+    `resume_mode` — P0.1 Safe resume: jak ověřit identitu souborů už v DB při
+        ``resume=True``. "fast" (výchozí) = existence + size_bytes + mtime (UTC);
+        "strict" = obsah SHA-256 (metadata nejsou důkazem integrity obsahu).
+        Změněné/smazané soubory se neticho přeskočí: dojdou na re-processing a
+        auditní událost ``source_modified_during_resume`` zachová původní hodnoty.
     `max_workers` — E3 paralelizace: počet worker procesů/vláken pro hashing/parsing;
         None = auto (min(8, cpu_count)). DB writes + dedupe zůstávají v hlavním
         vlákně → deterministický výsledek nezávislý na počtu workerů.
@@ -143,21 +187,99 @@ def process_source(
     walked = walk_source(root)
     total = len(walked)
 
-    # E3 checkpointing (resume): soubory už v DB pro tento zdroj se přeskočí —
-    # předchozí běh je dokončený, neděláme hashing/parsing znovu. Timeline se
-    # nečistí (události z prvního běhu jsou platné), doplníme jen nové soubory.
+    # ── P0.1 Safe resume — ověření identity souborů mezi běhy ───────────────
+    # Staré --resume věřil jen rel_path v DB: nahrazený/zmenšený/smazaný soubor
+    # prošel ticho jako „již zpracován“. Teď se ověřuje:
+    #   fast (výchozí) — existence + size_bytes + mtime (UTC); levný metadata check.
+    #   strict         — obsah SHA-256 (metadata nejsou důkazem integrity obsahu).
+    #   force          = resume=False (kompletní re-ingest, idempotentní upsert).
+    # Změněné soubory se NEpřeskočí: dojdou na re-processing a auditní událost
+    # source_modified_during_resume zachová původní hodnoty (hash/historii).
+    if resume_mode is not None and resume_mode not in ("fast", "strict"):
+        raise ValueError(f"resume_mode: očekávám 'fast' nebo 'strict', dostal jsem {resume_mode!r}")
+
     if resume:
-        existing_paths = {
-            r["rel_path"]
-            for r in db.conn.execute(
-                "SELECT rel_path FROM files WHERE source_id = ?", (source_id,)
-            ).fetchall()
+        mode = resume_mode or "fast"
+        rows = db.conn.execute(
+            "SELECT rel_path, size_bytes, mtime, sha256 FROM files WHERE source_id = ?",
+            (source_id,),
+        ).fetchall()
+        existing_meta = {
+            r["rel_path"]: {
+                "size": r["size_bytes"],
+                "mtime": r["mtime"],
+                "sha256": r["sha256"],
+            }
+            for r in rows
         }
-        to_process = [wf for wf in walked if wf.rel_path not in existing_paths]
+        single_file_source = root.is_file()
+        resolved_root = Path(root).resolve()
+
+        def _resume_abs(rel_path: str) -> Path:
+            return resolved_root if single_file_source else resolved_root / rel_path
+
+        changes: list[dict] = []
+        to_process: list[WalkedFile] = []
+        for wf in walked:
+            row_meta = existing_meta.get(wf.rel_path)
+            if row_meta is None:
+                to_process.append(wf)  # nový soubor — zpracovat
+                continue
+            if mode == "strict":
+                stored_sha = row_meta["sha256"]
+                current_sha = _sha256_stream(_resume_abs(wf.rel_path))
+                same_content = (
+                    stored_sha is not None
+                    and current_sha is not None
+                    and stored_sha == current_sha
+                )
+            else:  # fast — jen metadata (size + mtime UTC)
+                same_content = _resume_meta_matches(row_meta, wf)
+            if same_content:
+                continue  # ověřeno → přeskočit
+            to_process.append(wf)  # změněno → re-processing (upsert drží kanonické ID)
+            changes.append(
+                {
+                    "rel_path": wf.rel_path,
+                    "kind": "modified",
+                    "old_size": row_meta["size"],
+                    "new_size": wf.size_bytes,
+                    "old_mtime": row_meta["mtime"],
+                    "new_mtime": wf.mtime.isoformat() if wf.mtime else None,
+                    "old_sha256": row_meta["sha256"],
+                }
+            )
+        # smazané soubory — v DB, ale už ve zdroji ne (walk vidí jen co existuje)
+        walked_paths = {wf.rel_path for wf in walked}
+        for rel_path in sorted(set(existing_meta) - walked_paths):
+            row_meta = existing_meta[rel_path]
+            changes.append(
+                {
+                    "rel_path": rel_path,
+                    "kind": "deleted",
+                    "old_size": row_meta["size"],
+                    "old_mtime": row_meta["mtime"],
+                    "old_sha256": row_meta["sha256"],
+                }
+            )
+        if changes:
+            truncated = len(changes) > 100
+            db.log_operation(
+                "source_modified_during_resume",
+                details={
+                    "mode": mode,
+                    "modified_count": sum(1 for c in changes if c["kind"] == "modified"),
+                    "deleted_count": sum(1 for c in changes if c["kind"] == "deleted"),
+                    "changes": changes[:100],
+                    **({"truncated": True} if truncated else {}),
+                },
+            )
+            result.modified_during_resume = len(changes)
     else:
         to_process = list(walked)
 
     skipped = total - len(to_process)  # E3 resume — hotové z předchozího běhu
+    result.skipped = skipped  # P0.1 — explicitní counter pro volající (API/CLI/web)
     if progress is not None:
         progress(skipped, total)
 
