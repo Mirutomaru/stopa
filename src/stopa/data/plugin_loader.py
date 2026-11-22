@@ -252,6 +252,11 @@ def _rlimit_factory(
     zvýšit limit se ticho ignoruje (limit může být i nižší než požadovaný).
     P4-2: ``RLIMIT_NPROC`` (fork bomb; pozor — Linux počítá per UID napříč systémem)
     a ``RLIMIT_FSIZE`` (obrovský soubor); tichá degradace jako NOFILE.
+
+    Release 2.4 CI fix: i ``RLIMIT_AS``/``RLIMIT_CPU`` degraduji ticho — hard cap
+    hostu může být nižší než požadovaný strop (např. macOS CI runner) a nechráněné
+    setrlimit hází ValueError v preexec_fn → celý dětský proces padne dřív, než
+    sandbox vůbec běží.
     """
 
     def factory() -> None:  # pragma: no cover - běží v dětském procesu
@@ -260,9 +265,15 @@ def _rlimit_factory(
         import resource
 
         limit = max_mem_mb * 1024 * 1024
-        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+        except (ValueError, OSError):
+            pass
         if cpu_seconds is not None and cpu_seconds > 0:
-            resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+            try:
+                resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+            except (ValueError, OSError):
+                pass
         try:
             resource.setrlimit(resource.RLIMIT_NOFILE, (max_fds, max_fds))
         except (ValueError, OSError):
@@ -704,7 +715,11 @@ def sandbox_exec(
 
     import signal as _signal
 
-    if os.name == "posix" and proc.returncode in (-_signal.SIGXCPU, -24):
+    # Release 2.4 CI fix: bez posix gate — testy CPU limitu běží i na Windows, kde
+    # ``signal.SIGXCPU`` neexistuje (fallback 24); reálně negativní returncode na
+    # Windows nevzniká (preexec_fn = None), takže klasifikace je tam inertní.
+    sigxcpu = getattr(_signal, "SIGXCPU", 24)
+    if proc.returncode in (-sigxcpu, -24):
         raise ValueError(
             f"sandbox překročil CPU limit ({lim.cpu_seconds} s; workdir pro debug: {wd})"
         )

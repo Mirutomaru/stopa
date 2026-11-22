@@ -94,13 +94,18 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      # weasyprint (extra [pdf]) potřebuje system pango; ostatní extras jsou čisté Python/C wheels
+      # weasyprint (extra [pdf]) potřebuje system pango; ostatní extras jsou čisté Python/C wheels.
+      # Ubuntu 26.04 runner: libgdk-pixbuf2.0-0 nahradila libgdk-pixbuf-xlib-2.0-0 → fallback níže.
       - name: System deps (weasyprint)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
-            libfontconfig1 fonts-dejavu-core
+          if ! sudo apt-get install -y --no-install-recommends \
+              libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+              libfontconfig1 fonts-dejavu-core; then
+            sudo apt-get install -y --no-install-recommends \
+              libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-xlib-2.0-0 \
+              libfontconfig1 fonts-dejavu-core
+          fi
 
       - name: Install (all extras)
         run: |
@@ -124,9 +129,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
+        # Release 2.4 CI fix: i [web] jako Linux job — portability core obsahuje
+        # sandbox testy, které importují volitelné web deps (httpx/fastapi).
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,web]"
       - name: Pytest — portability core (domain + data, bez Rust wheelu)
         run: >
           python -m pytest tests/test_p21_work_queue_domain.py
@@ -150,9 +157,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
+        # Release 2.4 CI fix: i [web] jako Linux job — portability core obsahuje
+        # sandbox testy, které importují volitelné web deps (httpx/fastapi).
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,web]"
       - name: Pytest — portability core (domain + data, bez Rust wheelu)
         run: >
           python -m pytest tests/test_p21_work_queue_domain.py
@@ -184,11 +193,24 @@ jobs:
             | sh -s -- -y --default-toolchain stable --profile minimal
           echo "PATH=$HOME/.cargo/bin:$PATH" >> "$GITHUB_ENV"
 
+      # Release 2.4 CI fix: layout manylinux image se liší verzí (cpXXX-x64 → cpXXX-cpXXX /
+      # symlinky) → robustní detekce CPython místo hardcoded cesty.
+      - name: Detect CPython in manylinux image
+        id: py
+        run: |
+          for cand in /opt/python/cp311* /usr/local/bin/python3.11 /usr/local/bin/python3; do
+            for p in $cand/bin/python $cand; do
+              if [ -x "$p" ]; then echo "py=$p" >> "$GITHUB_OUTPUT"; exit 0; fi
+            done
+          done
+          echo "::error::CPython nenalezen v manylinux image (/opt/python, /usr/local/bin)" >&2
+          exit 1
+
       # manylinux image má python v /opt/python — izolovaný venv pro gate,
       # aby parity testy běžely PŘES wheel z tohoto buildu (ne systémový core).
       - name: Build wheel + install do izolovaného venv
         run: |
-          PY=/opt/python/cp311-x64/bin/python
+          PY=${{ steps.py.outputs.py }}
           $PY -m venv /venv-p410
           /venv-p410/bin/pip install --upgrade pip
           /venv-p410/bin/pip install maturin pytest

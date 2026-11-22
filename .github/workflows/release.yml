@@ -57,6 +57,9 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y ruby
           gem install --no-document fpm
+          # Release 2.4 CI fix: Ubuntu 26.04 runner — gem bin dir není v PATH;
+          # GITHUB_PATH ho doplní pro následující kroky (fpm: command not found).
+          echo "$(gem env home)/bin" >> "$GITHUB_PATH"
 
       - name: Sestavit instalační strom (wheels)
         id: tree
@@ -123,9 +126,22 @@ jobs:
             | sh -s -- -y --default-toolchain stable --profile minimal
           echo "PATH=$HOME/.cargo/bin:$PATH" >> "$GITHUB_ENV"
 
+      # Release 2.4 CI fix: layout manylinux image se liší verzí (cpXXX-x64 → cpXXX-cpXXX /
+      # symlinky) → robustní detekce CPython místo hardcoded cesty.
+      - name: Detect CPython in manylinux image
+        id: py
+        run: |
+          for cand in /opt/python/cp311* /usr/local/bin/python3.11 /usr/local/bin/python3; do
+            for p in $cand/bin/python $cand; do
+              if [ -x "$p" ]; then echo "py=$p" >> "$GITHUB_OUTPUT"; exit 0; fi
+            done
+          done
+          echo "::error::CPython nenalezen v manylinux image (/opt/python, /usr/local/bin)" >&2
+          exit 1
+
       - name: Build wheel (${{ matrix.arch }})
         run: |
-          PY=/opt/python/cp311-x64/bin/python
+          PY=${{ steps.py.outputs.py }}
           $PY -m pip install --upgrade pip
           $PY -m pip install maturin
           cd rust
@@ -146,7 +162,7 @@ jobs:
         run: |
           ls dist-rust/
           # přesný očekávaný tag — chrání proti tichému degradaci na linux_*
-          /opt/python/cp311-x64/bin/python -c "
+          ${{ steps.py.outputs.py }} -c "
           import glob, sys
           arch = '${{ matrix.arch }}'
           suffix = f'cp310-abi3-manylinux_2_28_{arch}.whl'
@@ -162,6 +178,38 @@ jobs:
         with:
           name: rust-wheels-${{ matrix.arch }}
           path: dist-rust/*.whl
+
+  # ---------------------------------------------------------------------------
+  # P4-10 — publikace Rust wheelů jako assety GitHub Release. Actions artifact
+  # nestačí: extra `carving` v pyproject.toml pinuje přímé download URL z tohoto
+  # tagu (v2.4.0), takže bez release assetu `pip install stopa[carving]` = 404.
+  # softprops/action-gh-release na pushi v* tagu nájde/aktualizuje release podle
+  # GITHUB_REF_NAME a nahraje wheels jako assets (idempotentní při re-run).
+  # ---------------------------------------------------------------------------
+  publish-release:
+    name: Publish release (wheels → GitHub Release)
+    needs: [rust-wheels]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-wheels-x86_64
+          path: dist-rust/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-wheels-aarch64
+          path: dist-rust/
+
+      - name: Upload wheels as release assets
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-rust/*.whl
+
 
   # ---------------------------------------------------------------------------
   # AppImage — PyInstaller onedir + AppImageTool. continue-on-error: download
@@ -204,7 +252,8 @@ jobs:
             exec "$(dirname "$0")/bin/python" -m stopa.cli "$@"
           EOF
           chmod +x AppDir/AppRun
-          printf 'Name=STOPA\nComment=Forenzní workbench\nType=Application\nIcon=stopa\n' > AppDir/stopa.desktop
+          # novější appimagetool validuje [Desktop Entry] skupinu (freedesktop spec)
+          printf '[Desktop Entry]\nName=STOPA\nComment=Forenzní workbench\nType=Application\nIcon=stopa\nExec=stopa\n' > AppDir/stopa.desktop
           ./appimagetool-x86_64.AppImage AppDir stopa.AppImage
 
       - name: Upload artifact

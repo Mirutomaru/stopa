@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from test_sqlite_recover import FREEBLOCK_BYTES_PRESERVED
 
 from stopa.artifacts.sqlite_recover import recover_deleted_rows
 
@@ -52,6 +53,10 @@ def db_with_wal(tmp_path: Path) -> tuple[Path, sqlite3.Connection]:
 
 
 class TestRecoverDeletedRows:
+    @pytest.mark.skipif(
+        not FREEBLOCK_BYTES_PRESERVED,
+        reason="SQLite build vynuluje slihaný freeblock — smazané byty v souboru nejsou",
+    )
     def test_recovers_deleted_texts(self, db_with_deleted):
         arts = recover_deleted_rows(db_with_deleted)
         texts = {a.title for a in arts}
@@ -63,6 +68,10 @@ class TestRecoverDeletedRows:
         arts = recover_deleted_rows(db_with_deleted)
         assert all(a.artifact_type == "sqlite_deleted_row" for a in arts)
 
+    @pytest.mark.skipif(
+        not FREEBLOCK_BYTES_PRESERVED,
+        reason="SQLite build vynuluje slihaný freeblock — smazané byty v souboru nejsou",
+    )
     def test_details_have_source_page_rowid(self, db_with_deleted):
         arts = recover_deleted_rows(db_with_deleted)
         assert arts  # alespoň jeden obnovený řádek

@@ -1,71 +1,38 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
 # STOPA — unifikovaná forenzní workbench (R0.2 Distributivní balíčky)
-# Multi-stage build: nativní knihovny z oficiálních zdrojů → slim runtime.
+# python:3.11-bookworm + nativní libewf/libafflib pro carving (ctypes).
 # AK: image < 1.5 GB, `stopa serve` hotové k použití, EWF/TSK funkční offline.
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# STAGE 1 — builder: autotools stack + libcommon/libafflib/libewf (ctypes)
-#   STOPA načítá libewf.so + libafflib.so přes ctypes z STOPA_EWF_LIB.
-#   Buildujeme do /opt/native, aby file name odpovídal očekávání _load()
-#   ({name}.so → libewf.so / libafflib.so). Zdroje: github.com/libyal (master,
-#   --depth 1 = vždy buildable stav bez nutnosti poznat přesný release tag).
-# -----------------------------------------------------------------------------
-FROM python:3.11-bookworm AS native-builder
+# Release 2.4 CI fix: knihovny z Debian balíčků (libewf2, libafflib0v5) místo
+# source buildu — upstream github.com/libyal rozštěpil závislostní řetězec
+# (libcommon → libcfile/libcdata/...) a master už není spolehlivě buildable.
+# apt na bookworm vyřeší všechny tranzitivní závislosti; -dev balíčky dodávají
+# neversionované symlinky, které _load() očekává ({name}.so → libewf.so /
+# libafflib.so) — stejné knihovny, jaké STOPA installer používá v apt instalacích.
+FROM python:3.11-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    PREFIX=/opt/native
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential autoconf automake libtool pkg-config git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Závislostní řetězec: libcommon → (libafflib, libewf). Každá do PREFIX.
-WORKDIR /build
-
-RUN set -eux; \
-    git clone --depth 1 https://github.com/libyal/libcommon.git; \
-    cd libcommon; ./autogen.sh; \
-    ./configure --prefix=$PREFIX; make -j"$(nproc)"; make install; ldconfig
-
-RUN set -eux; \
-    export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig \
-           CPPFLAGS=-I$PREFIX/include LDFLAGS="-L$PREFIX/lib -Wl,-rpath,$PREFIX/lib"; \
-    git clone --depth 1 https://github.com/libyal/libafflib.git; \
-    cd libafflib; ./autogen.sh; \
-    ./configure --prefix=$PREFIX; make -j"$(nproc)"; make install; ldconfig
-
-RUN set -eux; \
-    export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig \
-           CPPFLAGS=-I$PREFIX/include LDFLAGS="-L$PREFIX/lib -Wl,-rpath,$PREFIX/lib"; \
-    git clone --depth 1 https://github.com/libyal/libewf.git; \
-    cd libewf; ./autogen.sh; \
-    ./configure --prefix=$PREFIX; make -j"$(nproc)"; make install; ldconfig
-
-# Zkontroluj, že oba .so existují (jinak by runtime tichounce spadl na fallback).
-RUN test -e $PREFIX/lib/libewf.so && test -e $PREFIX/lib/libafflib.so \
-    || { echo "CHYBI libewf.so nebo libafflib.so v $PREFIX/lib"; ls -la $PREFIX/lib | head; exit 1; }
-
-# -----------------------------------------------------------------------------
-# STAGE 2 — runtime: python slim + stopa[web] + sleuthkit (TSK CLI fallback)
-#   pytsk3 wheel se neinstaluje (build risk); STOPA má explicitní fallback na
-#   tsk_cli binárky z apt balíčku `sleuthkit`. EWF běží přes ctypes ze STAGE 1.
-# -----------------------------------------------------------------------------
-FROM python:3.11-slim-bookworm AS runtime
-
-ENV DEBIAN_FRONTEND=noninteractive \
+    # STOPA_EWF_LIB = adresář s libewf.so / libafflib.so (ctypes _load())
     STOPA_EWF_LIB=/opt/native/lib \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
+# Runtime deps: sleuthkit (TSK CLI fallback), ca-certificates + nativní EWF/AFFLIB.
+# --no-install-recommends drží image malý; -dev = neversionované symlinky pro _load().
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        sleuthkit ca-certificates \
+        sleuthkit ca-certificates libewf2 libafflib0v5 libewf-dev libafflib-dev \
+    # arch-safe multiarch dir (x86_64: x86_64-linux-gnu, arm64: aarch64-linux-gnu)
+    && LIBDIR=$(dpkg-architecture -qDEB_HOST_MULTIARCH) \
+    && mkdir -p /opt/native/lib \
+    && ln -sf "/usr/lib/${LIBDIR}/libewf.so" /opt/native/lib/ \
+    && ln -sf "/usr/lib/${LIBDIR}/libafflib.so" /opt/native/lib/ \
+    # kontrola, že oba .so existují (jinak by runtime ticho spadl na fallback)
+    && test -e /opt/native/lib/libewf.so && test -e /opt/native/lib/libafflib.so \
+    || { echo "CHYBI libewf.so nebo libafflib.so v /opt/native/lib"; ls -la /opt/native/lib; exit 1; } \
+    && ldconfig \
     && rm -rf /var/lib/apt/lists/*
-
-# Nativní knihovny z builderu.
-COPY --from=native-builder /opt/native/ /opt/native/
-RUN ldconfig /opt/native/lib || true
 
 WORKDIR /app
 COPY pyproject.toml README.md ./

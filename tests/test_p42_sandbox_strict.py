@@ -128,7 +128,7 @@ def test_rlimit_factory_sets_nproc_and_fsize(tmp_path):
 
 @pytest.mark.skipif(os.name != "posix", reason="resource modul je jen pro POSIX")
 def test_fsize_enforced_efbig(tmp_path):
-    """Živé vynucení: zápis 3 MB pod RLIMIT_FSIZE=1 MB → EFBIG (errno 28)."""
+    """Živé vynucení: zápis 3 MB pod RLIMIT_FSIZE=1 MB → EFBIG (errno 27)."""
     target = tmp_path / "fsize_probe.bin"
     code = (
         "import sys\n"
@@ -146,7 +146,8 @@ def test_fsize_enforced_efbig(tmp_path):
         [sys.executable, "-c", code], capture_output=True, text=True, timeout=120, check=False
     )
     assert proc.returncode == 0, f"exit={proc.returncode} stderr={proc.stderr}"
-    # Linux: EFBIG=27 (jen BSD/macOS sdílejí s ENOSPC hodnotu 28); bez limitu by zápis prošel (NO-LIMIT)
+    # EFBIG=27 na Linuxu i macOS (Darwin XNU errno.h); jen FreeBSD sdílí s ENOSPC 28.
+    # Bez limitu by zápis prošel (NO-LIMIT).
     assert "EFBIG:27" in proc.stdout, proc.stdout
 
 
