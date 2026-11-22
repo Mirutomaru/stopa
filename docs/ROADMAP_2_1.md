@@ -184,6 +184,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > (alive/expired/unknown, LEASE_WINDOW=8; atomický beat BEGIN IMMEDIATE + max+1), web poller auto-heartbeat
 > (STOPA_NODE_ID/hostname), `GET /api/registry` vrací lease mapu, CLI `stopa registry --heartbeat NODE`;
 > W4 `docs/MULTI_NODE.md`; 24 testů (i na minimálním profilu). P4-10: Rust distribuce — PyO3 `abi3-py310` → jeden wheel per platforma pro Python ≥ 3.10 (`cp310-abi3-manylinux_2_28_{x86_64,aarch64}.whl`), extra `carving` = pinned direct-URL release assety (v2.4.0; jinde fallback na čisté Python), CI parity gate job `rust-parity` (manylinux_2_28 kontejner: maturin build + wheel do izolovaného venv → F2.1 parity testy) a release job `rust-wheels` (matrix x86_64 nativně / aarch64 cross `maturin --zig`, tag verify); distribuce doložena v PLATFORM_MATRIX.md. **Zbývá 0 položek — P4 roadmap kompletní (10/10).**
+> **Stav 2026-11-22: všech 10 položek hotovo ✅** (SHAs v `STOPA_CHANGELOG.md` / SKILL) — Release STOPA 2.4, suite **5155p/1s**.
 
 | # | Položka | Priorita | Velikost | Pozn. |
 |---|---------|----------|----------|-------|
