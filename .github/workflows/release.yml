@@ -74,6 +74,9 @@ jobs:
           cp dist/wheels/*.whl dist/pkg/usr/lib/stopa/wheels/
           echo "tree_ready=1" >> "$GITHUB_OUTPUT"
 
+      # vlna 4: fpm (Thor) přestane parsovát optiony na prvním pozičním argumentu
+      # → --force/-p musí být PŘED zdrojem dist/pkg=/, jinak se čtou jako cesty
+      # ("Cannot package the path './--force'").
       - name: Build .deb (fpm + postinst venv)
         run: |
           fpm -s dir -t deb \
@@ -82,9 +85,11 @@ jobs:
             --depends python3 --depends python3-venv --depends sleuthkit \
             --after-install packaging/postinst.sh \
             --description "STOPA — unifikovaná forenzní workbench" \
-            dist/pkg=/ --force \
-            -p dist/stopa_${{ steps.ver.outputs.tag }}_amd64.deb
+            --force \
+            -p dist/stopa_${{ steps.ver.outputs.tag }}_amd64.deb \
+            dist/pkg=/
 
+      # vlna 4: stejné pořadí optionů jako u .deb (viz výše)
       - name: Build .rpm (fpm + postinst venv)
         run: |
           fpm -s dir -t rpm \
@@ -93,8 +98,9 @@ jobs:
             --depends python3 --depends sleuthkit \
             --after-install packaging/postinst.sh \
             --description "STOPA — unifikovaná forenzní workbench" \
-            dist/pkg=/ --force \
-            -p dist/stopa-${{ steps.ver.outputs.tag }}-x86_64.rpm
+            --force \
+            -p dist/stopa-${{ steps.ver.outputs.tag }}-x86_64.rpm \
+            dist/pkg=/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -264,8 +270,9 @@ jobs:
           EOF
           chmod +x AppDir/AppRun
           # novější appimagetool validuje [Desktop Entry] skupinu (freedesktop spec);
-          # Release 2.4 CI fix: desktop-file-validate dále vyžaduje Categories=
-          printf '[Desktop Entry]\nName=STOPA\nComment=Forenzní workbench\nType=Application\nIcon=stopa\nExec=stopa\nCategories=Utility;Forensics;\n' > AppDir/stopa.desktop
+          # Release 2.4 CI fix vlna 4: desktop-file-validate akceptuje jen
+          # ZAREGISTROVANÉ kategorie — `Forensics` ve specu neexistuje → Utility.
+          printf '[Desktop Entry]\nName=STOPA\nComment=Forenzní workbench\nType=Application\nIcon=stopa\nExec=stopa\nCategories=Utility;\n' > AppDir/stopa.desktop
           ./appimagetool-x86_64.AppImage AppDir stopa.AppImage
 
       - name: Upload artifact
