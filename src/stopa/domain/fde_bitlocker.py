@@ -44,13 +44,15 @@ from __future__ import annotations
 import hashlib
 import os
 import struct
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 # sdílená výjimka + konvence z fde.py (jeden typ pro všechny FDE formáty)
 from stopa.domain.fde import DEFAULT_ITERATIONS, FdeError
+
+# P0.3 — jednotná správa dočasných dešifrovaných obrazů (izolace, registry, audit)
+from stopa.domain.temp_images import EncryptedTempImage, release_temp
 
 MAGIC = b"STOPABLK"
 VERSION = 1
@@ -204,7 +206,8 @@ def decrypt_block_stream(
     obrazu (XTS je sektorová šifra — tweak = globální číslo sektoru).
 
     ``progress`` — volitelný callback ``(zpracováno_bajtů, celkem_bajtů)``.
-    Vrací ``(cesta_k_tmp_plaintextu, hlavička)``; volající tmp soubor smaže.
+    Vrací ``(cesta_k_tmp_plaintextu, hlavička)``; volající objekt uvolní přes
+    ``release_temp`` (P0.3 — zero-fill + unlink z jednotného registru).
     """
     if chunk_size % SECTOR_SIZE != 0:
         raise FdeError(f"chunk_size musí být násobkem sektoru {SECTOR_SIZE} B")
@@ -224,30 +227,37 @@ def decrypt_block_stream(
     if len(stored_key) != header.key_len or derived != stored_key:
         raise FdeError("Špatné recovery key / heslo — odvozený XTS klíč neodpovídá")
 
-    fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-block-")
-    try:
-        with open(image_path, "rb") as src, os.fdopen(fd, "wb") as dst:
-            # layout: [36 B hlavička][XTS klíč][ciphertext] → seek za uložený klíč
-            total = os.fstat(src.fileno()).st_size - HEADER_SIZE - header.key_len
-            src.seek(HEADER_SIZE + header.key_len)
-            base_sector = 0
-            written = 0
-            while True:
-                chunk = src.read(chunk_size)
-                if not chunk:
-                    break
-                pt = _xts_transform(chunk, derived, encrypt=False, base_sector=base_sector)
-                dst.write(pt)
-                written += len(pt)
-                base_sector += len(chunk) // SECTOR_SIZE
-                if progress is not None:
-                    progress(written, total)
-    except FdeError:
-        Path(tmp_name).unlink(missing_ok=True)
-        raise
-    except Exception as e:  # cryptography (ValueError apod.) + IO
-        Path(tmp_name).unlink(missing_ok=True)
-        if isinstance(e, OSError):
-            raise FdeError(f"Streaming dešifrování STOPABLOCK selhalo (IO): {e}") from e
-        raise FdeError(f"AES-XTS dešifrování selhalo: {e}") from e
-    return Path(tmp_name), header
+    # P0.3 — jednotná správa dočasných obrazů (izolace, registry, audit);
+    # detach() předá ownership volajícímu (release_temp)
+    tmp_path: Path | None = None
+    with EncryptedTempImage(prefix="stopa-block-", suffix=".img", owner="bitlocker_stream") as t:
+        try:
+            with open(image_path, "rb") as src, os.fdopen(t.take_fd(), "wb") as dst:
+                # layout: [36 B hlavička][XTS klíč][ciphertext] → seek za uložený klíč
+                total = os.fstat(src.fileno()).st_size - HEADER_SIZE - header.key_len
+                src.seek(HEADER_SIZE + header.key_len)
+                base_sector = 0
+                written = 0
+                while True:
+                    chunk = src.read(chunk_size)
+                    if not chunk:
+                        break
+                    pt = _xts_transform(chunk, derived, encrypt=False, base_sector=base_sector)
+                    dst.write(pt)
+                    written += len(pt)
+                    base_sector += len(chunk) // SECTOR_SIZE
+                    if progress is not None:
+                        progress(written, total)
+        except FdeError:
+            release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+            raise
+        except Exception as e:  # cryptography (ValueError apod.) + IO
+            release_temp(t.path)
+            if isinstance(e, OSError):
+                raise FdeError(f"Streaming dešifrování STOPABLOCK selhalo (IO): {e}") from e
+            raise FdeError(f"AES-XTS dešifrování selhalo: {e}") from e
+
+        # ownership přechází na volajícího — image_pipeline uvolní přes release_temp po zpracování
+        tmp_path = t.detach()
+    assert tmp_path is not None  # detach() se vykoná jen na úspěšné cestě (jinak raise v with)
+    return tmp_path, header

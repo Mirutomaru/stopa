@@ -40,6 +40,7 @@ _log = logging.getLogger("stopa.cli")
 from stopa.domain.investigation_workspace import TASK_STATUSES  # P2-4 — workspace task stavy
 from stopa.domain.mem_forensics import DEFAULT_PLUGINS as _VOL_DEFAULT_PLUGINS
 from stopa.domain.profiles import PROFILES
+from stopa.domain.temp_images import reap_orphans  # P0.3 — obnova osiřelých dešifrovaných obrazů
 from stopa.domain.write_blocker import known_vendor_ids  # F5.4 — write-blocker API
 
 # P1-4 — helpery přesunuty do cli/_util.py (re-export pro kompatibilitní povrch)
@@ -1189,6 +1190,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"stopa: {exc}", file=sys.stderr)
         return 2
     set_lang(lang)
+    # P0.3 — obnova po crashu: jednou na startu procesů uklidit osiřelé dešifrované
+    # obrazy (idempotentní, levné; nesmí zaslinit původní příkaz)
+    try:
+        reap_orphans()
+    except OSError as exc:
+        _log.debug("reap_orphans na startu selhalo (nekritické): %s", exc)
     parser = build_parser()
     args = parser.parse_args(rest)
     return args.func(args)

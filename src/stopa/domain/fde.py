@@ -29,6 +29,9 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
+# P0.3 — jednotná správa dočasných dešifrovaných obrazů (izolace, registry, audit)
+from stopa.domain.temp_images import EncryptedTempImage, release_temp
+
 MAGIC = b"STOPAFDE"
 VERSION = 1
 DEFAULT_ITERATIONS = 4096
@@ -161,11 +164,10 @@ def decrypt_image_stream(image_path: Path | str, password: str | bytes) -> tuple
     PKCS#7 padding se ověří na konci: poslední blok se drží v bufferu, až dokud
     ``finalize()`` nedokončí dešifrování (padding platí jen pro konec plaintextu).
 
-    Vrací ``(cesta_k_tmp_plaintextu, hlavička)``; volající tmp soubor smaže.
+    Vrací ``(cesta_k_tmp_plaintextu, hlavička)``; volající objekt uvolní přes
+    ``release_temp`` (P0.3 — zero-fill + unlink z jednotného registru).
     Chyby: neplatná hlavička / špatné heslo / IO → ``FdeError``.
     """
-    import tempfile
-
     image_path = Path(image_path).expanduser()
     with open(image_path, "rb") as f:
         head = f.read(HEADER_SIZE)
@@ -179,37 +181,44 @@ def decrypt_image_stream(image_path: Path | str, password: str | bytes) -> tuple
     except ImportError as e:  # volitelná závislost [fde]
         raise FdeError("Chybí AES — nainstalujte extra [fde] (cryptography)") from e
 
-    fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-fde-")
-    try:
-        dec = Cipher(algorithms.AES(key), modes.CBC(header.iv)).decryptor()
-        tail = bytearray()  # drží poslední blok pro PKCS#7 ověření
-        with open(image_path, "rb") as src, os.fdopen(fd, "wb") as dst:
-            src.seek(HEADER_SIZE)
-            while True:
-                chunk = src.read(STREAM_CHUNK)
-                if not chunk:
-                    break
-                tail += dec.update(chunk)
-                # vše kromě posledních 16 B (padding se ověří až po finalize)
-                if len(tail) > 16:
-                    dst.write(bytes(tail[:-16]))
-                    del tail[:-16]
-            tail += dec.finalize()
-        plaintext_tail = _unpad_pkcs7(bytes(tail))
-    except FdeError:
-        Path(tmp_name).unlink(missing_ok=True)
-        raise
-    except Exception as e:  # cryptography zvedá různé typy (ValueError apod.) + IO
-        Path(tmp_name).unlink(missing_ok=True)
-        if isinstance(e, OSError):
-            raise FdeError(f"Streaming dešifrování FDE selhalo (IO): {e}") from e
-        raise FdeError(f"AES dešifrování selhalo: {e}") from e
+    # P0.3 — jednotná správa dočasných obrazů: izolovaný dir 0700, soubor 0600,
+    # registry + audit; detach() na konci předá ownership volajícímu (release_temp)
+    tmp_path: Path | None = None
+    with EncryptedTempImage(prefix="stopa-fde-", suffix=".img", owner="fde_stream") as t:
+        try:
+            dec = Cipher(algorithms.AES(key), modes.CBC(header.iv)).decryptor()
+            tail = bytearray()  # drží poslední blok pro PKCS#7 ověření
+            with open(image_path, "rb") as src, os.fdopen(t.take_fd(), "wb") as dst:
+                src.seek(HEADER_SIZE)
+                while True:
+                    chunk = src.read(STREAM_CHUNK)
+                    if not chunk:
+                        break
+                    tail += dec.update(chunk)
+                    # vše kromě posledních 16 B (padding se ověří až po finalize)
+                    if len(tail) > 16:
+                        dst.write(bytes(tail[:-16]))
+                        del tail[:-16]
+                tail += dec.finalize()
+            plaintext_tail = _unpad_pkcs7(bytes(tail))
+        except FdeError:
+            release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+            raise
+        except Exception as e:  # cryptography zvedá různé typy (ValueError apod.) + IO
+            release_temp(t.path)
+            if isinstance(e, OSError):
+                raise FdeError(f"Streaming dešifrování FDE selhalo (IO): {e}") from e
+            raise FdeError(f"AES dešifrování selhalo: {e}") from e
 
-    # doplnit odpaddingovaný konec — soubor obsahuje všechny bloky kromě posledního
-    try:
-        with open(tmp_name, "ab") as f:
-            f.write(plaintext_tail)
-    except OSError as e:
-        Path(tmp_name).unlink(missing_ok=True)
-        raise FdeError(f"Streaming dešifrování FDE selhalo (IO): {e}") from e
-    return Path(tmp_name), header
+        # doplnit odpaddingovaný konec — soubor obsahuje všechny bloky kromě posledního
+        try:
+            with open(t.path, "ab") as f:
+                f.write(plaintext_tail)
+        except OSError as e:
+            release_temp(t.path)
+            raise FdeError(f"Streaming dešifrování FDE selhalo (IO): {e}") from e
+
+        # ownership přechází na volajícího — image_pipeline uvolní přes release_temp po zpracování
+        tmp_path = t.detach()
+    assert tmp_path is not None  # detach() se vykoná jen na úspěšné cestě (jinak raise v with)
+    return tmp_path, header

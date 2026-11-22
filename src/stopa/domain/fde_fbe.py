@@ -35,6 +35,9 @@ from pathlib import Path
 # sdílená výjimka + konvence z fde.py (jeden typ pro všechny FDE formáty)
 from stopa.domain.fde import DEFAULT_ITERATIONS, FdeError
 
+# P0.3 — jednotná správa dočasných dešifrovaných obrazů (izolace, registry, audit)
+from stopa.domain.temp_images import EncryptedTempImage, release_temp
+
 MAGIC = b"STOPAFBE"
 VERSION = 1
 SECTOR_SIZE = 512  # dm-crypt sektorová velikost
@@ -176,11 +179,10 @@ def decrypt_fbe_stream(
     XTS je sektorová šifra, tweak = globální číslo sektoru (``base_sector``).
     Peak paměť ≈ 2×chunk bez ohledu na velikost obrazu.
 
-    Vrací ``(cesta_k_tmp_plaintextu, hlavička)``; volající tmp soubor smaže.
+    Vrací ``(cesta_k_tmp_plaintextu, hlavička)``; volající objekt uvolní přes
+    ``release_temp`` (P0.3 — zero-fill + unlink z jednotného registru).
     Chyby: neplatná hlavička / špatné heslo / IO → ``FdeError``.
     """
-    import tempfile
-
     image_path = Path(image_path).expanduser()
     with open(image_path, "rb") as f:
         head = f.read(HEADER_SIZE)
@@ -194,24 +196,30 @@ def decrypt_fbe_stream(
     if derived != header.key:
         raise FdeError("Špatné heslo — odvozený XTS klíč neodpovídá uloženému")
 
-    fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-fbe-")
-    try:
-        with open(image_path, "rb") as src, os.fdopen(fd, "wb") as dst:
-            src.seek(HEADER_SIZE)  # ciphertext začíná za hlavičkou
-            base_sector = 0
-            while True:
-                chunk = src.read(STREAM_CHUNK)
-                if not chunk:
-                    break
-                pt = _xts_transform(chunk, header.key, encrypt=False, base_sector=base_sector)
-                dst.write(pt)
-                base_sector += len(chunk) // SECTOR_SIZE
-    except FdeError:
-        Path(tmp_name).unlink(missing_ok=True)  # odstranit částečný plaintext
-        raise
-    except Exception as e:  # cryptography zvedá různé typy (ValueError apod.) + IO
-        Path(tmp_name).unlink(missing_ok=True)
-        if isinstance(e, OSError):
-            raise FdeError(f"Streaming dešifrování FBE selhalo (IO): {e}") from e
-        raise FdeError(f"AES-XTS dešifrování selhalo: {e}") from e
-    return Path(tmp_name), header
+    # P0.3 — jednotná správa dočasných obrazů (izolace 0700/0600, registry, audit);
+    # detach() předá ownership volajícímu (release_temp)
+    tmp_path: Path | None = None
+    with EncryptedTempImage(prefix="stopa-fbe-", suffix=".img", owner="fbe_stream") as t:
+        try:
+            with open(image_path, "rb") as src, os.fdopen(t.take_fd(), "wb") as dst:
+                src.seek(HEADER_SIZE)  # ciphertext začíná za hlavičkou
+                base_sector = 0
+                while True:
+                    chunk = src.read(STREAM_CHUNK)
+                    if not chunk:
+                        break
+                    pt = _xts_transform(chunk, header.key, encrypt=False, base_sector=base_sector)
+                    dst.write(pt)
+                    base_sector += len(chunk) // SECTOR_SIZE
+        except FdeError:
+            release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+            raise
+        except Exception as e:  # cryptography zvedá různé typy (ValueError apod.) + IO
+            release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+            if isinstance(e, OSError):
+                raise FdeError(f"Streaming dešifrování FBE selhalo (IO): {e}") from e
+            raise FdeError(f"AES-XTS dešifrování selhalo: {e}") from e
+        tmp_path = t.detach()  # ownership → volající; soubor zůstává pro pipeline
+
+    assert tmp_path is not None  # detach() se vykoná jen na úspěšné cestě (jinak raise v with)
+    return tmp_path, header

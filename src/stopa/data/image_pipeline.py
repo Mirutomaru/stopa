@@ -33,6 +33,7 @@ from stopa.data.tsk import (
 from stopa.domain.carving import carve_file
 from stopa.domain.image_types import detect_image_type, filesystem_fstype, is_container
 from stopa.domain.signatures import detect_signature
+from stopa.domain.temp_images import EncryptedTempImage, TempImageError, release_temp
 from stopa.models import Artifact, FileRecord, ProcessingProfile
 
 _log = logging.getLogger(__name__)
@@ -105,19 +106,22 @@ def process_disk_image(
                 "nedostupné (nainstalujte runtime knihovny)"
             )
             return summary
-        import tempfile
-
-        fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-ewf-")
-        os.close(fd)
-        extracted_raw = Path(tmp_name)
+        # P0.3 — jednotná správa dočasných obrazů (izolace 0700/0600, registry, audit);
+        # detach() předá ownership volajícímu (release_temp v cleanup níže)
+        ctype = summary.image_type or "unknown"  # typ je známy (is_container guard výše)
         try:
-            # STP-021 — stream po 1 MiB chunkách (RAM peak = chunka, ne celý obraz);
-            # volitelný byte-level progress callback pro Processing Monitor.
-            stream_to_raw(image_path, summary.image_type, extracted_raw, extract_progress)
-        except EwfError as e:
-            summary.errors.append(f"Čtení kontejneru ({summary.image_type}): {e}")
+            with EncryptedTempImage(prefix="stopa-ewf-", suffix=".img", owner="ewf") as t:
+                extracted_raw = t.path
+                # STP-021 — stream po 1 MiB chunkách (RAM peak = chunka, ne celý obraz);
+                # volitelný byte-level progress callback pro Processing Monitor.
+                try:
+                    stream_to_raw(image_path, ctype, extracted_raw, extract_progress)
+                except EwfError as e:
+                    raise TempImageError(f"Čtení kontejneru ({ctype}): {e}") from e
+                work_path = t.detach()  # ownership → konec funkce (release_temp níže)
+        except TempImageError as e:
+            summary.errors.append(str(e))
             return summary
-        work_path = extracted_raw
 
     # 2) particie (TSK mmls) — defenzivně
     try:
@@ -220,29 +224,12 @@ def process_disk_image(
     # 6) cleanup extrahovaného RAW (E01/AFF4 kontejner) — TSK už s ním hotovo
     if extracted_raw is not None and extracted_raw.exists():
         try:
-            extracted_raw.unlink()
+            release_temp(extracted_raw)  # P0.3 — zero-fill + unlink z jednotného registru
         except OSError as e:
             _log.debug("cleanup extrahovaného obrazu %s selhal: %s", extracted_raw, e)
 
     db.commit()
     return summary
-
-
-def _fde_plaintext_to_tmp(plaintext: bytes) -> tuple[Path | None, str]:
-    """Zapíše dešifrovaný plaintext do dočasného souboru pro TSK pipeline.
-
-    Vrací ``(cesta, "")`` při úspěchu nebo ``(None, popis_chyby)`` při selhání.
-    TSK čte z cesty (ne z paměti), takže plaintext musí být na disku.
-    """
-    import tempfile
-
-    try:
-        fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-fde-")
-        os.close(fd)
-        Path(tmp_name).write_bytes(plaintext)
-        return Path(tmp_name), ""
-    except OSError as e:
-        return None, f"FDE plaintext zápis: {e}"
 
 
 def _fde_key_material(password: str | None, keyfile: Path | str | None) -> bytes:
@@ -292,7 +279,7 @@ def process_mobile_image(
         is_bitlocker_image,
     )
     from stopa.domain.fde_fbe import decrypt_fbe_stream, is_fbe_image
-    from stopa.domain.fde_luks import decrypt_luks, is_luks_image
+    from stopa.domain.fde_luks import decrypt_luks_stream, is_luks_image
 
     image_path = Path(image_path).expanduser()
     summary = ImageSummary()
@@ -320,15 +307,22 @@ def process_mobile_image(
             return summary
         fde_meta = ("fde", f"FBE obraz (fs={header.fs_type}) — AES-XTS, dešifrován heslem")
     elif is_luks_image(head):
-        # FÁZE B2 — LUKS/dm-crypt (cryptsetup, vyžaduje root + loop device)
+        # FÁZE B2 + P1.1 — LUKS/dm-crypt (cryptsetup, root + loop device): streamované
+        # dočasným obrazem — peak RAM ≈ 4 MiB chunk, ne celý oddíl (dříve read_bytes)
         try:
-            plaintext, header = decrypt_luks(image_path, password=password, keyfile=keyfile)
+            header, chunks = decrypt_luks_stream(image_path, password=password, keyfile=keyfile)
+            with EncryptedTempImage(prefix="stopa-luks-", suffix=".img", owner="luks_stream") as t:
+                # P0.3 — jednotná správa dočasných obrazů (izolace 0700/0600, registry, audit);
+                # při výjimce __exit__ uklidí částečný plaintext (zero-fill + unlink)
+                try:
+                    with os.fdopen(t.take_fd(), "wb") as dst:
+                        for chunk in chunks:
+                            dst.write(chunk)
+                except OSError as e:
+                    raise FdeError(f"Zápis dešifrovaného LUKS oddílu selhal: {e}") from e
+                work_path = t.detach()  # ownership → konec funkce (release_temp níže)
         except FdeError as e:
             summary.errors.append(f"LUKS unlock selhal: {e}")
-            return summary
-        work_path, desc = _fde_plaintext_to_tmp(plaintext)
-        if work_path is None:
-            summary.errors.append(desc)
             return summary
         fde_meta = ("luks", f"LUKS v{header.version} obraz — dešifrován cryptsetup")
     elif is_bitlocker_image(head):
@@ -396,7 +390,12 @@ def process_mobile_image(
         inner = process_disk_image(db, source_id, work_path, profile, carve_free=carve_free)
     finally:
         if work_path != image_path and work_path.exists():
-            work_path.unlink(missing_ok=True)
+            # P0.3 — zero-fill + unlink z jednotného registru (idempotentní);
+            # cleanup nesmí maskovat výjimku z pipeline → jen debug log
+            try:
+                release_temp(work_path)
+            except OSError as e:
+                _log.debug("cleanup dešifrovaného obrazu %s selhal: %s", work_path, e)
 
     # sloučí výsledky (FDE metadata + vnitřní disk image výsledek)
     summary.partitions = inner.partitions

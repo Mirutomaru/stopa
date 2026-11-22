@@ -34,6 +34,9 @@ def cmd_decrypt(args: argparse.Namespace) -> int:
         is_bitlocker_image,
     )
 
+    # P0.3 — jednotná správa dočasných dešifrovaných obrazů (registry + audit)
+    from stopa.domain.temp_images import release_temp
+
     img_path = Path(args.image).expanduser()
     if not img_path.is_file():
         print(f"Obraz neexistuje: {img_path}", file=sys.stderr)
@@ -56,7 +59,12 @@ def cmd_decrypt(args: argparse.Namespace) -> int:
                 print("Zadejte --recovery-key nebo --password", file=sys.stderr)
                 return 2
             tmp_path, header = decrypt_block_stream(img_path, cred)
-            tmp_path.replace(out_path)
+            try:
+                tmp_path.replace(out_path)
+            except OSError:
+                release_temp(tmp_path)  # P0.3 — plaintext uvolnit z registru (zero-fill + unlink)
+                raise
+            release_temp(tmp_path)  # P0.3 — po replace() soubor pryč, zbývá auditní registrace
             size = out_path.stat().st_size
             desc = f"STOPABLOCK ({header.fs_type}, AES-XTS-{header.key_len // 2}) — dešifrováno {size / 1e6:.2f} MB"
         elif args.type == "bitlocker":
@@ -64,7 +72,12 @@ def cmd_decrypt(args: argparse.Namespace) -> int:
                 print("Chybí libbde (nainstalujte runtime knihovnu — viz STOPA_BDE_LIB)", file=sys.stderr)
                 return 3
             res = bde_fvde.decrypt_bitlocker(img_path, password=args.password, recovery_key=args.recovery_key)
-            res.plaintext_path.replace(out_path)
+            try:
+                res.plaintext_path.replace(out_path)
+            except OSError:
+                release_temp(res.plaintext_path)  # P0.3 — plaintext uvolnit z registru (zero-fill + unlink)
+                raise
+            release_temp(res.plaintext_path)  # P0.3 — po replace() soubor pryč, zbývá auditní registrace
             size = out_path.stat().st_size
             desc = f"{res.description} — {size / 1e6:.2f} MB"
         elif args.type == "filevault":
@@ -75,7 +88,12 @@ def cmd_decrypt(args: argparse.Namespace) -> int:
                 print("FileVault vyžaduje --password", file=sys.stderr)
                 return 2
             res = bde_fvde.decrypt_filevault(img_path, password=args.password)
-            res.plaintext_path.replace(out_path)
+            try:
+                res.plaintext_path.replace(out_path)
+            except OSError:
+                release_temp(res.plaintext_path)  # P0.3 — plaintext uvolnit z registru (zero-fill + unlink)
+                raise
+            release_temp(res.plaintext_path)  # P0.3 — po replace() soubor pryč, zbývá auditní registrace
             size = out_path.stat().st_size
             desc = f"{res.description} — {size / 1e6:.2f} MB"
         else:

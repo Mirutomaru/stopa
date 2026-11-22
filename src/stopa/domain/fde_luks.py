@@ -26,17 +26,20 @@ import logging
 import os
 import shutil
 import subprocess
-import tempfile
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-# sdílená výjimka z fde.py (aby konzument měl jeden typ pro všechny FDE formáty)
+# sdílená výjimka + jednotná správa dočasných dešifrovaných obrazů (P0.3)
 from stopa.domain.fde import FdeError
+from stopa.domain.temp_images import temp_secret_file
 
 _log = logging.getLogger(__name__)
 
 LUKS_MAGIC = b"LUKS\xba\xbe"  # 6 B na offsetu 0
 HEADER_SIZE_V1 = 4096  # LUKS1 hlavička (data area začíná za ní)
+# P1.1 — streamované čtení /dev/mapper: peak RAM ≈ chunk, ne celý oddíl (dříve read_bytes())
+LUKS_STREAM_CHUNK = 4 * 1024 * 1024  # výchozí 4 MiB (nastavitelné parametrem)
 
 
 @dataclass(frozen=True)
@@ -90,19 +93,42 @@ def cryptsetup_available() -> bool:
     return _find_cryptsetup() is not None
 
 
-def decrypt_luks(
+def _luks_open(image_path: Path, cs: str, key_opt: list[str], name: str) -> None:
+    """``cryptsetup open --type luks``; selhání → ``FdeError`` s posledním řádkem stderr.
+
+    P0.2 — do chybové zprávy se nedostává passphrase (jen typ chyby + stderr,
+    který u keyfile obsahuje cestu, ne obsah).
+    """
+    try:
+        subprocess.run(
+            [cs, "open", "--type", "luks", *key_opt, str(image_path), name],
+            check=True, capture_output=True, text=True, timeout=600,
+        )
+    except subprocess.CalledProcessError as e:
+        err = (e.stderr or "").strip().splitlines()[-1] if e.stderr else str(e)
+        raise FdeError(f"cryptsetup open selhalo: {err}") from e
+
+
+def _luks_close(cs: str, name: str) -> None:
+    """Zavře dm-crypt mapper (ignoruje chyby — mapper může být už pryč)."""
+    try:
+        subprocess.run([cs, "close", name], check=False, capture_output=True, timeout=30)
+    except Exception as e:  # noqa: BLE001 — cleanup, nekritické
+        _log.debug("cryptsetup close %s selhalo (nekritické): %s", name, e)
+
+
+def decrypt_luks_stream(
     image_path: Path | str,
     password: str | bytes | None = None,
     keyfile: Path | str | None = None,
-) -> tuple[bytes, LUKSHeader]:
-    """Dešifruje LUKS obraz → (plaintext, hlavička).
+    chunk_size: int = LUKS_STREAM_CHUNK,
+) -> tuple[LUKSHeader, Iterator[bytes]]:
+    """P1.1 — streamované dešifrování LUKS → ``(hlavička, iterátor_chunků)``.
 
-    ``password`` — passphrase (str se kóduje UTF-8); ``keyfile`` — cesta ke klíči.
-    Volá ``cryptsetup open --type luks`` + čte /dev/mapper/<name>. Vyžaduje root
-    + loop device; chybějící binárka / selhání → ``FdeError`` srozumitelně.
-
-    Plaintext se vrací jako bytes (celý dešifrovaný datový oddíl). Pro velké obrazy
-    volající může preferovat streamování — tohle je jednoduchá reference.
+    Peak RAM ≈ ``chunk_size`` (výchozí 4 MiB), ne velikost celého oddílu
+    (dříve ``mapper.read_bytes()`` = celý obraz v RAM). Mapper se zavře při
+    vyčerpání i při výjimce (finally v generátoru); dočasný keyfile passphrase
+    má garantovaný cleanup v kontextu :func:`temp_secret_file` (P0.2).
     """
     image_path = Path(image_path).expanduser()
     if not image_path.exists():
@@ -124,38 +150,56 @@ def decrypt_luks(
             raise FdeError(f"Klíčový soubor neexistuje: {kf}")
         key_opt = ["--key-file", str(kf)]
     elif password is not None:
-        # passphrase přes dočasný klíčový soubor (cryptsetup čte z file, ne stdin)
-        pw_bytes = password.encode("utf-8") if isinstance(password, str) else password
-        fd, tmp_key = tempfile.mkstemp(prefix="stopa-luks-key-", suffix=".bin")
-        try:
-            os.write(fd, pw_bytes + b"\n" if not pw_bytes.endswith(b"\n") else pw_bytes)
-            os.close(fd)
-            key_opt = ["--key-file", tmp_key]
-        except OSError as e:
-            os.close(fd)
-            raise FdeError(f"Zápis dočasného klíče selhal: {e}") from e
+        # P0.2 — passphrase v dočasném keyfile (práva 0600, izolovaný dir),
+        # životnost minimalizovaná na volání open; cleanup garantovaný kontextem
+        pw_bytes = password.encode("utf-8") if isinstance(password, str) else bytes(password)
+        with temp_secret_file(prefix="stopa-luks-key-", suffix=".bin", owner="fde_luks") as kf_path:
+            try:
+                kf_path.write_bytes(pw_bytes if pw_bytes.endswith(b"\n") else pw_bytes + b"\n")
+            except OSError as e:
+                raise FdeError(f"Zápis dočasného klíče selhal: {e}") from e
+            key_opt = ["--key-file", str(kf_path)]
+            _luks_open(image_path, cs, key_opt, name)
+    else:
+        # bez hesla i keyfile — cryptsetup selže srozumitelně (chybějící vstup)
+        _luks_open(image_path, cs, key_opt, name)
 
+    mapper = Path(f"/dev/mapper/{name}")
+    if not mapper.exists():
+        _luks_close(cs, name)
+        raise FdeError(f"Mapper /dev/mapper/{name} neexistuje po open")
+
+    def _chunks() -> Iterator[bytes]:
+        try:
+            with open(mapper, "rb") as f:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break  # korektní EOF — čtení do konce data area
+                    yield chunk
+        finally:
+            _luks_close(cs, name)
+
+    return header, _chunks()
+
+
+def decrypt_luks(
+    image_path: Path | str, password: str | bytes | None = None, keyfile: Path | str | None = None
+) -> tuple[bytes, LUKSHeader]:
+    """Dešifruje LUKS obraz → (plaintext, hlavička).
+
+    ``password`` — passphrase (str se kóduje UTF-8); ``keyfile`` — cesta ke klíči.
+    Volá ``cryptsetup open --type luks`` + čte /dev/mapper/<name>. Vyžaduje root
+    + loop device; chybějící binárka / selhání → ``FdeError`` srozumitelně.
+
+    P1.1 — implementováno přes :func:`decrypt_luks_stream` (výchozí chunk 4 MiB).
+    Pro velké obrazy použijte stream verzi přímo a pište do souboru, ne do RAM.
+    """
+    header, chunks = decrypt_luks_stream(image_path, password=password, keyfile=keyfile)
+    out = bytearray()
     try:
-        subprocess.run(
-            [cs, "open", "--type", "luks", *key_opt, str(image_path), name],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        mapper = Path(f"/dev/mapper/{name}")
-        if not mapper.exists():
-            raise FdeError(f"Mapper /dev/mapper/{name} neexistuje po open")
-        plaintext = mapper.read_bytes()
-    except subprocess.CalledProcessError as e:
-        err = (e.stderr or "").strip().splitlines()[-1] if e.stderr else str(e)
-        raise FdeError(f"cryptsetup open selhalo: {err}") from e
+        for chunk in chunks:
+            out.extend(chunk)
     except OSError as e:
         raise FdeError(f"Čtení dešifrovaného oddílu selhalo: {e}") from e
-    finally:
-        # close mapper (ignoruj chyby — může být už pryč)
-        try:
-            subprocess.run([cs, "close", name], check=False, capture_output=True, timeout=30)
-        except Exception as e:  # noqa: BLE001 — cleanup, nekritické
-            _log.debug("cryptsetup close %s selhalo (nekritické): %s", name, e)
-
-    return plaintext, header
+    return bytes(out), header

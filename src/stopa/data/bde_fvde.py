@@ -32,6 +32,9 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+# P0.3 — jednotná správa dočasných dešifrovaných obrazů (izolace, registry, audit)
+from stopa.domain.temp_images import EncryptedTempImage, release_temp
+
 _log = logging.getLogger(__name__)
 
 #: Velikost čtení v bytech (chunked IO — ne celý obraz v paměti).
@@ -178,10 +181,8 @@ def decrypt_bitlocker(
 
     ``recovery_key`` — 48místný recovery key (primární cesta, viz ROADMAP V2);
     ``password`` — passphrase. Aspoň jeden parametr je nutný. Peak RAM = chunka
-    (1 MiB), ne celý obraz. Volající smaže vrácený tmp soubor.
+    (1 MiB), ne celý obraz. Volající uvolní vrácený objekt přes ``release_temp`` (P0.3).
     """
-    import tempfile
-
     if password is None and recovery_key is None:
         raise BdeError("Zadejte --password nebo --recovery-key")
 
@@ -231,21 +232,25 @@ def decrypt_bitlocker(
         read_f.restype = ctypes.c_ssize_t
         read_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int64, ctypes.POINTER(ctypes.c_void_p)]
 
-        fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-bde-")
-        try:
-            with os.fdopen(fd, "wb") as dst:
-                offset = 0
-                while offset < total:
-                    want = min(_CHUNK, total - offset)
-                    buf = ctypes.create_string_buffer(want)
-                    n = read_f(volume, buf, want, ctypes.c_int64(offset), ctypes.byref(err))
-                    if n <= 0:
-                        raise BdeError(f"čtení selhalo @ {offset}: {_error_message(lib, 'libbde', err)}")
-                    dst.write(buf.raw[:n])
-                    offset += n
-        except Exception:
-            Path(tmp_name).unlink(missing_ok=True)  # odstranit částečný plaintext
-            raise
+        # P0.3 — jednotná správa dočasných obrazů (izolace 0700/0600, registry, audit);
+        # detach() předá ownership volajícímu (release_temp)
+        tmp_path: Path | None = None
+        with EncryptedTempImage(prefix="stopa-bde-", suffix=".img", owner="bde") as t:
+            try:
+                with os.fdopen(t.take_fd(), "wb") as dst:
+                    offset = 0
+                    while offset < total:
+                        want = min(_CHUNK, total - offset)
+                        buf = ctypes.create_string_buffer(want)
+                        n = read_f(volume, buf, want, ctypes.c_int64(offset), ctypes.byref(err))
+                        if n <= 0:
+                            raise BdeError(f"čtení selhalo @ {offset}: {_error_message(lib, 'libbde', err)}")
+                        dst.write(buf.raw[:n])
+                        offset += n
+            except Exception:
+                release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+                raise
+            tmp_path = t.detach()  # ownership → volající; soubor zůstává pro pipeline
 
         method_f = lib.libbde_volume_get_encryption_method
         method_f.restype = ctypes.c_int
@@ -255,8 +260,9 @@ def decrypt_bitlocker(
             method.value = 0  # nekritické — popis
 
         how = "recovery key" if recovery_key is not None else "heslo"
+        assert tmp_path is not None  # detach() se vykoná jen na úspěšné cestě (jinak raise v with)
         return BdeResult(
-            plaintext_path=Path(tmp_name),
+            plaintext_path=tmp_path,
             size=total,
             description=f"BitLocker volume dešifrováno ({how}, method=0x{method.value:04X})",
         )
@@ -305,10 +311,9 @@ def decrypt_filevault(image_path: Path | str, password: str) -> FvdeResult:
     """Dešifruje FileVault obraz → RAW plaintext prvního logical volumeu (stream).
 
     FileVault = physical volume + volume group s 1..N logical volumes;
-    dešifruje se první (datový oddíl). Peak RAM = chunka. Volající smaže tmp.
+    dešifruje se první (datový oddíl). Peak RAM = chunka. Volající uvolní objekt
+    přes ``release_temp`` (P0.3).
     """
-    import tempfile
-
     if not password:
         raise FvdeError("Zadejte heslo FileVault disku")
 
@@ -373,24 +378,29 @@ def decrypt_filevault(image_path: Path | str, password: str) -> FvdeResult:
         read_f.restype = ctypes.c_ssize_t
         read_f.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int64, ctypes.POINTER(ctypes.c_void_p)]
 
-        fd, tmp_name = tempfile.mkstemp(suffix=".img", prefix="stopa-fvde-")
-        try:
-            with os.fdopen(fd, "wb") as dst:
-                offset = 0
-                while offset < total:
-                    want = min(_CHUNK, total - offset)
-                    buf = ctypes.create_string_buffer(want)
-                    n = read_f(lv, buf, want, ctypes.c_int64(offset), ctypes.byref(err))
-                    if n <= 0:
-                        raise FvdeError(f"čtení selhalo @ {offset}: {_error_message(lib, 'libfvde', err)}")
-                    dst.write(buf.raw[:n])
-                    offset += n
-        except Exception:
-            Path(tmp_name).unlink(missing_ok=True)  # odstranit částečný plaintext
-            raise
+        # P0.3 — jednotná správa dočasných obrazů (izolace 0700/0600, registry, audit);
+        # detach() předá ownership volajícímu (release_temp)
+        tmp_path: Path | None = None
+        with EncryptedTempImage(prefix="stopa-fvde-", suffix=".img", owner="fvde") as t:
+            try:
+                with os.fdopen(t.take_fd(), "wb") as dst:
+                    offset = 0
+                    while offset < total:
+                        want = min(_CHUNK, total - offset)
+                        buf = ctypes.create_string_buffer(want)
+                        n = read_f(lv, buf, want, ctypes.c_int64(offset), ctypes.byref(err))
+                        if n <= 0:
+                            raise FvdeError(f"čtení selhalo @ {offset}: {_error_message(lib, 'libfvde', err)}")
+                        dst.write(buf.raw[:n])
+                        offset += n
+            except Exception:
+                release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+                raise
+            tmp_path = t.detach()  # ownership → volající; soubor zůstává pro pipeline
 
         desc = f"FileVault logical volume 0/{count.value} dešifrováno heslem"
-        return FvdeResult(plaintext_path=Path(tmp_name), size=total, description=desc)
+        assert tmp_path is not None  # detach() se vykoná jen na úspěšné cestě (jinak raise v with)
+        return FvdeResult(plaintext_path=tmp_path, size=total, description=desc)
     finally:
         lv_free = lib.libfvde_logical_volume_free
         lv_free.restype = ctypes.c_int
