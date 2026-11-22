@@ -154,7 +154,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > P4-4 Frontend sjednocení (SPA kanonická) → P4-9 Cross-platform a stabilita → P4-8 i18n CLI/legacy →
 > P4-7 Multi-node readiness → P4-10 Rust distribuce.
 > **Schváleno uživatelem 2026-11-21**, doporučené pořadí se dodržuje.
-> **Stav 2026-11-22: P4-1 + P4-3 + P4-2 + P4-6 + P4-5 + P4-4 + P4-9 + P4-8 + P4-7 hotové** — CI profily `test` (min) + nový `test-full` (všechny extras),
+> **Stav 2026-11-22: P4-1 + P4-3 + P4-2 + P4-6 + P4-5 + P4-4 + P4-9 + P4-8 + P4-7 + P4-10 hotové (10/10)** — CI profily `test` (min) + nový `test-full` (všechny extras),
 > `docs/EXTRAS_COVERAGE.md`, fail-closed opravy v 24 test souborech (test-only, src beze změny);
 > min suite exit 0. P4-3: volitelné manifest pole `api_version` + validace, sekce „Contract stability"
 > v PLUGINS_API.md, breaking change log marker `!plugins:`. P4-2: NPROC/FSIZE rlimity + strict
@@ -183,7 +183,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 > node_id/last_heartbeat (idempotentní migrace), liveness nad monotónními sekvencemi beatů bez wall-clocku
 > (alive/expired/unknown, LEASE_WINDOW=8; atomický beat BEGIN IMMEDIATE + max+1), web poller auto-heartbeat
 > (STOPA_NODE_ID/hostname), `GET /api/registry` vrací lease mapu, CLI `stopa registry --heartbeat NODE`;
-> W4 `docs/MULTI_NODE.md`; 24 testů (i na minimálním profilu). Zbývá 1 položka = návrh k implementaci.
+> W4 `docs/MULTI_NODE.md`; 24 testů (i na minimálním profilu). P4-10: Rust distribuce — PyO3 `abi3-py310` → jeden wheel per platforma pro Python ≥ 3.10 (`cp310-abi3-manylinux_2_28_{x86_64,aarch64}.whl`), extra `carving` = pinned direct-URL release assety (v2.4.0; jinde fallback na čisté Python), CI parity gate job `rust-parity` (manylinux_2_28 kontejner: maturin build + wheel do izolovaného venv → F2.1 parity testy) a release job `rust-wheels` (matrix x86_64 nativně / aarch64 cross `maturin --zig`, tag verify); distribuce doložena v PLATFORM_MATRIX.md. **Zbývá 0 položek — P4 roadmap kompletní (10/10).**
 
 | # | Položka | Priorita | Velikost | Pozn. |
 |---|---------|----------|----------|-------|
@@ -196,7 +196,7 @@ Rozsah: pluginy (neověřený kód), AI (prompt injection z analyzovaných dat, 
 | P4-9 | Cross-platform a long-running stabilita (Win/macOS CI + leak canary) | **P2** | M | ✅ **hotová**: W1 audit readiness; W2 leak canary `test_p49_leak_canary.py` (deterministický ingest loop ~5 MB/23k záznamů, 16 iterací, prah < 100 MiB tracemalloc); W3 CI jobs `windows` + `macos` (portability core = kurátorovaný domain+data subset bez Rust wheelu → referenční carving cesta; full suite jen ubuntu); W4 `docs/PLATFORM_MATRIX.md` (matice × pokrytí, platformově omezené cesty, known gaps) |
 | P4-8 | i18n CLI (+ legacy UI katalog) | **P2** | M | ✅ **hotová**: cs/en JSON katalogy (339 klíčů) + fail-open helper `t(key, **params)`; priorita flag --lang > env STOPA_LANG > default cs (byte-kompatibilní — zlatá `p48_cli_help_cs.json`); EN akceptační kritéria = top-level help + 100 % epilogů v angličtině; Web GET /api/i18n/{lang} pro legacy UI (web povrch 122→123 rout); 23 testů |
 | P4-7 | Multi-node readiness (DB event bus + registry lease) | **P2** | L | ✅ **hotová**: W1 audit VERIFIED; W2 tabulka `events` v instance DB (pořadí = monotónní id, kanonické JSON, index topic+id), WAL + busy_timeout=5000 ms centralizovaně v `open_instance()`, web polling worker 0,25 s (publisher+subscriber, dedup `_pid`, retence 2 h / pruning 240 cyklů); W3 lease sloupce node_id/last_heartbeat (idempotentní migrace), liveness nad monotónními sekvencemi beatů (alive/expired/unknown, LEASE_WINDOW=8; atomický beat BEGIN IMMEDIATE + max+1 bez clock driftu), poller auto-heartbeat STOPA_NODE_ID/hostname, registry endpoint vrací lease mapu, CLI `stopa registry --heartbeat NODE [--json]`; W4 `docs/MULTI_NODE.md`; 24 testů offline (běží i na min profilu); zlaté povrchy beze změny (CLI 87 cest / CS byte-guard / Web 123 rout) |
-| P4-10 | Rust distribuce — manylinux wheels | **P2** | M | GHA matrix x86_64/aarch64, extra `[carving]`, wheel parity gate |
+| P4-10 | Rust distribuce — manylinux wheels | **P2** | M | ✅ **hotová**: PyO3 `abi3-py310` (jeden `cp310-abi3-manylinux_2_28_<arch>.whl` per arch, Python ≥ 3.10); extra `carving` = pinned direct-URL release assety (v2.4.0; Linux x86_64/aarch64, jinde čisté-Python fallback); CI job `rust-parity` (per push: manylinux_2_28 kontejner → maturin build + auditwheel repair → wheel do izolovaného venv → F2.1 parity testy) + release job `rust-wheels` (matrix x86_64 nativně / aarch64 cross `maturin --zig`, verify přesného tagu, upload assetů); PLATFORM_MATRIX.md sekce „Rust core distribuce“ |
 
 ---
 

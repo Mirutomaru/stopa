@@ -99,6 +99,71 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
+  # P4-10 — Rust core wheels (manylinux_2_28), matrix per arch:
+  # x86_64 nativně, aarch64 cross-compilace přes maturin --zig (bez ARM runneru).
+  # Výstup = release assety, které pinuje extra `carving` v pyproject.toml
+  # (pip install stopa[carving] → stopa_core wheel; bez něj čisté-Python fallback).
+  # cp310-abi3 wheel = jeden per platforma pro všechny Python >= 3.10.
+  # ---------------------------------------------------------------------------
+  rust-wheels:
+    name: Rust wheels (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      # rustup v kontejneru; aarch64 target pro cross build (zig dodává libc, QEMU zbytečný)
+      - name: Install Rust stable toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "PATH=$HOME/.cargo/bin:$PATH" >> "$GITHUB_ENV"
+
+      - name: Build wheel (${{ matrix.arch }})
+        run: |
+          PY=/opt/python/cp311-x64/bin/python
+          $PY -m pip install --upgrade pip
+          $PY -m pip install maturin
+          cd rust
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            # nativní build v manylinux kontejneru, auto auditwheel repair na tag
+            $PY -m maturin build --release \
+              --compatibility manylinux_2_28 -o ../dist-rust/
+          else
+            # cross: zig dodává aarch64 libc → bez QEMU / ARM runneru
+            rustup target add aarch64-unknown-linux-gnu
+            $PY -m pip install "maturin[zig]"
+            $PY -m maturin build --release \
+              --compatibility manylinux_2_28 --zig \
+              --target aarch64-unknown-linux-gnu -o ../dist-rust/
+          fi
+
+      - name: Verify wheel tag (manylinux_2_28_${{ matrix.arch }})
+        run: |
+          ls dist-rust/
+          # přesný očekávaný tag — chrání proti tichému degradaci na linux_*
+          /opt/python/cp311-x64/bin/python -c "
+          import glob, sys
+          arch = '${{ matrix.arch }}'
+          suffix = f'cp310-abi3-manylinux_2_28_{arch}.whl'
+          wheels = [w for w in glob.glob('dist-rust/*.whl') if w.endswith(suffix)]
+          if not wheels:
+              print(f'::error::Chybí wheel s tagem {suffix}')
+              sys.exit(1)
+          print('OK:', wheels[0])
+          "
+
+      - name: Upload Rust wheels (release assets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-wheels-${{ matrix.arch }}
+          path: dist-rust/*.whl
+
+  # ---------------------------------------------------------------------------
   # AppImage — PyInstaller onedir + AppImageTool. continue-on-error: download
   # runtime z appimage.org je externí závislost; selhání nesmí blokovat
   # deb/rpm/docker artifacts (AK primary = instalovatelný balík).

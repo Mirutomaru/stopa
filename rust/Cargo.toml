@@ -10,7 +10,9 @@ name = "stopa_core"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.26", features = ["extension-module"] }
+# P4-10 — abi3-py310: jeden wheel per platforma pro všechny Python >= 3.10
+# (STOPA requires-python = ">=3.10"); bez abi3 by matrix nutně obsahoval i Py verze.
+pyo3 = { version = "0.26", features = ["extension-module", "abi3-py310"] }
 sha1 = "0.10"
 # asm: SSE/AVX shapy — čistý Rust sha2 dělá ~1 GB/s, se asm > 3 GB/s (F2.3 AK overhead)
 sha2 = { version = "0.10", features = ["asm"] }

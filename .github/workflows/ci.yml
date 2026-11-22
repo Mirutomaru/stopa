@@ -165,6 +165,46 @@ jobs:
           tests/test_f64_plugins.py tests/test_p42_sandbox_strict.py
           tests/test_p49_leak_canary.py -q --maxfail=50
 
+  # P4-10 — Rust wheel parity gate (per push): stopa_core se builduje maturinem
+  # v manylinux_2_28 kontejneru (glibc 2.28 = distribuční target), výstupní
+  # wheel se nainstaluje do izolovaného venv a F2.1 parity testy ověří bitovou
+  # shodu Rust core vs Python referenční cesty na fixním korpusu. aarch64 cross
+  # build zde nebývá (jen release) — gate chrání x86_64 cestu, která běží v produkci.
+  rust-parity:
+    name: "Rust wheel parity (manylinux_2_28)"
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      # rustup v kontejneru (manylinux image nemá Rust toolchain)
+      - name: Install Rust stable toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "PATH=$HOME/.cargo/bin:$PATH" >> "$GITHUB_ENV"
+
+      # manylinux image má python v /opt/python — izolovaný venv pro gate,
+      # aby parity testy běžely PŘES wheel z tohoto buildu (ne systémový core).
+      - name: Build wheel + install do izolovaného venv
+        run: |
+          PY=/opt/python/cp311-x64/bin/python
+          $PY -m venv /venv-p410
+          /venv-p410/bin/pip install --upgrade pip
+          /venv-p410/bin/pip install maturin pytest
+          cd rust
+          # --compatibility manylinux_2_28 = auto auditwheel repair na distribuční tag
+          /venv-p410/bin/maturin build --release \
+            --compatibility manylinux_2_28 -o ../dist-rust/
+          cd ..
+          /venv-p410/bin/pip install dist-rust/*.whl
+          # stopa bez extras (core) — parity testy potřebují jen stdlib + stopa core
+          /venv-p410/bin/pip install -e . --no-deps
+
+      # F2.1 parity: Rust vs Python referenční cesta (hashing + carving), bitová shoda
+      - name: Parity testy (F2.1, wheel z tohoto buildu)
+        run: env -u STOPA_DB_DIR /venv-p410/bin/python -m pytest tests/test_f21_rust_core.py -q
+
   # ETAPA D vlna 1 (STP-043): benchmark proti baseline — fail na regresi >20 %
   # a ≥0.5 ms absolutního rozdílu (CI noise guard pro sub-ms položky).
   benchmark:
