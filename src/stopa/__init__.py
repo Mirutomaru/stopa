@@ -11,4 +11,4 @@ from importlib.metadata import version as _pkg_version
 try:
     __version__ = _pkg_version("stopa")
 except PackageNotFoundError:  # dev run bez instalace
-    __version__ = "2.4.0"
+    __version__ = "2.5.0"
