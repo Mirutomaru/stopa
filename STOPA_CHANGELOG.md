@@ -2,6 +2,26 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-23 (STOPA 2.5: post-release **forenzní integritní hardening P0+P1** — P0.5 deterministické generated_at, P0.2/P0.3 EncryptedTempImage životní cyklus, P0.1 safe resume s ověřením zdrojů (+`--resume-mode`), P0.4 write-blocker fail-closed + zdrojový manifest (schéma v28), FDE chybové cesty; P1 security S1 bounded XML / S2 ZIP bomb limity / S3 path traversal defense in depth; full suite **5269p/1s** exit 0)
+
+### Added — Post-release 2.4: forenzní integritní hardening (P0 + P1, 2026-11-22…23)
+Zdroj auditu a plný report: `FORENSIC_HARDENING_REPORT.md` (P0 = `a661cae`, P1 + finální výsledky = `d332824`). Prioritní pořadí dle auditu: Forensic correctness > Data integrity > Security > Reliability > Performance > Convenience. Každý celek s testy a cílenou regresí před commitem; veřejné API/formáty beze změny, CLI čistě aditivní (p48 CS byte-guard regenerován s diffem omezeným na nový flag).
+- **P0.5 Deterministické `generated_at`** (`24d4cc7`): explicitní TZ v reportech místo implicitního systémového času — stejný stav = byte-identický report (reprodukovatelnost).
+- **P0.2/P0.3 `EncryptedTempImage`** (`268df65`): jednotný životní cyklus dešifrovaných dočasných obrazů (LUKS/BitLocker) — vytvoření/použití/garantované odstranění včetně chybových cest; read-only originály zachovány.
+- **P0.1 Safe resume s ověřením identity zdrojových souborů** (`5a88771`): `--resume` ověří identitu registrovaných zdrojů (hash/velikost/mtime); změněný zdroj = explicitní stav (`skipped`/`modified_during_resume`), ne tiché přeparsování. Nový CLI flag **`--resume-mode`**; zlaté povrchy regenerovány, diff omezen na nový flag.
+- **P0.4 Write-blocker fail-closed brána + zdrojový manifest** (`97863de`): fail-closed ověření write-protection (mód/profile) před zápisem do důkazového prostoru; nová tabulka zdrojového manifestu v case DB — **schéma v28** (28 sloupců, čistě aditivní a idempotentní migrace; legacy případy beze změny chování).
+- **FDE chybové cesty — uzavírací vlna P0** (`a6ee280`): BDE/FVDE read-loop error cesty (fake lib `_obj` int handle) + LUKS open-failure pokrytí; validace 89 passed / 1 skipped.
+- **P1 S1 Bounded XML parse důkazových souborů** (`f20d56f`): nový modul `domain/xml_bounded.py` — ruční pyexpat wiring (C `_elementtree` maskuje interní expat), depth limit default **200** (konfigurovatelný), zákaz uživatelských entit (billion laughs fail-closed), streaming 64 KiB; call sites ODF `content.xml`, OOXML docProps, Windows Scheduled Task, WLAN profile, UFED `report.xml`. Testy 18p + regrese dotčených parserů 255p.
+- **P1 S2 Limity ZIP bomb pro import-mobile archívy** (`42a97b9`): `_archive_members` — per-member 256 MiB (existující) + celkové limity **4 GiB / 20 000 členů** (module globály, monkeypatchovatelné testy); OOXML docProps s per-member limitem. Testy 5p.
+- **P1 S3 Path traversal validace v `_last_export_path`** (`b6d1655`): audit potvrdil silnou politiku (strict regex case_id `^[A-Za-z0-9_-]+$`, enum what/format, DB lookup před cache, atomický tmp→rename); helper si nyní ověřuje `case_id` sám — budoucí endpointy nejen implicitně obnoví traversal. Testy 6p + regrese export endpointů (stp067/068/069) 35p.
+
+### Changed — Validace STOPA 2.5
+- Full regression: **`5269 passed / 1 skipped`, exit 0** (36:47; +32 testů vs báze po 2.4 = +3 FDE uzavírací vlna + 29 P1 testů). Ruff clean repo-wide, rozpočet `db.py` **599/600**, PKG_COMPAT OK (`python -m stopa.cli --version` exit 0).
+- Benchmark vs baseline: **ok=true, regressions=[], noise_filtered=0**, `pipeline.core` = 1634 ms (CI baseline 4241 ms); gate >20 % a ≥0.5 ms beze změny.
+- GitHub CI na `d332824`: **8/8 jobů green** — jediné selhání prvních běhů = šum shared runneru u `parser.email_mbox` (+54.5 %, absolutně 0.86 ms; `email_mbox.py` v diffu není) → re-run jobu zelený (precedent: sub-ms scénáře s rozptylem chrání mediánová baseline + absolutní podlaha).
+- Reziduální rizika (dokumentována): ADB branch import-mobile bez celkových limitů archivu (soubory na disku jednotlivě; sdílená budget logika → P2), citlivost `test_stp044` benchmarku na zatížení, bounded XML fail-closed na uživatelských entitách.
+- Release notes s známými limity: `docs/RELEASE_NOTES_2_5.md`.
+
 ## [Unreleased] — 2026-11-22 (STOPA 2.4: post-release roadmap **P4 hotová 10/10** — P4-1 CI matrix pro volitelné extras, P4-3 Plugin API semvering + breaking change log, P4-2 Plugin sandbox hardening, P4-6 Sealing v2 (time hash chain + externí witness), P4-5 AI production robustness, P4-4 Frontend sjednocení (SPA kanonická), P4-9 Cross-platform a long-running stabilita, P4-8 i18n CLI (+ legacy UI katalog), P4-7 Multi-node readiness, P4-10 Rust distribuce; full suite **5155p/1s** exit 0)
 
 ### Added — Post-release 2.3: P4 roadmap kompletní (10/10 položek, 2026-11-21…22)
