@@ -58,6 +58,14 @@ Priorita práce: **Forensic correctness > Data integrity > Security > Reliabilit
 - **Provedená změna:** audit §6 (path traversal / symlinks / TOCTOU) potvrdil solidní politiku: strict regex case_id `^[A-Za-z0-9_-]+$` (bez tečky i lomítka), enum `what`/`format`, DB lookup před cache přístupem; ingest symlink policy (`followlinks=False` + per-file `is_symlink()` skip); atomický tmp→rename. Zbývající mezera — `_last_export_path` důvěřoval volajícím endpointům — uzavřena vlastní validací (defense in depth, 400).
 - **Výsledek testu:** VERIFIED — `tests/test_p1_path_traversal.py` **6 passed**; regrese export cache endpointů (stp067/068/069) **35 passed**.
 
+### P2 A — sdílená budget logika pro import-mobile (commit `874c044`)
+- **Provedená změna:** ADB větev `--source adb` měla vlastní neomezenou rglob smyčku mimo P1 ZIP limity (dump s tisíci .db/.vcf = bezohraničný sha256 + parse). Nyní sdílí obě větve jednu čistou implementaci `domain/archive_budget.py` (`ArchiveBudget`, limity přes konstruktor; produkční defaults = module globály `_MAX_ARCHIVE_*`, P1 monkeypatch kontrakt zachován, hranice inkluzivní jako dříve). ADB: počtový + celkový velikostní limit sbíraných vstupů (.db/.sqlite/.vcf); per-member limit se vztahuje jen na .vcf (čtené celé do RAM) — DB se streamují po cestě (sha256 v kusech, sqlite po cestě), takže je omezuje celkový limit. ZIP/složková větev refaktorovaná přes `ArchiveBudget` se zprávami a sémantikou byte-identickými.
+- **Výsledek testu:** VERIFIED — `tests/test_p2_archive_budget.py` **10 passed** (5 unit domény bez I/O + 5 ADB E2E přes `cli.main`); regrese `test_p1_zip_bounded.py` + `test_f15_cli_import_mobile.py`: **27 passed in 37.45s**; Ruff clean.
+
+### P2 B — benchmark medián proti šumu (commit `cd005ad`)
+- **Provedená změna:** CI flake stp044 self-baseline (+21,9 % pod plným zatížením, práh 20 %) — single measurement vs. single measurement je na sub-2 ms scénářích křehký. `scripts/ci_benchmark.py`: nový `--runs N` (default 1 → CI job bez změny runtime); N>1 = medián per scénář z N měření; baseline i current se porovnávají na stejné úrovni (medián vs. medián), report + pole `"runs"`. stp044 self-baseline test: `--runs 3` na obou stranách — šum by musel systematicky zatížit > polovinu měření, aby projel prahem.
+- **Výsledek testu:** VERIFIED — `tests/test_stp044_ci_benchmark_e2e.py` **6 passed in 103.33s**; Ruff scripts+tests clean.
+
 ## 3. Změněné soubory
 
 **Cell 1 `24d4cc7`** (P0.5): `src/stopa/domain/report.py`, `tests/test_p05_report_timestamps.py`.
@@ -93,10 +101,15 @@ Priorita práce: **Forensic correctness > Data integrity > Security > Reliabilit
 
 **Cell S3 `b6d1655`** (P1 path traversal): `web/app.py` (validace v `_last_export_path`) + nový `tests/test_p1_path_traversal.py` (6 testů).
 
+**Cell A `874c044`** (P2 sdílená budget logika): nová `domain/archive_budget.py` (`ArchiveBudget`, čistá doménová vrstva), `cli/commands/forensics.py` (refaktor `_archive_members` přes ArchiveBudget + ADB větev pod limity, zprávy byte-identické) + nový `tests/test_p2_archive_budget.py` (10 testů).
+
+**Cell B `cd005ad`** (P2 benchmark medián): `scripts/ci_benchmark.py` (`--runs N`, medián per scénář, report pole `"runs"`) + `tests/test_stp044_ci_benchmark_e2e.py` (self-baseline `--runs 3`).
+
 ## 4. Nové moduly
 - `src/stopa/domain/temp_images.py` (P0.3, commit Cell 2)
 - `src/stopa/domain/source_manifest.py` (Cell 4, 133 řádků, čistá doménová vrstva bez I/O)
 - `src/stopa/domain/xml_bounded.py` (P1 S1, 114 řádků, čistá doménová vrstva; pyexpat wiring s depth limit a zákazem uživatelských entit)
+- `src/stopa/domain/archive_budget.py` (P2 A, čistá doménová vrstva bez I/O; sdílený rozpočet neomezených zdrojů import-mobile — ZIP/složka i ADB)
 
 ## 5. Databázové migrace
 - **v27 → v28** (`apply_source_manifest_migration`, aditivní): tabulka `sources` + 11 sloupců: `manifest_sha256 TEXT`, `manifest_version INTEGER DEFAULT 1`, `manifest_json TEXT`, `created_at_utc TEXT`, `file_count INTEGER`, `total_size_bytes INTEGER`, `source_type TEXT`, `source_identifier TEXT`, `acquisition_method TEXT`, `filesystem_type TEXT`, `acquisition_tool_version TEXT`. NULL = manifest dosud nevytvořen. Idempotence testována (integrační testy). Staré DB migrace přes PRAGMA user_version; žádné datové změny.
@@ -115,6 +128,7 @@ Priorita práce: **Forensic correctness > Data integrity > Security > Reliabilit
 | `tests/test_p1_xml_bounded.py` | 18 | P1 S1 bounded XML: depth bomba, billion laughs, předdefinované entity, streaming file-like, ekvivalence s ET, call-site integrace (ODF/OOXML/Win sched/WLAN/UFED) |
 | `tests/test_p1_zip_bounded.py` | 5 | P1 S2 ZIP bomb import-mobile: per-member / celková velikost / počet členů; prázdný výsledek → exit 2 (E2E přes cli.main, limity monkeypatchovány) |
 | `tests/test_p1_path_traversal.py` | 6 | P1 S3 path traversal: strict regex case_id, `_last_export_path` defense in depth (přes app.state.ctx), E2E endpoint 400 + negativní 404 |
+| `tests/test_p2_archive_budget.py` | 10 | P2 A sdílená budget logika: ArchiveBudget unit (validace, hranice, počítadla) + ADB E2E (počtový limit, celkový limit, vše přeskočeno → exit 2, DB se počítá do budgetu, defaults beze změny) |
 
 Upravené: `test_f54_write_blocker.py` (piny nové sémantiky), web test fixtures (laboratorní `wb_gate_mode=warn_only` — 10 souborů), piny schématu v27→v28 (5 souborů), zlaté povrchy `p14_cli_surface.json`, `p48_cli_help_cs.json`, `p14_pipeline_surface.json`.
 
@@ -133,6 +147,11 @@ Upravené: `test_f54_write_blocker.py` (piny nové sémantiky), web test fixture
 - Kombinovaný běh všech tří P1 testových souborů: **23 passed in 8.85s**; Ruff `All checks passed!`
 - **Finální full suite (po celé P1 vlně):** `5269 passed, 1 skipped in 2207.25s`, **exit 0 — nula selhání** (předchozí stav: 5236 passed / 1 failed E2E flake; delta +32 testů = +3 FDE uzavírací vlna + 29 P1). `test_stp044_ci_benchmark_e2e.py` tentokrát green.
 
+### P2 hardening vlna
+- Cell A sdílená budget logika: `tests/test_p2_archive_budget.py` **10 passed**; regrese `test_p1_zip_bounded.py` + `test_f15_cli_import_mobile.py`: **27 passed in 37.45s** (exit 0); Ruff clean
+- Cell B benchmark medián: `tests/test_stp044_ci_benchmark_e2e.py` **6 passed in 103.33s**; regrese `test_stp043_ci_benchmark.py`: fake engine lambda nezachytil nový kwarg `runs=` (5F v plné suite) → oprava v rámci cely B (amend); po opravě stp043+stp044 **21 passed in 102.65s**; Ruff scripts+tests clean
+- **Finální full suite (po celé P2 vlně):** `5279 passed, 1 skipped in 2278.46s`, **exit 0 — nula selhání** (delta +10 vs. stav po P1 = +10 nových P2 testů; první běh suite chytal Cell B regresii stp043 fake engine → opravena amendem, re-run čistý)
+
 ## 8. Výsledky benchmarků
 
 Lokální běh `scripts/ci_benchmark.py --baseline benchmarks/baseline.json --threshold 0.20 --min-delta-ms 0.5` (stejný příkaz jako CI job `benchmark`):
@@ -140,6 +159,7 @@ Lokální běh `scripts/ci_benchmark.py --baseline benchmarks/baseline.json --th
 - `pipeline.core`: lokálně **1827,3 ms** vs. CI baseline **4241,4 ms** (medián ze 3 CI měření; lokální stroj rychlejší než GHA runner) — pod gate i s velkou rezervou. Manifest blok se počítá až za finálním commitem ingestu a do hot-path parserů nezahálí.
 - Aktuálně se měří **80 položek**; baseline obsahuje 79 — nová položka `core.rust` (přidána po vytvoření baseline) se proti ničemu neporovnává, bez dopadu na gate.
 - Kontext: quick regression batch (90 testů kolem ingest/pipeline) = 245,96 s; full suite 2231,27 s (srovnatelné s předchozími běhy ~2217 s).
+- P2 re-run (po dokončení vlny, čistá CPU): exit 0, `ok=true`, `regressions=[]`, `noise_filtered=0`; `pipeline.core` lokálně **1625,4 ms** vs. CI baseline **4241,4 ms** — pod gate i s velkou rezervou (P2 změny do hot-path parserů nezaházejí).
 
 ## 9. Nevyřešená rizika
 P1 security vlna (§6 master promptu) je **uzavřena** — auditní pokrytí všech témat:
@@ -155,9 +175,13 @@ P1 security vlna (§6 master promptu) je **uzavřena** — auditní pokrytí vš
 | Neomezené zdroje | FIXED (S2): limity 256 MiB / 4 GiB / 20 000 členů; XML streaming 64 KiB chunky (S1) |
 | seccomp | VERIFIED bez změny: P4-2 strict profil, empiricky ověřeno strace |
 
+Vyřešeno v P2 vlně:
+- **ADB branch `--source adb` bez celkových limitů** (původní riziko 1) — sdílená budget logika `domain.archive_budget.ArchiveBudget`, obě větve import-mobile pod limity 256 MiB / 4 GiB / 20 000; commit `874c044`.
+- **Citlivost `test_stp044_ci_benchmark_e2e.py` na zatížení** (původní riziko 2, flake +21,9 % vs. práh 20 %) — medián 3 měření per scénář (`--runs N`), baseline i current na stejné úrovni; commit `cd005ad`.
+
 Zbývající reziduální rizika (uvědomělá, s odůvodněním):
-1. **ADB branch `--source adb`** v import-mobile má vlastní rglob smyčku (nechází přes `_archive_members`) — bez celkových limitů. Odůvodnění: ADB export = živý dump z připojeného zařízení, ne soubor od třetí strany; limity by se aplikovaly na rozbalený výstup a měnily by chování bez jasně definovaného rozpočtu. Doporučení: sdílená budget logika v P2 vlně.
-2. **`test_stp044_ci_benchmark_e2e.py`** — citlivost na zatížení (viz sekce 7); pod plným loadem full suite může dojít k flaknutí +21,9 % vs. práh 20 %.
+1. **JSON depth limit u neomezených vstupů** — ~40 call sites `json.loads(data.decode(...))` v cloud parcích (google_*, amazon_*, dropbox_mega, ...). Vše parsuje už načtené file bytes (velikost omezená upstream per-file limity), takže riziko = hluboké vnoření, ne velikost. Cross-cutting změna přes 40+ souborů → P3: sdílený `json_bounded` doménový helper s depth limit + staged rollout po skupinách parserů.
+2. **Parser timeouty** — jednotlivé artifact parcery nemají globální watchdog; v praxi omezeny velikostními limity (P1/P2) a streamingem, dedikovaný timeout = P3 scope.
 
 Vyřešeno v uzavírací vlně (`fix(fde)` commit `a6ee280`):
 - **LUKS cryptsetup open failure** — dedikovaný test (mockovaný `subprocess.run` → `CalledProcessError`): FdeError s posledním řádkem stderr, passphrase se nedostává do zprávy, dočasný keyfile uklizen i při selhání open.
@@ -165,6 +189,6 @@ Vyřešeno v uzavírací vlně (`fix(fde)` commit `a6ee280`):
 - **Třetí CLI cesta `replace(out_path)`** — VERIFIED řádek za řádkem: 3× `release_temp` po replace (forensics.py L67/L80/L96) s OSError guardem před re-raise.
 
 ## 10. Doporučené další kroky
-1. Push `main` přes SSH (`id_ed25519_gh`) po souhlasu; tag zůstává `v2.4.0` na `7a9bc66`, dokud se hardening nepropíše do release vlny (P0 + P1 celky jsou lokálně hotové a otestované).
-2. P2 vlna: sdílená budget logika pro ADB branch import-mobile (viz sekce 9, riziko 1), případně timeouty parserů a limit hloubky JSON u neomezených vstupů.
-3. Volitelné: zvýšit práh `test_stp044_ci_benchmark_e2e.py` nebo přidat třetí měření (medián) pro odolnost proti šumu pod loadem (viz sekce 9, riziko 2).
+1. **Release STOPA 2.5 hotový** — docs `79ae292` + bump/tag `881a121`, annotated tag `v2.5.0`; CI + Release workflow green; GitHub Release s wheels x86_64/aarch64 (E2E ověřeno clean venv Python 3.14). P2 vlna (`874c044`, `cd005ad`) = 2 commity nad tagem → příští release.
+2. **P3 vlna (doporučena):** JSON depth limit — sdílený `json_bounded` doménový helper (~40 call sites, staged rollout) + parser timeouty (viz sekce 9).
+3. **extra `carving` pinuje wheels z tagu `v2.4.0`** — URL fungují; update pinu až s novým Rust kódem (dokumentováno v RELEASE_NOTES_2_5.md).
