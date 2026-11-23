@@ -265,6 +265,15 @@ class _BytesHolder:
     data: bytes
 
 
+#: P1 security — limity neomezených zdrojů (ZIP bomba) pro import-mobile archívy:
+#: jediný člen ≤ 256 MiB, celková velikost všech členů ≤ 4 GiB, počet členů ≤ 20_000.
+# Legitimní UFED/ADB exporty jsou obvykle < 1 GB — limity jsou s rezervou; testy je
+# monkeypatchují na malé hodnoty (čtení z module globalu v době volání).
+_MAX_ARCHIVE_MEMBER = 256 * (1 << 20)
+_MAX_ARCHIVE_TOTAL = 4 * (1 << 30)
+_MAX_ARCHIVE_MEMBERS = 20_000
+
+
 def cmd_import_mobile(args: argparse.Namespace) -> int:
     """F1.5 — Import mobilní extrakce (ROADMAP V2 Fáze 1).
 
@@ -330,25 +339,55 @@ def cmd_import_mobile(args: argparse.Namespace) -> int:
             return 2
 
         def _archive_members() -> list[tuple[str, bytes]] | None:
-            """ZIP (.ufd/.zip) → [(rel_path, bytes)]; složka → [..] z disk."""
+            """ZIP (.ufd/.zip) → [(rel_path, bytes)]; složka → [..] z disk.
+
+            P1 security — limity neomezených zdrojů (ZIP bomba): jediný člen ≤ 256 MiB,
+            celkem ≤ 4 GiB, počet ≤ 20_000; překročení → warning + skip zbytku
+            (přeskočené členy se logují, proces nesmí OOM).
+            """
+            out: list[tuple[str, bytes]] = []
+            total_size = 0
+
+            def _collect(rel: str, data: bytes) -> bool:
+                # False = konec sběru (počtový limit); True = pokračovat
+                nonlocal total_size
+                if len(out) >= _MAX_ARCHIVE_MEMBERS:
+                    print(
+                        f"P1 limit: více než {_MAX_ARCHIVE_MEMBERS} členů archívu — "
+                        "zbytek se přeskočí",
+                        file=sys.stderr,
+                    )
+                    return False
+                if total_size + len(data) > _MAX_ARCHIVE_TOTAL:
+                    print(
+                        f"P1 limit: celková velikost archívu > 4 GiB — člen {rel} "
+                        "se přeskočí",
+                        file=sys.stderr,
+                    )
+                    return True
+                total_size += len(data)
+                out.append((rel, data))
+                return True
+
             if dump_path.is_dir():  # rozbalený export — procházíme přímo
-                out = []
                 for p in sorted(dump_path.rglob("*")):
-                    if not p.is_file() or p.stat().st_size > 256 * (1 << 20):
+                    if not p.is_file() or p.stat().st_size > _MAX_ARCHIVE_MEMBER:
                         continue
-                    out.append((p.relative_to(dump_path).as_posix(), p.read_bytes()))
+                    if not _collect(p.relative_to(dump_path).as_posix(), p.read_bytes()):
+                        break
                 return out
             if dump_path.suffix.lower() in (".zip", ".ufd"):
                 try:
                     with zipfile.ZipFile(dump_path) as zf:
-                        return [
-                            (zi.filename, zf.read(zi))
-                            for zi in zf.infolist()
-                            if not zi.is_dir() and zi.file_size <= 256 * (1 << 20)
-                        ]
+                        for zi in zf.infolist():
+                            if zi.is_dir() or zi.file_size > _MAX_ARCHIVE_MEMBER:
+                                continue
+                            if not _collect(zi.filename, zf.read(zi)):
+                                break
                 except zipfile.BadZipFile as e:
                     print(f"Neplatné ZIP/UFDR archív: {e}", file=sys.stderr)
                     return None
+                return out
             print(
                 f"Nerozpoznaný formát pro --source {source_kind} "
                 "(očekávám .ufd/.zip/složku): " + str(dump_path),
