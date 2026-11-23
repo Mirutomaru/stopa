@@ -36,6 +36,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from stopa.domain.entities import EntityOccurrence, normalize_hash, normalize_url_host
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.models import Artifact, FileRecord
 
 #: Druhy IoC — E4 kanonika + P3-5 pravidlové druhy (feed item nese samotné
@@ -266,7 +267,7 @@ def import_bundle(text: str) -> list[IoC]:
     STIX selže explicitně, ne tichě).
     """
     try:
-        doc = json.loads(text)
+        doc = bounded_json_loads(text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"Neplatné JSON bundle: {exc}") from exc
     if not isinstance(doc, dict) or doc.get("type") != "bundle":

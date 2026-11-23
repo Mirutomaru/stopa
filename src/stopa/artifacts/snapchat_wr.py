@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ def parse_snapchat_messages(data: bytes) -> list[ScMessageRecord]:
         TypeError: Platné JSON, ale bez zpráv.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 
@@ -184,7 +185,7 @@ def parse_snapchat_contacts(data: bytes) -> list[ScContactRecord]:
         TypeError: Platné JSON, ale bez kontaktů.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 
@@ -235,7 +236,7 @@ def parse_snapchat_geolocation(data: bytes) -> list[ScLocationRecord]:
         TypeError: Platné JSON, ale bez bodů.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 
@@ -267,7 +268,7 @@ def parse_snapchat_ip_history(data: bytes) -> list[ScIpRecord]:
         TypeError: Platné JSON, ale bez IP záznamů.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 
@@ -444,7 +445,7 @@ def extract_snapchat_artifacts(path: Path) -> list[Artifact]:
 
     artifacts: list[Artifact] = []
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError):
         logger.debug("SnapchatWR %s: neplatné JSON", path.name)
         return []

@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
+
 
 @dataclass(frozen=True)
 class PlasoEvent:
@@ -99,7 +101,7 @@ def parse_l2tcsv(text: str) -> list[PlasoEvent]:
         details: dict[str, Any] = {}
         if extra_raw:
             try:
-                parsed = json.loads(extra_raw)
+                parsed = bounded_json_loads(extra_raw)
                 if isinstance(parsed, dict):
                     details = parsed
             except (json.JSONDecodeError, ValueError):

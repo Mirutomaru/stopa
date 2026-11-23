@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,7 @@ def parse_mem_processes(data: bytes) -> list[MemProcessRecord]:
         TypeError: Platné JSON, ale bez procesních záznamů.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 

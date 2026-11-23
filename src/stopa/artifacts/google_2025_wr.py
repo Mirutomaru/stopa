@@ -40,6 +40,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.domain.times import from_unix
 from stopa.models import Artifact
 
@@ -168,7 +169,7 @@ def parse_google_2025_wr(data: bytes, kind_hint: str = "") -> list[Google2025Rec
         TypeError: Platné JSON, ale bez Google 2025 WR záznamů.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 

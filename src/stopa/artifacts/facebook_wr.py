@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
@@ -137,7 +138,7 @@ def parse_facebook_messages(data: bytes) -> list[FbMessageRecord]:
         TypeError: Platné JSON, ale bez zpráv.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 
@@ -211,7 +212,7 @@ def parse_facebook_friends(data: bytes) -> list[FbContactRecord]:
         TypeError: Platné JSON, ale bez kontaktů.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 
@@ -268,7 +269,7 @@ def parse_facebook_timeline(data: bytes) -> list[FbPostRecord]:
         TypeError: Platné JSON, ale bez příspěvků.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 
@@ -299,7 +300,7 @@ def parse_facebook_timeline(data: bytes) -> list[FbPostRecord]:
 def parse_facebook_profile(data: bytes) -> FbContactRecord | None:
     """ČISTÝ parser — Facebook profil info JSON → kontakt (vlastní účet)."""
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError):
         return None
 
@@ -430,7 +431,7 @@ def extract_facebook_artifacts(path: Path) -> list[Artifact]:
 
     artifacts: list[Artifact] = []
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError):
         logger.debug("FacebookWR %s: neplatné JSON", path.name)
         return []

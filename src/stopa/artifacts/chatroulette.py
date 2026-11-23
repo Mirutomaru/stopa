@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ def parse_chatroulette(data: bytes) -> list[ChatrouletteMessage]:
     )
     if looks_json:
         try:
-            payload = json.loads(candidate)
+            payload = bounded_json_loads(candidate)
         except json.JSONDecodeError as e:
             raise ValueError(f"Neplatné JSON: {e}") from None
         if not isinstance(payload, list):

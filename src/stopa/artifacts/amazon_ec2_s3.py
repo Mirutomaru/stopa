@@ -36,6 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.domain.times import from_unix
 from stopa.models import Artifact
 
@@ -128,7 +129,7 @@ def parse_ec2_instances(data: bytes) -> list[Ec2InstanceRecord]:
         TypeError: Platné JSON, ale bez instancí.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 
@@ -197,7 +198,7 @@ def parse_s3_objects(data: bytes) -> list[S3ObjectRecord]:
         TypeError: Platné JSON, ale bez S3 objektů.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 

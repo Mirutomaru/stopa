@@ -19,6 +19,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.models import Artifact
 
 PARSER_VERSION = "1.0"
@@ -111,7 +112,7 @@ def build_team_artifacts(entries: list[dict[str, Any]]) -> list[Artifact]:
 def extract_teams(path: str | Path) -> list[Artifact]:
     """IO entrypoint — načtení Teams JSON exportu a extrakce artifactů."""
     try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        data = bounded_json_loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         _LOGGER.warning("ms_teams: selhalo načtení %s: %s", path, exc)
         return []

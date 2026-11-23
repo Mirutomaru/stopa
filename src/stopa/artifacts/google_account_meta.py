@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.domain.times import from_unix
 from stopa.models import Artifact
 
@@ -97,7 +98,7 @@ def _parse_iso_or_epoch(value: Any) -> float | None:
 
 def _load_list(data: bytes, what: str) -> list[Any]:
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON ({what}): {e}") from e
     if isinstance(payload, list):
@@ -163,7 +164,7 @@ def parse_export_summary(data: bytes) -> dict[str, Any]:
         TypeError: Platné JSON, ale ne objekt.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON (export_summary): {e}") from e
 

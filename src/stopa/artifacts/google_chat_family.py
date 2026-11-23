@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.domain.times import from_unix
 from stopa.models import Artifact
 
@@ -94,7 +95,7 @@ def parse_chat_messages(data: bytes) -> list[ChatMessage]:
         TypeError: Platné JSON, ale ne objekt s conversations.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 

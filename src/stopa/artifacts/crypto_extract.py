@@ -41,6 +41,7 @@ from stopa.domain.crypto.wallets import (
     parse_electrum_wallet,
     parse_metamask_vault,
 )
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.models import Artifact
 
 CRYPTO_EXTRACT_VERSION = "1.0"
@@ -329,7 +330,7 @@ def extract_crypto_artifacts(path: Path | str) -> list[Artifact]:
     # 1) JSON strukturované formáty (Electrum / MetaMask vault)
     if text is not None and _looks_like_json(text):
         try:
-            obj = json.loads(text)
+            obj = bounded_json_loads(text)
         except json.JSONDecodeError:
             obj = None
         if isinstance(obj, dict):

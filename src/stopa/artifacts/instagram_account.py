@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,7 @@ def parse_instagram_account(data: bytes) -> tuple[list[IgAccountEvent], list[IgS
         TypeError: Platné JSON, ale bez rozpoznatelných záznamů.
     """
     try:
-        payload = json.loads(data.decode("utf-8", errors="replace"))
+        payload = bounded_json_loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"Neplatné JSON: {e}") from e
 

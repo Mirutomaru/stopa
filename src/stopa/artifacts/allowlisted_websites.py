@@ -19,6 +19,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.json_bounded import bounded_json_loads
 from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ def build_allowlisted_artifacts(domains: list[str]) -> list[Artifact]:
 def extract_allowlisted_websites_artifacts(path: Path) -> list[Artifact]:
     """Pipeline entrypoint — DDG allowlisted websites JSON → artifacty."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        data = bounded_json_loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("AllowlistedWebsites read %s: %s", path, exc)
         return []
