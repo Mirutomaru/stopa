@@ -265,8 +265,9 @@ class _BytesHolder:
     data: bytes
 
 
-#: P1 security — limity neomezených zdrojů (ZIP bomba) pro import-mobile archívy:
-#: jediný člen ≤ 256 MiB, celková velikost všech členů ≤ 4 GiB, počet členů ≤ 20_000.
+#: P1/P2 security — limity neomezených zdrojů pro import-mobile (ZIP/složka i ADB;
+#: sdílená budget logika v domain.archive_budget): jediný člen ≤ 256 MiB, celková
+#: velikost všech členů ≤ 4 GiB, počet členů ≤ 20_000.
 # Legitimní UFED/ADB exporty jsou obvykle < 1 GB — limity jsou s rezervou; testy je
 # monkeypatchují na malé hodnoty (čtení z module globalu v době volání).
 _MAX_ARCHIVE_MEMBER = 256 * (1 << 20)
@@ -321,18 +322,46 @@ def cmd_import_mobile(args: argparse.Namespace) -> int:
         return h.hexdigest()
 
     if source_kind == "adb":
+        from stopa.domain.archive_budget import ArchiveBudget
+
         if not dump_path.is_dir():
             print(f"ADB logical dump musí být složka: {dump_path}", file=sys.stderr)
             return 2
+        # P2 security — sdílená budget logika (stejné limity jako ZIP/složková
+        # větev): počet + celková velikost sbíraných vstupů; per-member limit
+        # se vztahuje jen na .vcf (čtené celé do RAM) — DB se streamují po cestě
+        # (sha256 v kusech, sqlite po cestě), takže je omezuje jen celkový limit.
+        adb_budget = ArchiveBudget(
+            max_member=_MAX_ARCHIVE_MEMBER,
+            max_total=_MAX_ARCHIVE_TOTAL,
+            max_members=_MAX_ARCHIVE_MEMBERS,
+        )
         for p in sorted(dump_path.rglob("*")):
             if not p.is_file():
                 continue
             suf = p.suffix.lower()
+            if suf not in (".db", ".sqlite", ".vcf"):
+                continue
             rel = p.relative_to(dump_path).as_posix()
-            if suf in (".db", ".sqlite"):
-                inputs.append((rel, p))
-            elif suf == ".vcf":
-                inputs.append((rel, p))  # VCF z backupu (řídké, ale levné)
+            size = p.stat().st_size
+            if adb_budget.exhausted:
+                print(
+                    f"P2 limit: více než {adb_budget.max_members} souborů v ADB "
+                    "dumpu — zbytek se přeskočí",
+                    file=sys.stderr,
+                )
+                break
+            if suf == ".vcf" and not adb_budget.fits_member(size):
+                continue  # tichý skip — shodná sémantika jako ZIP per-member
+            if not adb_budget.fits_total(size):
+                print(
+                    f"P2 limit: celková velikost ADB dumpu > "
+                    f"{adb_budget.max_total >> 30} GiB — soubor {rel} se přeskočí",
+                    file=sys.stderr,
+                )
+                continue
+            inputs.append((rel, p))
+            adb_budget.accept(size)  # VCF z backupu (řídké, ale levné)
     else:
         if not dump_path.exists():
             print(f"Soubor neexistuje: {dump_path}", file=sys.stderr)
@@ -341,37 +370,42 @@ def cmd_import_mobile(args: argparse.Namespace) -> int:
         def _archive_members() -> list[tuple[str, bytes]] | None:
             """ZIP (.ufd/.zip) → [(rel_path, bytes)]; složka → [..] z disk.
 
-            P1 security — limity neomezených zdrojů (ZIP bomba): jediný člen ≤ 256 MiB,
-            celkem ≤ 4 GiB, počet ≤ 20_000; překročení → warning + skip zbytku
-            (přeskočené členy se logují, proces nesmí OOM).
+            P1/P2 security — sdílená budget logika (``domain.archive_budget``):
+            jediný člen ≤ 256 MiB, celkem ≤ 4 GiB, počet ≤ 20_000; překročení
+            → warning + skip zbytku (přeskočené členy se logují, proces nesmí OOM).
             """
+            from stopa.domain.archive_budget import ArchiveBudget
+
             out: list[tuple[str, bytes]] = []
-            total_size = 0
+            budget = ArchiveBudget(
+                max_member=_MAX_ARCHIVE_MEMBER,
+                max_total=_MAX_ARCHIVE_TOTAL,
+                max_members=_MAX_ARCHIVE_MEMBERS,
+            )
 
             def _collect(rel: str, data: bytes) -> bool:
                 # False = konec sběru (počtový limit); True = pokračovat
-                nonlocal total_size
-                if len(out) >= _MAX_ARCHIVE_MEMBERS:
+                if budget.exhausted:
                     print(
-                        f"P1 limit: více než {_MAX_ARCHIVE_MEMBERS} členů archívu — "
+                        f"P1 limit: více než {budget.max_members} členů archívu — "
                         "zbytek se přeskočí",
                         file=sys.stderr,
                     )
                     return False
-                if total_size + len(data) > _MAX_ARCHIVE_TOTAL:
+                if not budget.fits_total(len(data)):
                     print(
                         f"P1 limit: celková velikost archívu > 4 GiB — člen {rel} "
                         "se přeskočí",
                         file=sys.stderr,
                     )
                     return True
-                total_size += len(data)
+                budget.accept(len(data))
                 out.append((rel, data))
                 return True
 
             if dump_path.is_dir():  # rozbalený export — procházíme přímo
                 for p in sorted(dump_path.rglob("*")):
-                    if not p.is_file() or p.stat().st_size > _MAX_ARCHIVE_MEMBER:
+                    if not p.is_file() or not budget.fits_member(p.stat().st_size):
                         continue
                     if not _collect(p.relative_to(dump_path).as_posix(), p.read_bytes()):
                         break
@@ -380,7 +414,7 @@ def cmd_import_mobile(args: argparse.Namespace) -> int:
                 try:
                     with zipfile.ZipFile(dump_path) as zf:
                         for zi in zf.infolist():
-                            if zi.is_dir() or zi.file_size > _MAX_ARCHIVE_MEMBER:
+                            if zi.is_dir() or not budget.fits_member(zi.file_size):
                                 continue
                             if not _collect(zi.filename, zf.read(zi)):
                                 break
