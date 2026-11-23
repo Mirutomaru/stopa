@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.xml_bounded import XmlLimitError, bounded_xml_parse
 from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
@@ -125,8 +126,9 @@ def parse_wlan_profile_xml(data: bytes) -> list[WifiProfile]:
         ValueError: Neplatné XML nebo chybějící WLANProfile kořen.
     """
     try:
-        root = ET.fromstring(data)
-    except ET.ParseError as e:
+        # P1 security — důkazový XML s limitem hloubky a entit
+        root = bounded_xml_parse(data)
+    except (ET.ParseError, XmlLimitError) as e:
         raise ValueError(f"Neplatné WLAN profile XML: {e}") from e
 
     # kořen může být <WLANProfile> přímo, nebo obálka s více profily

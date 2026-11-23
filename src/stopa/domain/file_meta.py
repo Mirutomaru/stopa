@@ -23,6 +23,8 @@ import re
 import xml.etree.ElementTree as ET
 import zipfile
 
+from stopa.domain.xml_bounded import XmlLimitError, bounded_xml_parse
+
 logger = logging.getLogger(__name__)
 
 # ── PDF /Info ────────────────────────────────────────────────────────
@@ -158,6 +160,22 @@ _OOXML_APP_FIELDS = {
 }
 
 
+#: P1 security — maximální velikost jednoho docProps člena (legitimní < 64 KiB).
+_MAX_DOCPROPS_BYTES: int = 256 * 1024
+
+
+def _read_ooxml_member(zf: zipfile.ZipFile, name: str) -> bytes | None:
+    """P1 security — omezené čtení docProps člena (bombuje-li, přeskočí se)."""
+    try:
+        with zf.open(name) as fh:
+            data = fh.read(_MAX_DOCPROPS_BYTES + 1)
+    except (KeyError, OSError):
+        return None
+    if len(data) > _MAX_DOCPROPS_BYTES:
+        return None  # abnormálně velký člen → metadata se přeskočí
+    return data
+
+
 def _parse_ooxml(data: bytes) -> dict[str, str]:
     """OOXML docProps — core.xml (Dublin Core) + app.xml přes zipfile."""
     out: dict[str, str] = {}
@@ -168,10 +186,14 @@ def _parse_ooxml(data: bytes) -> dict[str, str]:
     names = set(zf.namelist())
 
     if "docProps/core.xml" in names:
-        try:
-            root = ET.fromstring(zf.read("docProps/core.xml"))
-        except (ET.ParseError, OSError):
-            root = None
+        raw = _read_ooxml_member(zf, "docProps/core.xml")
+        root = None
+        if raw is not None:
+            try:
+                # P1 security — docProps je nedůvěryhodný (billion laughs / hloubka)
+                root = bounded_xml_parse(raw)
+            except (ET.ParseError, OSError, XmlLimitError):
+                root = None
         if root is not None:
             for local, field in _OOXML_CORE_FIELDS.items():
                 for el in root.iter():
@@ -180,10 +202,14 @@ def _parse_ooxml(data: bytes) -> dict[str, str]:
                         break
 
     if "docProps/app.xml" in names:
-        try:
-            root = ET.fromstring(zf.read("docProps/app.xml"))
-        except (ET.ParseError, OSError):
-            root = None
+        raw = _read_ooxml_member(zf, "docProps/app.xml")
+        root = None
+        if raw is not None:
+            try:
+                # P1 security — docProps je nedůvěryhodný (billion laughs / hloubka)
+                root = bounded_xml_parse(raw)
+            except (ET.ParseError, OSError, XmlLimitError):
+                root = None
         if root is not None:
             for el in root.iter():
                 field = _OOXML_APP_FIELDS.get(el.tag.split("}")[-1])

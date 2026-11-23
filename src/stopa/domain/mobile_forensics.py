@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from xml.etree import ElementTree
 
+from stopa.domain.xml_bounded import XmlLimitError, bounded_xml_parse
+
 logger = logging.getLogger(__name__)
 
 # E1: verze parseru — eviduje se v audit logu (reprodukovatelnost analýzy)
@@ -121,8 +123,9 @@ def parse_ufdr_xml(xml_text: str | bytes) -> tuple[list[ModelSpec], list[str]]:
     spotřebované u rodiče (žádné dvojité počítání). Nevalidní XML → `UfedParseError`.
     """
     try:
-        root = ElementTree.fromstring(xml_text if isinstance(xml_text, str) else xml_text.decode("utf-8"))
-    except (ElementTree.ParseError, UnicodeDecodeError) as e:
+        # P1 security — report.xml je nedůvěryhodný (billion laughs / hloubka)
+        root = bounded_xml_parse(xml_text if isinstance(xml_text, str) else xml_text.decode("utf-8"))
+    except (ElementTree.ParseError, UnicodeDecodeError, XmlLimitError) as e:
         raise UfedParseError(f"report.xml nevalidní XML: {e}") from e
 
     unsupported: set[str] = set()

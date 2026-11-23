@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from stopa.domain.xml_bounded import XmlLimitError, bounded_xml_parse
 from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
@@ -153,8 +154,9 @@ def parse_scheduled_task_xml(data: bytes) -> list[ScheduledTask]:
         ValueError: Neplatné XML nebo chybějící Task kořen.
     """
     try:
-        root = ET.fromstring(data)
-    except ET.ParseError as e:
+        # P1 security — důkazový XML s limitem hloubky a entit
+        root = bounded_xml_parse(data)
+    except (ET.ParseError, XmlLimitError) as e:
         raise ValueError(f"Neplatné Scheduled Task XML: {e}") from e
 
     if _local(root.tag) != "task":

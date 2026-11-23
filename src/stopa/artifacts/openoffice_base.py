@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
+from stopa.domain.xml_bounded import XmlLimitError, bounded_xml_parse
 from stopa.models import Artifact
 
 logger = logging.getLogger(__name__)
@@ -61,11 +62,10 @@ def _read_metadata(zf: zipfile.ZipFile) -> dict[str, Any]:
     meta: dict[str, Any] = {}
     try:
         with zf.open("content.xml") as fh:
-            tree = ET.parse(fh)
-    except (KeyError, ET.ParseError, OSError):
+            # P1 security — content.xml je nedůvěryhodný (billion laughs / hloubka)
+            root = bounded_xml_parse(fh)
+    except (KeyError, ET.ParseError, OSError, XmlLimitError):
         return meta
-
-    root = tree.getroot()
     for tag in ("title", "creator", "date"):
         el = root.find(f".//{_DC_NS}{tag}")
         if el is not None and el.text:
