@@ -66,6 +66,14 @@ Priorita práce: **Forensic correctness > Data integrity > Security > Reliabilit
 - **Provedená změna:** CI flake stp044 self-baseline (+21,9 % pod plným zatížením, práh 20 %) — single measurement vs. single measurement je na sub-2 ms scénářích křehký. `scripts/ci_benchmark.py`: nový `--runs N` (default 1 → CI job bez změny runtime); N>1 = medián per scénář z N měření; baseline i current se porovnávají na stejné úrovni (medián vs. medián), report + pole `"runs"`. stp044 self-baseline test: `--runs 3` na obou stranách — šum by musel systematicky zatížit > polovinu měření, aby projel prahem.
 - **Výsledek testu:** VERIFIED — `tests/test_stp044_ci_benchmark_e2e.py` **6 passed in 103.33s**; Ruff scripts+tests clean.
 
+### P3 A — bounded JSON parse nedůvěryhodných vstupů (commit `51b0018`)
+- **Provedená změna:** Auditní riziko „JSON depth limit" — cloud parserte volaly `json.loads` na uživatelská data bez limity vnoření (pathologická bomb by vyčerpala rekurzi / C stack parseru). Nový čistý doménový modul `domain/json_bounded.py`: `bounded_json_loads(str|bytes|bytearray, *, max_depth=None)` — default `DEFAULT_MAX_DEPTH=200` (kořen = úroveň 1; reálné důkazové soubory <30), rychlá cesta přes celkový počet otevíracích závorek (typické dokumenty bez lineárního skenu, jen dva C-level pasy) + `JsonLimitError(ValueError)` — parser kontrakt „Raises: ValueError" platí, pipeline (`except Exception`) i plaso handler `(JSONDecodeError|ValueError)` zachovávají sémantiku; limit error je informativnější než decode failure. Staged rollout přes celý povrch nedůvěryhodných dat: 57 artifact parserů (68 call sites) + nahraný STIX bundle v `threat_intel.py` + `extra` pole uživatelských plaso záznamů v `plaso_import.py`. AST rollout guard brání regresi — žádná holá `json.loads/json.load(` v cílovém povrchu.
+- **Výsledek testu:** VERIFIED — `tests/test_p3_json_bounded.py` **26 passed** (unit hloubka / JSON bomb / E2E přes parser google_location_history + AST guard); cílená regrese všech dotčených parserů + threat_intel + plaso: **1192 passed in 13.74s**; Ruff clean.
+
+### P3 B — subprocess timeouty + AST guard (commit `b509e7c`)
+- **Provedená změna:** Auditní riziko „parser timeouty" uzavřeno auditováním: TSK/volatility/LUKS/sandbox/plugin_loader už měly explicitní `timeout=`, síťová volání přes `urlopen(timeout)` / `httpx.Client(timeout)`, čistě paměťové parserte omezené velikostními limity (P1/P2) + hloubkovým limitem (P3 A) — chybějící timeouty byly jen v `installer.py` (setup fáze: mrtvá síť/apt repo viselo installer navždy). `_subprocess(cmd, *, timeout_s=900)` → timeout = exit 124 + warning (ne výjimka), vytvoření venvu pod limitem 300 s; AST sken celé `src/stopa` — každé blokovací volání subprocess.run/Popen/call/check_output musí mít explicitní `timeout=` kwarg.
+- **Výsledek testu:** VERIFIED — `tests/test_p3_subprocess_timeouts.py` **6 passed** (AST guard + chování installeru při Timeoutu přes monkeypatch, žádné reálné procesy); regrese `test_installer.py`: celkem **28 passed in 1.53s**; Ruff clean.
+
 ## 3. Změněné soubory
 
 **Cell 1 `24d4cc7`** (P0.5): `src/stopa/domain/report.py`, `tests/test_p05_report_timestamps.py`.
@@ -152,6 +160,11 @@ Upravené: `test_f54_write_blocker.py` (piny nové sémantiky), web test fixture
 - Cell B benchmark medián: `tests/test_stp044_ci_benchmark_e2e.py` **6 passed in 103.33s**; regrese `test_stp043_ci_benchmark.py`: fake engine lambda nezachytil nový kwarg `runs=` (5F v plné suite) → oprava v rámci cely B (amend); po opravě stp043+stp044 **21 passed in 102.65s**; Ruff scripts+tests clean
 - **Finální full suite (po celé P2 vlně):** `5279 passed, 1 skipped in 2278.46s`, **exit 0 — nula selhání** (delta +10 vs. stav po P1 = +10 nových P2 testů; první běh suite chytal Cell B regresii stp043 fake engine → opravena amendem, re-run čistý)
 
+### P3 hardening vlna
+- Cell A bounded JSON: `tests/test_p3_json_bounded.py` **26 passed**; cílená regrese všech dotčených parserů (57 artifact + threat_intel + plaso): **1192 passed in 13.74s** (exit 0); Ruff clean
+- Cell B subprocess timeouty: `tests/test_p3_subprocess_timeouts.py` **6 passed** + regrese `test_installer.py`: celkem **28 passed in 1.53s**; Ruff clean
+- **Finální full suite nad celou P3 vlnou:** **`5311 passed, 1 skipped`, exit 0** (37:47; delta +32 vs. P2 báze 5279 = nové P3 testy)
+
 ## 8. Výsledky benchmarků
 
 Lokální běh `scripts/ci_benchmark.py --baseline benchmarks/baseline.json --threshold 0.20 --min-delta-ms 0.5` (stejný příkaz jako CI job `benchmark`):
@@ -179,9 +192,11 @@ Vyřešeno v P2 vlně:
 - **ADB branch `--source adb` bez celkových limitů** (původní riziko 1) — sdílená budget logika `domain.archive_budget.ArchiveBudget`, obě větve import-mobile pod limity 256 MiB / 4 GiB / 20 000; commit `874c044`.
 - **Citlivost `test_stp044_ci_benchmark_e2e.py` na zatížení** (původní riziko 2, flake +21,9 % vs. práh 20 %) — medián 3 měření per scénář (`--runs N`), baseline i current na stejné úrovni; commit `cd005ad`.
 
-Zbývající reziduální rizika (uvědomělá, s odůvodněním):
-1. **JSON depth limit u neomezených vstupů** — ~40 call sites `json.loads(data.decode(...))` v cloud parcích (google_*, amazon_*, dropbox_mega, ...). Vše parsuje už načtené file bytes (velikost omezená upstream per-file limity), takže riziko = hluboké vnoření, ne velikost. Cross-cutting změna přes 40+ souborů → P3: sdílený `json_bounded` doménový helper s depth limit + staged rollout po skupinách parserů.
-2. **Parser timeouty** — jednotlivé artifact parcery nemají globální watchdog; v praxi omezeny velikostními limity (P1/P2) a streamingem, dedikovaný timeout = P3 scope.
+Vyřešeno v P3 vlně (commity `51b0018`, `b509e7c`):
+- **JSON depth limit u neomezených vstupů** (původní riziko 1) — sdílený helper `domain/json_bounded.bounded_json_loads` (depth ≤200, `JsonLimitError(ValueError)`), staged rollout přes celý povrch nedůvěryhodných dat: 68 call sites v 57 artifact parcích + STIX bundle (`threat_intel.py`) + uživatelské plaso záznamy (`plaso_import.py`); AST guard proti regresi.
+- **Parser timeouty** (původní riziko 2) — uzavřeno auditováním: subprocess parserte měly explicitní `timeout=`, síťová volání přes urlopen/httpx timeout, paměťové parserte omezené P1/P2 velikostními + P3 hloubkovými limity; chybějící timeouty doplněny v `installer.py` (900 s / venv 300 s) + AST guard.
+
+Zbývající reziduální rizika: **žádná** — všechny položky §6 master promptu i auditní rezidua jsou uzavřeny (P0–P3).
 
 Vyřešeno v uzavírací vlně (`fix(fde)` commit `a6ee280`):
 - **LUKS cryptsetup open failure** — dedikovaný test (mockovaný `subprocess.run` → `CalledProcessError`): FdeError s posledním řádkem stderr, passphrase se nedostává do zprávy, dočasný keyfile uklizen i při selhání open.
@@ -189,6 +204,6 @@ Vyřešeno v uzavírací vlně (`fix(fde)` commit `a6ee280`):
 - **Třetí CLI cesta `replace(out_path)`** — VERIFIED řádek za řádkem: 3× `release_temp` po replace (forensics.py L67/L80/L96) s OSError guardem před re-raise.
 
 ## 10. Doporučené další kroky
-1. **Release STOPA 2.5 hotový** — docs `79ae292` + bump/tag `881a121`, annotated tag `v2.5.0`; CI + Release workflow green; GitHub Release s wheels x86_64/aarch64 (E2E ověřeno clean venv Python 3.14). P2 vlna (`874c044`, `cd005ad`) = 2 commity nad tagem → příští release.
-2. **P3 vlna (doporučena):** JSON depth limit — sdílený `json_bounded` doménový helper (~40 call sites, staged rollout) + parser timeouty (viz sekce 9).
-3. **extra `carving` pinuje wheels z tagu `v2.4.0`** — URL fungují; update pinu až s novým Rust kódem (dokumentováno v RELEASE_NOTES_2_5.md).
+1. **Release STOPA 2.5 hotový** — docs `79ae292` + bump/tag `881a121`, annotated tag `v2.5.0`; CI + Release workflow green; GitHub Release s wheels x86_64/aarch64 (E2E ověřeno clean venv Python 3.14). P2+P3 vlny = hardening commity nad tagem → příští release (semver: změny aditivní/behavior fix, bez lámání veřejných API → minor 2.6).
+2. **extra `carving` pinuje wheels z tagu `v2.4.0`** — URL fungují; update pinu až s novým Rust kódem (dokumentováno v RELEASE_NOTES_2_5.md).
+3. **Volitelné: macOS runner capacity flake** — pokud se opakuje nedostatek arm64 hosted runnerů, pin CI jobu na `macos-15-intel` + update PLATFORM_MATRIX.md; dosud stačilo re-run bez změny workflow (fallback připraven).

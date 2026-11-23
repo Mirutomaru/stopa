@@ -78,3 +78,9 @@ nejen implicitně obnoví traversal. Testy 6p + regrese export endpointů (stp06
   to míří; volitelné posílení (třetí měření) v P2.
 - Bounded XML: dokumenty s uživatelskými entity deklaracemi selhávají fail-closed (hloubka default
   200, konfigurovatelná).
+
+> **Post-release update (2026-11-24):** položky 1–2 uzavřeny v P2+P3 hardening vlně nad tagem
+> `v2.5.0` (commity `874c044`, `6f4f8f1`, `51b0018`, `b509e7c`): ADB branch pod sdílenou
+> ArchiveBudget, benchmark medián `--runs N`, bounded JSON depth limit 200 u nedůvěryhodných
+> vstupů a installer subprocess timeouty. Detail: `STOPA_CHANGELOG.md` +
+> `FORENSIC_HARDENING_REPORT.md`.
