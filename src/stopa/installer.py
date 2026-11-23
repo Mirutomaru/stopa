@@ -203,7 +203,13 @@ def _setup_venv(venv_dir: Path) -> int:
     bin_name = "Scripts" if os.name == "nt" else "bin"
     venv_dir.mkdir(parents=True, exist_ok=True)
     print(f"[install] python -m venv {venv_dir}")
-    r = subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=False)
+    try:
+        r = subprocess.run(
+            [sys.executable, "-m", "venv", str(venv_dir)], check=False, timeout=300
+        )
+    except subprocess.TimeoutExpired:
+        print("[install] ERROR: vytvoření venvu přerušeno (timeout 300 s)", file=sys.stderr)
+        return 124
     if r.returncode != 0:
         print("[install] ERROR: vytvoření venvu selhalo", file=sys.stderr)
         return 1
@@ -240,13 +246,23 @@ def _run_system_packages(plan: InstallPlan) -> None:
         _symlink_ewf_libs(plan.ewf_symlink_dir)
 
 
-def _subprocess(cmd: list[str]) -> int:
-    """Spustí příkaz (bez shell); vrací return code. Chyba = warning, ne výjimka."""
+def _subprocess(cmd: list[str], *, timeout_s: int = 900) -> int:
+    """Spustí příkaz (bez shell); vrací return code. Chyba = warning, ne výjimka.
+
+    ``timeout_s``: maximální doba běhu — bez limitu by mrtvá síť/apt repo
+    viselo installer navždy (P3-B). Timeout → 124 (standardní exit pro timeout).
+    """
     try:
-        r = subprocess.run(cmd, check=False)
+        r = subprocess.run(cmd, check=False, timeout=timeout_s)
         if r.returncode != 0:
             print(f"[install] WARNING: {' '.join(cmd)} vrátilo {r.returncode} (pokračuji)", file=sys.stderr)
         return r.returncode
+    except subprocess.TimeoutExpired:
+        print(
+            f"[install] WARNING: {' '.join(cmd[:3])}… přerušeno po {timeout_s}s",
+            file=sys.stderr,
+        )
+        return 124
     except FileNotFoundError as e:
         print(f"[install] WARNING: příkaz nenalezen ({e}) — přeskočeno", file=sys.stderr)
         return 127
