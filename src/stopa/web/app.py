@@ -656,7 +656,12 @@ def create_app(
 
         Layout: ``{db_dir}/exports/{case_id}/{what}.{format}`` — vedle case DB,
         aby re-download fungoval i po restartu serveru (trvalá cache).
+
+        P1 security — path traversal: validace zde (ne jen u volajících endpointů)
+        je obrana v hloubce; strict regex _CASE_ID_RE nepustí tečku ani lomítko,
+        takže žádný legitimní ID neunikne z ``exports/``.
         """
+        validate_case_id(case_id)  # P1 security — defense in depth (400 při traversalu)
         return base / "exports" / case_id / f"{what}.{format}"
 
     def _save_last_export(case_id: str, what: str, format: str, text: str) -> None:
