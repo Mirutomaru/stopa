@@ -8,5 +8,7 @@ dist/
 build/
 cases/
 *.db
+# lokální artefakt CI benchmark jobu (upload, ne commit)
+benchmark-result.json
 .DS_Store
 node_modules/
