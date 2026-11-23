@@ -14,6 +14,7 @@ Formáty:
 from __future__ import annotations
 
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -54,6 +55,7 @@ from stopa.domain.fde_luks import (
     LUKS_MAGIC,
     cryptsetup_available,
     decrypt_luks,
+    decrypt_luks_stream,
     is_luks_image,
     parse_luks_header,
 )
@@ -392,3 +394,33 @@ def test_pipeline_fbe_keyfile_beats_password(tmp_path: Path, case_db):
 
     assert summary.fde_unlocked is True
     db.close()
+
+
+# ── P0.2 — LUKS error scénáře (mockovaný cryptsetup; root nevyžaduje) ─────────────
+
+
+def test_luks_open_failure_fde_error_and_keyfile_cleanup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """cryptsetup open selže → FdeError s posledním řádkem stderr.
+
+    P0.2 — passphrase se nedostává do chybové zprávy (jen typ + stderr); dočasný
+    keyfile (0600, izolovaný dir) se uklidí i při selhání open.
+    """
+    data = LUKS_MAGIC + bytes([1]) + b"\x00" + struct.pack("<I", 4096)
+    img = tmp_path / "luks.img"
+    img.write_bytes(data + b"\x00" * (HEADER_SIZE_V1 - len(data)) + b"junk")
+
+    base = tmp_path / "stopatmp"
+    monkeypatch.setenv("STOPA_TMP_DIR", str(base))
+    monkeypatch.setattr("stopa.domain.fde_luks._find_cryptsetup", lambda: "cryptsetup")
+
+    def _run(cmd, **_kw):
+        raise subprocess.CalledProcessError(1, cmd, stderr="první řádek\nChybné heslo (bad passphrase)")
+
+    monkeypatch.setattr("subprocess.run", _run)
+
+    with pytest.raises(FdeError, match="Chybné heslo") as ei:
+        decrypt_luks_stream(str(img), password="tajne-heslo-123")
+
+    assert "tajne-heslo-123" not in str(ei.value)  # passphrase jen v keyfile, ne ve zprávě
+    leftovers = [p for p in base.iterdir()] if base.exists() else []
+    assert leftovers == []  # P0.2 — keyfile uklizen i při selhání open

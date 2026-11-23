@@ -248,7 +248,13 @@ def decrypt_bitlocker(
                         dst.write(buf.raw[:n])
                         offset += n
             except Exception:
-                release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+                try:
+                    release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+                except Exception as cleanup_err:  # noqa: BLE001 — úklid nesmí maskovat původní chybu
+                    _log.warning(
+                        "Úklid dočasného BDE/FVDE obrazu selhal (původní chyba propaguje): %s",
+                        cleanup_err,
+                    )
                 raise
             tmp_path = t.detach()  # ownership → volající; soubor zůstává pro pipeline
 
@@ -394,7 +400,13 @@ def decrypt_filevault(image_path: Path | str, password: str) -> FvdeResult:
                         dst.write(buf.raw[:n])
                         offset += n
             except Exception:
-                release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+                try:
+                    release_temp(t.path)  # P0.3 — úklid částečného plaintextu (zero-fill + unlink)
+                except Exception as cleanup_err:  # noqa: BLE001 — úklid nesmí maskovat původní chybu
+                    _log.warning(
+                        "Úklid dočasného BDE/FVDE obrazu selhal (původní chyba propaguje): %s",
+                        cleanup_err,
+                    )
                 raise
             tmp_path = t.detach()  # ownership → volající; soubor zůstává pro pipeline
 

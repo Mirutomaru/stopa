@@ -89,6 +89,8 @@ Priorita práce: **Forensic correctness > Data integrity > Security > Reliabilit
 | `tests/test_p04_source_manifest.py` | — | manifest doména (canonical hash, verify) |
 | `tests/test_p04_write_blocker_gate.py` | — | gate / resolve_gate_mode / třídy ochrany |
 | `tests/test_p04_source_manifest_integration.py` | — | v28 migrace, lifecycle, pipeline audit (celkem s předchozími 39) |
+| `test_f11_bitlocker.py::TestBdeReadLoopP03` (+ `_FakeBdeLib`) | +2 | BDE read-loop: mid-stream selhání → BdeError + úklid; masking test (úklid nesmí potlačit původní chybu) |
+| `test_fde_b2.py::test_luks_open_failure_…` | +1 | LUKS open selže → FdeError (poslední řádek stderr), passphrase mimo zprávu, keyfile uklizen |
 
 Upravené: `test_f54_write_blocker.py` (piny nové sémantiky), web test fixtures (laboratorní `wb_gate_mode=warn_only` — 10 souborů), piny schématu v27→v28 (5 souborů), zlaté povrchy `p14_cli_surface.json`, `p48_cli_help_cs.json`, `p14_pipeline_surface.json`.
 
@@ -109,13 +111,13 @@ Lokální běh `scripts/ci_benchmark.py --baseline benchmarks/baseline.json --th
 - Kontext: quick regression batch (90 testů kolem ingest/pipeline) = 245,96 s; full suite 2231,27 s (srovnatelné s předchozími běhy ~2217 s).
 
 ## 9. Nevyřešená rizika
-1. **LUKS cryptsetup open/close failure paths** — cleanup keyfile pokrýt výjimkou v `temp_secret_file`; dedikované testy pro selhání cryptsetup ještě chybí (PARTIALLY VERIFIED).
-2. **BDE/FVDE `except Exception:` kolem ctypes read loopu** — semantická shoda s projektovými error semantics (TypeError/ValueError/BdeError/FvdeError) otevřená; Ruff/full suite zelené.
-3. **Třetí CLI cesta `replace(out_path)`** — asistent potvrdil 3× `release_temp`, explicitní zachování v patchi neověřeno řádkem za řádkem (PARTIALLY VERIFIED).
-4. **Forenzní audit §6 master promptu** (path traversal, ZIP bomb, seccomp…) — plný rozsah P1 security hardening nad ráměm P0 celů zůstává jako samostatná vlna.
+1. **Forenzní audit §6 master promptu** (path traversal, ZIP bomb, seccomp…) — plný rozsah P1 security hardening nad ráměm P0 celů zůstává jako samostatná vlna.
+
+Vyřešeno v uzavírací vlně (`fix(fde)` commit):
+- **LUKS cryptsetup open failure** — dedikovaný test (mockovaný `subprocess.run` → `CalledProcessError`): FdeError s posledním řádkem stderr, passphrase se nedostává do zprávy, dočasný keyfile uklizen i při selhání open.
+- **BDE/FVDE `except Exception:` kolem ctypes read loopu** — VERIFIED: re-raise zachovává původní typ výjimky (BdeError/FvdeError) pro volající; ostatní broad catche jsou doloženě nekritické cleanupy (jen log). Reziduální riziko, že `release_temp` v except bloku sám zvedne a maskuje původní chybu → uzavřeno try/except + log + masking testem.
+- **Třetí CLI cesta `replace(out_path)`** — VERIFIED řádek za řádkem: 3× `release_temp` po replace (forensics.py L67/L80/L96) s OSError guardem před re-raise.
 
 ## 10. Doporučené další kroky
-1. Dedikované LUKS failure-path testy (mock cryptsetup open/close selhání).
-2. Zúžení BDE/FVDE broad exception na typové výjimky + testy.
-3. Vlna P1 security hardening dle §6 master promptu (limity vstoupů, timeouty parserů, ZIP bomb).
-4. Push `main` přes SSH (`id_ed25519_gh`) po souhlasu; tag zůstává `v2.4.0` na `7a9bc66` dokud se hardening nepropíše do release vlny.
+1. Vlna P1 security hardening dle §6 master promptu (limity vstupů, timeouty parserů, ZIP bomb).
+2. Push `main` přes SSH (`id_ed25519_gh`) po souhlasu; tag zůstává `v2.4.0` na `7a9bc66`, dokud se hardening nepropíše do release vlny.

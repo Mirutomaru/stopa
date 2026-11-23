@@ -442,3 +442,104 @@ def test_pipeline_stopablock_password(tmp_path: Path, case_db):
     assert summary.fde_unlocked is True
     assert summary.files_total >= 1
     db.close()
+
+
+# ── P0.3 — BDE read-loop error cesty (falešný libbde, bez reálné knihovny) ────────
+
+
+class _FakeBdeLib:
+    """Minimální falešný libbde pokrývající ``decrypt_bitlocker`` až po read loop.
+
+    Callables jsou instance atributy (funkční objekty mají ``__dict__``, takže na
+    nich kód nastaví ``.restype``/``.argtypes`` — bound metody ne). Jsou to plain
+    Python callables, takže argumenty dorazí v původní podobě:
+    ``byref(x)`` → CArgObject, který drží zabalený objekt v ``._obj`` (py3.11).
+    """
+
+    def __init__(self, total: int, fail_after_reads: int = 1) -> None:
+        self._total = total
+        self._reads_ok = fail_after_reads
+
+        def initialize(vol_ref, err_ref):
+            vol_ref._obj.value = 42  # libovolný non-NULL „handle“ (int pro c_void_p)
+            return 1
+
+        def access_flags():
+            return 0x1
+
+        def volume_open(volume, path, flags, err_ref):
+            return 1
+
+        def volume_unlock(volume, err_ref):
+            return 1
+
+        def set_password(volume, pw, size, err_ref):
+            return 1
+
+        def get_size(volume, size_ref, err_ref):
+            size_ref._obj.value = total
+            return 1
+
+        def read_at_offset(volume, buf, want, offset, err_ref):
+            if self._reads_ok > 0:
+                self._reads_ok -= 1
+                buf[0:want] = b"A" * want
+                return want
+            return -1  # <= 0 → BdeError "čtení selhalo @ offset"
+
+        def volume_close(volume, err_ref):
+            return 1
+
+        def volume_free(vol_ref, err_ref):
+            vol_ref._obj.value = None
+            return 1
+
+        self.libbde_volume_initialize = initialize
+        self.libbde_get_access_flags_read = access_flags
+        self.libbde_volume_open = volume_open
+        self.libbde_volume_unlock = volume_unlock
+        self.libbde_volume_set_utf8_password = set_password
+        self.libbde_volume_get_size = get_size
+        self.libbde_volume_read_buffer_at_offset = read_at_offset
+        self.libbde_volume_close = volume_close
+        self.libbde_volume_free = volume_free
+
+
+@pytest.fixture()
+def bde_tmpdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Izolované STOPA_TMP_DIR — částečný plaintext nesmí uniknout do reálného TMPDIRu."""
+    base = tmp_path / "stopatmp"
+    monkeypatch.setenv("STOPA_TMP_DIR", str(base))
+    return base
+
+
+class TestBdeReadLoopP03:
+    """Chybové cesty BDE read loop — deterministické, offline (falešná knihovna)."""
+
+    def _run_decrypt(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        img = tmp_path / "bitlocker.img"
+        img.write_bytes(b"\x00" * 16)
+        monkeypatch.setattr(bde_fvde, "_CHUNK", 4096)
+        fake = _FakeBdeLib(total=8192, fail_after_reads=1)
+        monkeypatch.setattr(bde_fvde, "_load", lambda name: fake)
+        return bde_fvde.decrypt_bitlocker(img, password="heslo")
+
+    def test_mid_stream_read_failure_raises_bde_error_and_cleans_tmp(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bde_tmpdir: Path
+    ) -> None:
+        """První chunk OK, druhý selže → BdeError s offsetem; částečný plaintext uklizen."""
+        with pytest.raises(bde_fvde.BdeError, match="čtení selhalo @ 4096"):
+            self._run_decrypt(tmp_path, monkeypatch)
+        assert [p for p in bde_tmpdir.iterdir()] == []
+
+    def test_cleanup_failure_does_not_mask_original_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bde_tmpdir: Path
+    ) -> None:
+        """P0.3 — selhání release_temp v except bloku nesmí potlačit původní BdeError."""
+
+        def _boom(path, audit=None):
+            raise RuntimeError("úklid padl")
+
+        monkeypatch.setattr(bde_fvde, "release_temp", _boom)
+        with pytest.raises(bde_fvde.BdeError, match="čtení selhalo"):  # ne RuntimeError!
+            self._run_decrypt(tmp_path, monkeypatch)
