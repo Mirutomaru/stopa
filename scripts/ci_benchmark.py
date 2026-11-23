@@ -7,8 +7,8 @@ na stdout a (volitelně) do artifact souboru pro GitHub Actions.
 
 Usage:
     python scripts/ci_benchmark.py [--baseline PATH] [--threshold 0.20]
-                                   [--min-delta-ms 0.5] [--update-baseline]
-                                   [--output PATH]
+                                   [--min-delta-ms 0.5] [--runs N]
+                                   [--update-baseline] [--output PATH]
 
 Exit codes:
     0 — OK (bez regresí, nebo --update-baseline)
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import sys
 from pathlib import Path
 
@@ -27,12 +28,25 @@ DEFAULT_BASELINE = REPO_ROOT / "benchmarks" / "baseline.json"
 BASELINE_VERSION = 1
 
 
-def run_current(suite: str = "all") -> dict[str, float]:
-    """Spustí benchmark engine; vrátí name → duration_ms (průměr iterací)."""
+def run_current(suite: str = "all", runs: int = 1) -> dict[str, float]:
+    """Spustí benchmark engine; vrátí name → duration_ms.
+
+    ``runs > 1`` — medián N měření per scénář (P2 hardening: robustní proti
+    šumu pod zátěží; deterministický při stejných měřích). Baseline i current
+    se porovnávají na stejné úrovni (medián vs. medián), viz stp044.
+    """
     from stopa.data.benchmark_engine import run_benchmark
 
-    results = run_benchmark(suite=suite)
-    return {r.name: r.duration_ms for r in results}
+    if runs <= 1:
+        results = run_benchmark(suite=suite)
+        return {r.name: r.duration_ms for r in results}
+    per_run = [run_benchmark(suite=suite) for _ in range(runs)]
+    names = sorted({r.name for res in per_run for r in res})
+    out: dict[str, float] = {}
+    for name in names:
+        values = [r.duration_ms for res in per_run for r in res if r.name == name]
+        out[name] = statistics.median(values)
+    return out
 
 
 def load_baseline(path: Path) -> dict[str, float] | None:
@@ -119,11 +133,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--update-baseline", action="store_true", help="uložit aktuální běh jako novou baseline"
     )
-    parser.add_argument("--output", type=Path, default=None, help="artifact soubor (JSON)")
+    parser.add_argument(
+        "--output", type=Path, default=None, help="artifact soubor (JSON)"
+    )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="počet měření; N>1 → medián per scénář (guard proti šumu pod zátěží)",
+    )
     args = parser.parse_args(argv)
+    if args.runs < 1:
+        print("ERROR: --runs musí být ≥ 1", file=sys.stderr)
+        return 2
 
     try:
-        current = run_current()
+        current = run_current(runs=args.runs)
     except Exception as exc:  # noqa: BLE001 — CI job musí skončit exit 2
         print(f"ERROR: benchmark engine selhal: {exc}", file=sys.stderr)
         return 2
@@ -141,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     filtered_out = len(raw_warnings) - len(warnings)
     report = build_report(current, warnings, baseline, args.threshold)
     report["noise_filtered"] = filtered_out
+    report["runs"] = args.runs
     out_text = json.dumps(report, indent=2, sort_keys=True)
     print(out_text)
 

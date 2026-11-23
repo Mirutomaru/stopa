@@ -53,10 +53,17 @@ class TestCiBenchmarkE2E:
         assert isinstance(data["results"], dict) and len(data["results"]) >= 70
 
     def test_run_against_own_baseline_passes(self, tmp_path):
-        """Běh proti vlastní baseline → exit 0, žádné regresy (noise guard)."""
+        """Běh proti vlastní baseline → exit 0, žádné regresy (noise guard).
+
+        P2 hardening: --runs 3 → medián 3 měření per scénář na obou stranách
+        (baseline i current). Šum pod zátěží CI runneru (předchozí flake +21.9 %)
+        by musel systematicky zatížit > polovinu měření, aby projel prahem 20 %.
+        """
         baseline = tmp_path / "baseline.json"
-        assert _run(["--baseline", str(baseline), "--update-baseline"]).returncode == 0
-        proc = _run(["--baseline", str(baseline)])
+        assert _run(
+            ["--baseline", str(baseline), "--update-baseline", "--runs", "3"]
+        ).returncode == 0
+        proc = _run(["--baseline", str(baseline), "--runs", "3"])
         assert proc.returncode == 0
         report = json.loads(proc.stdout)
         assert report["ok"] is True

@@ -116,7 +116,8 @@ FAKE_CURRENT = {"parser.x": 0.3, "pipeline.y": 2.5}
 
 @pytest.fixture
 def fake_engine(monkeypatch):
-    monkeypatch.setattr(cb, "run_current", lambda suite="all": dict(FAKE_CURRENT))
+    # P2 B: main() volá run_current(runs=...) — fake musí odpovídat signatuře
+    monkeypatch.setattr(cb, "run_current", lambda suite="all", runs=1: dict(FAKE_CURRENT))
 
 
 def test_main_ok_with_baseline(fake_engine, tmp_path):
