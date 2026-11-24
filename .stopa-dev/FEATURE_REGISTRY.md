@@ -3,38 +3,38 @@
 Rozlišení stavů: IMPLEMENTED ≠ TESTED ≠ VERIFIED.
 - **impl:** implementováno | **test:** testováno (unit/integration) | **verif:** nezávisle ověřeno (plná sada + ruff + commit)
 Stavy: plně funkční / částečně funkční / experimentální / nefunkční
-Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parserů, jinak verze aplikace 0.1.0.
+Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parserů, jinak verze aplikace 2.6.0.
 
 ## Evidence & Integrity (P0 Core C1–C4)
 
 | Feature ID | Název | Popis | Modul | Verze | impl | test | verif | Stav | Omezení | Úkoly |
 |---|---|---|---|---|---|---|---|---|---|---|
-| F-001 | Evidence Model + Lineage | Důkazní model s provenancí a lineage řetězem artifact→zdroj | domain/evidence_model.py, lineage.py | 0.1.0 | ✓ | ✓ (26) | ✓ `943753b` | plně funkční | — | STP-001 |
-| F-002 | Integrity SHA-256/MD5 + Ed25519 | Hashování důkazů, tamper detekce, kryptografické podpisy | domain/integrity.py, hashing.py | 0.1.0 | ✓ | ✓ (29) | ✓ `8b09071` | plně funkční | SHA-512 chybí | STP-002, STP-022 |
-| F-003 | Audit log s hash chainingem | Append-only audit log s hash řetězem (tamper-proof) | data/db.py | 0.1.0 | ✓ | ✓ (sada) | ✓ `a0e4577` | plně funkční | — | STP-003 |
-| F-004 | Reproducibility Engine | Reprodukovatelné operace s DB + idempotentní migrace | domain/reproducibility.py, data/db.py | 0.1.0 | ✓ | ✓ (20) | ✓ `a554a20` | plně funkční | — | STP-004 |
+| F-001 | Evidence Model + Lineage | Důkazní model s provenancí a lineage řetězem artifact→zdroj | domain/evidence_model.py, lineage.py | 2.6.0 | ✓ | ✓ (26) | ✓ `943753b` | plně funkční | — | STP-001 |
+| F-002 | Integrity SHA-256/MD5 + Ed25519 | Hashování důkazů, tamper detekce, kryptografické podpisy | domain/integrity.py, hashing.py | 2.6.0 | ✓ | ✓ (29) | ✓ `8b09071` | plně funkční | SHA-512 chybí | STP-002, STP-022 |
+| F-003 | Audit log s hash chainingem | Append-only audit log s hash řetězem (tamper-proof) | data/db.py | 2.6.0 | ✓ | ✓ (sada) | ✓ `a0e4577` | plně funkční | — | STP-003 |
+| F-004 | Reproducibility Engine | Reprodukovatelné operace s DB + idempotentní migrace | domain/reproducibility.py, data/db.py | 2.6.0 | ✓ | ✓ (20) | ✓ `a554a20` | plně funkční | — | STP-004 |
 
 ## Export & Report (C5, L)
 
 | Feature ID | Název | Popis | Modul | Verze | impl | test | verif | Stav | Omezení | Úkoly |
 |---|---|---|---|---|---|---|---|---|---|---|
-| F-005 | Export CSV/JSON + manifest | Export artifactů/timeline/korelací s SHA-256 manifestem pro reprodukovatelnost | domain/export.py, cli.py | 0.1.0 | ✓ | ✓ (sada) | ✓ `5b10a95` | plně funkční | chybí STIX/UCO/Plaso/JSONL/XML | STP-005, STP-023 |
-| F-006 | HTML report 9 sekcí + PDF | Soudně použitelný report: chain of custody, artifacty, findings, manifest+podpis, audit trail, timeline, korelace | presentation/case_report.py | 0.1.0 | ✓ | ✓ (16) | ✓ `42ade02` | plně funkční | 9/20 sekcí; PDF volitelné (weasyprint) | STP-020 |
+| F-005 | Export CSV/JSON + manifest | Export artifactů/timeline/korelací s SHA-256 manifestem pro reprodukovatelnost | domain/export.py, cli.py | 2.6.0 | ✓ | ✓ (sada) | ✓ `5b10a95` | plně funkční | chybí STIX/UCO/Plaso/JSONL/XML | STP-005, STP-023 |
+| F-006 | HTML report 9 sekcí + PDF | Soudně použitelný report: chain of custody, artifacty, findings, manifest+podpis, audit trail, timeline, korelace | presentation/case_report.py | 2.6.0 | ✓ | ✓ (16) | ✓ `42ade02` | plně funkční | 9/20 sekcí; PDF volitelné (weasyprint) | STP-020 |
 
 ## Benchmark & Validation (C6, I)
 
 | Feature ID | Název | Popis | Modul | Verze | impl | test | verif | Stav | Omezení | Úkoly |
 |---|---|---|---|---|---|---|---|---|---|---|
-| F-007 | Benchmark Engine + detekce regresí >20% | Deterministické workloads, měření času/RAM, regresní detekce proti baseline | domain/benchmark.py, data/benchmark_engine.py | 0.1.0 | ✓ | ✓ (18) | ✓ `42ade02` | plně funkční | neběží v CI | STP-006 |
-| F-008 | C3 Parser Validation Registry (13 parserů) | ID+verze+formáty+omezení každého parseru; 1:1 sync s pipeline vynucen build_registry() | domain/validation_registry.py | 0.1.0 | ✓ | ✓ (10) | ✓ `afc49a0` | plně funkční | — | STP-006, STP-013..015 |
+| F-007 | Benchmark Engine + detekce regresí >20% | Deterministické workloads, měření času/RAM, regresní detekce proti baseline | domain/benchmark.py, data/benchmark_engine.py | 2.6.0 | ✓ | ✓ (18) | ✓ `42ade02` | plně funkční | neběží v CI | STP-006 |
+| F-008 | C3 Parser Validation Registry (13 parserů) | ID+verze+formáty+omezení každého parseru; 1:1 sync s pipeline vynucen build_registry() | domain/validation_registry.py | 2.6.0 | ✓ | ✓ (10) | ✓ `afc49a0` | plně funkční | — | STP-006, STP-013..015 |
 
 ## Disk images & Filesystems (B, C)
 
 | Feature ID | Název | Popis | Modul | Verze | impl | test | verif | Stav | Omezení | Úkoly |
 |---|---|---|---|---|---|---|---|---|---|---|
-| F-010 | EWF/libewf (E01) | Čtení E01/EWF kontejnerů přes libewf | data/ewf_container.py, image_pipeline.py | 0.1.0 | ✓ | ✓ (41) | ✓ sada | plně funkční | `EWF available: True` ověřeno | — |
-| F-011 | RAW/IMG přes TSK + carving volného prostoru | Filesystem analýza (NTFS/FAT/APFS), MFT, carving ukrytých souborů | data/tsk*.py, domain/carving.py | 0.1.0 | ✓ | ✓ (35+21) | ✓ sada | plně funkční | — | — |
-| F-012 | FDE dešifrování AES-CBC/FBE/LUKS | Dešifrování šifrovaných diskových obrazů | domain/fde*.py | 0.1.0 | ✓ | ✓ (50) | ✓ sada | plně funkční | — | — |
+| F-010 | EWF/libewf (E01) | Čtení E01/EWF kontejnerů přes libewf | data/ewf_container.py, image_pipeline.py | 2.6.0 | ✓ | ✓ (41) | ✓ sada | plně funkční | `EWF available: True` ověřeno | — |
+| F-011 | RAW/IMG přes TSK + carving volného prostoru | Filesystem analýza (NTFS/FAT/APFS), MFT, carving ukrytých souborů | data/tsk*.py, domain/carving.py | 2.6.0 | ✓ | ✓ (35+21) | ✓ sada | plně funkční | — | — |
+| F-012 | FDE dešifrování AES-CBC/FBE/LUKS | Dešifrování šifrovaných diskových obrazů | domain/fde*.py | 2.6.0 | ✓ | ✓ (50) | ✓ sada | plně funkční | — | — |
 
 ## Artifact Engine (D) — 20 parser modulů, C3 registry 13 verzovaných
 
@@ -104,21 +104,21 @@ Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parser
 
 | Feature ID | Název | Popis | Modul | Verze | impl | test | verif | Stav | Omezení | Úkoly |
 |---|---|---|---|---|---|---|---|---|---|---|
-| F-040 | Timeline + anomálie | Unifikovaná timeline s detekcí anomálií a rozporů | domain/timeline_anomaly.py | 0.1.0 | ✓ | ✓ (sada) | ✓ | plně funkční | — | STP-018 |
-| F-041 | Entity Resolution 2.0 (4 confidence, normalizace, merge candidates) | Normalizace účtů/čísel/mailů, 4 úrovně confidence, detekce duplicit entit | domain/entity_resolution.py, entities.py, correlation.py | 0.1.0 | ✓ | ✓ (26+e4/e5/e10) | ✓ `2244d95` | plně funkční | schéma v11; backward compat mapping | STP-009 |
-| F-042 | AI orchestrace — 5 agentů, routing, fail-closed validace | Deklarativní analytické agenty s Pydantic validací a citacemi ke zdrojům | intelligence/agents.py, ai_orchestrator.py | 0.1.0 | ✓ | ✓ (25) | ✓ `61f9a03` | plně funkční | AI volitelná; LM Studio port 1234 | STP-007 |
-| F-043 | Forensic RAG — 3 vrstvy, citace, prompt injection ochrana | Retrieval napříč case/technical/knowledge vrstvami s `<untrusted_source>` izolací | intelligence/rag.py | 0.1.0 | ✓ | ✓ (30) | ✓ `97cd4d6` | plně funkční | docs/formats + docs/methodology volitelné/prázdné | STP-008 |
-| F-044 | AI governance + PII redaktor | Governance dokumentace + PII redakce před inference + audit modelových volání | domain/pii_redaction.py, ai_orchestrator.py, ai_assistant.py, web/app.py, cli.py | 0.1.0 | ✓ | ✓ (23) | ✓ `6d74ab3` | plně funkční | toggle `ai_redact_pii` default ON; audit E11+I1 do analysis_operations | STP-019 |
+| F-040 | Timeline + anomálie | Unifikovaná timeline s detekcí anomálií a rozporů | domain/timeline_anomaly.py | 2.6.0 | ✓ | ✓ (sada) | ✓ | plně funkční | — | STP-018 |
+| F-041 | Entity Resolution 2.0 (4 confidence, normalizace, merge candidates) | Normalizace účtů/čísel/mailů, 4 úrovně confidence, detekce duplicit entit | domain/entity_resolution.py, entities.py, correlation.py | 2.6.0 | ✓ | ✓ (26+e4/e5/e10) | ✓ `2244d95` | plně funkční | schéma v11; backward compat mapping | STP-009 |
+| F-042 | AI orchestrace — 5 agentů, routing, fail-closed validace | Deklarativní analytické agenty s Pydantic validací a citacemi ke zdrojům | intelligence/agents.py, ai_orchestrator.py | 2.6.0 | ✓ | ✓ (25) | ✓ `61f9a03` | plně funkční | AI volitelná; LM Studio port 1234 | STP-007 |
+| F-043 | Forensic RAG — 3 vrstvy, citace, prompt injection ochrana | Retrieval napříč case/technical/knowledge vrstvami s `<untrusted_source>` izolací | intelligence/rag.py | 2.6.0 | ✓ | ✓ (30) | ✓ `97cd4d6` | plně funkční | docs/formats + docs/methodology volitelné/prázdné | STP-008 |
+| F-044 | AI governance + PII redaktor | Governance dokumentace + PII redakce před inference + audit modelových volání | domain/pii_redaction.py, ai_orchestrator.py, ai_assistant.py, web/app.py, cli.py | 2.6.0 | ✓ | ✓ (23) | ✓ `6d74ab3` | plně funkční | toggle `ai_redact_pii` default ON; audit E11+I1 do analysis_operations | STP-019 |
 
 ## UI & Performance (N, O)
 
 | Feature ID | Název | Popis | Modul | Verze | impl | test | verif | Stav | Omezení | Úkoly |
 |---|---|---|---|---|---|---|---|---|---|---|
-| F-050 | Web UI — FastAPI 30 endpointů + vanilla JS SPA (dark mode) | Interaktivní GUI pro případy, timeline, graf entit, reporty | web/app.py, static/ | 0.1.0 | ✓ | ✓ (29) | ✓ sada | plně funkční | chybí Processing/Validation/Audit Center | STP-021 |
-| F-051 | Paralelizace pipeline (ThreadPoolExecutor) + E3 resume | Paralelní zpracování souborů, checkpointing a obnovení přerušené analýzy | pipeline.py | 0.1.0 | ✓ | ✓ (sada) | ✓ | plně funkční | RAM peak u velkých E01 — chybí stream parsing | STP-021 |
-| F-052 | Stream parsing E01/AFF4 + web Processing Monitor | Chunked extrakce kontejneru (RAM peak z GB na ~1 MiB), byte-level progress, async ingest s živým progress v GUI | data/ewf_container.py, data/image_pipeline.py, web/app.py, static/js/components/modules.js | 0.1.0 | ✓ | ✓ (7) | ✓ sada | plně funkční | CI běh benchmarku zbývá | STP-021 |
-| F-053 | SHA-512 integrity vrstva + RBAC minimální + pip-audit CI | SHA-512 v audit chain/manifestech/pipeline (FORENSIC one-pass), report CoC +SHA-512 sloupec, actor atribuce (explicitní > examiner, strict=), CI job security s pip-audit | domain/integrity.py, domain/rbac.py, models.py, domain/profiles.py, data/db.py, pipeline.py, domain/report.py, presentation/case_report.py, .github/workflows/ci.yml | 0.1.0 | ✓ | ✓ (32) | ✓ sada | plně funkční | izolace parserů (sandbox) zbývá | STP-022 |
-| F-054 | Export JSONL/XML/STIX 2.1 formáty | `to_jsonl` (1 objekt/řádek, streamovací), `to_xml` (deterministický ElementTree UTF-8, kořen stopa_<dataset>), `to_stix_bundle` (STIX 2.1 bundle — artefakty → file/message + x-stopa rozšíření, deterministická UUIDv5 ID pro C4 reprodukovatelnost); CLI --format csv|json|jsonl|xml|stix | domain/export.py, cli.py | 0.1.0 | ✓ | ✓ (17) | ✓ sada | plně funkční | UCO mapping + Plaso zbývají (volitelné) | STP-023 |
+| F-050 | Web UI — FastAPI 30 endpointů + vanilla JS SPA (dark mode) | Interaktivní GUI pro případy, timeline, graf entit, reporty | web/app.py, static/ | 2.6.0 | ✓ | ✓ (29) | ✓ sada | plně funkční | chybí Processing/Validation/Audit Center | STP-021 |
+| F-051 | Paralelizace pipeline (ThreadPoolExecutor) + E3 resume | Paralelní zpracování souborů, checkpointing a obnovení přerušené analýzy | pipeline.py | 2.6.0 | ✓ | ✓ (sada) | ✓ | plně funkční | RAM peak u velkých E01 — chybí stream parsing | STP-021 |
+| F-052 | Stream parsing E01/AFF4 + web Processing Monitor | Chunked extrakce kontejneru (RAM peak z GB na ~1 MiB), byte-level progress, async ingest s živým progress v GUI | data/ewf_container.py, data/image_pipeline.py, web/app.py, static/js/components/modules.js | 2.6.0 | ✓ | ✓ (7) | ✓ sada | plně funkční | CI běh benchmarku zbývá | STP-021 |
+| F-053 | SHA-512 integrity vrstva + RBAC minimální + pip-audit CI | SHA-512 v audit chain/manifestech/pipeline (FORENSIC one-pass), report CoC +SHA-512 sloupec, actor atribuce (explicitní > examiner, strict=), CI job security s pip-audit | domain/integrity.py, domain/rbac.py, models.py, domain/profiles.py, data/db.py, pipeline.py, domain/report.py, presentation/case_report.py, .github/workflows/ci.yml | 2.6.0 | ✓ | ✓ (32) | ✓ sada | plně funkční | izolace parserů (sandbox) zbývá | STP-022 |
+| F-054 | Export JSONL/XML/STIX 2.1 formáty | `to_jsonl` (1 objekt/řádek, streamovací), `to_xml` (deterministický ElementTree UTF-8, kořen stopa_<dataset>), `to_stix_bundle` (STIX 2.1 bundle — artefakty → file/message + x-stopa rozšíření, deterministická UUIDv5 ID pro C4 reprodukovatelnost); CLI --format csv|json|jsonl|xml|stix | domain/export.py, cli.py | 2.6.0 | ✓ | ✓ (17) | ✓ sada | plně funkční | UCO mapping + Plaso zbývají (volitelné) | STP-023 |
 
 ## Coverage AXIOM (D)
 - **covered 198 / 232** unikátních typů ★ (po ETAPA B vlně 15 — závěrečný audit; předtím 179 po vlně 14). Matice: `STOPA_COVERAGE_MATRIX.csv` + `docs/re-axiom/AXIOM_COVERAGE.{md,json}`.
