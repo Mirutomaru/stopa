@@ -2,6 +2,22 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-24 (STOPA 2.6: post-release **hardening P2+P3** — sdílená ArchiveBudget logika (ADB branch pod limity), benchmark medián `--runs N`, bounded JSON depth limit u nedůvěryhodných vstupů, installer subprocess timeouty; auditní reziduální rizika uzavřena; full suite **5311p/1s** exit 0)
+
+### Hardening — P2+P3 vlna (2026-11-24, nad tagem `v2.5.0`)
+Zdroj: `FORENSIC_HARDENING_REPORT.md` (§2 P2 A/B + P3 A/B; §9/§10 uzavřeno — po vlně žádné z auditních reziduálních rizik neotevřené, P0–P3 hotové). Commity: `874c044`, `6f4f8f1`, `51b0018`, `b509e7c`.
+- **P2 A sdílená ArchiveBudget logika** (`874c044`): `domain/archive_budget.py` (čistá doména) — ZIP/složková i ADB branch import-mobile pod společnými limity archivu (per-member 256 MiB / celkem 4 GiB / 20 000 členů); ADB per-member limit jen `.vcf`, DB streamované po cestě; ZIP sémantika a P1 warning zprávy byte-identické.
+- **P2 B benchmark medián** (`6f4f8f1`): `scripts/ci_benchmark.py --runs N` (default 1 = CI bez změny); N>1 = medián per scénář porovnávaný na stejné úrovni; stp044 self-baseline `--runs 3`; oprava regresí stp043 fake engine.
+- **P3 A bounded JSON parse nedůvěryhodných vstupů** (`51b0018`): nový doménový modul `stopa.domain.json_bounded` — `bounded_json_loads()` s hloubkovým limitem 200 (`JsonLimitError(ValueError)`, parser kontrakt „Raises: ValueError“ zachován), rychlá cesta bez lineárního skenu; staged rollout přes celý povrch nedůvěryhodných dat: 57 artifact parserů (68 call sites) + STIX bundle upload (`threat_intel.py`) + uživatelské plaso záznamy (`plaso_import.py`); AST guard proti regresi.
+- **P3 B installer subprocess timeouty** (`b509e7c`): `_subprocess(timeout_s=900)` (timeout → exit 124 + warning), vytvoření venvu pod limitem 300 s; AST sken celé `src/stopa` vyžaduje explicitní `timeout=` u každého blokovacího volání subprocess.run/Popen/call/check_output.
+
+### Changed — Validace STOPA 2.6
+- Full regression nad celou P2+P3 vlnou: **`5311 passed / 1 skipped`, exit 0** (37:47; delta +32 vs báze 5279p po P2 = nové P3 testy). Ruff clean repo-wide, rozpočet `db.py` **599/600**, PKG_COMPAT OK (`python -m stopa.cli --version` exit 0).
+- Cílená regrese dotčených parserů (57 artifact + threat_intel + plaso): **1192 passed in 13.74s**.
+- Benchmark vs baseline: **ok=true, regressions=[]** (`pipeline.core` lokálně 1625 ms vs CI baseline 4241 ms); gate >20 % a ≥0.5 ms beze změny; stp044 self-baseline `--runs 3`.
+- GitHub CI: na `601867f` **8/8 jobů green** (jediné selhání = capacity flake macOS arm64 hosted runneru → re-run #3 zelený bez změny workflow); na `39da653` **8/8 jobů green** (run 45291515347).
+- Release notes: `docs/RELEASE_NOTES_2_6.md`.
+
 ## [Unreleased] — 2026-11-23 (STOPA 2.5: post-release **forenzní integritní hardening P0+P1** — P0.5 deterministické generated_at, P0.2/P0.3 EncryptedTempImage životní cyklus, P0.1 safe resume s ověřením zdrojů (+`--resume-mode`), P0.4 write-blocker fail-closed + zdrojový manifest (schéma v28), FDE chybové cesty; P1 security S1 bounded XML / S2 ZIP bomb limity / S3 path traversal defense in depth; full suite **5269p/1s** exit 0)
 
 ### Added — Post-release 2.4: forenzní integritní hardening (P0 + P1, 2026-11-22…23)
@@ -15,21 +31,11 @@ Zdroj auditu a plný report: `FORENSIC_HARDENING_REPORT.md` (P0 = `a661cae`, P1 
 - **P1 S2 Limity ZIP bomb pro import-mobile archívy** (`42a97b9`): `_archive_members` — per-member 256 MiB (existující) + celkové limity **4 GiB / 20 000 členů** (module globály, monkeypatchovatelné testy); OOXML docProps s per-member limitem. Testy 5p.
 - **P1 S3 Path traversal validace v `_last_export_path`** (`b6d1655`): audit potvrdil silnou politiku (strict regex case_id `^[A-Za-z0-9_-]+$`, enum what/format, DB lookup před cache, atomický tmp→rename); helper si nyní ověřuje `case_id` sám — budoucí endpointy nejen implicitně obnoví traversal. Testy 6p + regrese export endpointů (stp067/068/069) 35p.
 
-### Added/Improved — Post-release hardening P2+P3 vlny (2026-11-24, nad tagem `v2.5.0`)
-Zdroj: `FORENSIC_HARDENING_REPORT.md` (§2 P2 A/B + P3 A/B; §9/§10 uzavřeno). Commity: `874c044`, `6f4f8f1`, `51b0018`, `b509e7c`.
-- **P2 A sdílená ArchiveBudget logika** (`874c044`): `domain/archive_budget.py` (čistá doména) — ZIP/složková i ADB branch import-mobile pod společnými limity archivu (per-member 256 MiB / celkem 4 GiB / 20 000 členů); ADB per-member limit jen `.vcf`, DB streamované po cestě; ZIP sémantika a P1 warning zprávy byte-identické.
-- **P2 B benchmark medián** (`6f4f8f1`): `scripts/ci_benchmark.py --runs N` (default 1 = CI bez změny); N>1 = medián per scénář porovnávaný na stejné úrovni; stp044 self-baseline `--runs 3`; oprava regresí stp043 fake engine.
-- **P3 A bounded JSON parse nedůvěryhodných vstupů** (`51b0018`): nový doménový modul `stopa.domain.json_bounded` — `bounded_json_loads()` s hloubkovým limitem 200 (`JsonLimitError(ValueError)`, parser kontrakt „Raises: ValueError" zachován), rychlá cesta bez lineárního skenu; staged rollout přes celý povrch nedůvěryhodných dat: 57 artifact parserů (68 call sites) + STIX bundle upload (`threat_intel.py`) + uživatelské plaso záznamy (`plaso_import.py`); AST guard proti regresi.
-- **P3 B installer subprocess timeouty** (`b509e7c`): `_subprocess(timeout_s=900)` (timeout → exit 124 + warning), vytvoření venvu pod limitem 300 s; AST sken celé `src/stopa` vyžaduje explicitní `timeout=` u každého blokovacího volání subprocess.run/Popen/call/check_output.
-
 ### Changed — Validace STOPA 2.5
 - Full regression: **`5269 passed / 1 skipped`, exit 0** (36:47; +32 testů vs báze po 2.4 = +3 FDE uzavírací vlna + 29 P1 testů). Ruff clean repo-wide, rozpočet `db.py` **599/600**, PKG_COMPAT OK (`python -m stopa.cli --version` exit 0).
 - Benchmark vs baseline: **ok=true, regressions=[], noise_filtered=0**, `pipeline.core` = 1634 ms (CI baseline 4241 ms); gate >20 % a ≥0.5 ms beze změny.
 - GitHub CI na `d332824`: **8/8 jobů green** — jediné selhání prvních běhů = šum shared runneru u `parser.email_mbox` (+54.5 %, absolutně 0.86 ms; `email_mbox.py` v diffu není) → re-run jobu zelený (precedent: sub-ms scénáře s rozptylem chrání mediánová baseline + absolutní podlaha).
-- Validace P2 vlny: full regression **`5279 passed / 1 skipped`, exit 0** (37:58); benchmark vs baseline `ok=true, regressions=[]` (`pipeline.core` lokálně 1625 ms); GitHub CI na `601867f`: **8/8 jobů green** — jediné selhání = capacity flake macOS arm64 hosted runneru („no hosted-type runner could acquire the job") → re-run #3 zelený bez změny workflow.
-- Validace P3 vlny: cílená regrese dotčených parserů (57 artifact + threat_intel + plaso) **1192 passed in 13.74s**; finální full regression nad celou P3 vlnou **`5311 passed / 1 skipped`, exit 0** (37:47; delta +32 = nové P3 testy); Ruff clean repo-wide.
-- Reziduální rizika: po P2+P3 vlně **žádná z auditních položek neotevřená** — ADB branch pod sdílenou ArchiveBudget (P2 A), benchmark medián `--runs N` (P2 B), bounded JSON depth limit (P3 A), parser/installer timeouty (P3 B); bounded XML fail-closed na uživatelských entitách zůstává uvědomělým limitem (dokumentováno).
-- Release notes s známými limity: `docs/RELEASE_NOTES_2_5.md`.
+- Release notes s známými limity: `docs/RELEASE_NOTES_2_5.md` (post-release update: P2+P3 vlna → STOPA 2.6).
 
 ## [Unreleased] — 2026-11-22 (STOPA 2.4: post-release roadmap **P4 hotová 10/10** — P4-1 CI matrix pro volitelné extras, P4-3 Plugin API semvering + breaking change log, P4-2 Plugin sandbox hardening, P4-6 Sealing v2 (time hash chain + externí witness), P4-5 AI production robustness, P4-4 Frontend sjednocení (SPA kanonická), P4-9 Cross-platform a long-running stabilita, P4-8 i18n CLI (+ legacy UI katalog), P4-7 Multi-node readiness, P4-10 Rust distribuce; full suite **5155p/1s** exit 0)
 
