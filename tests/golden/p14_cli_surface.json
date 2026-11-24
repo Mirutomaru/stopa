@@ -177,6 +177,70 @@
       "-v"
     ]
   },
+  "court": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "court/daubert": {
+    "opts": [
+      "--help",
+      "--json",
+      "--out",
+      "-h"
+    ]
+  },
+  "court/swgde": {
+    "opts": [
+      "--help",
+      "--json",
+      "--out",
+      "-h"
+    ]
+  },
+  "crypto": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "crypto/advanced": {
+    "opts": [
+      "--file",
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "crypto/darkweb": {
+    "opts": [
+      "--file",
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "crypto/onchain": {
+    "opts": [
+      "--api-key",
+      "--depth",
+      "--etherscan-key",
+      "--help",
+      "--json",
+      "--no-network",
+      "-h"
+    ]
+  },
+  "crypto/report": {
+    "opts": [
+      "--format",
+      "--help",
+      "--json",
+      "--out",
+      "-h"
+    ]
+  },
   "crypto-report": {
     "opts": [
       "--format",
@@ -286,6 +350,71 @@
       "-h"
     ]
   },
+  "forensic": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "forensic/anti": {
+    "opts": [
+      "--help",
+      "--image",
+      "--json",
+      "-h"
+    ]
+  },
+  "forensic/decrypt": {
+    "opts": [
+      "--help",
+      "--json",
+      "--out",
+      "--password",
+      "--recovery-key",
+      "--type",
+      "-h"
+    ]
+  },
+  "forensic/image": {
+    "opts": [
+      "--help",
+      "--json",
+      "--no-carve",
+      "--profile",
+      "-h"
+    ]
+  },
+  "forensic/memory": {
+    "opts": [
+      "--help",
+      "--json",
+      "--plugin",
+      "--timeout",
+      "--with-defaults",
+      "-h"
+    ]
+  },
+  "forensic/mobile": {
+    "opts": [
+      "--fde-type",
+      "--help",
+      "--json",
+      "--keyfile",
+      "--no-carve",
+      "--password",
+      "--profile",
+      "--recovery-key",
+      "-h"
+    ]
+  },
+  "forensic/pcap": {
+    "opts": [
+      "--help",
+      "--json",
+      "--max-packets",
+      "-h"
+    ]
+  },
   "graph": {
     "opts": [
       "--help",
@@ -299,6 +428,27 @@
       "--json",
       "--no-carve",
       "--profile",
+      "-h"
+    ]
+  },
+  "import": {
+    "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "import/mobile": {
+    "opts": [
+      "--help",
+      "--json",
+      "--source",
+      "-h"
+    ]
+  },
+  "import/plaso": {
+    "opts": [
+      "--help",
+      "--json",
       "-h"
     ]
   },
@@ -321,10 +471,47 @@
   },
   "integrity": {
     "opts": [
+      "--help",
+      "-h"
+    ]
+  },
+  "integrity/chain": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "integrity/check": {
+    "opts": [
       "--checkpoint",
       "--help",
       "--init-key",
       "--json",
+      "-h"
+    ]
+  },
+  "integrity/keys": {
+    "opts": [
+      "--help",
+      "--json",
+      "-h"
+    ]
+  },
+  "integrity/rotate-key": {
+    "opts": [
+      "--help",
+      "--json",
+      "--reason",
+      "-h"
+    ]
+  },
+  "integrity/seal": {
+    "opts": [
+      "--help",
+      "--json",
+      "--reason",
+      "--witness",
       "-h"
     ]
   },

@@ -340,4 +340,10 @@
   "cli.h.330": "vol plugin (lze opakovat; bez = výchozí {defaults})",
   "cli.h.329": "JSON parametry AI toolu",
   "cli.h.331": "P4-7 — lease heartbeat uzlu: beat registru pod NODE_ID a tisk generace"
+,
+  "cli.h.337": "Integrita a pečetě případu (kontrola, řetěz pečetí, klíče)",
+  "cli.h.338": "Import externích dat do případu (mobilní extrakce, Plaso)",
+  "cli.h.339": "Forenzní analýza typů důkazů (disk, mobil, paměť, síť, dešifrování…)",
+  "cli.h.340": "Krypto-assety a pokročilá kryptoanalýza",
+  "cli.h.341": "Připravenost na soud (SWGDE, Daubert)"
 }

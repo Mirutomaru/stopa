@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import warnings
 
 from stopa.i18n import resolve_lang, set_lang, t
 
@@ -45,10 +46,14 @@ from stopa.domain.write_blocker import known_vendor_ids  # F5.4 — write-blocke
 
 # P1-4 — helpery přesunuty do cli/_util.py (re-export pro kompatibilitní povrch)
 from ._util import (
+    DEPRECATED_ALIASES,  # noqa: F401 — B7 kontrakt aliasů (testy importují ze stopa.cli)
     _add_json_flag,
     _db_dir,  # noqa: F401 — kompatibilitní povrch (testy importují ze stopa.cli)
     _load_timesketch_auto_push,  # noqa: F401 — kompatibilitní povrch (testy importují ze stopa.cli)
     _print_json,
+    deprecation_warning_for,
+    register_alias,
+    rewrite_legacy_integrity,
 )
 
 # P1-4 — kvalita parserů/AI/reparse přesunuty do cli/commands/analysis.py (re-export)
@@ -270,6 +275,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"stopa {_ver}")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    # B7 — konzolidační skupiny (příbuzné příkazy pod jednotný kořen; stará jména
+    # zůstávají skrytými BC aliasy s DeprecationWarning, viz _util.register_alias).
+    # "integrity" je raw add_parser, protože tabulka příkladů nese klíč "integrity"
+    # pro podakci check (skupina sama žádný příklad nemá).
+    integ_p = sub.add_parser("integrity", help=t("cli.h.337"))
+    integ_sub = integ_p.add_subparsers(dest="integrity_cmd", required=True)
+    import_grp_p = _ex_sub(sub, "import", help=t("cli.h.338"))
+    import_grp_sub = import_grp_p.add_subparsers(dest="import_cmd", required=True)
+    forensic_p = _ex_sub(sub, "forensic", help=t("cli.h.339"))
+    forensic_sub = forensic_p.add_subparsers(dest="forensic_cmd", required=True)
+    crypto_p = _ex_sub(sub, "crypto", help=t("cli.h.340"))
+    crypto_sub = crypto_p.add_subparsers(dest="crypto_cmd", required=True)
+    court_p = _ex_sub(sub, "court", help=t("cli.h.341"))
+    court_sub = court_p.add_subparsers(dest="court_cmd", required=True)
+
     case_p = _ex_sub(sub, "case", help=t("cli.h.059"))
     case_sub = case_p.add_subparsers(dest="case_cmd", required=True)
     new_p = _ex_sub(case_sub, "new", help=t("cli.h.060"))
@@ -382,7 +402,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(ver_p)
     ver_p.set_defaults(func=cmd_verify)
 
-    seal_p = _ex_sub(sub, "seal",
+    seal_p = _ex_sub(integ_sub, "seal",
                      help=t("cli.h.098"))
     seal_p.add_argument("case_id")
     seal_p.add_argument("--reason", metavar=t("cli.mv.reason"), default=None,
@@ -391,26 +411,30 @@ def build_parser() -> argparse.ArgumentParser:
                         help=(t("cli.h.100")))
     _add_json_flag(seal_p)
     seal_p.set_defaults(func=cmd_seal)
+    register_alias(sub, "seal", seal_p)  # B7 — skrytý BC alias starého jména
 
-    sc_p = _ex_sub(sub, "seal-chain",
+    sc_p = _ex_sub(integ_sub, "chain", example=t("cli.h.010"),
                    help=t("cli.h.101"))
     sc_p.add_argument("case_id")
     _add_json_flag(sc_p)
     sc_p.set_defaults(func=cmd_seal_chain)
+    register_alias(sub, "seal-chain", sc_p)  # B7 — skrytý BC alias starého jména
 
-    ik_p = _ex_sub(sub, "integrity-keys",
+    ik_p = _ex_sub(integ_sub, "keys", example=t("cli.h.011"),
                    help=t("cli.h.102"))
     ik_p.add_argument("case_id")
     _add_json_flag(ik_p)
     ik_p.set_defaults(func=cmd_integrity_keys)
+    register_alias(sub, "integrity-keys", ik_p)  # B7 — skrytý BC alias starého jména
 
-    rk_p = _ex_sub(sub, "rotate-key",
-                   help=t("cli.h.103"))
+    rk_p = _ex_sub(integ_sub, "rotate-key",
+                  help=t("cli.h.103"))
     rk_p.add_argument("case_id")
     rk_p.add_argument("--reason", metavar=t("cli.mv.reason"), default=None,
                       help=t("cli.h.104"))
     _add_json_flag(rk_p)
     rk_p.set_defaults(func=cmd_rotate_key)
+    register_alias(sub, "rotate-key", rk_p)  # B7 — skrytý BC alias starého jména
 
     q_p = _ex_sub(sub, "parser-quality",
                   help=t("cli.h.105"))
@@ -552,16 +576,17 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(whl_p)
     whl_p.set_defaults(func=cmd_workspace_hypo_rev_list)
 
-    comp_p = _ex_sub(sub, "compliance",
+    comp_p = _ex_sub(court_sub, "swgde", example=t("cli.h.019"),
                      help=t("cli.h.148"))
     comp_p.add_argument("case_id")
     comp_p.add_argument("--out", metavar="DIR", default=None,
                         help=t("cli.h.149"))
     _add_json_flag(comp_p)
     comp_p.set_defaults(func=cmd_compliance)
+    register_alias(sub, "compliance", comp_p)  # B7 — skrytý BC alias starého jména
 
     daubert_p = _ex_sub(
-        sub, "daubert",
+        court_sub, "daubert",
         help=t("cli.h.150"),
     )
     daubert_p.add_argument("case_id")
@@ -569,6 +594,7 @@ def build_parser() -> argparse.ArgumentParser:
                            help=t("cli.h.149"))
     _add_json_flag(daubert_p)
     daubert_p.set_defaults(func=cmd_daubert)
+    register_alias(sub, "daubert", daubert_p)  # B7 — skrytý BC alias starého jména
 
     attack_map_p = _ex_sub(
         sub, "attack-map",
@@ -745,8 +771,10 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(wbm_p)
     wbm_p.set_defaults(func=cmd_wb_remove)
 
-    int_p = _ex_sub(sub, "integrity", help=t("cli.h.198")
-    )
+    # B7 — původní top-level `integrity <case_id>` je nyní podakce check;
+    # legacy tvar zachovává BC přepis rewrite_legacy_integrity() v main().
+    int_p = _ex_sub(integ_sub, "check", example=t("cli.h.027"),
+                    help=t("cli.h.198"))
     int_p.add_argument("case_id")
     int_p.add_argument("--init-key", action="store_true",
                        help=t("cli.h.199"))
@@ -974,7 +1002,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_json_flag(an_p)
     an_p.set_defaults(func=cmd_analytics)
 
-    img_p = _ex_sub(sub, "image", help=t("cli.h.265"))
+    img_p = _ex_sub(forensic_sub, "image", help=t("cli.h.265"))
     img_p.add_argument("case_id")
     img_p.add_argument("path", help=t("cli.h.266"))
     img_p.add_argument("--profile", default="forensic", choices=sorted(PROFILES),
@@ -983,8 +1011,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help=t("cli.h.267"))
     _add_json_flag(img_p)
     img_p.set_defaults(func=cmd_image)
+    register_alias(sub, "image", img_p)  # B7 — skrytý BC alias starého jména
 
-    mob_p = _ex_sub(sub, "mobile", help=t("cli.h.268"))
+    mob_p = _ex_sub(forensic_sub, "mobile", help=t("cli.h.268"))
     mob_p.add_argument("case_id")
     mob_p.add_argument("path", help=t("cli.h.269"))
     mob_p.add_argument("--password", metavar=t("cli.mv.password"), default=None,
@@ -1001,21 +1030,24 @@ def build_parser() -> argparse.ArgumentParser:
                        help=t("cli.h.267"))
     _add_json_flag(mob_p)
     mob_p.set_defaults(func=cmd_mobile)
+    register_alias(sub, "mobile", mob_p)  # B7 — skrytý BC alias starého jména
 
-    dec_p = _ex_sub(sub, "decrypt", help=t("cli.h.274"))
+    dec_p = _ex_sub(forensic_sub, "decrypt", help=t("cli.h.274"))
     dec_p.add_argument("image", help=t("cli.h.275"))
     dec_p.add_argument("--type", choices=["bitlocker", "filevault"], default=None,
                        help=t("cli.h.276"))
     dec_p.add_argument("--recovery-key", metavar=t("cli.mv.key"), default=None,
-                       help=t("cli.h.277"))
+                      help=t("cli.h.277"))
     dec_p.add_argument("--password", metavar=t("cli.mv.password"), default=None,
-                       help=t("cli.h.278"))
+                      help=t("cli.h.278"))
     dec_p.add_argument("--out", metavar=t("cli.mv.file"), default=None,
-                       help=t("cli.h.279"))
+                      help=t("cli.h.279"))
     _add_json_flag(dec_p)
     dec_p.set_defaults(func=cmd_decrypt)
+    register_alias(sub, "decrypt", dec_p)  # B7 — skrytý BC alias starého jména
 
-    mem_p = _ex_sub(sub, "memory-analyze", help=t("cli.h.280"))
+    mem_p = _ex_sub(forensic_sub, "memory", example=t("cli.h.043"),
+                    help=t("cli.h.280"))
     mem_p.add_argument("case_id", help=t("cli.h.065"))
     mem_p.add_argument("dump", help=t("cli.h.281"))
     mem_p.add_argument("--plugin", action="append", metavar="PLUGIN", default=None,
@@ -1026,29 +1058,36 @@ def build_parser() -> argparse.ArgumentParser:
                        help=t("cli.h.283"))
     _add_json_flag(mem_p)
     mem_p.set_defaults(func=cmd_memory_analyze)
+    register_alias(sub, "memory-analyze", mem_p)  # B7 — skrytý BC alias starého jména
 
-    mob_p = _ex_sub(sub, "import-mobile", help=t("cli.h.284"))
+    mob_p = _ex_sub(import_grp_sub, "mobile", example=t("cli.h.053"),
+                    help=t("cli.h.284"))
     mob_p.add_argument("case_id", help=t("cli.h.065"))
     mob_p.add_argument("dump", help=t("cli.h.285"))
     mob_p.add_argument("--source", choices=["cellebrite", "msab", "adb"], default="cellebrite",
                        help=t("cli.h.286"))
     _add_json_flag(mob_p)
     mob_p.set_defaults(func=cmd_import_mobile)
+    register_alias(sub, "import-mobile", mob_p)  # B7 — skrytý BC alias starého jména
 
-    pcap_p = _ex_sub(sub, "pcap-analyze", help=t("cli.h.287"))
+    pcap_p = _ex_sub(forensic_sub, "pcap", example=t("cli.h.044"),
+                     help=t("cli.h.287"))
     pcap_p.add_argument("case_id", help=t("cli.h.065"))
     pcap_p.add_argument("pcap", help=t("cli.h.288"))
     pcap_p.add_argument("--max-packets", type=int, default=50_000, metavar="N",
                         help=t("cli.h.289"))
     _add_json_flag(pcap_p)
     pcap_p.set_defaults(func=cmd_pcap_analyze)
+    register_alias(sub, "pcap-analyze", pcap_p)  # B7 — skrytý BC alias starého jména
 
-    af_p = _ex_sub(sub, "antiforensics-scan", help=t("cli.h.290"))
+    af_p = _ex_sub(forensic_sub, "anti", example=t("cli.h.045"),
+                   help=t("cli.h.290"))
     af_p.add_argument("case_id", help=t("cli.h.065"))
     af_p.add_argument("--image", metavar="PATH", default=None,
                       help=t("cli.h.291"))
     _add_json_flag(af_p)
     af_p.set_defaults(func=cmd_antiforensics)
+    register_alias(sub, "antiforensics-scan", af_p)  # B7 — skrytý BC alias starého jména
 
     prof_p = _ex_sub(sub, "profiles", help=t("cli.h.292"))
     _add_json_flag(prof_p)
@@ -1082,7 +1121,7 @@ def build_parser() -> argparse.ArgumentParser:
                        help=t("cli.h.302"))
     exp_p.set_defaults(func=cmd_export)
 
-    oc_p = _ex_sub(sub, "onchain",
+    oc_p = _ex_sub(crypto_sub, "onchain",
                    help=t("cli.h.303"))
     oc_p.add_argument("case_id")
     oc_p.add_argument("--api-key", default=None, metavar="KEY",
@@ -1095,16 +1134,18 @@ def build_parser() -> argparse.ArgumentParser:
                       help=t("cli.h.307"))
     _add_json_flag(oc_p)
     oc_p.set_defaults(func=cmd_onchain)
+    register_alias(sub, "onchain", oc_p)  # B7 — skrytý BC alias starého jména
 
-    dw_p = _ex_sub(sub, "darkweb",
+    dw_p = _ex_sub(crypto_sub, "darkweb",
                    help=t("cli.h.308"))
     dw_p.add_argument("case_id")
     dw_p.add_argument("--file", action="append", default=None, metavar=t("cli.mv.file"),
                       help=t("cli.h.309"))
     _add_json_flag(dw_p)
     dw_p.set_defaults(func=cmd_darkweb)
+    register_alias(sub, "darkweb", dw_p)  # B7 — skrytý BC alias starého jména
 
-    crp = _ex_sub(sub, "crypto-report",
+    crp = _ex_sub(crypto_sub, "report", example=t("cli.h.056"),
                   help=t("cli.h.310"))
     crp.add_argument("case_id")
     crp.add_argument("--format", choices=["md", "html", "json"], default="md",
@@ -1113,21 +1154,24 @@ def build_parser() -> argparse.ArgumentParser:
                      help=t("cli.h.312"))
     _add_json_flag(crp)
     crp.set_defaults(func=cmd_crypto_report)
+    register_alias(sub, "crypto-report", crp)  # B7 — skrytý BC alias starého jména
 
-    adv_p = _ex_sub(sub, "advanced",
+    adv_p = _ex_sub(crypto_sub, "advanced",
                     help=t("cli.h.313"))
     adv_p.add_argument("case_id")
     adv_p.add_argument("--file", action="append", default=None, metavar=t("cli.mv.file"),
                        help=t("cli.h.309"))
     _add_json_flag(adv_p)
     adv_p.set_defaults(func=cmd_advanced)
+    register_alias(sub, "advanced", adv_p)  # B7 — skrytý BC alias starého jména
 
-    pli_p = _ex_sub(sub, "plaso-import", help=t("cli.h.314")
+    pli_p = _ex_sub(import_grp_sub, "plaso", example=t("cli.h.049"), help=t("cli.h.314")
     )
     pli_p.add_argument("case_id")
     pli_p.add_argument("path", help=t("cli.h.315"))
     _add_json_flag(pli_p)
     pli_p.set_defaults(func=cmd_plaso_import)
+    register_alias(sub, "plaso-import", pli_p)  # B7 — skrytý BC alias starého jména
 
     tsk_p = _ex_sub(sub, "timesketch-push",
         help=t("cli.h.316"),
@@ -1193,6 +1237,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"stopa: {exc}", file=sys.stderr)
         return 2
     set_lang(lang)
+    # B7 — BC přepis legacy formy `stopa integrity <case_id>` → `integrity check`
+    rest, legacy_integrity = rewrite_legacy_integrity(list(rest))
     # P0.3 — obnova po crashu: jednou na startu procesů uklidit osiřelé dešifrované
     # obrazy (idempotentní, levné; nesmí zaslinit původní příkaz)
     try:
@@ -1201,6 +1247,10 @@ def main(argv: list[str] | None = None) -> int:
         _log.debug("reap_orphans na startu selhalo (nekritické): %s", exc)
     parser = build_parser()
     args = parser.parse_args(rest)
+    # B7 — DeprecationWarning pro stará top-level jména (skryté BC aliasy)
+    msg = deprecation_warning_for(getattr(args, "command", None), legacy_integrity)
+    if msg:
+        warnings.warn(msg, category=DeprecationWarning, stacklevel=2)
     return args.func(args)
 
 

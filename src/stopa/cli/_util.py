@@ -124,6 +124,145 @@ def _print_json(payload: object) -> None:
     print(json.dumps(payload, ensure_ascii=False, default=str))
 
 
+# ---------------------------------------------------------------------------
+# B7 — konzolidace CLI: skryté kompatibilitní aliasy pro seskupené příkazy
+# ---------------------------------------------------------------------------
+
+def register_alias(
+    subparsers: argparse._SubParsersAction,
+    alias_name: str,
+    target: argparse.ArgumentParser,
+) -> argparse.ArgumentParser:
+    """B7 — skrytý BC alias (help=SUPPRESS) na seskupený kanonický příkaz.
+
+    Klonuje argumentový povrch ``target`` do nového top-level subpříkazu se
+    stejnym dispatchem (func + defaults), takže stará volání dál fungují;
+    DeprecationWarning emituje :func:`stopa.cli.main` při dispatchi.
+    """
+    p = subparsers.add_parser(alias_name, help=argparse.SUPPRESS)
+    # BC povrch helpu: příklad v epilogu (R0.4) + formatter musí být identické,
+    # jinak `staré-jméno --help` ztratí sekci „Příklad:" (viz test_f12 E2E).
+    if target.epilog is not None:
+        p.formatter_class = target.formatter_class
+        p.epilog = target.epilog
+    if getattr(target, "description", None) is not None:
+        p.description = target.description
+    for action in target._actions:
+        _clone_action(p, action)
+    # func + vlastní defaults → identický dispatch jako kanonická cesta
+    target_defaults = dict(getattr(target, "_defaults", {}) or {})  # argparse interní stav (veřejné .defaults neexistuje)
+    if target_defaults:
+        p.set_defaults(**target_defaults)
+    return p
+
+
+def _clone_action(dst: argparse.ArgumentParser, a: argparse.Action) -> None:
+    """Klonuje jednu akci do ``dst``; neznámý typ hází (žádný tichý drift)."""
+    kind = type(a).__name__
+    if kind == "_HelpAction":
+        return  # -h/--help si argparse přidá ke každému parseru automaticky
+    common = {
+        "const": a.const,
+        "default": a.default,
+        "type": a.type,
+        "choices": a.choices,
+        "help": a.help,
+        "metavar": a.metavar,
+    }
+    if kind == "_PositionalAction" or (kind == "_StoreAction" and not a.option_strings):
+        # positionál — dest se odvozuje ze jména (case_id → case_id; pojmenování neměníme).
+        # Pozn.: v Pythonu 3.11 jsou positionály _StoreAction s prázdným option_strings,
+        # _PositionalAction zůstává jako obrana pro ostatní verze.
+        dst.add_argument(a.dest, nargs=a.nargs, **common)
+        return
+    if kind in ("_StoreTrueAction", "_StoreFalseAction"):
+        # store_true/false nesnáší type/choices — obranná kontrola
+        if a.type is not None or a.choices:
+            raise NotImplementedError(f"B7 alias: neočekávaná akce {kind} s type/choices")
+        action = "store_true" if kind == "_StoreTrueAction" else "store_false"
+        dst.add_argument(
+            *a.option_strings, dest=a.dest, action=action, default=a.default, help=a.help
+        )
+        return
+    if kind == "_AppendAction":
+        if a.type is not None or a.choices:
+            raise NotImplementedError(f"B7 alias: neočekávaná akce {kind} s type/choices")
+        dst.add_argument(
+            *a.option_strings, dest=a.dest, action="append",
+            default=a.default, help=a.help, metavar=a.metavar,
+        )
+        return
+    if kind == "_CountAction":
+        dst.add_argument(
+            *a.option_strings, dest=a.dest, action="count", default=a.default, help=a.help
+        )
+        return
+    if kind == "_StoreAction":
+        dst.add_argument(
+            *a.option_strings, dest=a.dest, action="store",
+            nargs=a.nargs, required=a.required, **common,
+        )
+        return
+    raise NotImplementedError(f"B7 alias: nepodporovaná argparse akce {kind}")
+
+
+# B7 — deprecated top-level jména → nová poloha (konzolidační skupiny)
+DEPRECATED_ALIASES: dict[str, str] = {
+    "seal": "integrity seal",
+    "seal-chain": "integrity chain",
+    "integrity-keys": "integrity keys",
+    "rotate-key": "integrity rotate-key",
+    "import-mobile": "import mobile",
+    "plaso-import": "import plaso",
+    "image": "forensic image",
+    "mobile": "forensic mobile",
+    "memory-analyze": "forensic memory",
+    "pcap-analyze": "forensic pcap",
+    "decrypt": "forensic decrypt",
+    "antiforensics-scan": "forensic anti",
+    "onchain": "crypto onchain",
+    "darkweb": "crypto darkweb",
+    "crypto-report": "crypto report",
+    "advanced": "crypto advanced",
+    "compliance": "court swgde",
+    "daubert": "court daubert",
+}
+
+# B7 — legacy forma `stopa integrity <case_id>` → podakce check (integrity = skupina)
+INTEGRITY_SUBCOMMANDS: frozenset[str] = frozenset(
+    {"check", "seal", "chain", "keys", "rotate-key"}
+)
+
+
+def rewrite_legacy_integrity(argv: list[str]) -> tuple[list[str], bool]:
+    """B7 — BC přepis legacy formy ``stopa integrity <case_id>``.
+
+    Vrací ``(argv, byl_přepsán)``. Přepíše jen tehdy, když druhý token není
+    nová podakce ani -h/--help (ty obsluhuje help skupiny).
+    """
+    if (
+        len(argv) >= 2
+        and argv[0] == "integrity"
+        and argv[1] not in INTEGRITY_SUBCOMMANDS
+        and argv[1] not in ("-h", "--help")
+    ):
+        return ["integrity", "check", *argv[1:]], True
+    return argv, False
+
+
+def deprecation_warning_for(command: str | None, legacy_integrity: bool) -> str | None:
+    """B7 — text DeprecationWarning pro staré top-level jméno (None = nový tvar)."""
+    if legacy_integrity:
+        return (
+            "stopa integrity <case_id> je deprecated — použij stopa integrity check <case_id> (B7)"
+        )
+    if command in DEPRECATED_ALIASES:
+        return (
+            f"stopa {command} je deprecated — použij stopa {DEPRECATED_ALIASES[command]} (B7)"
+        )
+    return None
+
+
 def _rich_progress():
     """Rich Progress pro dlouhé operace (R0.4) — None pokud Rich chybí nebo není TTY."""
     if not sys.stdout.isatty():
