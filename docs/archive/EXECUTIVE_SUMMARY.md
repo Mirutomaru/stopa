@@ -1,7 +1,7 @@
 # STOPA 2.1 — Executive Summary (auditní výstupy)
 
 **Stav:** Release 2.0 GA, commit `4a3a867` = origin/main · suite **3652 passed / 1 skipped** · Ruff clean · schema v19
-**Zdroj požadavků:** `docs/STOPA_2_1_MASTER_PROMPT.md` · **Plán:** `docs/ROADMAP_2_1.md` (detail s AK a velikostmi)
+**Zdroj požadavků:** `docs/prompts/STOPA_2_1_MASTER_PROMPT.md` · **Plán:** `docs/ROADMAP_2_1.md` (detail s AK a velikostmi)
 
 ## Co audit prokázal (ověřeno v kódu, ne z dokumentace)
 

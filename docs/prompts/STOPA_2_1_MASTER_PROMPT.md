@@ -92,7 +92,7 @@ U každého posuď odpovědnosti, cyklické závislosti, testovatelnost,
 rizika změn a možnosti postupného rozdělení.
 
 Vytvoř nebo aktualizuj: - ARCHITECTURE_AUDIT.md - EXECUTIVE_SUMMARY.md -
-ROADMAP_2_1.md
+ROADMAP_2_1.md _(Pozn. 2026-11-24: ARCHITECTURE_AUDIT.md a EXECUTIVE_SUMMARY.md jsou dnes archivovány v `docs/archive/`; ROADMAP_2_1.md žije v `docs/`.)_
 
 Dokumentace musí odpovídat skutečnému stavu kódu, ne plánovanému stavu.
 

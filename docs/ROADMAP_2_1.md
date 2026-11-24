@@ -1,8 +1,10 @@
 # ROADMAP STOPA 2.1 — Komplexní audit, bezpečnostní zpevnění a strategický rozvoj
 
-**Zdroj požadavků:** [`STOPA_2_1_MASTER_PROMPT.md`](./STOPA_2_1_MASTER_PROMPT.md) (master prompt od externího evaluátora).
+**Zdroj požadavků:** [`STOPA_2_1_MASTER_PROMPT.md`](prompts/STOPA_2_1_MASTER_PROMPT.md) (master prompt od externího evaluátora).
 **Výchozí stav:** Release 2.0 GA, commit `4a3a867`, suite **3652 passed / 1 skipped**, Ruff clean, schema v19.
 **Zásadní pravidla (z master promptu):** audit před refaktorem; malé kontrolované změny; každý nález s označením VERIFIED / PARTIALLY VERIFIED / IMPLEMENTED / NOT IMPLEMENTED / BLOCKED / N/A; destruktivní operace a změny datových kontraktů vyžadují souhlas uživatele; testy deterministické a offline.
+
+> ⚠️ **DOKONČENO + SNAPSHOT BASELINE** (2026-11-24): P4 vlna hotová 10/10; výchozí stav (suite 3652 passed, schema v19) = snapshot k commitu `4a3a867` — aktuální stav viz `.stopa-dev/PROJECT_STATE.md`. Referencován živými dokumenty, proto banner místo archivace.
 
 > Stav níže je **ověřený stav kódu v `4a3a867`** (soubory + tabulky), ne popis z dokumentace. Ověřeno: `src/stopa/models.py`, `domain/evidence_model.py`, `data/schema.py` (SCHEMA_VERSION=19), `data/plugin_loader.py`.
 
