@@ -263,6 +263,55 @@ jobs:
       - name: Test suite (aktivní core)
         run: python -m pytest -q
 
+  # B5 — Web SPA build/check (React+TS+Vite, frontend/): tsc --noEmit strict + syntax check raw JS
+  # + unit testy vitest + řízené sestavení s ověřením freshness proti commitnutému
+  # src/stopa/web/static/spa. Předbuildovaná SPA se shání v wheelu BEZ Node u uživatele —
+  # tento gate dokazuje, že commitovaný artefakt odpovídá zdrojům (žádný stale build).
+  web-spa:
+    name: "Web SPA (tsc + vitest + build fresh)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Pinned lock (reprodukovatelnost) — stejný princip jako tests/js v jobu test
+      - name: Install dependencies (npm ci, pinned lock)
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      # B5 — typová kontrola (strict tsconfig, noEmit) + syntax jediné raw JS souboru (service worker)
+      - name: Type check (tsc --noEmit strict)
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Syntax check (node --check sw.js)
+        working-directory: frontend
+        run: node --check public/sw.js
+
+      # Unit testy SPA komponent/lib (vitest, jsdom)
+      - name: Unit tests (vitest)
+        working-directory: frontend
+        run: npx vitest run
+
+      # B5 — řízené sestavení výstupu + ověření freshness proti commitnutému static/spa:
+      # vite zapisuje do ../src/stopa/web/static/spa (emptyOutDir); jakákoli změna = stale build → fail.
+      - name: Build (vite) + verify fresh against committed output
+        working-directory: frontend
+        run: |
+          npm run build
+          cd ..
+          if git status --porcelain src/stopa/web/static/spa | grep -q .; then
+            echo "::error::Commitnutá SPA je stale — přebuild (cd frontend && npm run build) a commit výstupu"
+            git status --porcelain src/stopa/web/static/spa
+            exit 1
+          fi
+          echo "OK: commitnutá SPA odpovídá čerstvému buildu"
+
   # ETAPA D vlna 1 (STP-043): benchmark proti baseline — fail na regresi >20 %
   # a ≥0.5 ms absolutního rozdílu (CI noise guard pro sub-ms položky).
   benchmark:
