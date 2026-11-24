@@ -41,9 +41,11 @@ def _repo(db) -> IntelRepository:
 def register(app, ctx) -> None:
     """Přidá P2-5 routy do aplikace (volá se z ``create_app``)."""
     open_db = ctx["open_db"]
+    _require = ctx["_require"]  # B3a — per-case tenancy enforcement
 
     @app.get("/api/cases/{case_id}/intel/feed")
     def intel_feed(case_id: str):
+        _require("case.read", "intel_feed", case_id=case_id)
         db = open_db(case_id)
         try:
             repo = _repo(db)
@@ -56,6 +58,7 @@ def register(app, ctx) -> None:
 
     @app.post("/api/cases/{case_id}/intel/import", status_code=201)
     def intel_import(case_id: str, body: ImportIn):
+        _require("case.update", "intel_import", case_id=case_id)
         from stopa.domain.threat_intel import IoC
 
         db = open_db(case_id)
@@ -75,6 +78,7 @@ def register(app, ctx) -> None:
     @app.post("/api/cases/{case_id}/intel/match")
     def intel_match(case_id: str, body: MatchIn | None = Body(default=None)):
         """Matching IoC feedu × artefakty/entities (+ P3-5 YARA/Sigma), re-run = clear + insert."""
+        _require("analysis.run", "intel_match", case_id=case_id)
         db = open_db(case_id)
         try:
             return run_intel_match(

@@ -22,6 +22,7 @@ def register(app, ctx) -> None:
     _load_last_export = ctx["_load_last_export"]
     _load_settings = ctx["_load_settings"]
     _require = ctx["_require"]
+    _audit_actor = ctx["_audit_actor"]  # B3b — actor pro audit citlivých egress akcí
 
     @app.get("/api/cases/{case_id}/interop-export")
     def interop_export(
@@ -351,8 +352,9 @@ def register(app, ctx) -> None:
 
         Vrací cache soubor uložený při posledním ``interop-export`` pro daný
         dataset a formát — uživatel si z historie v UI stáhne stejná data,
-        která už jednou vyexportoval, bez nového exportu. Read-only: bez audit
-        záznamu i integrity checkpointu (není nový export).
+        která už jednou vyexportoval, bez nového exportu. B3b: píše auditní
+        událost ``export_redownloaded``; integrity checkpoint se nepřidává
+        (není nový export).
 
         STP-068: ``what=bundle&format=zip`` re-downloaduje poslední ZIP bundle
         všech datasetů (cache uložená při ``interop-export-bundle``).
@@ -373,26 +375,35 @@ def register(app, ctx) -> None:
 
         # case musí existovat (open_db → 404), cache nemusí
         db = open_db(case_id)
-        db.close()
+        try:
+            case_row = db.get_case(case_id)
+            path = _load_last_export(case_id, what, format)
+            if path is None:
+                raise HTTPException(
+                    404, f"pro {what}/{format} ještě nebylo nic exportováno"
+                )
 
-        path = _load_last_export(case_id, what, format)
-        if path is None:
-            raise HTTPException(
-                404, f"pro {what}/{format} ještě nebylo nic exportováno"
+            media_type = {
+                "csv": "text/csv",
+                "json": "application/json",
+                "uco": "application/json",
+                "stix": "application/json",
+                "jsonl": "application/x-ndjson",
+                "xml": "application/xml",
+                "l2tcsv": "text/plain",
+                "zip": "application/zip",  # STP-068 — ZIP bundle
+            }[format]
+            # B3b — audit citlivého přístupu (re-download exportu); bez integrity
+            # checkpointu, protože nejde o nový export (rozhodnutí v PLAN_BACKLOG B3).
+            db.log_operation(
+                "export_redownloaded",
+                actor=_audit_actor(case_row),
+                details={"what": what, "format": format},
             )
-
-        media_type = {
-            "csv": "text/csv",
-            "json": "application/json",
-            "uco": "application/json",
-            "stix": "application/json",
-            "jsonl": "application/x-ndjson",
-            "xml": "application/xml",
-            "l2tcsv": "text/plain",
-            "zip": "application/zip",  # STP-068 — ZIP bundle
-        }[format]
-        # FileResponse s filename= sám nastaví Content-Disposition: attachment.
-        return FileResponse(path, media_type=media_type, filename=f"{case_id}_{what}.{format}")
+            # FileResponse s filename= sám nastaví Content-Disposition: attachment.
+            return FileResponse(path, media_type=media_type, filename=f"{case_id}_{what}.{format}")
+        finally:
+            db.close()
 
     # ── STP-069 — download posledního automatického ZIP bundle (opt-in) ──
     @app.get("/api/plugins")
@@ -425,6 +436,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/attack-map")
     def attack_map(case_id: str, format: str = "json"):
         """F6.3 — heat-mapa taktik×technik; ``format=stix`` → intrusion-set bundle."""
+        _require("case.read", "attack_map", case_id=case_id)
         from fastapi import Response
 
         from stopa.domain.mitre_attack import build_attack_heatmap, to_stix_bundle_intrusion_set
@@ -453,6 +465,7 @@ def register(app, ctx) -> None:
     # ── report (FÁZE 7) ───────────────────────────────────────
     @app.get("/api/cases/{case_id}/report")
     def report(case_id: str, format: str = "html"):
+        _require("case.read", "report", case_id=case_id)
         from fastapi import Response
 
         from stopa.presentation.case_report import build_html
@@ -489,6 +502,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/compliance-report")
     def compliance_report(case_id: str, format: str = "pdf"):
         """Podepsaný compliance report (PDF nebo JSON) pro externího auditora."""
+        _require("case.read", "compliance_report", case_id=case_id)
         from fastapi import Response
 
         from stopa.presentation.compliance_report import generate_compliance_report
@@ -520,6 +534,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/daubert-pack")
     def daubert_pack(case_id: str):
         """Daubert balík: peer-reviewed reference, validační testy, error rates."""
+        _require("case.read", "daubert_pack", case_id=case_id)
         from fastapi import Response
 
         from stopa.presentation.daubert import generate_daubert_pack
@@ -548,6 +563,7 @@ def register(app, ctx) -> None:
         Čistá agregace nad DB (C6 ``build_validation_report``); selhání registry
         degraduje na 500 s logem (defenzivní obal).
         """
+        _require("case.read", "validation", case_id=case_id)
         from stopa.data.validation_report import build_validation_report
 
         db = open_db(case_id)
@@ -575,6 +591,7 @@ def register(app, ctx) -> None:
 
         Selhání degraduje na 500 s logem (defenzivní obal).
         """
+        _require("case.read", "audit_log_view", case_id=case_id)
         db = open_db(case_id)
         try:
             report = db.verify_audit_chain()
@@ -613,6 +630,7 @@ def register(app, ctx) -> None:
         přepočet chain_hash) **a** vazba každého záznamu na F5.1 pečeť (shoda
         root + platný Ed25519 podpis). Records nesou externí witness.
         """
+        _require("case.read", "seals_chain", case_id=case_id)
         db = open_db(case_id)
         try:
             return db.seal_repo.verify_chain(case_id)

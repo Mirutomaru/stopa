@@ -25,6 +25,7 @@ def register(app, ctx) -> None:
         (subjekty + rozporné skupiny), findings a ruční/AI hrany z ``graph_edges``.
         Explicitní hrana se stejným klíčem má přednost před odvozenou.
         """
+        _require("case.read", "evidence_graph", case_id=case_id)
         from stopa.data.graph_repository import GraphRepository
 
         db = open_db(case_id)
@@ -77,6 +78,7 @@ def register(app, ctx) -> None:
           ``ext:jpg``, ``in-artifact:X``)
         - `hash` — hex SHA-256/MD5 → exact lookup přes index (priorita před `q`)
         """
+        _require("case.read", "search", case_id=case_id)
         db = open_db(case_id)
         try:
             if hash and hash.strip():
@@ -114,6 +116,7 @@ def register(app, ctx) -> None:
         ``graph_edges`` (hloubka 1..3) z artefaktů výsledků. Neznámý případ →
         404, semantická chyba filtru → 400.
         """
+        _require("case.read", "search_advanced", case_id=case_id)
         from stopa.data.search_repository import SearchRepository
         from stopa.domain.search_adv import AdvancedSearchQuery, FilterSpec, RelationSpec
 
@@ -165,6 +168,7 @@ def register(app, ctx) -> None:
         case ``timezone_name`` (default Europe/Prague). Backward-kompatibilní:
         staré GUI konzumuje ``timestamp`` / ``artifact_type`` / ``title``.
         """
+        _require("case.read", "timeline", case_id=case_id)
         db = open_db(case_id)
         try:
             tz_name = "Europe/Prague"
@@ -234,6 +238,7 @@ def register(app, ctx) -> None:
         Bez nainstalovaného duckdb ([analytics] extra) → HTTP 503 s hláškou;
         standardní timeline/search zůstává v SQLite (backward-kompatibilní).
         """
+        _require("case.read", "analytics", case_id=case_id)
         from stopa.data.analytics import AnalyticsError, AnalyticsStore, duckdb_available
 
         if not duckdb_available():
@@ -306,6 +311,7 @@ def register(app, ctx) -> None:
         nejvyššího ranku E4 propojení entity. Neznámý případ → 404,
         semantická chyba → 400.
         """
+        _require("case.read", "advanced_intel", case_id=case_id)
         from stopa.domain.timeline_adv import analyze_timeline_adv, entity_confidence_map
 
         db = open_db(case_id)   # neznámý případ → HTTPException(404) z ctx["open_db"]
@@ -350,6 +356,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/correlations")
     def list_correlations(case_id: str) -> list[dict]:
         """Propojení entit s evidence listy (dohledatelnost každého nálezu)."""
+        _require("case.read", "correlations", case_id=case_id)
         db = open_db(case_id)
         try:
             return db.list_correlations(case_id)
@@ -358,6 +365,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/entities")
     def list_entities(case_id: str) -> list[dict]:
         """Kanonické entity extrahované z artifactů (E4)."""
+        _require("case.read", "entities", case_id=case_id)
         db = open_db(case_id)
         try:
             return db.list_entities(case_id)
@@ -366,6 +374,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/entities/merge-candidates")
     def merge_candidates(case_id: str) -> list[dict]:
         """P0 I3 — detekce duplicitních entit s důvody (heuristické páry)."""
+        _require("case.read", "merge_candidates", case_id=case_id)
         from stopa.domain.entity_resolution import find_merge_candidates
 
         db = open_db(case_id)
@@ -381,6 +390,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/partition-map")
     def partition_map(case_id: str) -> list[dict]:
         """Partition mapy všech diskových obrazů v případu."""
+        _require("case.read", "partition_map", case_id=case_id)
         db = open_db(case_id)
         try:
             arts = db.list_artifacts(artifact_type="disk_image")

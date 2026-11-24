@@ -47,9 +47,11 @@ def _repo(db) -> InvestigationRepository:
 def register(app, ctx) -> None:
     """Přidá P2-4 routy do aplikace (volá se z ``create_app``)."""
     open_db = ctx["open_db"]
+    _require = ctx["_require"]  # B3a — per-case tenancy enforcement
 
     @app.get("/api/cases/{case_id}/inv/notes")
     def inv_notes_list(case_id: str):
+        _require("case.read", "inv_notes_list", case_id=case_id)
         db = open_db(case_id)
         try:
             return _repo(db).list_notes(case_id)
@@ -58,6 +60,7 @@ def register(app, ctx) -> None:
 
     @app.post("/api/cases/{case_id}/inv/notes", status_code=201)
     def inv_note_add(case_id: str, body: NoteIn):
+        _require("case.update", "inv_note_add", case_id=case_id)
         db = open_db(case_id)
         try:
             note_id = _repo(db).add_note(
@@ -71,6 +74,7 @@ def register(app, ctx) -> None:
 
     @app.get("/api/cases/{case_id}/inv/tasks")
     def inv_tasks_list(case_id: str):
+        _require("case.read", "inv_tasks_list", case_id=case_id)
         db = open_db(case_id)
         try:
             return _repo(db).list_tasks(case_id)
@@ -79,6 +83,7 @@ def register(app, ctx) -> None:
 
     @app.post("/api/cases/{case_id}/inv/tasks", status_code=201)
     def inv_task_add(case_id: str, body: TaskIn):
+        _require("case.update", "inv_task_add", case_id=case_id)
         db = open_db(case_id)
         try:
             task_id = _repo(db).add_task(
@@ -92,6 +97,7 @@ def register(app, ctx) -> None:
 
     @app.patch("/api/cases/{case_id}/inv/tasks/{task_id}")
     def inv_task_set_status(case_id: str, task_id: int, body: TaskStatusIn):
+        _require("case.update", "inv_task_set_status", case_id=case_id)
         db = open_db(case_id)
         try:
             return _repo(db).set_task_status(case_id, task_id, body.status)
@@ -102,6 +108,7 @@ def register(app, ctx) -> None:
 
     @app.get("/api/cases/{case_id}/inv/hypo-revisions")
     def inv_hypo_revisions_list(case_id: str, hypothesis: str | None = None):
+        _require("case.read", "hypo_revisions_list", case_id=case_id)
         from stopa.domain.investigation_workspace import verify_revisions
 
         db = open_db(case_id)
@@ -113,6 +120,7 @@ def register(app, ctx) -> None:
 
     @app.post("/api/cases/{case_id}/inv/hypo-revisions", status_code=201)
     def inv_hypo_revision_add(case_id: str, body: HypoRevisionIn):
+        _require("case.update", "hypo_revision_add", case_id=case_id)
         db = open_db(case_id)
         try:
             return _repo(db).add_hypo_revision(

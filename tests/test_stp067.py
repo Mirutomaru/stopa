@@ -17,6 +17,7 @@ TestClient s reálnou case DB (seed přes sqlite3).
 from __future__ import annotations
 
 import sqlite3
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -80,10 +81,14 @@ def _seed_artifacts(dbp: Path, n: int = 3, prefix: str = "art-le") -> None:
         con.close()
 
 
-def _audit_count(client, cid: str) -> int:
+def _audit_entries(client, cid: str) -> list[dict]:
     r = client.get(f"/api/cases/{cid}/audit?limit=500")
     assert r.status_code == 200, r.text
-    return len(r.json().get("entries", []))
+    return r.json().get("entries", [])
+
+
+def _audit_count(client, cid: str) -> int:
+    return len(_audit_entries(client, cid))
 
 
 # ── cache vzniká při exportu ────────────────────────────────────────
@@ -247,8 +252,11 @@ class TestValidation:
                   params={"what": "artifacts", "format": "pdf"})
         assert r.status_code == 400
 
-    def test_read_only_no_audit_entry(self, client, evidence):
-        """Re-download je read-only — nezapisuje audit záznam."""
+    def test_read_only_egress_audit(self, client, evidence):
+        """Re-download je read-only — nemění stav případu. Od B3b píše jediný
+        egress audit záznam (`export_redownloaded`) za každý stažený formát, aby
+        bylo forenzně vidět, kdy data opustila systém. Původní kontrakt STP-067
+        („bez auditu — re-download není akcí“) tímto záměrně upraven."""
         c, tmp = client
         case = _make_case(c)
         cid = case["id"]
@@ -259,13 +267,16 @@ class TestValidation:
             rr = c.get(f"/api/cases/{cid}/interop-export",
                        params={"what": "artifacts", "format": fmt})
             assert rr.status_code == 200, rr.text
-        after_export = _audit_count(c, cid)
-        assert after_export > 0, "export musí zapsat audit"
+        before = _audit_entries(c, cid)
+        assert len(before) > 0, "export musí zapsat audit"
 
         for fmt in ("csv", "json", "l2tcsv"):
             rr = c.get(f"/api/cases/{cid}/last-export",
                        params={"what": "artifacts", "format": fmt})
             assert rr.status_code == 200, rr.text
-        after_redownload = _audit_count(c, cid)
-        assert after_redownload == after_export, \
-            "re-download nesmí přidávat audit záznamy"
+        after = _audit_entries(c, cid)
+
+        added = (Counter(e.get("action") for e in after)
+                 - Counter(e.get("action") for e in before))
+        assert dict(added) == {"export_redownloaded": 3}, \
+            f"re-download píše přesně 1 egress záznam na formát: {dict(added)}"

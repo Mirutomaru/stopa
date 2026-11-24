@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse
 from stopa.data.db import CaseDB
 from stopa.data.write_blocker_repository import WriteBlockerRepository
 from stopa.domain.events import case_topic
+from stopa.domain.multitenant import access_for_case  # B3a — WS tenancy izolace
 from stopa.domain.rbac import normalize_role
 from stopa.domain.write_blocker import (  # F5.4/P0.4 — write-blocker API
     ACTION_CHECK,
@@ -44,6 +45,9 @@ def register(app, ctx) -> None:
     _job_update = ctx["_job_update"]
     _user_repo = ctx["_user_repo"]
     _current_user = ctx["_current_user"]
+    _multi_user_mode = ctx["_multi_user_mode"]  # B3a — WS tenancy izolace
+    _set_session_token = ctx["_set_session_token"]  # B3a — WS session token (ContextVar)
+    _audit_actor = ctx["_audit_actor"]  # B3b — actor pro audit citlivých egress akcí
     open_db = ctx["open_db"]
     _load_last_export = ctx["_load_last_export"]
     _load_settings = ctx["_load_settings"]
@@ -114,6 +118,7 @@ def register(app, ctx) -> None:
         return {"id": case.id, "name": case.name}
     @app.get("/api/cases/{case_id}")
     def get_case(case_id: str) -> dict:
+        _require("case.read", "get_case", case_id=case_id)
         db = open_db(case_id)
         try:
             case = db.get_case(case_id)
@@ -266,6 +271,7 @@ def register(app, ctx) -> None:
         `active` = právě probíhající job (GUI polluje tento endpoint během
         async ingestu); `recent` = poslední 10 běhů (nejnovější první).
         """
+        _require("case.read", "processing_status", case_id=case_id)
         with _jobs_lock:
             mine = [dict(j) for j in _jobs.values() if j["case_id"] == case_id]
         active = next((j for j in reversed(mine) if j["status"] == "running"), None)
@@ -285,7 +291,10 @@ def register(app, ctx) -> None:
           při neaktivitě (AK F4.2; default 15 s, parametr factory pro testy);
         - **reconnection** je na klientu (exponenciální backoff + fallback
           na REST polling — graceful degradation: bez WS vše funguje dál);
-        - neznámý případ → close code 4004.
+        - neznámý případ → close code 4004;
+        - **B3a tenancy**: neplatný/expirovaný token → 4001, multi-user bez tokenu
+          → 4001, OK uživatel bez členství v případu (ne-admin) → 4003.
+          Legacy BC (bez tokenu, single-operator) = open.
 
         Latence AK < 200 ms: publish je nablokující put_nowait do fronty,
         handler čte přes ``asyncio.to_thread`` (worker vlákna nepočeká).
@@ -297,6 +306,28 @@ def register(app, ctx) -> None:
             await websocket.accept()
             await websocket.close(code=4004, reason="případ nenalezen")
             return
+
+        # B3a — tenancy izolace WS kanálu (fail-closed v multi-user režimu):
+        # neplatný token → 4001; členství per-case → 4003. Legacy (bez tokenu) = BC open.
+        _set_session_token(
+            websocket.headers.get("x-stopa-token") or websocket.cookies.get("stopa_token")
+        )
+        ws_status, ws_user = _current_user()
+        if ws_status == "bad" or (ws_status == "no-token" and _multi_user_mode()):
+            await websocket.accept()
+            await websocket.close(code=4001, reason="session required")
+            return
+        if ws_status == "ok":
+            repo = _user_repo()
+            try:
+                grants = repo.case_grants(ws_user["id"], case_id)
+            finally:
+                repo.conn.close()
+            has_access, _ws_role = access_for_case(ws_user["role"], grants)
+            if not (has_access and _ws_role):
+                await websocket.accept()
+                await websocket.close(code=4003, reason="no access to this case")
+                return
 
         topic = case_topic(case_id)
         q: queue.Queue = _bus.subscribe(topic)
@@ -321,6 +352,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/families")
     def families(case_id: str) -> list[str]:
         """DISTINCT detekované signatury — pro filtr v File System gridu."""
+        _require("case.read", "families", case_id=case_id)
         db = open_db(case_id)
         try:
             rows = db.conn.execute(
@@ -338,7 +370,9 @@ def register(app, ctx) -> None:
         Auto-bundle generuje pipeline hook po dokončení processingu, pokud je u
         případu zapnutý ``auto_export_enabled``. Cesta je persistovaná v case DB
         (``last_auto_export_path``); fallback = trvalá cache layout
-        ``{db_dir}/exports/{case_id}/auto-bundle.zip``. Read-only: bez auditu.
+        ``{db_dir}/exports/{case_id}/auto-bundle.zip``. B3b: píše auditní
+        událost ``auto_export_downloaded`` (integrity checkpoint se nepřidává —
+        není nový export).
 
         404 = auto-export ještě nikdy nebyl vygenerován.
         """
@@ -359,6 +393,18 @@ def register(app, ctx) -> None:
             path = _load_last_export(case_id, "auto-bundle", "zip")
         if path is None:
             raise HTTPException(404, "automatický export ještě nebyl vygenerován")
+
+        # B3b — audit citlivého přístupu (re-download auto-bundle); bez integrity
+        # checkpointu (není nový export).
+        db = open_db(case_id)
+        try:
+            db.log_operation(
+                "auto_export_downloaded",
+                actor=_audit_actor(case),
+                details={"path": str(path)},
+            )
+        finally:
+            db.close()
 
         return FileResponse(
             path, media_type="application/zip", filename=f"{case_id}_auto-bundle.zip"

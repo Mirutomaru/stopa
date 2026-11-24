@@ -27,10 +27,12 @@ class OverrideIn(BaseModel):
 def register(app, ctx) -> None:
     """Přidá P3-3 routy do aplikace (volá se z ``create_app``)."""
     open_db = ctx["open_db"]
+    _require = ctx["_require"]  # B3a — per-case tenancy enforcement
 
     @app.get("/api/cases/{case_id}/classifications")
     def list_classifications(case_id: str, needs_review: bool = False) -> dict:
         """Výsledek klasifikace per soubor (+ efektivní kategorie po override)."""
+        _require("case.read", "list_classifications", case_id=case_id)
         db = open_db(case_id)
         try:
             repo = ClassificationRepository(db.conn)
@@ -44,6 +46,7 @@ def register(app, ctx) -> None:
     @app.post("/api/cases/{case_id}/classifications/classify")
     def run_classification(case_id: str) -> dict:
         """Spustí pravidlový klasifikátor nad všemi soubory (re-run deterministický)."""
+        _require("analysis.run", "run_classification", case_id=case_id)
         db = open_db(case_id)
         try:
             repo = ClassificationRepository(db.conn)
@@ -55,6 +58,7 @@ def register(app, ctx) -> None:
     @app.post("/api/cases/{case_id}/classifications/override")
     def override_classification(case_id: str, body: OverrideIn) -> dict:
         """Lidský override klasifikace (append-only audit; auto hodnota zůstává)."""
+        _require("case.update", "override_classification", case_id=case_id)
         db = open_db(case_id)
         try:
             repo = ClassificationRepository(db.conn)

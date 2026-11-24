@@ -76,7 +76,7 @@ def register(app, ctx) -> None:
     @app.post("/api/registry/{case_id}/sync", status_code=201)
     def registry_sync(case_id: str):
         """Idempotentní sync jednoho případu do registru (404 = neznámý případ)."""
-        _require("settings.write", "registry-sync")
+        _require("settings.write", "registry-sync", case_id=case_id)  # B3a — NOCTX fix: tenancy per case
         if case_id not in list_case_ids(base):
             raise HTTPException(404, f"Případ {case_id!r} neexistuje")
         inst = open_instance(base)
@@ -90,7 +90,7 @@ def register(app, ctx) -> None:
     @app.post("/api/registry/{case_id}/status")
     def registry_status(case_id: str, body: StatusIn):
         """Změna stavu záznamu registru; 404 = není v registru, 400 = neplatný status."""
-        _require("settings.write", "registry-status")
+        _require("settings.write", "registry-status", case_id=case_id)  # B3a — NOCTX fix: tenancy per case
         inst = open_instance(base)
         try:
             return set_status(inst, case_id, body.status)  # ValueError → 400 níže
@@ -102,7 +102,7 @@ def register(app, ctx) -> None:
     @app.delete("/api/registry/{case_id}")
     def registry_delete(case_id: str):
         """Odebrání záznamu registru; 404 = není v registru."""
-        _require("settings.write", "registry-delete")
+        _require("settings.write", "registry-delete", case_id=case_id)  # B3a — NOCTX fix: tenancy per case
         inst = open_instance(base)
         try:
             if not remove_case_entry(inst, case_id):

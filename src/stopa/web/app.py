@@ -586,6 +586,22 @@ def create_app(
         finally:
             repo.conn.close()
 
+    def _audit_actor(case) -> str | None:
+        """B3b — actor pro audit citlivých egress akcí: session uživatel > case examiner."""
+        _, user = _current_user()
+        if user is not None and user.get("username"):
+            return user["username"]
+        return getattr(case, "examiner", None) or None
+
+    def _set_session_token(tok: str | None) -> None:
+        """B3a — WS path: nastaví session token do ContextVar.
+
+        ``_session_middleware`` je http middleware a websocket scope nekryje;
+        WS handler ho zavolá s tokenem z request hlaviček/cookie (stejný zdroj
+        jako middleware) a následně `_current_user()` funguje identicky.
+        """
+        _current_token_var.set(tok)
+
     @app.middleware("http")
     async def _session_middleware(request, call_next):
         """F4.4 — předá session token (header ``X-Stopa-Token`` nebo cookie) handlerům."""
@@ -953,6 +969,8 @@ def create_app(
         "_save_settings": _save_settings,
         "_current_role": _current_role,
         "_require": _require,
+        "_audit_actor": _audit_actor,  # B3b — actor pro audit citlivých egress akcí
+        "_set_session_token": _set_session_token,  # B3a — session token pro WS (ContextVar)
     }
     # P4-7 — test hook: interní stav (bus, poller stop) dostupný přes app.state.ctx
     app.state.ctx = ctx

@@ -23,6 +23,7 @@ import io
 import json
 import sqlite3
 import zipfile
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -140,10 +141,14 @@ def _seed_all(dbp: Path) -> None:
     _seed_correlations(dbp, n=2)
 
 
-def _audit_count(client, cid: str) -> int:
+def _audit_entries(client, cid: str) -> list[dict]:
     r = client.get(f"/api/cases/{cid}/audit?limit=500")
     assert r.status_code == 200, r.text
-    return len(r.json().get("entries", []))
+    return r.json().get("entries", [])
+
+
+def _audit_count(client, cid: str) -> int:
+    return len(_audit_entries(client, cid))
 
 
 # ── obsah ZIPu + manifest ───────────────────────────────────────────
@@ -349,16 +354,20 @@ class TestCacheAndRedownload:
         r_export = c.get(f"/api/cases/{cid}/interop-export-bundle")
         assert r_export.status_code == 200, r_export.text
 
-        # re-download vrací stejná data, bez nového audit záznamu (read-only)
-        n_before = _audit_count(c, cid)
+        # re-download vrací stejná data; od B3b píše přesně 1 egress audit záznam
+        # (`export_redownloaded`) — read-only sémantika = žádné změny stavu případu,
+        # jen stopa o odchodu dat (původní kontrakt „bez auditu“ záměrně upraven)
+        before_actions = [e.get("action") for e in _audit_entries(c, cid)]
         r_dl = c.get(
             f"/api/cases/{cid}/last-export", params={"what": "bundle", "format": "zip"}
         )
         assert r_dl.status_code == 200, r_dl.text
         assert r_dl.headers["content-type"] == "application/zip"
         assert r_dl.content == r_export.content
-        n_after = _audit_count(c, cid)
-        assert n_after == n_before, "re-download musí být read-only (bez auditu)"
+        after_actions = [e.get("action") for e in _audit_entries(c, cid)]
+        added = Counter(after_actions) - Counter(before_actions)
+        assert dict(added) == {"export_redownloaded": 1}, \
+            f"re-download píše přesně 1 egress záznam: {dict(added)}"
 
     def test_redownload_invalid_format_400(self, client):
         """bundle nezná formáty mimo zip → 400."""

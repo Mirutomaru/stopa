@@ -24,6 +24,7 @@ def register(app, ctx) -> None:
     _publish_case = ctx["_publish_case"]
     open_db = ctx["open_db"]
     _require = ctx["_require"]
+    _audit_actor = ctx["_audit_actor"]  # B3b — actor pro audit citlivých egress akcí
 
     @app.get("/api/cases/{case_id}/files")
     def list_files(
@@ -35,6 +36,7 @@ def register(app, ctx) -> None:
         limit: int = 500,
         offset: int = 0,
     ) -> list[dict]:
+        _require("case.read", "list_files", case_id=case_id)
         db = open_db(case_id)
         try:
             recs = db.list_files(
@@ -53,6 +55,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/artifacts")
     def list_artifacts(case_id: str, file_id: str | None = None, limit: int = 500) -> list[dict]:
         """Artefakty případu (volitelně filtr na soubor) včetně review_state."""
+        _require("case.read", "list_artifacts", case_id=case_id)
         db = open_db(case_id)
         try:
             arts = db.list_artifacts(limit=limit) if file_id is None else [
@@ -70,6 +73,7 @@ def register(app, ctx) -> None:
         Zrcadlí CLI ``stopa compare-artifacts``. 404 pokud některá verze neexistuje;
         400 pro jiný artifact_key / neplatné details_json (semantické chyby domény).
         """
+        _require("case.read", "artifact_compare", case_id=case_id)
         from stopa.data.artifact_compare_repository import ArtifactCompareRepository
         from stopa.domain.artifact_compare import compare_artifacts, comparison_to_dict
 
@@ -96,6 +100,7 @@ def register(app, ctx) -> None:
         ``gaps`` = tvrdé mezery (řetězec neúplný), ``warnings`` = měkké mezery
         (např. legacy hash bez timestampu).
         """
+        _require("case.read", "artifact_provenance", case_id=case_id)
         from stopa.data.provenance_repository import ProvenanceRepository
 
         db = open_db(case_id)
@@ -135,6 +140,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/artifacts/{artifact_id}/reviews")
     def artifact_reviews(case_id: str, artifact_id: str) -> dict:
         """Aktuální stav + kritičnost + neměnná historie review akcí."""
+        _require("case.read", "artifact_reviews", case_id=case_id)
         db = open_db(case_id)
         try:
             art = db.get_artifact(artifact_id)
@@ -151,6 +157,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/files/{file_id}")
     def get_file(case_id: str, file_id: str) -> dict:
         """Detail jednoho souboru + flagy (File Inspector)."""
+        _require("case.read", "get_file", case_id=case_id)
         db = open_db(case_id)
         try:
             rec = db.get_file(file_id)
@@ -171,6 +178,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/files/{file_id}/metadata")
     def file_metadata(case_id: str, file_id: str) -> dict:
         """Metadata z obsahu souboru (čistý Python + volitelné EXIF)."""
+        _require("case.read", "file_metadata", case_id=case_id)
         from stopa.domain.file_meta import extract_metadata
 
         db = open_db(case_id)
@@ -186,6 +194,7 @@ def register(app, ctx) -> None:
     @app.post("/api/cases/{case_id}/files/compare-metadata")
     def compare_metadata(case_id: str, a: str, b: str) -> dict:
         """Porovnání metadat dvou souborů (řádky field/a/b/match)."""
+        _require("case.read", "compare_metadata", case_id=case_id)
         from stopa.domain.file_meta import diff_metadata, extract_metadata
 
         db = open_db(case_id)
@@ -225,6 +234,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/marked")
     def marked(case_id: str, flag: str | None = None) -> list[dict]:
         """Označené soubory (Evidence / Report modul)."""
+        _require("case.read", "marked_files", case_id=case_id)
         db = open_db(case_id)
         try:
             out = []
@@ -238,6 +248,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/files/{file_id}/hex")
     def file_hex(case_id: str, file_id: str, offset: int = 0, length: int = 256) -> dict:
         """Hex dump úryvku souboru (File Inspector — hex grid)."""
+        _require("case.read", "file_hex", case_id=case_id)
         db = open_db(case_id)
         try:
             rec = db.get_file(file_id)
@@ -260,6 +271,7 @@ def register(app, ctx) -> None:
         Klasifikace přes `domain.file_preview` (čistá logika). Neznámý/nelze
         zobrazit → 415; příliš velký media → 413.
         """
+        _require("case.read", "file_preview", case_id=case_id)
         from fastapi import Response
 
         from stopa.domain.file_preview import (
@@ -294,6 +306,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/files/{file_id}/export")
     def export_file(case_id: str, file_id: str):
         """Stáhnout obsah souboru (Export File)."""
+        _require("case.read", "export_file", case_id=case_id)
         from fastapi import Response
 
         db = open_db(case_id)
@@ -307,6 +320,14 @@ def register(app, ctx) -> None:
             # isprintable() vyfiltruje i control chars (\r\n) → CRLF injection pryč.
             name = rec.name or "soubor"
             ascii_name = "".join(c if c.isascii() and c.isprintable() and c not in '"\\' else "_" for c in name)
+            # B3b — audit citlivého egressu (stáhnutí raw obsahu důkazu);
+            # actor = session uživatel, fallback case examiner (legacy BC).
+            case = db.get_case(case_id)
+            db.log_operation(
+                "evidence_exported",
+                actor=_audit_actor(case),
+                details={"file_id": file_id, "name": name, "bytes": len(data)},
+            )
             return Response(
                 content=data,
                 media_type="application/octet-stream",

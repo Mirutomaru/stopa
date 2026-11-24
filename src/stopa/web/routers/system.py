@@ -203,6 +203,7 @@ def register(app, ctx) -> None:
     @app.get("/api/cases/{case_id}/write-blocker")
     def wb_status(case_id: str) -> dict:
         """Aktuální WB stav + rozhodnutí ingest brány pro UI (P0.4: režim + třída ochrany)."""
+        _require("case.read", "write_blocker_status", case_id=case_id)
         db = open_db(case_id)
         try:
             repo = WriteBlockerRepository(db.conn, db.audit_repo)

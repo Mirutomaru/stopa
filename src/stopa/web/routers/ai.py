@@ -58,6 +58,7 @@ def register(app, ctx) -> None:
         404 = artefakt nenalezen / prázdný case. ``validated=False`` = výstup
         nesplnil schema role (payload=None, QA signál).
         """
+        _require("analysis.run", "ai_run", case_id=case_id)
         from stopa.data.ai_orchestrator_service import AiOrchestrationError, run_role_on_case
         from stopa.domain.ai_orchestrator import ROLE_IDS
 
@@ -95,6 +96,7 @@ def register(app, ctx) -> None:
         404 = případ neexistuje; 503 = LM Studio nedostupný. DB se zavírá až
         po skončení streamu (ne před ním).
         """
+        _require("analysis.run", "ai_stream", case_id=case_id)
         import json as _json
 
         from stopa.intelligence.tool_agent import run_stream
