@@ -26,12 +26,11 @@ meta = ["Pillow>=10"]  # E8 — EXIF metadata (volitelné; PDF/OOXML/ID3/MP4 fun
 net = ["scapy>=2.5"]  # F1.3 — síťová forenzika: PCAP parser + TCP reassembly + IoC (lazy import; bez scapy fallback na statický scanner)
 analytics = ["duckdb>=1.0"]  # F2.2 — DuckDB OLAP vrstva pro timeline & analytics (lazy import; bez duckdb SQLite fallback)
 # P4-10 — Rust core (stopa_core) jako manylinux wheel z release assetů:
-# jeden cp310-abi3 wheel per platforma (Py 3.10+), pin na release v2.4.0 (první
-# s wheels). Bez Linux x86_64/aarch64 = prázdné extra → čisté-Python fallback
+# jeden cp310-abi3 wheel per platforma (Py 3.10+), pin na release v2.6.0 (nejnovější; wheels se budují u každého tagu od v2.4.0). Bez Linux x86_64/aarch64 = prázdné extra → čisté-Python fallback
 # (facada data/rust_core.py, parity testy F2.1). Instalace ze zdroje: maturin.
 carving = [
-    "stopa_core @ https://github.com/Mirutomaru/stopa/releases/download/v2.4.0/stopa_core-0.1.0-cp310-abi3-manylinux_2_28_x86_64.whl ; platform_system == 'Linux' and platform_machine == 'x86_64'",
-    "stopa_core @ https://github.com/Mirutomaru/stopa/releases/download/v2.4.0/stopa_core-0.1.0-cp310-abi3-manylinux_2_28_aarch64.whl ; platform_system == 'Linux' and platform_machine == 'aarch64'",
+    "stopa_core @ https://github.com/Mirutomaru/stopa/releases/download/v2.6.0/stopa_core-0.1.0-cp310-abi3-manylinux_2_28_x86_64.whl ; platform_system == 'Linux' and platform_machine == 'x86_64'",
+    "stopa_core @ https://github.com/Mirutomaru/stopa/releases/download/v2.6.0/stopa_core-0.1.0-cp310-abi3-manylinux_2_28_aarch64.whl ; platform_system == 'Linux' and platform_machine == 'aarch64'",
 ]
 
 [project.scripts]
