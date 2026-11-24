@@ -1,6 +1,6 @@
 # STOPA — Validation Strategy (ETAPA C)
 
-**Datum:** 2026-11-02 · **Základ:** `udelej.md` §13 (Forensic Validation Laboratory) + E13 backlog
+**Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` §13 (Forensic Validation Laboratory) + E13 backlog
 
 ## 1. Principy
 

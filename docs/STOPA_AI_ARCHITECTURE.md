@@ -1,6 +1,6 @@
 # STOPA — AI Architecture (ETAPA C)
 
-**Datum:** 2026-11-02 · **Základ:** `udelej.md` §5 + gap analysis §4
+**Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` §5 + gap analysis §4
 
 ## 1. Současný stav (E11)
 

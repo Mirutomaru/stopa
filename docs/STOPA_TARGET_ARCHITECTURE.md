@@ -1,6 +1,6 @@
 # STOPA — Target Architecture (ETAPA C)
 
-**Datum:** 2026-11-02 · **Základ:** `udelej.md` + `STOPA_TECHNICAL_AUDIT.md` + `STOPA_GAP_ANALYSIS.md`
+**Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` + `STOPA_TECHNICAL_AUDIT.md` + `STOPA_GAP_ANALYSIS.md`
 
 ## 1. Cílová architektura — principy
 

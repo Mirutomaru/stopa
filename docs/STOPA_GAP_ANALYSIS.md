@@ -1,6 +1,6 @@
 # STOPA — Gap Analysis (ETAPA B)
 
-**Datum:** 2026-11-02 · **Základ:** `udelej.md` §4–§20 vs. stav v commitu `ae73ad0`
+**Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` §4–§20 vs. stav v commitu `ae73ad0`
 **Legenda:** IMPLEMENTED · PARTIALLY IMPLEMENTED · MISSING · NEEDS VALIDATION · NOT RECOMMENDED
 
 ## 1. Unified Evidence Model (§4.1) — **PARTIALLY IMPLEMENTED**

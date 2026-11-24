@@ -1,6 +1,6 @@
 # STOPA — Technický audit (FÁZE 1, MASTER PROMPT)
 
-**Datum:** 2026-11-02 · **Commit:** `2244d95` · **Základní zadání:** `udelej.md` (master prompt)
+**Datum:** 2026-11-02 · **Commit:** `2244d95` · **Základní zadání:** `docs/prompts/udelej.md` (master prompt)
 **Metoda:** každé tvrzení ověřeno zdrojovým kódem, testem nebo živým spuštěním — ne deklarací.
 
 ## 0. Baseline (nezávisle ověřeno)

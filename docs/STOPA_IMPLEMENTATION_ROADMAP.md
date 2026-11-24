@@ -1,6 +1,6 @@
 # STOPA — Implementation Roadmap (ETAPA C)
 
-**Datum:** 2026-11-02 · **Základ:** `udelej.md` §21 + gap analysis
+**Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` §21 + gap analysis
 **Pravidlo:** každý úkol = samostatný commit; po každém: testy + ruff + full regresní sada + DB kompatibilita + docs.
 
 ## P0 — Forensic Core 2.0 (nejprve)

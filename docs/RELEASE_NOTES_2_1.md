@@ -73,7 +73,7 @@ schémat jsou aditivní a idempotentní (v19→v20→v21→v22).
   | `pipeline.py` | 1532 ř. → balíček 6 modulů + facade **86 ř.** | `45911f9`, `fc7cfcb` |
   | `validation_registry.py` | 1242 ř. → balíček 9 modulů (datové moduly per ETAPA B rodina) + facade **82 ř.** | `17cd27c`, `77885d9` |
 
-- **Dokumentace** — `docs/ARCHITECTURE_AUDIT.md` (nálezy A-1..A-7),
+- **Dokumentace** — `docs/archive/ARCHITECTURE_AUDIT.md` (nálezy A-1..A-7),
   `docs/SECURITY_HARDENING.md`, `docs/FORENSIC_VALIDATION.md` (pětivrstvá
   hierarchie s ověřenými milníky).
 

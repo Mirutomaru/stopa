@@ -1,6 +1,6 @@
 # STOPA — Security Model (ETAPA C)
 
-**Datum:** 2026-11-02 · **Základ:** `udelej.md` §14, §23 + E-audit (`docs/archive/AUDIT-2026-11.md`)
+**Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` §14, §23 + E-audit (`docs/archive/AUDIT-2026-11.md`)
 
 ## 1. Hrozby a předpoklady
 
