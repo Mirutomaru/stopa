@@ -228,9 +228,17 @@ class TestP2Quality:
         assert wrapper.row_to_artifact is domain_fmt.row_to_artifact
 
     def test_db_no_local_datetime_imports(self):
-        """P2#5 — jediný (top-level) datetime import v db.py."""
-        src = (ROOT / "src" / "stopa" / "data" / "db.py").read_text(encoding="utf-8")
-        assert src.count("from datetime import") == 1
+        """P2#5/B2 — datetime jen jako jediný top-level import v db vrstvě (žádné lokální)."""
+        data_dir = ROOT / "src" / "stopa" / "data"
+        files = [data_dir / "db.py"] + sorted(data_dir.glob("db_facade_*.py"))
+        for f in files:
+            src = f.read_text(encoding="utf-8")
+            assert src.count("from datetime import") <= 1, (
+                f"{f.name}: víc jak jeden top-level datetime import"
+            )
+            assert "    from datetime import" not in src, (
+                f"{f.name}: lokální (vnitřní) datetime import"
+            )
 
     def test_version_single_source(self, client):
         """P2#9 — app.version == stopa.__version__ a žádný hardcodovaný literal v app.py."""
