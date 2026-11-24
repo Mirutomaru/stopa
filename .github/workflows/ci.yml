@@ -277,3 +277,40 @@ jobs:
         run: |
           echo "::error::Benchmark detekoval regresii >20 % (a ≥0.5 ms) oproti baseline."
           exit 1
+
+  lockfile-rust-pin:
+    name: Lockfile + Rust wheel pin (SHA-256)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # B1 — pinovaná verze uv → deterministické lockfile vyřešení (reprodukovatelnost)
+      - name: Install uv (pin version)
+        run: pip install "uv==0.11.13"
+
+      # Header lockfile obsahuje invokaci uv (včetně výstupní cesty) → regenerujeme se stejným
+      # -o a porovnáme s zálohou — deterministická kontrola, že pyproject↔lock sedí.
+      - name: Lockfile up-to-date check (pyproject.toml ↔ requirements.lock)
+        run: |
+          cp requirements.lock /tmp/lock.orig
+          uv pip compile pyproject.toml --all-extras \
+            --python-version 3.11 --universal --generate-hashes \
+            -o requirements.lock --quiet
+          diff /tmp/lock.orig requirements.lock
+
+      # B1 — fail-closed pin stopa_core: verze + SHA-256 release assetů proti manifestu a pyproject
+      - name: Verify stopa_core wheel (version + SHA-256, obě platformy)
+        run: python scripts/verify_rust_wheel.py --platforms x86_64 aarch64
+
+      # B1 — důkaz reprodukovatelnosti: čisté venv z lockfile + import stopa
+      - name: Install from lockfile (clean venv)
+        run: |
+          uv venv /tmp/stopa-lock-venv --python 3.11 --quiet
+          VIRTUAL_ENV=/tmp/stopa-lock-venv uv pip sync requirements.lock --quiet
+          VIRTUAL_ENV=/tmp/stopa-lock-venv uv pip install . --quiet
+          /tmp/stopa-lock-venv/bin/python -c "import stopa, fastapi; print('lockfile install OK')"

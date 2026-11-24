@@ -1,0 +1,17 @@
+{
+  "version": "2.6.0",
+  "core_version": "0.1.0",
+  "note": "SHA-256 pin release assetů stopa_core (manylinux wheels). Zdroj pravdy pro verzi/URL je pyproject.toml [carving]; tento manifest musí sedět s ním obousobně (test test_rust_wheel_pin.py). Přegenerace: scripts/verify_rust_wheel.py --update-manifest",
+  "wheels": {
+    "x86_64": {
+      "url": "https://github.com/Mirutomaru/stopa/releases/download/v2.6.0/stopa_core-0.1.0-cp310-abi3-manylinux_2_28_x86_64.whl",
+      "sha256": "3f4eb8b368248405f54ad0ecdcee54de3605b44eed9f1cc946ae7fdfdf8fc99a",
+      "size_bytes": 360753
+    },
+    "aarch64": {
+      "url": "https://github.com/Mirutomaru/stopa/releases/download/v2.6.0/stopa_core-0.1.0-cp310-abi3-manylinux_2_28_aarch64.whl",
+      "sha256": "973f5f8a4cb25bbf50d383cbd14438275d83f4c57a8bb4022adf3ddf6e23292a",
+      "size_bytes": 307993
+    }
+  }
+}
