@@ -22,7 +22,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 ### Fáze 2 — P1
 | ID | Úkol | Zdroj | Stav |
 |----|------|-------|------|
-| B4 | CI build/test s aktivním Rust wheelem (vedle parity): instalace `[carving]`, běh s aktivním core, kontrola verze pinu | D3/Q3 · S | TODO |
+| B4 | CI build/test s aktivním Rust wheelem (vedle parity): instalace `[carving]`, běh s aktivním core, kontrola verze pinu | D3/Q3 · S | ✅ DONE `b49a7e5` |
 | B5 | Minimální CI build/check Web SPA: node syntax/lint + typová kontrola JSDoc (`tsc --noEmit`), řízené sestavení výstupu pro wheel bez Node u uživatele | W6/Q7 · S | TODO |
 | B6 | Statistická brána benchmark engine: percentily (≥P95) vedle mediánu + prahy tolerance (% drift + minimální absolutní práh) — šum se nehlásí, ocas latence se neskrývá | W4/Q11 · S | TODO |
 | B7 | Zúžení/konsolidace 60 CLI subpříkazů: příbuzné pod jednotné kořeny s podakcemi + dočasné aliasy s DeprecationWarning (backward compat) | W5/Q4 · M | TODO |
@@ -63,3 +63,8 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - Opravené reálné bugy při review: ContextVar na WS cestě (multi-user režim — i validní token byl 4001), chybějící výtaž `_audit_actor` z ctx v `cases.py`.
 - Záměrné změny kontraktů: STP-067 `test_read_only_no_audit_entry` → `test_read_only_egress_audit` + STP-068 bundle re-download — re-download last-export od B3b píše přesně 1 egress záznam za stažený formát (data opouštějí systém = forenzní stopa; původní kontrakt „bez auditu“ nahrazen), read-only sémantika stavu případu zachována.
 - Ověřeno: ruff clean; B3 15/15; cílená regrese `test_f42_ws.py` + `test_f44_multitenant.py` + `test_web.py` + `test_p14_web_surface.py` = **100/100**; stp067 11/11, stp068 12/12; **full suite 5331 passed, 1 skipped, EXIT=0 (38:23)**.
+### B4 — CI build/test s aktivním Rust wheelem (DONE 2026-11-25, commit `b49a7e5`)
+- Nový CI job `test-active-core` v `.github/workflows/ci.yml` (vedle `rust-parity`): instalace `-e ".[dev,web,carving]"` → pip stáhne pinned stopa_core wheel z release v2.6.0 (Linux x86_64 marker), fail-closed verifikační pin nainstalovaného core a **full suite s aktivním core** — produkční cesta, nikoli čisté-Python fallback (RUST-markované testy zde skutečně běží).
+- `scripts/verify_rust_wheel.py`: nový režim `--installed` — fail-closed verifikace nainstalovaného aktivního core (importovatelné + verze == manifest `core_version`; tolerantní `check_imported_core` zůstává pro fallback prostředí bez wheelu).
+- Nové testy v `tests/test_rust_wheel_pin.py`: `--installed` exit 0 s aktivním core; fail-closed (exit ≠ 0) při chybějícím core — oba přes subprocess na skutečný CLI entry point.
+- Ověřeno: ruff clean; `--installed` s core = PASS exit 0, simulace bez core (čisté venv) = FAIL exit 1 fail-closed; pin testy **5 passed/1 skipped**; CI YAML validní (10 jobů); full suite s aktivním core **5331 passed, 1 skipped** (lokální `.venv` obsahuje stopa_core 0.1.0 = stejná konfigurace jako CI job).
