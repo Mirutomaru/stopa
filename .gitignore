@@ -12,3 +12,5 @@ cases/
 benchmark-result.json
 .DS_Store
 node_modules/
+# lokální zálohy (ne commit)
+backups/
