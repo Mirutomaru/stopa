@@ -1,18 +1,15 @@
-# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 6)
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 7)
 
-## Hotovo právě teď: **B4 [S] CI build/test s aktivním Rust wheelem**
-Commit `b49a7e5`. Nový CI job `test-active-core`: instalace `-e ".[dev,web,carving]"` (pinned stopa_core wheel z release v2.6.0), fail-closed verifikační pin nainstalovaného core (`scripts/verify_rust_wheel.py --installed`, nový režim) a full suite s aktivním core — produkční cesta, nikoli čisté-Python fallback; RUST-markované testy zde skutečně běží. Ověřeno: ruff clean, `--installed` PASS s core / fail-closed bez core (simulace v čistem venv), pin testy 5p/1s, CI YAML validní (10 jobů); full suite s aktivním core **5331 passed, 1 skipped** (lokální `.venv` = stejná konfigurace jako CI job).
-Předtím ve vlně: **B3 [P0·L]** multi-tenancy — commit `8a36e21` (viz vlna 5 níže).
+## Hotovo právě teď: **B5 [S] Minimální CI build/check Web SPA**
+Commit `72ddd8c`. Nový CI job `web-spa` (React+TS+Vite, `frontend/`): npm ci s pinned lockem, tsc --noEmit (strict), node --check sw.js, vitest run a **řízené sestavení s freshness kontrolou** — vite build píše do commitnutého `src/stopa/web/static/spa`; jakákoli odchylka = stale build → fail. Předbuildovaná SPA se shání v wheelu bez Node u uživatele; gate dokazuje, že artefakt odpovídá zdrojům (doteď SPA neměla žádnou CI pokrývku). Ověřeno lokálně: tsc exit 0, sw.js syntax OK, vitest **20/20**, build → identické hashy, negativní stale test zachycen.
+Předtím ve vlně: **B4 [S]** aktivní Rust wheel gate — commit `b49a7e5` (viz vlna 6 níže).
 
 ## Co dělat dál (backlog)
 Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
-1. ~~**B1 [P0·S]**~~ ✅ DONE `392d335` — Lockfile s hashi + CI kontrola SHA-256/verze `stopa_core` pin v2.6.0
-2. ~~**B2 [P0·M]**~~ ✅ DONE `d352d65` — Rozdělení `data/db.py` (599→88) na funkční domény
-3. ~~**B3 [P0·L]**~~ ✅ DONE `8a36e21` — Základ multi-tenancy ve Web vrstvě (WS tenancy + per-case RBAC + egress audit)
-4. ~~**B4 [S]**~~ ✅ DONE `b49a7e5` — CI build/test s aktivním Rust wheelem (`[carving]`, běh s aktivním core, kontrola verze pinu)
-5. **B5 [S]** Minimální CI build/check Web SPA (node syntax/lint + `tsc --noEmit` JSDoc typová kontrola) — START
-6. **B6 [S]** Statistická brána benchmark engine: percentily (≥P95) vedle mediánu + prahy tolerance
-7. **B7 [M]** Zúžení/konsolidace 60 CLI subpříkazů pod jednotné kořeny s aliasy a DeprecationWarning
+1. ~~**B4 [S]**~~ ✅ DONE `b49a7e5` — CI build/test s aktivním Rust wheelem (`[carving]`, běh s aktivním core, kontrola verze pinu)
+2. ~~**B5 [S]**~~ ✅ DONE `72ddd8c` — Minimální CI build/check Web SPA (tsc --noEmit + vitest + řízený build s freshness kontrolou static/spa)
+3. **B6 [S]** Statistická brána benchmark engine: percentily (≥P95) vedle mediánu + prahy tolerance — START
+4. **B7 [M]** Zúžení/konsolidace 60 CLI subpříkazů pod jednotné kořeny s aliasy a DeprecationWarning
 
 ---
 

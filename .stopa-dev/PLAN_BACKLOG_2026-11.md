@@ -23,7 +23,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 | ID | Úkol | Zdroj | Stav |
 |----|------|-------|------|
 | B4 | CI build/test s aktivním Rust wheelem (vedle parity): instalace `[carving]`, běh s aktivním core, kontrola verze pinu | D3/Q3 · S | ✅ DONE `b49a7e5` |
-| B5 | Minimální CI build/check Web SPA: node syntax/lint + typová kontrola JSDoc (`tsc --noEmit`), řízené sestavení výstupu pro wheel bez Node u uživatele | W6/Q7 · S | TODO |
+| B5 | Minimální CI build/check Web SPA: node syntax/lint + typová kontrola JSDoc (`tsc --noEmit`), řízené sestavení výstupu pro wheel bez Node u uživatele | W6/Q7 · S | ✅ DONE `72ddd8c` |
 | B6 | Statistická brána benchmark engine: percentily (≥P95) vedle mediánu + prahy tolerance (% drift + minimální absolutní práh) — šum se nehlásí, ocas latence se neskrývá | W4/Q11 · S | TODO |
 | B7 | Zúžení/konsolidace 60 CLI subpříkazů: příbuzné pod jednotné kořeny s podakcemi + dočasné aliasy s DeprecationWarning (backward compat) | W5/Q4 · M | TODO |
 | B8 | Determinismus kolem AI agentů: fixní parametry, přísná schémata výstupů, povinné citace ID důkazů z DB, ověření tvrzení proti případu, audit (prompt + verze modelu + hash vstupu) | D8/Q8 · M | TODO |
@@ -68,3 +68,7 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - `scripts/verify_rust_wheel.py`: nový režim `--installed` — fail-closed verifikace nainstalovaného aktivního core (importovatelné + verze == manifest `core_version`; tolerantní `check_imported_core` zůstává pro fallback prostředí bez wheelu).
 - Nové testy v `tests/test_rust_wheel_pin.py`: `--installed` exit 0 s aktivním core; fail-closed (exit ≠ 0) při chybějícím core — oba přes subprocess na skutečný CLI entry point.
 - Ověřeno: ruff clean; `--installed` s core = PASS exit 0, simulace bez core (čisté venv) = FAIL exit 1 fail-closed; pin testy **5 passed/1 skipped**; CI YAML validní (10 jobů); full suite s aktivním core **5331 passed, 1 skipped** (lokální `.venv` obsahuje stopa_core 0.1.0 = stejná konfigurace jako CI job).
+### B5 — Minimální CI build/check Web SPA (DONE 2026-11-25, commit `72ddd8c`)
+- Nový CI job `web-spa` v `.github/workflows/ci.yml` (React+TS+Vite, `frontend/`): `npm ci` s pinned lockem, **tsc --noEmit** (strict tsconfig), `node --check public/sw.js` (jediná raw JS soubor — service worker), **vitest run** (unit testy SPA komponent/lib) a **řízené sestavení s freshness kontrolou**: vite build píše do `../src/stopa/web/static/spa` (`emptyOutDir: true`); jakákoli změna proti commitnutému artefaktu = stale build → fail.
+- Kontext: předbuildovaná SPA (4 soubory) je **commitnutá v repozitáři** a shání se v wheelu bez Node u uživatele; doteď neměla žádnou CI pokrývku (`tests/js` pokrývá jen legacy `graph.js`). Gate dokazuje, že commitovaný artefakt odpovídá aktuálním zdrojům.
+- Ověřeno lokálně (Node v22.23.4): tsc --noEmit exit 0; node --check sw.js exit 0; vitest **6 test files / 20 passed** (518 ms); `npm run build` → identické asset hashy jako commitnuté (`index-BHoSAUcY.js`, `index-Dh6WKXs4.css`), `git status --porcelain src/stopa/web/static/spa` po rebuildu prázdný; negativní test (záměrný stale soubor) gate zachycuje.
