@@ -1,3 +1,19 @@
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 9)
+
+## Hotovo právě teď: **B7 [M] Konzolidace CLI subpříkazů do doménových skupin**
+Commit `ad72b7b`. 19 plochých příkazů seskupeno do 5 nových top-level skupin (`integrity`, `import`, `forensic`, `crypto`, `court`); stará jména zůstávají jako **skryté BC aliasy** (`help=SUPPRESS`) s byte-identickým dispatchem (func + defaults + flagový povrch + epilog s příkladem). `main()` emituje `DeprecationWarning` pro stará jména a přepisuje legacy formu `stopa integrity <case_id>` → `integrity check`. i18n klíče cli.h.337–341 (skupinové help; 332 už obsazen P0.1). Goldeny p14/p48 = čistý superset (+187/+23 cesty, 0 ztrát; textově změněn jen `<root>` a `integrity` leaf→skupina — zdokumentovaný trade-off). Ověřeno: ruff clean; B7 testy **19/19**; BC batche **387 + 164 passed** (všechna stará volání v existujících testech fungují bez zásahu); p48 i18n+locale **50 passed**.
+Předtím ve vlně: **B6 [S]** benchmark brána — commit `f7903e7` (viz níže).
+
+## Co dělat dál (backlog)
+Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
+1. ~~**B4 [S]**~~ ✅ DONE `b49a7e5` — CI build/test s aktivním Rust wheelem (`[carving]`, běh s aktivním core, kontrola verze pinu)
+2. ~~**B5 [S]**~~ ✅ DONE `72ddd8c` — Minimální CI build/check Web SPA (tsc --noEmit + vitest + řízený build s freshness kontrolou static/spa)
+3. ~~**B6 [S]**~~ ✅ DONE `f7903e7` — Percentilová brána benchmark engine (medián + P95, dual-axis gate, baseline v2)
+4. ~~**B7 [M]**~~ ✅ DONE `ad72b7b` — Konzolidace CLI subpříkazů do 5 skupin + skryté BC aliasy s DeprecationWarning
+5. **B8 [M]** Determinismus kolem AI agentů: fixní parametry, přísná schémata výstupů, povinné citace ID důkazů z DB, ověření tvrzení proti případu, audit (prompt + verze modelu + hash vstupu) — START
+
+---
+
 # NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 8)
 
 ## Hotovo právě teď: **B6 [S] Statistická brána benchmark engine**
