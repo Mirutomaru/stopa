@@ -466,7 +466,7 @@ def extract_snapchat_artifacts(path: Path) -> list[Artifact]:
         ):
             artifacts.extend(build_snapchat_message_artifacts(parse_snapchat_messages(data)))
     except (ValueError, TypeError):
-        pass
+        logger.debug("Snapchat messages: parse selhal → bez message artefaktů")
 
     try:
         if any(k in lower_keys for k in ("friends", "contacts")) or (
@@ -476,7 +476,7 @@ def extract_snapchat_artifacts(path: Path) -> list[Artifact]:
         ):
             artifacts.extend(build_snapchat_contact_artifacts(parse_snapchat_contacts(data)))
     except (ValueError, TypeError):
-        pass
+        logger.debug("Snapchat contacts: parse selhal → bez contact artefaktů")
 
     try:
         if any(k in lower_keys for k in ("locations", "geolocation")) or (
@@ -486,7 +486,7 @@ def extract_snapchat_artifacts(path: Path) -> list[Artifact]:
         ):
             artifacts.extend(build_snapchat_location_artifacts(parse_snapchat_geolocation(data)))
     except (ValueError, TypeError):
-        pass
+        logger.debug("Snapchat geolocation: parse selhal → bez lokace artefaktů")
 
     try:
         if any(k in lower_keys for k in ("ip_history", "ips")) or (
@@ -496,7 +496,7 @@ def extract_snapchat_artifacts(path: Path) -> list[Artifact]:
         ):
             artifacts.extend(build_snapchat_ip_artifacts(parse_snapchat_ip_history(data)))
     except (ValueError, TypeError):
-        pass
+        logger.debug("Snapchat IP history: parse selhal → bez IP artefaktů")
 
     return artifacts
 

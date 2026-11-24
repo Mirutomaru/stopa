@@ -14,6 +14,7 @@ API shoda s CLI backendem:
 from __future__ import annotations
 
 import datetime as _dt
+import logging
 from pathlib import Path
 
 from stopa.data.tsk_types import (
@@ -23,6 +24,9 @@ from stopa.data.tsk_types import (
     desc_to_fstype,
     meta_type_char,
 )
+
+logger = logging.getLogger(__name__)
+
 
 # --- lazy import pytsk3 -------------------------------------------------------
 
@@ -153,7 +157,7 @@ def _walk_dir(d, prefix: str = "") -> list[ImageFile]:
                 sub = entry.as_directory()
                 out.extend(_walk_dir(sub, path + "/"))
             except Exception:
-                pass  # nepodařilo se otevřít podadresář → přeskočit
+                logger.debug("TSK podadresář %s se nepodařilo otevřít → větev přeskočena", path)
 
     return out
 
@@ -166,7 +170,7 @@ def _collect_runs(entry) -> list[tuple[int, int]]:
             for run in iter(attr):
                 runs.append((int(run.addr), int(run.len)))
     except Exception:
-        pass
+        logger.debug("TSK iterace atributů/runs selhala → prázdné runs")
     return runs
 
 
@@ -326,7 +330,7 @@ def _walk_dir_filtered(d, prefix: str = "", only_allocated: bool = False) -> lis
                 sub = entry.as_directory()
                 out.extend(_walk_dir_filtered(sub, path + "/", only_allocated))
             except Exception:
-                pass
+                logger.debug("TSK podadresář %s se nepodařilo otevřít (filtered walk) → větev přeskočena", path)
 
     return out
 
@@ -390,7 +394,7 @@ def free_blocks(image_path: Path, partition: Partition | None = None) -> list[st
                         sub = entry.as_directory()
                         _collect(sub)
                     except Exception:
-                        pass
+                        logger.debug("TSK podadresář %s se nepodařilo otevřít (free_blocks) → přeskočeno", nm)
 
         _collect(root_dir)
 

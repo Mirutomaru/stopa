@@ -116,7 +116,7 @@ def extract_openoffice_base_artifacts(path: Path) -> list[Artifact]:
                     mt = fh.read(256).decode("utf-8", errors="replace").strip()
                 is_base = mt == _ODF_BASE_MIMETYPE
             except (KeyError, OSError):
-                pass  # mimetype chybí — spolehneme se na .odb extenzi
+                logger.debug("mimetype v ZIP chybí/čtení selhalo → spoléhám se na .odb extenzi")
 
             meta = _read_metadata(zf)
             if not is_base and not meta:

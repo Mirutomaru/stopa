@@ -54,13 +54,13 @@ def _decode_reg_str(raw: Any) -> str:
             if _printable_ratio(s) > 0.9:
                 return s.strip()
         except (UnicodeDecodeError, UnicodeError):
-            pass
+            logger.debug("SIDs: UTF-16LE decode selhal (%d B) → zkusím UTF-8", len(raw))
         try:
             s = raw.decode("utf-8")
             if _printable_ratio(s) > 0.9:
                 return s.strip()
         except (UnicodeDecodeError, UnicodeError):
-            pass
+            logger.debug("SIDs: oba decode selhaly (%d B) → prázdný string", len(raw))
         return ""
     return str(raw).strip()
 

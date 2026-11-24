@@ -83,7 +83,7 @@ def _iso_to_seconds(value: Any) -> float | None:
             num /= 1000.0
         return num if num > 0 else None
     except ValueError:
-        pass
+        logger.debug("epoch číselný parse selhal pro %r → zkusím další formát", text[:40])
     try:
         dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
         if dt.tzinfo is None:

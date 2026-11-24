@@ -189,7 +189,7 @@ def parse_google_voice(data: bytes) -> tuple[str | None, list[VoiceRecord]]:
                 if duration is not None:
                     details["duration_seconds"] = int(duration)
             except (ValueError, TypeError):
-                pass
+                logger.debug("Google Voice duration %r nepárabilní → bez délky hovoru", duration)
             if transcript:
                 details["transcript"] = transcript[:500]
             ts_s = _epoch_ms_to_seconds(item.get("timestampMsInEpoch", item.get("timestamp")))

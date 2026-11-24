@@ -61,7 +61,7 @@ def _part_size(part: Any) -> int | None:
         try:
             return max(0, int(cl))
         except (ValueError, TypeError):
-            pass
+            logger.debug("Content-Length %r nepárabilní → fallback na další heuristiku", cl)
     try:
         payload = part.get_payload(decode=True)
         if isinstance(payload, (bytes, bytearray)):

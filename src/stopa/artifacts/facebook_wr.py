@@ -458,7 +458,7 @@ def extract_facebook_artifacts(path: Path) -> list[Artifact]:
         ):
             artifacts.extend(build_facebook_message_artifacts(parse_facebook_messages(data)))
     except (ValueError, TypeError):
-        pass
+        logger.debug("Facebook messages: parse selhal → bez message artefaktů")
 
     try:
         if any(k in lower_keys for k in ("friends", "contacts")) or (
@@ -471,7 +471,7 @@ def extract_facebook_artifacts(path: Path) -> list[Artifact]:
         ):
             artifacts.extend(build_facebook_contact_artifacts(parse_facebook_friends(data)))
     except (ValueError, TypeError):
-        pass
+        logger.debug("Facebook contacts/friends: parse selhal → bez contact artefaktů")
 
     try:
         if any(k in lower_keys for k in ("timeline", "posts", "feed")) or (
@@ -483,7 +483,7 @@ def extract_facebook_artifacts(path: Path) -> list[Artifact]:
         ):
             artifacts.extend(build_facebook_timeline_artifacts(parse_facebook_timeline(data)))
     except (ValueError, TypeError):
-        pass
+        logger.debug("Facebook timeline: parse selhal → bez timeline artefaktů")
 
     try:
         if isinstance(payload, dict) and any(
@@ -493,7 +493,7 @@ def extract_facebook_artifacts(path: Path) -> list[Artifact]:
             if profile:
                 artifacts.extend(build_facebook_contact_artifacts([profile]))
     except (ValueError, TypeError):
-        pass
+        logger.debug("Facebook profile: parse selhal → bez profilu")
 
     return artifacts
 

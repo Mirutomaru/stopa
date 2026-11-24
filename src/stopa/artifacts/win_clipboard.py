@@ -84,7 +84,7 @@ def _decode_value(value: Any) -> tuple[str, bool]:
             if _printable_ratio(s) > 0.9:
                 return s.strip(), False
         except (UnicodeDecodeError, UnicodeError):
-            pass
+            logger.debug("clipboard: UTF-8 decode selhal (%d B) → zkusím další kódování", len(value))
         # 2) UTF-16LE text — strict decode + >90% tisknutelných znaků
         if len(value) % 2 == 0:
             try:
@@ -92,7 +92,7 @@ def _decode_value(value: Any) -> tuple[str, bool]:
                 if _printable_ratio(s) > 0.9:
                     return s.strip(), False
             except (UnicodeDecodeError, UnicodeError):
-                pass
+                logger.debug("clipboard: UTF-16LE decode selhal (%d B) → hex preview", len(value))
         # 3) binární — hex preview
         return value.hex()[:MAX_DATA_LEN], True
     return str(value)[:MAX_DATA_LEN], False

@@ -346,7 +346,7 @@ def extract_amazon_ec2_s3_artifacts(path: Path) -> list[Artifact]:
         instances = parse_ec2_instances(data)
         artifacts.extend(build_ec2_instance_artifacts(instances))
     except (ValueError, TypeError):
-        pass  # ne EC2 formát — zkusit S3 níže
+        logger.debug("EC2 instance parse selhal — ne EC2 formát, zkusím S3 níže")
     try:
         objects = parse_s3_objects(data)
         artifacts.extend(build_s3_object_artifacts(objects))

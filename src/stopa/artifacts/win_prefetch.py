@@ -394,7 +394,7 @@ def build_prefetch_artifacts(path: Path, parsed: dict) -> list[Artifact]:
         try:
             ts = datetime.fromisoformat(ts_str)
         except ValueError:
-            pass
+            log.debug("prefetch timestamp %r nepárabilní → None", ts_str)
 
     arts.append(
         Artifact(
