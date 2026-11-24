@@ -1,3 +1,16 @@
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 4)
+
+## Hotovo právě teď: **Prioritizovaný backlog vylepšení z evaluace**
+Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2).
+Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
+
+## Co dělat dál (backlog)
+1. **B1 [P0·S]** Lockfile s hashi + CI kontrola SHA-256/verze `stopa_core` pin v2.6.0 — START
+2. B2 [P0·M] Rozdělení `data/db.py` (599/600) na funkční domény
+3. B3 [P0·L] Základ multi-tenancy (org/team/case, tenant izolace, audit citlivých přístupů)
+
+---
+
 # NĚJBLIŽŠÍ AKCE — STOPA (2026-11-24, vlna 3)
 
 ## Hotovo právě teď: **P4 vlna z nezávislé Qwen revize**
