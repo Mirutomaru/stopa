@@ -11,7 +11,7 @@ nalezla P1×1 + P3×6 — vše opraveno:
 
 ## Stav verifikace (2026-11-24)
 - Cílené testy (benchmark/TSK/parsers): **327 passed** · ruff: **clean** (src+tests+scripts)
-- Full suite: probíhá (po dokončení doplnit čísla)
+- Full suite: **5312 passed, 1 skipped** v 2294 s (38:14), EXIT=0 (+1 nad baseline 5311/1s = nový test `test_current_only_keys_warn`); jediný warning = předexistující `StarletteDeprecationWarning` z fastapi testclient
 
 ## Co dělat dál (ROADMAP kandidáti z revize, P4)
 1. **File preview UI** (oblast G) — náhled souborů bez opouštění workbench
