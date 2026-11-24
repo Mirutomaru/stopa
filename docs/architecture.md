@@ -3,6 +3,11 @@
 > Generováno 2026-10-30, aktualizováno **2026-10-31** po fázích A2 + B2.
 > Stav: `main` @ `877dd6b`, **všechny fáze hotové**,
 > **362 testů zelených** (ruff clean).
+>
+> ⚠️ **ZASTARALÝ SNAPSHOT** (označeno 2026-11-24): popis odpovídá stavu `main @ 877dd6b`
+> (362 testů, kořenové god-files `cli.py`/`models.py`/`pipeline.py`). Aktuální strukturu a
+> stav vid v `.stopa-dev/PROJECT_STATE.md`; kořenový výstup MASTER PROMPT
+> `STOPA_ARCHITECTURE.md` byl pořízen při v0.1.0 (2026-11-03) a je archivován v `docs/archive/`.
 
 STOPA = unifikovaná forenzní workbench (AXIOM/FTK-lite). Zpracovává složky i raw
 diskové obrazy: detekce signatur, deduplikace, full-text search, timeline,
