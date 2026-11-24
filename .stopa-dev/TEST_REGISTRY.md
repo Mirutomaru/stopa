@@ -5,7 +5,7 @@ dne 2026-11-03 (commit `afc49a0`). **Celkem: 896 testů = 895 passed + 1 skipped
 `.venv/bin/python -m pytest -q`, plně offline — syntetické fixtures, žádné externí API).
 
 Povinná pole dle DEV OS promptu §3.7:
-- **Datum:** 2026-11-03 pro všechny záznamy (poslední plný běh; starší běhy viz CHANGELOG.md)
+- **Datum:** 2026-11-03 pro všechny záznamy (poslední plný běh; starší běhy viz docs/archive/CHANGELOG.md)
 - **Verze aplikace:** 0.1.0, commit `afc49a0` / `e227929`
 - **Případná chyba:** sloupec Poznámka (aktuálně žádný FAIL — jediný skipped = volitelný backend bez nainstalované závislosti)
 - **Odkaz na testovací protokol:** testovací soubor v `tests/` je protokolem; plný běh reprodukovatelný `.venv/bin/python -m pytest -q` (deterministická offline sada)

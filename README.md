@@ -213,4 +213,4 @@ src/stopa/
 ### Zbývá (P3 / tech-debt backlog)
 
 - **E13**: Benchmarky + regresní sada + SWGDE/NIST validace (`docs/DEVELOPMENT_ROADMAP.md`)
-- Tech-debt: viz `docs/improvement-plan.md`
+- Tech-debt: viz `docs/archive/improvement-plan.md` (superseded; aktuální stav `.stopa-dev/ROADMAP.md`)

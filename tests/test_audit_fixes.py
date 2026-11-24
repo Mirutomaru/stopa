@@ -1,4 +1,4 @@
-"""Testy oprav z auditu (docs/AUDIT-2026-11.md).
+"""Testy oprav z auditu (docs/archive/AUDIT-2026-11.md).
 
 P1#1 — path traversal case_id (regex validace)
 P1#2 — rel_path traversal + Content-Disposition RFC 5987

@@ -1,6 +1,6 @@
 # STOPA — DEVELOPMENT ROADMAP (2026-10-31)
 
-**Seřazení:** priorita × závislosti × technická náročnost × přínos. Každá etapa = samostatný commit/commity + testy + ruff clean + poznámka do `improvement-plan.md`.
+**Seřazení:** priorita × závislosti × technická náročnost × přínos. Každá etapa = samostatný commit/commity + testy + ruff clean + poznámka do `archive/improvement-plan.md` (superseded).
 
 ## Prioritní matice (přehled)
 
@@ -162,4 +162,4 @@
 | P2 (E6–E10) | 5 | ~83 | **~550+** |
 | P3 (E11–E13) | 3 | ~26 | **~580+** |
 
-**Pravidla implementace (z master promptu §11)** se aplikují na každou etapu: modulární změny, testy před commitem, ruff clean, dokumentace do `improvement-plan.md`, žádné destruktivní DB změny (vše `IF NOT EXISTS` + `schema_version`).
+**Pravidla implementace (z master promptu §11)** se aplikují na každou etapu: modulární změny, testy před commitem, ruff clean, dokumentace do `archive/improvement-plan.md` (superseded), žádné destruktivní DB změny (vše `IF NOT EXISTS` + `schema_version`).
