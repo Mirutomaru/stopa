@@ -1,15 +1,15 @@
-# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 7)
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 8)
 
-## Hotovo právě teď: **B5 [S] Minimální CI build/check Web SPA**
-Commit `72ddd8c`. Nový CI job `web-spa` (React+TS+Vite, `frontend/`): npm ci s pinned lockem, tsc --noEmit (strict), node --check sw.js, vitest run a **řízené sestavení s freshness kontrolou** — vite build píše do commitnutého `src/stopa/web/static/spa`; jakákoli odchylka = stale build → fail. Předbuildovaná SPA se shání v wheelu bez Node u uživatele; gate dokazuje, že artefakt odpovídá zdrojům (doteď SPA neměla žádnou CI pokrývku). Ověřeno lokálně: tsc exit 0, sw.js syntax OK, vitest **20/20**, build → identické hashy, negativní stale test zachycen.
-Předtím ve vlně: **B4 [S]** aktivní Rust wheel gate — commit `b49a7e5` (viz vlna 6 níže).
+## Hotovo právě teď: **B6 [S] Statistická brána benchmark engine**
+Commit `f7903e7`. Dual-axis gate: kromě mean osy (BC) se porovnávají **medián i P95** per-iterace vzorků (perf_counter; čistá `percentile()` v domain, linear interpolation). Dvojí práh (% drift + absolutní minimum 0.5 ms) platí na obou osách — šum se nehlásí a ocas latence ho průměr/medián neskrývá. Baseline in-place migrace **v1→v2** (79 položek; median=stará hodnota, p95=null → osa P95 se aktivuje po prvním CI běhu s novým enginem — konvence „baseline z CI měření“ zachována, lokální stroj je ~3× rychlejší na pipeline.core). `check_regressions` (app) porovnává každou osu nezávisle (mean/median/p95), historie ukládá percentily, CLI benchmark hlásí regrese s osou. Ověřeno: ruff clean; cílené testy **49/49** (engine + STP-043); e2e CI příkaz exit 0 proti migrace baseline.
+Předtím ve vlně: **B5 [S]** Web SPA CI check — commit `72ddd8c` (viz níže).
 
 ## Co dělat dál (backlog)
 Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
 1. ~~**B4 [S]**~~ ✅ DONE `b49a7e5` — CI build/test s aktivním Rust wheelem (`[carving]`, běh s aktivním core, kontrola verze pinu)
 2. ~~**B5 [S]**~~ ✅ DONE `72ddd8c` — Minimální CI build/check Web SPA (tsc --noEmit + vitest + řízený build s freshness kontrolou static/spa)
-3. **B6 [S]** Statistická brána benchmark engine: percentily (≥P95) vedle mediánu + prahy tolerance — START
-4. **B7 [M]** Zúžení/konsolidace 60 CLI subpříkazů pod jednotné kořeny s aliasy a DeprecationWarning
+3. ~~**B6 [S]**~~ ✅ DONE `f7903e7` — Percentilová brána benchmark engine (medián + P95, dual-axis gate, baseline v2)
+4. **B7 [M]** Zúžení/konsolidace 60 CLI subpříkazů pod jednotné kořeny s aliasy a DeprecationWarning — START
 
 ---
 
