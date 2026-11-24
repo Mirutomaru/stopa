@@ -2,6 +2,16 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-24 (po-release **revizní vlny P1+P3 a P2+P3 nad tagem `v2.6.0`** — P1 stale `docs/architecture.md` banner; hygiena: archive 13 dokumentů, udelej.md→docs/prompts/, .gitignore backups/, benchmark warning + test, verze 0.1.0→2.6.0, 23× debug log v tichých exceptech; P2 synchronizace PROJECT_STATE s realitou (STP-070); P3 checkpoint STP-070, TEST_REGISTRY verze, banner STOPA_TECHNICAL_AUDIT (schema v11→v28), most STP-056…070; full suite **5312p/1s** exit 0)
+
+### Added — Revizní vlny 2026-11-24
+- P1: banner ZASTARALÝ SNAPSHOT v `docs/architecture.md` (snapshot @877dd6b / 362 testů; živý stav = PROJECT_STATE.md).
+- Benchmark: `detect_regressions()` hlásí warning pro current-only položky (předtím tichý skip) + nový test.
+- 23× tichý except+pass → debug log (artifacts parse cascades + TSK walk); zbývající ~21 mají explanatory komentáře.
+- Dokumenty: 13 superseded souborů → `docs/archive/` (+README), `udelej.md`→`docs/prompts/`, `.gitignore`+backups/, verze v PROJECT_STATE/ROADMAP 0.1.0→2.6.0, cross-reference upraveny.
+- DEV OS: PROJECT_STATE synchronizace (poslední úkol STP-070, testy, počty), checkpoint STP-070 + záznam v DEV OS CHANGELOG, TEST_REGISTRY verze 2.6.0, banner `docs/STOPA_TECHNICAL_AUDIT.md`.
+- **Most evidence:** individuální záznamy STP-056…070 (11/07–11/09) chyběly v tomto changelogu — zdroj: `.stopa-dev/CHANGELOG.md` + `checkpoints/history/`.
+
 ## [Unreleased] — 2026-11-24 (STOPA 2.6: post-release **hardening P2+P3** — sdílená ArchiveBudget logika (ADB branch pod limity), benchmark medián `--runs N`, bounded JSON depth limit u nedůvěryhodných vstupů, installer subprocess timeouty; auditní reziduální rizika uzavřena; full suite **5311p/1s** exit 0)
 
 ### Hardening — P2+P3 vlna (2026-11-24, nad tagem `v2.5.0`)
