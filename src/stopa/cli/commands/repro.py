@@ -191,8 +191,11 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
 
     if not json_mode:
         for r in results:
+            pct = ""
+            if r.median_ms is not None and r.p95_ms is not None:  # B6: osa medián/P95
+                pct = f" | med {r.median_ms:.3f} p95 {r.p95_ms:.3f}"
             print(
-                f"  {r.name:<24} {r.duration_ms:>10.3f} ms | "
+                f"  {r.name:<24} {r.duration_ms:>10.3f} ms{pct} | "
                 f"RAM peak {r.ram_peak_bytes / 1e6:>8.2f} MB | artefakty {r.artifacts}"
             )
 
@@ -213,8 +216,8 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
                 print(f"\n⚠ Regrese výkonu (>20% proti baseline): {len(warnings)}")
                 for w in warnings:
                     print(
-                        f"  ! {w.name}: {w.baseline_ms:.3f} → {w.current_ms:.3f} ms "
-                        f"(+{w.delta_pct}%)"
+                        f"  ! [{w.axis}] {w.name}: {w.baseline_ms:.3f} → "
+                        f"{w.current_ms:.3f} ms (+{w.delta_pct}%)"
                     )
             else:
                 print("\nRegrese výkonu: žádná (baseline OK)")
@@ -224,11 +227,14 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
             "suite": args.suite,
             "results": [
                 {"name": r.name, "duration_ms": r.duration_ms,
+                 "median_ms": r.median_ms,  # B6: osa medián (None = starý běh)
+                 "p95_ms": r.p95_ms,
                  "ram_peak_bytes": r.ram_peak_bytes, "artifacts": r.artifacts}
                 for r in results
             ],
             "regressions": [
-                {"name": w.name, "baseline_ms": w.baseline_ms,
+                {"name": w.name, "axis": w.axis,  # B6: osa regrese (mean|median|p95)
+                 "baseline_ms": w.baseline_ms,
                  "current_ms": w.current_ms, "delta_pct": w.delta_pct}
                 for w in warnings
             ],

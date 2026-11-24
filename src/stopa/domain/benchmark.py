@@ -13,9 +13,11 @@ Principy (viz docs/STOPA_VALIDATION_STRATEGY.md):
 from __future__ import annotations
 
 import logging
+import math
 import platform
 import sqlite3
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
@@ -31,6 +33,8 @@ class BenchmarkResult:
     ram_peak_bytes: int  # špičková RAM (tracemalloc)
     artifacts: int  # počet extrahovaných artefaktů
     iterations: int  # počet opakování
+    median_ms: float | None = None  # B6: medián per-iterace vzorků (None u starých běhů)
+    p95_ms: float | None = None  # B6: P95 per-iterace vzorků — ocas latence
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,41 @@ class RegressionWarning:
     baseline_ms: float
     current_ms: float
     delta_pct: float  # >0 = zpomalení
+    axis: str = "median"  # B6: osa porovnání ("mean" | "median" | "p95") — BC default
+
+
+def percentile(values: Sequence[float], p: float) -> float:
+    """Deterministický percentil (lineární interpolace na seřazených hodnotách).
+
+    Shodné s numpy ``percentile(..., method="linear")``; bez závislostí.
+    ``p=0`` → minimum, ``p=1`` → maximum, ``p=0.5`` → medián.
+
+    Args:
+        values: vzorky (doba v ms); prázdný vstup → ValueError.
+        p: percentilový bod v [0, 1] (např. 0.95 = P95).
+
+    Raises:
+        ValueError: prázdné ``values`` nebo ``p`` mimo [0, 1].
+        TypeError: nečíselný vzorek (defenzivní — benchmark nesmí padnout).
+    """
+    try:
+        xs = sorted(float(v) for v in values)
+    except (TypeError, ValueError) as exc:
+        # float() na nečíselném stringu hází ValueError → oba typy = typová chyba vzorku
+        raise TypeError(f"percentile: nečíselná hodnota {exc!s}") from None
+    if not xs:
+        raise ValueError("percentile: prázdné hodnoty")
+    if not 0.0 <= p <= 1.0:
+        raise ValueError(f"percentile: p={p} mimo [0, 1]")
+    if len(xs) == 1:
+        return xs[0]
+    idx = p * (len(xs) - 1)
+    lo = math.floor(idx)
+    hi = math.ceil(idx)
+    if lo == hi:
+        return xs[lo]
+    frac = idx - lo
+    return xs[lo] + (xs[hi] - xs[lo]) * frac
 
 
 def env_info() -> dict:

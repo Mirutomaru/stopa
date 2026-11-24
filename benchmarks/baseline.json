@@ -1,84 +1,321 @@
 {
   "results": {
-    "parser.allowlisted_websites": 0.197,
-    "parser.amazon_cloudtrail": 0.068,
-    "parser.amazon_ec2_s3": 0.083,
-    "parser.apple_cloud": 0.075,
-    "parser.bebo_chat": 0.096,
-    "parser.box_cloud": 0.055,
-    "parser.chatroulette": 0.103,
-    "parser.chrome_autofill": 0.053,
-    "parser.chrome_bookmarks": 0.051,
-    "parser.chrome_history_wr": 0.051,
-    "parser.chrome_preferences": 0.059,
-    "parser.cloud_drive_files": 0.051,
-    "parser.cloud_generic": 0.06,
-    "parser.contacts_wr": 0.052,
-    "parser.crypto_extract": 0.103,
-    "parser.ddg_current_tabs": 0.049,
-    "parser.drive_activity": 0.053,
-    "parser.dropbox_mega": 0.055,
-    "parser.email_mbox": 1.577,
-    "parser.evtx": 0.136,
-    "parser.facebook_wr": 0.066,
-    "parser.gmail_messages": 0.066,
-    "parser.google_2025_wr": 0.08,
-    "parser.google_account_change_history": 0.055,
-    "parser.google_account_info": 0.052,
-    "parser.google_aggregated_activities": 0.051,
-    "parser.google_calendar_events": 0.066,
-    "parser.google_chat_family": 0.052,
-    "parser.google_export_summary": 0.049,
-    "parser.google_identity_sessions": 0.048,
-    "parser.google_keep_tasks": 0.054,
-    "parser.google_linked_devices": 0.05,
-    "parser.google_location_history": 0.254,
-    "parser.google_login_history": 0.062,
-    "parser.google_mail_info": 0.055,
-    "parser.google_maps_activity": 0.052,
-    "parser.google_photos": 0.053,
-    "parser.google_search_history": 0.051,
-    "parser.google_voice_wr": 0.051,
-    "parser.icloud_messages": 0.253,
-    "parser.instagram_account": 0.054,
-    "parser.instagram_messages": 0.051,
-    "parser.instagram_posts": 0.052,
-    "parser.limewire_p2p": 0.083,
-    "parser.lnk": 0.142,
-    "parser.mailru_agent": 0.04,
-    "parser.maps_labeled_places": 0.056,
-    "parser.mem_handles": 0.052,
-    "parser.mem_hooks": 0.051,
-    "parser.mem_modules": 0.051,
-    "parser.mem_network": 0.05,
-    "parser.mem_processes": 0.05,
-    "parser.mem_scan": 0.037,
-    "parser.ms_contacts": 0.053,
-    "parser.ms_mail_pst": 0.053,
-    "parser.ms_outlook_calendar": 0.051,
-    "parser.ms_teams_conversations": 0.052,
-    "parser.ms_teams_teams": 0.168,
-    "parser.msn_messenger": 0.04,
-    "parser.net_connections": 0.042,
-    "parser.openoffice_base": 0.186,
-    "parser.plist": 0.128,
-    "parser.registry_hive": 83.935,
-    "parser.sharepoint_wr": 0.066,
-    "parser.sim_tpdu": 0.313,
-    "parser.skype_warrant": 0.06,
-    "parser.snapchat_wr": 0.048,
-    "parser.sqlite": 0.375,
-    "parser.twitter_messages": 0.057,
-    "parser.twitter_posts": 0.064,
-    "parser.twitter_users": 0.053,
-    "parser.whatsapp_cloud": 0.06,
-    "parser.wifi_wlan": 0.077,
-    "parser.win_drivers": 0.054,
-    "parser.win_jumplist": 0.027,
-    "parser.win_prefetch": 0.024,
-    "parser.win_schedtask": 0.066,
-    "parser.win_usn": 0.126,
-    "pipeline.core": 4241.365
+    "parser.allowlisted_websites": {
+      "median_ms": 0.197,
+      "p95_ms": null
+    },
+    "parser.amazon_cloudtrail": {
+      "median_ms": 0.068,
+      "p95_ms": null
+    },
+    "parser.amazon_ec2_s3": {
+      "median_ms": 0.083,
+      "p95_ms": null
+    },
+    "parser.apple_cloud": {
+      "median_ms": 0.075,
+      "p95_ms": null
+    },
+    "parser.bebo_chat": {
+      "median_ms": 0.096,
+      "p95_ms": null
+    },
+    "parser.box_cloud": {
+      "median_ms": 0.055,
+      "p95_ms": null
+    },
+    "parser.chatroulette": {
+      "median_ms": 0.103,
+      "p95_ms": null
+    },
+    "parser.chrome_autofill": {
+      "median_ms": 0.053,
+      "p95_ms": null
+    },
+    "parser.chrome_bookmarks": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.chrome_history_wr": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.chrome_preferences": {
+      "median_ms": 0.059,
+      "p95_ms": null
+    },
+    "parser.cloud_drive_files": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.cloud_generic": {
+      "median_ms": 0.06,
+      "p95_ms": null
+    },
+    "parser.contacts_wr": {
+      "median_ms": 0.052,
+      "p95_ms": null
+    },
+    "parser.crypto_extract": {
+      "median_ms": 0.103,
+      "p95_ms": null
+    },
+    "parser.ddg_current_tabs": {
+      "median_ms": 0.049,
+      "p95_ms": null
+    },
+    "parser.drive_activity": {
+      "median_ms": 0.053,
+      "p95_ms": null
+    },
+    "parser.dropbox_mega": {
+      "median_ms": 0.055,
+      "p95_ms": null
+    },
+    "parser.email_mbox": {
+      "median_ms": 1.577,
+      "p95_ms": null
+    },
+    "parser.evtx": {
+      "median_ms": 0.136,
+      "p95_ms": null
+    },
+    "parser.facebook_wr": {
+      "median_ms": 0.066,
+      "p95_ms": null
+    },
+    "parser.gmail_messages": {
+      "median_ms": 0.066,
+      "p95_ms": null
+    },
+    "parser.google_2025_wr": {
+      "median_ms": 0.08,
+      "p95_ms": null
+    },
+    "parser.google_account_change_history": {
+      "median_ms": 0.055,
+      "p95_ms": null
+    },
+    "parser.google_account_info": {
+      "median_ms": 0.052,
+      "p95_ms": null
+    },
+    "parser.google_aggregated_activities": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.google_calendar_events": {
+      "median_ms": 0.066,
+      "p95_ms": null
+    },
+    "parser.google_chat_family": {
+      "median_ms": 0.052,
+      "p95_ms": null
+    },
+    "parser.google_export_summary": {
+      "median_ms": 0.049,
+      "p95_ms": null
+    },
+    "parser.google_identity_sessions": {
+      "median_ms": 0.048,
+      "p95_ms": null
+    },
+    "parser.google_keep_tasks": {
+      "median_ms": 0.054,
+      "p95_ms": null
+    },
+    "parser.google_linked_devices": {
+      "median_ms": 0.05,
+      "p95_ms": null
+    },
+    "parser.google_location_history": {
+      "median_ms": 0.254,
+      "p95_ms": null
+    },
+    "parser.google_login_history": {
+      "median_ms": 0.062,
+      "p95_ms": null
+    },
+    "parser.google_mail_info": {
+      "median_ms": 0.055,
+      "p95_ms": null
+    },
+    "parser.google_maps_activity": {
+      "median_ms": 0.052,
+      "p95_ms": null
+    },
+    "parser.google_photos": {
+      "median_ms": 0.053,
+      "p95_ms": null
+    },
+    "parser.google_search_history": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.google_voice_wr": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.icloud_messages": {
+      "median_ms": 0.253,
+      "p95_ms": null
+    },
+    "parser.instagram_account": {
+      "median_ms": 0.054,
+      "p95_ms": null
+    },
+    "parser.instagram_messages": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.instagram_posts": {
+      "median_ms": 0.052,
+      "p95_ms": null
+    },
+    "parser.limewire_p2p": {
+      "median_ms": 0.083,
+      "p95_ms": null
+    },
+    "parser.lnk": {
+      "median_ms": 0.142,
+      "p95_ms": null
+    },
+    "parser.mailru_agent": {
+      "median_ms": 0.04,
+      "p95_ms": null
+    },
+    "parser.maps_labeled_places": {
+      "median_ms": 0.056,
+      "p95_ms": null
+    },
+    "parser.mem_handles": {
+      "median_ms": 0.052,
+      "p95_ms": null
+    },
+    "parser.mem_hooks": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.mem_modules": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.mem_network": {
+      "median_ms": 0.05,
+      "p95_ms": null
+    },
+    "parser.mem_processes": {
+      "median_ms": 0.05,
+      "p95_ms": null
+    },
+    "parser.mem_scan": {
+      "median_ms": 0.037,
+      "p95_ms": null
+    },
+    "parser.ms_contacts": {
+      "median_ms": 0.053,
+      "p95_ms": null
+    },
+    "parser.ms_mail_pst": {
+      "median_ms": 0.053,
+      "p95_ms": null
+    },
+    "parser.ms_outlook_calendar": {
+      "median_ms": 0.051,
+      "p95_ms": null
+    },
+    "parser.ms_teams_conversations": {
+      "median_ms": 0.052,
+      "p95_ms": null
+    },
+    "parser.ms_teams_teams": {
+      "median_ms": 0.168,
+      "p95_ms": null
+    },
+    "parser.msn_messenger": {
+      "median_ms": 0.04,
+      "p95_ms": null
+    },
+    "parser.net_connections": {
+      "median_ms": 0.042,
+      "p95_ms": null
+    },
+    "parser.openoffice_base": {
+      "median_ms": 0.186,
+      "p95_ms": null
+    },
+    "parser.plist": {
+      "median_ms": 0.128,
+      "p95_ms": null
+    },
+    "parser.registry_hive": {
+      "median_ms": 83.935,
+      "p95_ms": null
+    },
+    "parser.sharepoint_wr": {
+      "median_ms": 0.066,
+      "p95_ms": null
+    },
+    "parser.sim_tpdu": {
+      "median_ms": 0.313,
+      "p95_ms": null
+    },
+    "parser.skype_warrant": {
+      "median_ms": 0.06,
+      "p95_ms": null
+    },
+    "parser.snapchat_wr": {
+      "median_ms": 0.048,
+      "p95_ms": null
+    },
+    "parser.sqlite": {
+      "median_ms": 0.375,
+      "p95_ms": null
+    },
+    "parser.twitter_messages": {
+      "median_ms": 0.057,
+      "p95_ms": null
+    },
+    "parser.twitter_posts": {
+      "median_ms": 0.064,
+      "p95_ms": null
+    },
+    "parser.twitter_users": {
+      "median_ms": 0.053,
+      "p95_ms": null
+    },
+    "parser.whatsapp_cloud": {
+      "median_ms": 0.06,
+      "p95_ms": null
+    },
+    "parser.wifi_wlan": {
+      "median_ms": 0.077,
+      "p95_ms": null
+    },
+    "parser.win_drivers": {
+      "median_ms": 0.054,
+      "p95_ms": null
+    },
+    "parser.win_jumplist": {
+      "median_ms": 0.027,
+      "p95_ms": null
+    },
+    "parser.win_prefetch": {
+      "median_ms": 0.024,
+      "p95_ms": null
+    },
+    "parser.win_schedtask": {
+      "median_ms": 0.066,
+      "p95_ms": null
+    },
+    "parser.win_usn": {
+      "median_ms": 0.126,
+      "p95_ms": null
+    },
+    "pipeline.core": {
+      "median_ms": 4241.365,
+      "p95_ms": null
+    }
   },
-  "version": 1
+  "version": 2
 }

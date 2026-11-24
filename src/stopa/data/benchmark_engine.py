@@ -15,6 +15,7 @@ import logging
 import tempfile
 import time
 import tracemalloc
+from dataclasses import replace
 from pathlib import Path
 
 from stopa.domain.benchmark import (
@@ -22,6 +23,7 @@ from stopa.domain.benchmark import (
     RegressionWarning,
     detect_regressions,
     env_info,
+    percentile,
 )
 from stopa.domain.validation_registry import build_registry
 
@@ -55,16 +57,23 @@ def _make_core_tree(root: Path, n_files: int) -> None:
 
 
 def _time_and_ram(fn, iterations: int):
-    """Spustí ``fn`` ×iterations; vrátí (průměrná doba ms, RAM peak B, výsledek)."""
+    """Spustí ``fn`` ×iterations; vrátí (průměrná doba ms, RAM peak B, výsledek, vzorky).
+
+    B6: každá iterace se měří individuálně (perf_counter kolem volání) → vrácený
+    seznam vzorků umožňuje percentily (medián/P95); průměr zůstává BC s předchozím
+    blokovým měřením (rozdíl jen v mezivolacích mezerách, řádově µs).
+    """
     tracemalloc.start()
-    t0 = time.perf_counter()
+    samples: list[float] = []
     last = None
     for _ in range(iterations):
+        t0 = time.perf_counter()
         last = fn()
-    elapsed_ms = (time.perf_counter() - t0) * 1000.0 / max(1, iterations)
+        samples.append((time.perf_counter() - t0) * 1000.0)
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    return elapsed_ms, peak, last
+    mean_ms = sum(samples) / max(1, len(samples))
+    return mean_ms, peak, last, samples
 
 
 def _count_artifacts(result) -> int:
@@ -100,7 +109,8 @@ def _workload_core(workdir: Path, n_files: int = 48) -> BenchmarkResult:
     # iterations=5: plná pipeline je nejhlučnější workload (jednorázový běh má
     # run-to-run variabilitu ±15 %) → průměr 5 běhů stabilizuje měření pro
     # regresní detekci (parsery používají 3; core je těžší, proto více).
-    ms, peak, res = _time_and_ram(run, iterations=5)
+    # B6: percentily per-iterace vzorků (medián + P95) — ocas latence se neskrývá
+    ms, peak, res, samples = _time_and_ram(run, iterations=5)
     return BenchmarkResult(
         name="pipeline.core",
         suite="core",
@@ -108,6 +118,8 @@ def _workload_core(workdir: Path, n_files: int = 48) -> BenchmarkResult:
         ram_peak_bytes=peak,
         artifacts=_count_artifacts(res),
         iterations=1,
+        median_ms=round(percentile(samples, 0.5), 3),
+        p95_ms=round(percentile(samples, 0.95), 3),
     )
 
 
@@ -134,7 +146,7 @@ def _workload_parser(parser_id: str, workdir: Path) -> BenchmarkResult | None:
             log.debug("parser %s: %s", parser_id, e)
             return []
 
-    ms, peak, arts = _time_and_ram(run, iterations=3)
+    ms, peak, arts, samples = _time_and_ram(run, iterations=3)
     n = len(arts) if isinstance(arts, list) else 0
     return BenchmarkResult(
         name=f"parser.{parser_id}",
@@ -143,6 +155,8 @@ def _workload_parser(parser_id: str, workdir: Path) -> BenchmarkResult | None:
         ram_peak_bytes=peak,
         artifacts=n,
         iterations=3,
+        median_ms=round(percentile(samples, 0.5), 3),
+        p95_ms=round(percentile(samples, 0.95), 3),
     )
 
 
@@ -196,7 +210,7 @@ def _workload_rust_core(workdir: Path) -> BenchmarkResult | None:
         o = rust_core.find_offsets(scan, patterns)
         return (h or {}), (o or [])
 
-    ms, peak, res = _time_and_ram(run, iterations=3)
+    ms, peak, res, samples = _time_and_ram(run, iterations=3)
     n_hashes = len(res[0]) if isinstance(res, tuple) else 0
     n_offs = len(res[1]) if isinstance(res, tuple) else 0
     return BenchmarkResult(
@@ -206,6 +220,8 @@ def _workload_rust_core(workdir: Path) -> BenchmarkResult | None:
         ram_peak_bytes=peak,
         artifacts=n_hashes + n_offs,
         iterations=3,
+        median_ms=round(percentile(samples, 0.5), 3),
+        p95_ms=round(percentile(samples, 0.95), 3),
     )
 
 
@@ -252,6 +268,8 @@ def save_history(db, results: list[BenchmarkResult]) -> dict[str, float]:
     """Uloží aktuální výsledky do ``meta`` a vrátí baseline pro příště.
 
     Historie je JSON seznam záznamů {ts, env, results:[{name,duration_ms,...}]}.
+    B6: do historie se ukládají i percentily (median_ms/p95_ms) — aditivní pole,
+    staré záznamy bez nich zůstávají čitelné (osa se neporovnává).
     Vrací mapu name → duration_ms právě uložených výsledků (nové baseline).
     """
     from datetime import datetime, timezone
@@ -266,6 +284,8 @@ def save_history(db, results: list[BenchmarkResult]) -> dict[str, float]:
                 "name": r.name,
                 "suite": r.suite,
                 "duration_ms": r.duration_ms,
+                "median_ms": r.median_ms,  # B6: None u starých běhů (BC)
+                "p95_ms": r.p95_ms,
                 "ram_peak_bytes": r.ram_peak_bytes,
                 "artifacts": r.artifacts,
             }
@@ -297,17 +317,41 @@ def load_history(db) -> list[dict]:
         return []
 
 
+# B6: osa pole historie/výsledku → label osy pro RegressionWarning.axis
+_AXIS_FIELDS = (("duration_ms", "mean"), ("median_ms", "median"), ("p95_ms", "p95"))
+
+
 def check_regressions(db, results: list[BenchmarkResult], threshold: float = 0.20) -> list[RegressionWarning]:
-    """Porovná aktuální výsledky s baseline z historie → warningy regresí."""
+    """Porovná aktuální výsledky s baseline z historie → warningy regresí.
+
+    B6 statistická brána: porovnává se KAŽDÁ osa samostatně — průměr (BC),
+    medián i P95; regrese na kterékoli ose je regrese (ocas latence se
+    neskrývá). Osa se porovná jen pokud ji mají obě strany (stará historie
+    bez percentilů → jen osa mean, BC).
+    """
     prev = load_history(db)
     if not prev:
         return []
-    baseline: dict[str, float] = {}
-    for r in prev[-1].get("results", []):
-        if "name" in r and "duration_ms" in r:
-            baseline[r["name"]] = float(r["duration_ms"])
-    current = {r.name: r.duration_ms for r in results}
-    return detect_regressions(baseline, current, threshold)
+    last = prev[-1].get("results", [])
+    warnings: list[RegressionWarning] = []
+    for field, label in _AXIS_FIELDS:
+        baseline: dict[str, float] = {}
+        for r in last:
+            v = r.get(field) if isinstance(r, dict) and "name" in r else None
+            if v is not None:
+                try:
+                    baseline[r["name"]] = float(v)
+                except (TypeError, ValueError):
+                    log.debug("benchmark_history %s: nečíselná hodnota %r", field, v)
+        current: dict[str, float] = {}
+        for r in results:
+            v = getattr(r, field)
+            if v is not None:
+                current[r.name] = float(v)
+        warnings.extend(
+            replace(w, axis=label) for w in detect_regressions(baseline, current, threshold)
+        )
+    return warnings
 
 
 def benchmark_report(results: list[BenchmarkResult], warnings: list[RegressionWarning]) -> dict:
@@ -319,6 +363,8 @@ def benchmark_report(results: list[BenchmarkResult], warnings: list[RegressionWa
                 "name": r.name,
                 "suite": r.suite,
                 "duration_ms": r.duration_ms,
+                "median_ms": r.median_ms,  # B6: osa medián (None u starých běhů)
+                "p95_ms": r.p95_ms,
                 "ram_peak_bytes": r.ram_peak_bytes,
                 "artifacts": r.artifacts,
                 "iterations": r.iterations,
@@ -328,6 +374,7 @@ def benchmark_report(results: list[BenchmarkResult], warnings: list[RegressionWa
         "regressions": [
             {
                 "name": w.name,
+                "axis": w.axis,  # B6: která osa regresi vyvolala (mean|median|p95)
                 "baseline_ms": round(w.baseline_ms, 3),
                 "current_ms": round(w.current_ms, 3),
                 "delta_pct": w.delta_pct,

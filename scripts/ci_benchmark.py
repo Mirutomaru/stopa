@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""CI benchmark job — ETAPA D vlna 1 (STP-043).
+"""CI benchmark job — ETAPA D vlna 1 (STP-043) + B6 statistická brána.
 
 Spustí STOPA benchmark engine (suite=all), porovná aktuální doby s baseline
-a na regresii > threshold skončí exit code 1. Výsledek se vypíše jako JSON
-na stdout a (volitelně) do artifact souboru pro GitHub Actions.
+na DVOU osách — medián i P95 per-scénář (ocas latence se neskrývá) — a na
+regresii > threshold AND ≥ min_delta_ms skončí exit code 1 (šum se nehlásí:
+dvojí práh % drift + absolutní minimum platí pro obě osy).
+
+Výsledek se vypíše jako JSON na stdout a (volitelně) do artifact souboru.
+
+Baseline formát v2 (B6): results[name] = {"median_ms": x, "p95_ms": y};
+v1 (results[name] = float) se čte zpět jen jako osa medián (BC při migraci).
 
 Usage:
     python scripts/ci_benchmark.py [--baseline PATH] [--threshold 0.20]
@@ -12,45 +18,91 @@ Usage:
 
 Exit codes:
     0 — OK (bez regresí, nebo --update-baseline)
-    1 — detekována regresie > threshold a ≥ min_delta_ms
+    1 — detekována regrese > threshold a ≥ min_delta_ms (osa medián NEBO p95)
     2 — chyba běhu (engine selhal, baseline poškozená)
 """
 from __future__ import annotations
 
 import argparse
 import json
-import statistics
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BASELINE = REPO_ROOT / "benchmarks" / "baseline.json"
-BASELINE_VERSION = 1
+BASELINE_VERSION = 2  # B6: osa medián + P95
+
+# name → {"median_ms": float, "p95_ms": float | None}
+MetricMap = dict[str, dict[str, float | None]]
 
 
-def run_current(suite: str = "all", runs: int = 1) -> dict[str, float]:
-    """Spustí benchmark engine; vrátí name → duration_ms.
+def _metric(r) -> dict[str, float | None]:
+    """BenchmarkResult → osa medián/P95 (fallback na průměr u starých výsledků)."""
+    median = getattr(r, "median_ms", None)
+    if median is None:
+        median = r.duration_ms  # BC: engine bez per-iterace měření
+    p95 = getattr(r, "p95_ms", None)
+    return {"median_ms": float(median), "p95_ms": (float(p95) if p95 is not None else None)}
 
-    ``runs > 1`` — medián N měření per scénář (P2 hardening: robustní proti
-    šumu pod zátěží; deterministický při stejných měřích). Baseline i current
-    se porovnávají na stejné úrovni (medián vs. medián), viz stp044.
+
+def run_current(suite: str = "all", runs: int = 1) -> MetricMap:
+    """Spustí benchmark engine; vrátí name → {median_ms, p95_ms|None}.
+
+    ``runs > 1`` — agregace přes N plných běhů (P2 hardening): medián se bere
+    jako percentil(0.5) nad per-běh mediany, P95 jako percentil(0.95) nad
+    per-běh P95 (konzervativní — horší ocas z kteréhokoli běhu). Baseline i
+    current se porovnávají na stejné úrovni, viz stp044/B6.
     """
     from stopa.data.benchmark_engine import run_benchmark
+    from stopa.domain.benchmark import percentile
 
-    if runs <= 1:
-        results = run_benchmark(suite=suite)
-        return {r.name: r.duration_ms for r in results}
-    per_run = [run_benchmark(suite=suite) for _ in range(runs)]
-    names = sorted({r.name for res in per_run for r in res})
-    out: dict[str, float] = {}
-    for name in names:
-        values = [r.duration_ms for res in per_run for r in res if r.name == name]
-        out[name] = statistics.median(values)
+    per_run = [run_benchmark(suite=suite) for _ in range(max(1, runs))]
+    names: dict[str, list[dict[str, float | None]]] = {}
+    for res in per_run:
+        for r in res:
+            names.setdefault(r.name, []).append(_metric(r))
+
+    out: MetricMap = {}
+    for name in sorted(names):
+        metrics = names[name]
+        medians: list[float] = []
+        p95s: list[float] = []
+        for m in metrics:
+            med = m.get("median_ms")
+            if med is not None:
+                medians.append(float(med))
+            tail = m.get("p95_ms")
+            if tail is not None:
+                p95s.append(float(tail))
+        out[name] = {
+            "median_ms": percentile(medians, 0.5) if medians else 0.0,
+            "p95_ms": percentile(p95s, 0.95) if p95s else None,
+        }
     return out
 
 
-def load_baseline(path: Path) -> dict[str, float] | None:
-    """Načte baseline name → duration_ms; ``None`` pokud soubor neexistuje.
+def _normalize_entry(name: str, value) -> dict[str, float | None]:
+    """Baseline položka v2 (dict os) nebo v1 (float → jen osa medián)."""
+    if isinstance(value, dict):
+        median = value.get("median_ms")
+        p95 = value.get("p95_ms")
+        entry: dict[str, float | None] = {
+            "median_ms": float(median) if median is not None else 0.0,
+            "p95_ms": float(p95) if p95 is not None else None,
+        }
+        return entry
+    # v1: plain float → osa medián (BC migrace; P95 se u těchto položek neporovnává)
+    try:
+        return {"median_ms": float(value), "p95_ms": None}
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"baseline {name}: nelze interpretovat hodnotu {value!r}") from exc
+
+
+def load_baseline(path: Path) -> MetricMap | None:
+    """Načte baseline name → {median_ms, p95_ms|None}; ``None`` pokud neexistuje.
+
+    Akceptuje formát v2 (dict os) i legacy v1 (plain float — BC).
 
     Raises:
         TypeError: baseline má špatnou strukturu (chybí pole 'results').
@@ -60,27 +112,42 @@ def load_baseline(path: Path) -> dict[str, float] | None:
     data = json.loads(path.read_text(encoding="utf-8"))
     results = data.get("results") if isinstance(data, dict) else None
     if not isinstance(results, dict):
-        raise TypeError(f"baseline {path} nemá pole 'results' (dict name → ms)")
-    return {str(k): float(v) for k, v in results.items()}
+        raise TypeError(f"baseline {path} nemá pole 'results' (dict name → os)")
+    return {str(k): _normalize_entry(str(k), v) for k, v in results.items()}
 
 
-def save_baseline(path: Path, current: dict[str, float]) -> None:
-    """Uloží aktuální výsledky jako novou baseline (deterministický formát)."""
+def save_baseline(path: Path, current: MetricMap) -> None:
+    """Uloží aktuální výsledky jako novou baseline v2 (deterministický formát)."""
     path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _round(v: float | None):
+        return None if v is None else round(v, 3)
+
     payload = {
         "version": BASELINE_VERSION,
-        "results": {k: round(v, 3) for k, v in sorted(current.items())},
+        "results": {
+            k: {"median_ms": _round(m["median_ms"]), "p95_ms": _round(m.get("p95_ms"))}
+            for k, m in sorted(current.items())
+        },
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def compare(
-    baseline: dict[str, float], current: dict[str, float], threshold: float = 0.20
+def compare_axis(
+    axis: str, baseline: dict[str, float], current: dict[str, float], threshold: float = 0.20
 ):
-    """Porovnání přes domain API; vrátí ``list[RegressionWarning]``."""
+    """Porovnání JEDNÉ osy přes domain API; warningy s označením `axis`.
+
+    Args:
+        axis: "median" | "p95" — osa porovnávání (dual-axis brána, B6).
+        baseline: name → doba (ms) na této ose.
+        current: name → doba (ms) na této ose.
+        threshold: relativní práh driftu (0.20 = 20 % zpomalení).
+    """
     from stopa.domain.benchmark import detect_regressions
 
-    return detect_regressions(baseline=baseline, current=current, threshold=threshold)
+    warnings = detect_regressions(baseline=baseline, current=current, threshold=threshold)
+    return [replace(w, axis=axis) for w in warnings]
 
 
 def filter_noise(
@@ -90,6 +157,8 @@ def filter_noise(
 
     Relativní práh 20 % je na dobách < ~1 ms křehký (5 µs šumu stačí na
     +20 %). Regrese se počítá jen pokud absolutní rozdíl ≥ ``min_delta_ms``.
+    B6: stejný guard platí pro obě osy (medián i P95) — volá se s mapou
+    příslušné osy; `baseline` = osa, ke které `warnings` patří.
     """
     kept = []
     for w in warnings:
@@ -98,10 +167,37 @@ def filter_noise(
     return kept
 
 
+def _axis_maps(baseline: MetricMap | None, current: MetricMap) -> dict[str, tuple[dict, dict]]:
+    """Rozbalí dual-axis mapy na per-osa (name → ms) pro porovnání.
+
+    Položka se na ose porovná jen pokud ji mají OBA strany (v1 baseline bez P95
+    → osa p95 u té položky chybí; current-only položky řeší domain API).
+    """
+    per_axis: dict[str, tuple[dict[str, float], dict[str, float]]] = {}
+    for axis in ("median", "p95"):
+        key = f"{axis}_ms"
+        base_map: dict[str, float] = {}
+        cur_map: dict[str, float] = {}
+        for n, m in (baseline or {}).items():
+            v = m.get(key)
+            if v is not None and n in current:
+                base_map[n] = v
+        for n, m in current.items():
+            v = m.get(key)
+            if v is not None:
+                cur_map[n] = v
+        per_axis[axis] = (base_map, cur_map)
+    return per_axis
+
+
 def build_report(
-    current: dict[str, float], warnings, baseline: dict[str, float] | None, threshold: float
+    current: MetricMap, warnings, baseline: MetricMap | None, threshold: float
 ) -> dict:
     """Deterministický JSON report pro CI (stdout + artifact)."""
+
+    def _round(v: float | None):
+        return None if v is None else round(v, 3)
+
     return {
         "ok": not warnings,
         "threshold": threshold,
@@ -110,37 +206,38 @@ def build_report(
         "regressions": [
             {
                 "name": w.name,
+                "axis": w.axis,  # B6: která osa (median|p95) regresi vyvolala
                 "baseline_ms": round(w.baseline_ms, 3),
                 "current_ms": round(w.current_ms, 3),
                 "delta_pct": round(w.delta_pct, 2),
             }
             for w in warnings
         ],
-        "results": {k: round(v, 3) for k, v in sorted(current.items())},
+        "results": {k: {"median_ms": _round(m["median_ms"]), "p95_ms": _round(m.get("p95_ms"))}
+                    for k, m in sorted(current.items())},
     }
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="CI benchmark job (ETAPA D)")
+    parser = argparse.ArgumentParser(description="CI benchmark job (ETAPA D + B6)")
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
     parser.add_argument("--threshold", type=float, default=0.20)
     parser.add_argument(
         "--min-delta-ms",
         type=float,
         default=0.5,
-        help="absolutní minimum (ms), pod nímž se relativní regresie ignoruje (CI guard)",
+        help="absolutní minimum (ms), pod nímž se relativní regresie ignoruje "
+             "(CI guard; platí pro obě osy)",
     )
     parser.add_argument(
         "--update-baseline", action="store_true", help="uložit aktuální běh jako novou baseline"
     )
-    parser.add_argument(
-        "--output", type=Path, default=None, help="artifact soubor (JSON)"
-    )
+    parser.add_argument("--output", type=Path, default=None, help="artifact soubor (JSON)")
     parser.add_argument(
         "--runs",
         type=int,
         default=1,
-        help="počet měření; N>1 → medián per scénář (guard proti šumu pod zátěží)",
+        help="počet plných měření; N>1 → agregace percentilů nad per-běh mediany/P95",
     )
     args = parser.parse_args(argv)
     if args.runs < 1:
@@ -153,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: benchmark engine selhal: {exc}", file=sys.stderr)
         return 2
 
-    baseline: dict[str, float] | None = None
+    baseline: MetricMap | None = None
     if not args.update_baseline:
         try:
             baseline = load_baseline(args.baseline)
@@ -161,10 +258,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: baseline nepoužitelná: {exc}", file=sys.stderr)
             return 2
 
-    raw_warnings = compare(baseline or {}, current, args.threshold) if baseline else []
-    warnings = filter_noise(raw_warnings, baseline or {}, args.min_delta_ms)
-    filtered_out = len(raw_warnings) - len(warnings)
-    report = build_report(current, warnings, baseline, args.threshold)
+    # B6 dual-axis brána: osa medián + osa P95; dvojí práh (% drift + absolutní minimum)
+    all_warnings = []
+    filtered_out = 0
+    if baseline:
+        for axis, (base_map, cur_map) in _axis_maps(baseline, current).items():
+            raw = compare_axis(axis, base_map, cur_map, args.threshold)
+            kept = filter_noise(raw, base_map, args.min_delta_ms)
+            filtered_out += len(raw) - len(kept)
+            all_warnings.extend(kept)
+
+    report = build_report(current, all_warnings, baseline, args.threshold)
     report["noise_filtered"] = filtered_out
     report["runs"] = args.runs
     out_text = json.dumps(report, indent=2, sort_keys=True)
@@ -186,10 +290,10 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
-    if warnings:
-        for w in warnings:
+    if all_warnings:
+        for w in sorted(all_warnings, key=lambda x: (x.name, x.axis)):
             print(
-                f"REGRESIE {w.name}: baseline={w.baseline_ms:.3f}ms "
+                f"REGRESIE[{w.axis}] {w.name}: baseline={w.baseline_ms:.3f}ms "
                 f"current={w.current_ms:.3f}ms (+{w.delta_pct:.1f}%)",
                 file=sys.stderr,
             )

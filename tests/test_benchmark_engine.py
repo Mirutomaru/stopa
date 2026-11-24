@@ -14,6 +14,7 @@ from stopa.domain.benchmark import (
     BenchmarkResult,
     detect_regressions,
     env_info,
+    percentile,
     validation_coverage,
 )
 from stopa.models import Artifact, Case, EvidenceSource, Provenance
@@ -66,7 +67,50 @@ class TestDetectRegressions:
         assert "core.rust" in caplog.text
 
 
-# ── čistá logika: coverage validace ─────────────────────────────
+# ── čistá logika: percentily (B6 statistická brána) ─────────────
+
+class TestPercentile:
+    def test_single_value(self):
+        assert percentile([4.2], 0.95) == 4.2
+        assert percentile([4.2], 0.0) == 4.2
+
+    def test_extremes_min_max(self):
+        xs = [10.0, 20.0, 30.0]
+        assert percentile(xs, 0.0) == 10.0
+        assert percentile(xs, 1.0) == 30.0
+
+    def test_median_matches_sorted_middle(self):
+        assert percentile([3.0, 1.0, 2.0], 0.5) == 2.0
+
+    def test_linear_interpolation(self):
+        # numpy linear: p=0.95 nad [1,2,3] → idx=1.9 → 2 + 0.9*1 = 2.9
+        assert percentile([1.0, 2.0, 3.0], 0.95) == pytest.approx(2.9)
+
+    def test_p95_of_five_samples_between_top_two(self):
+        # idx = 0.95*4 = 3.8 → mezi 4. a 5. seřazenou hodnotou (ocas, ne průměr)
+        val = percentile([1.0, 2.0, 3.0, 4.0, 100.0], 0.95)
+        assert val == pytest.approx(4.0 + 0.8 * 96.0)
+
+    def test_unordered_input_is_sorted(self):
+        assert percentile([5.0, 1.0, 3.0, 2.0, 4.0], 0.5) == pytest.approx(3.0)
+
+    def test_empty_raises_value_error(self):
+        with pytest.raises(ValueError, match="prázdné"):
+            percentile([], 0.5)
+
+    def test_p_out_of_range_raises_value_error(self):
+        with pytest.raises(ValueError, match="p="):
+            percentile([1.0], -0.1)
+        with pytest.raises(ValueError, match="p="):
+            percentile([1.0], 1.1)
+
+    def test_non_numeric_raises_type_error(self):
+        """Typová chyba = TypeError (semantická = ValueError — STOPA konvence)."""
+        with pytest.raises(TypeError, match="nečíselná"):
+            percentile([1.0, "x"], 0.5)  # pyright: ignore[reportArgumentType]
+
+
+# ── čistá logika: coverage validace ───────────────────────────────
 
 class TestValidationCoverage:
     def test_full_coverage(self):
@@ -116,6 +160,9 @@ class TestBenchmarkEngine:
         assert r.duration_ms > 0
         assert r.ram_peak_bytes > 0
         assert r.artifacts >= 0
+        # B6: percentilová brána — osa medián i P95 per-iterace vzorků
+        assert r.median_ms is not None and r.p95_ms is not None
+        assert r.median_ms > 0 and r.p95_ms >= r.median_ms - 1e-3
         if len(results) == 2:
             rr = results[1]
             assert rr.name == "core.rust"
@@ -129,6 +176,23 @@ class TestBenchmarkEngine:
         assert len(results) >= 9
         names = {r.name for r in results}
         assert "parser.sqlite" in names and "parser.evtx" in names
+
+    def test_time_and_ram_samples_per_iteration(self):
+        """B6: per-iterace vzorkování — počet vzorků = počet iterací."""
+        from stopa.data.benchmark_engine import _time_and_ram
+
+        calls = []
+
+        def fn():
+            calls.append(1)
+            return "x"
+
+        mean_ms, peak, last, samples = _time_and_ram(fn, iterations=4)
+        assert len(calls) == 4
+        assert len(samples) == 4
+        assert all(s >= 0 for s in samples)
+        # průměr zůstává BC primární metrikou (BC se starším blokovým měřením)
+        assert mean_ms > 0 and last == "x" and peak >= 0
 
     def test_history_roundtrip(self, case_db: CaseDB, tmp_path: Path):
         from stopa.data.benchmark_engine import (
