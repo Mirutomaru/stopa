@@ -1,4 +1,26 @@
-# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-09)
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-24)
+
+## Hotovo právě teď: **P1+P3 vlna z nezávislé revize** (7 commitů nad `55454ca` = v2.6.0)
+Konsolidovaná revize (Qwen + Gemini subagent, report `.hermes scratch stopa_review_final.md`)
+nalezla P1×1 + P3×6 — vše opraveno:
+- **P1** `docs/architecture.md` → banner ZASTARALÝ SNAPSHOT (ukazuje na PROJECT_STATE.md)
+- **P3** `udelej.md` → `docs/prompts/`; `.gitignore` + `backups/`; benchmark `detect_regressions`
+  warning pro current-only položky (+test, core.rust 79/80); verze 0.1.0→2.6.0 v PROJECT_STATE
+  i kořenovém ROADMAP; 13 superseded dokumentů → `docs/archive/` (README s důvody, reference
+  upraveny); 23× tichý except+pass → debug log (artifacts parse cascades + TSK walk)
+
+## Stav verifikace (2026-11-24)
+- Cílené testy (benchmark/TSK/parsers): **327 passed** · ruff: **clean** (src+tests+scripts)
+- Full suite: probíhá (po dokončení doplnit čísla)
+
+## Co dělat dál (ROADMAP kandidáti z revize, P4)
+1. **File preview UI** (oblast G) — náhled souborů bez opouštění workbench
+2. **AI grounding + detekce rozporů** (oblast H) — citace na artefakty v AI odpovědích
+3. **Re-pin carving wheel** z v2.4.0
+
+---
+
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-09, historie: STP-069)
 
 ## Hotovo právě teď: **STP-069 ★★★★ = Plánované/periodické exporty** (ROADMAP #2 po STP-068)
 Per case opt-in přepínač `auto_export_enabled` (schema v13, default off). Pipeline hook `_maybe_auto_export()` na konci `process_source()`: jen při zapnutí volá `build_auto_bundle(case_id)` — re-use F-094 `to_zip_bundle()` s timestampem z `case.created_at`, atomický zápis tmp→rename na deterministickou cestu `{db_dir}/exports/{case_id}/auto-bundle.zip`, persistuje cestu přes `set_last_auto_export`, audit `auto_bundle_exported` (sha256/records). Celý blok v try/except — selhání nikdy nepadne hlavní ingest flow (jen warning log). Web: PATCH wiring + serializace `last_auto_bundle_path` + download endpoint `GET /api/cases/{id}/auto-export` (absence → 404, FileResponse attachment). CLI `stopa case auto-export <case_id> on|off` + audit `auto_export_toggled`. UI checkbox „📦 Auto export“ v cases tabulce (change handler → PATCH `/api/cases/{id}`, rollback UI + toast při selhání; case ID z `data-cid`). **12 nových testů** (`tests/test_stp069.py`) + nový JS DOM soubor `tests/js/modules.test.mjs` (**5/5 passed**). Full suite **2135 passed, 1 skipped**, ruff clean.
