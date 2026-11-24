@@ -1,14 +1,17 @@
-# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 4)
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 5)
 
-## Hotovo právě teď: **B2 [P0·M] Rozříznutí `data/db.py` na doménové facade mixiny**
-Commit `d352d65`. `db.py` 599 → **88 řádků**; nové `db_facade_{cases,files,artifacts,entities,audit}.py`; BC API CaseDB beze změny (66/66 veřejných metod, `_fts_query` re-export). Ověřeno: ruff clean, cílené testy (ETAPA C 33/33, search 61/61), **full suite 5316 passed, 1 skipped, EXIT=0** (38:14; +4 = testy B1).
-Předtím ve vlně: **B1 [P0·S]** Lockfile + Rust wheel pin — commit `392d335` (`requirements.lock` s hashi, `.github/wheel_pins.json`, fail-closed `scripts/verify_rust_wheel.py`, CI job `lockfile-rust-pin`).
+## Hotovo právě teď: **B3 [P0·L] Základ multi-tenancy ve Web vrstvě**
+Commit `8a36e21`. B3a: per-case tenancy ve všech 10 routerech (~51 endpointů `_require(case_id=...)` — v multi-user režimu nestačí globální role, rozhoduje členství v případu / admin fallback) + WS izolace fail-closed (neplatný/expirovaný/chybějící token → 4001, uživatel bez členství ne-admin → 4003, legacy BC open) a oprava ContextVar session tokenu na WS cestě (`_set_session_token`, header `x-stopa-token` / cookie). B3b: egress audit citlivých exportů (3 události, actor = session uživatel nebo examiner fallback). Záměrné změny kontraktů: STP-067/STP-068 re-download píše od B3b přesně 1 `export_redownloaded` za stažený formát. Nové testy 15/15; regrese f42+f44+web+p14 100/100; **full suite 5331 passed, 1 skipped, EXIT=0** (38:23).
+Předtím ve vlně: **B1 [P0·S]** `392d335`, **B2 [P0·M]** `d352d65` (viz vlna 4 níže).
 
 ## Co dělat dál (backlog)
 Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
 1. ~~**B1 [P0·S]**~~ ✅ DONE `392d335` — Lockfile s hashi + CI kontrola SHA-256/verze `stopa_core` pin v2.6.0
 2. ~~**B2 [P0·M]**~~ ✅ DONE `d352d65` — Rozdělení `data/db.py` (599→88) na funkční domény
-3. **B3 [P0·L]** Základ multi-tenancy (org/team/case role, tenant izolace napříč dotazy, audit citlivých přístupů/exportů) — START
+3. ~~**B3 [P0·L]**~~ ✅ DONE `8a36e21` — Základ multi-tenancy ve Web vrstvě (WS tenancy + per-case RBAC + egress audit)
+4. **B4 [S]** CI build/test s aktivním Rust wheelem (`[carving]`, běh s aktivním core, kontrola verze pinu) — START
+5. **B5 [S]** Minimální CI build/check Web SPA (node syntax/lint + `tsc --noEmit` JSDoc typová kontrola)
+6. **B6 [S]** Statistická brána benchmark engine: percentily (≥P95) vedle mediánu + prahy tolerance
 
 ---
 

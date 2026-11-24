@@ -62,7 +62,7 @@ Priorita práce: **Forensic correctness > Data integrity > Security > Reliabilit
 - **Provedená změna:** ADB větev `--source adb` měla vlastní neomezenou rglob smyčku mimo P1 ZIP limity (dump s tisíci .db/.vcf = bezohraničný sha256 + parse). Nyní sdílí obě větve jednu čistou implementaci `domain/archive_budget.py` (`ArchiveBudget`, limity přes konstruktor; produkční defaults = module globály `_MAX_ARCHIVE_*`, P1 monkeypatch kontrakt zachován, hranice inkluzivní jako dříve). ADB: počtový + celkový velikostní limit sbíraných vstupů (.db/.sqlite/.vcf); per-member limit se vztahuje jen na .vcf (čtené celé do RAM) — DB se streamují po cestě (sha256 v kusech, sqlite po cestě), takže je omezuje celkový limit. ZIP/složková větev refaktorovaná přes `ArchiveBudget` se zprávami a sémantikou byte-identickými.
 - **Výsledek testu:** VERIFIED — `tests/test_p2_archive_budget.py` **10 passed** (5 unit domény bez I/O + 5 ADB E2E přes `cli.main`); regrese `test_p1_zip_bounded.py` + `test_f15_cli_import_mobile.py`: **27 passed in 37.45s**; Ruff clean.
 
-### P2 B — benchmark medián proti šumu (commit `cd005ad`)
+### P2 B — benchmark medián proti šumu (commit `6f4f8f1`)
 - **Provedená změna:** CI flake stp044 self-baseline (+21,9 % pod plným zatížením, práh 20 %) — single measurement vs. single measurement je na sub-2 ms scénářích křehký. `scripts/ci_benchmark.py`: nový `--runs N` (default 1 → CI job bez změny runtime); N>1 = medián per scénář z N měření; baseline i current se porovnávají na stejné úrovni (medián vs. medián), report + pole `"runs"`. stp044 self-baseline test: `--runs 3` na obou stranách — šum by musel systematicky zatížit > polovinu měření, aby projel prahem.
 - **Výsledek testu:** VERIFIED — `tests/test_stp044_ci_benchmark_e2e.py` **6 passed in 103.33s**; Ruff scripts+tests clean.
 
@@ -111,7 +111,7 @@ Priorita práce: **Forensic correctness > Data integrity > Security > Reliabilit
 
 **Cell A `874c044`** (P2 sdílená budget logika): nová `domain/archive_budget.py` (`ArchiveBudget`, čistá doménová vrstva), `cli/commands/forensics.py` (refaktor `_archive_members` přes ArchiveBudget + ADB větev pod limity, zprávy byte-identické) + nový `tests/test_p2_archive_budget.py` (10 testů).
 
-**Cell B `cd005ad`** (P2 benchmark medián): `scripts/ci_benchmark.py` (`--runs N`, medián per scénář, report pole `"runs"`) + `tests/test_stp044_ci_benchmark_e2e.py` (self-baseline `--runs 3`).
+**Cell B `6f4f8f1`** (P2 benchmark medián): `scripts/ci_benchmark.py` (`--runs N`, medián per scénář, report pole `"runs"`) + `tests/test_stp044_ci_benchmark_e2e.py` (self-baseline `--runs 3`).
 
 ## 4. Nové moduly
 - `src/stopa/domain/temp_images.py` (P0.3, commit Cell 2)
@@ -190,7 +190,7 @@ P1 security vlna (§6 master promptu) je **uzavřena** — auditní pokrytí vš
 
 Vyřešeno v P2 vlně:
 - **ADB branch `--source adb` bez celkových limitů** (původní riziko 1) — sdílená budget logika `domain.archive_budget.ArchiveBudget`, obě větve import-mobile pod limity 256 MiB / 4 GiB / 20 000; commit `874c044`.
-- **Citlivost `test_stp044_ci_benchmark_e2e.py` na zatížení** (původní riziko 2, flake +21,9 % vs. práh 20 %) — medián 3 měření per scénář (`--runs N`), baseline i current na stejné úrovni; commit `cd005ad`.
+- **Citlivost `test_stp044_ci_benchmark_e2e.py` na zatížení** (původní riziko 2, flake +21,9 % vs. práh 20 %) — medián 3 měření per scénář (`--runs N`), baseline i current na stejné úrovni; commit `6f4f8f1`.
 
 Vyřešeno v P3 vlně (commity `51b0018`, `b509e7c`):
 - **JSON depth limit u neomezených vstupů** (původní riziko 1) — sdílený helper `domain/json_bounded.bounded_json_loads` (depth ≤200, `JsonLimitError(ValueError)`), staged rollout přes celý povrch nedůvěryhodných dat: 68 call sites v 57 artifact parcích + STIX bundle (`threat_intel.py`) + uživatelské plaso záznamy (`plaso_import.py`); AST guard proti regresi.

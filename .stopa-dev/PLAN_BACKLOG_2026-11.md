@@ -17,7 +17,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 |----|------|-------|------|
 | B1 | Lockfile s hashi (uv/pip-tools) + CI kontrola verze a SHA-256 `stopa_core` pin v2.6.0 proti manifestu/release assetům | W1/Q10 · S | ✅ DONE `392d335` |
 | B2 | Rozdělení `data/db.py` (599/600 řádků) na funkční domény (schéma/připojení, soubory/artefakty, graf/entitní vztahy, integrita/audit, tenancy) — zpětná kompatibilita volání | W2/Q1 · M | ✅ DONE `d352d65` |
-| B3 | Základ produkční multi-tenancy: AuthN/AuthZ (org/team/case role a oprávnění), vynucená tenant izolace napříč dotazy, nezávislý audit citlivých přístupů/exportů | Q12 · L | TODO |
+| B3 | Základ produkční multi-tenancy (Q12): AuthN/AuthZ org/team/case, vynucená tenant izolace napříč dotazy, nezávislý audit citlivých přístupů/exportů | Q12 · L | ✅ DONE `8a36e21` |
 
 ### Fáze 2 — P1
 | ID | Úkol | Zdroj | Stav |
@@ -57,3 +57,9 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - Změněné: `db.py` 599 → **88 řádků** — jen schéma/připojení (`__init__`, `_emit_web_event`, `schema_version`, `commit`, `close`) + kompozice `CaseDB(*Mixin)`; BC API beze změny (66/66 veřejných metod, re-export `_fts_query`), metody přesunuty verbatim do mixínů.
 - Změněné: `tests/test_audit_fixes.py::test_db_no_local_datetime_imports` — gate P2#5 rozšířen na db vrstvu jako celek (max 1× top-level `from datetime import` per modul, žádné lokální) — původní „právě 1 v db.py“ už po splitu neplatí.
 - Ověřeno: ruff clean (6 souborů); BC kontrola metod staré vs nové CaseDB; cílené testy ETAPA C 33/33, search 61/61, audit gate 15/15; **full suite 5316 passed, 1 skipped, EXIT=0 (38:14)** (+4 = testy B1; B2 = čistý refactor).
+### B3 — Základ multi-tenancy ve Web vrstvě (DONE 2026-11-25, commit `8a36e21`)
+- Nové: `tests/test_b3_tenancy_web.py` (416 ř., 15 testů) — B3a WS fail-closed tenancy (neplatný/expirovaný/chybějící token → close 4001; validní uživatel bez členství ne-admin → 4003; legacy single-operator BC open), per-case RBAC NOCTX důkaz (EXAMINER s globálním settings.write bez členství v případě → 403 na registry sync, po grantu projde), B3b egress audit (`export_redownloaded`, `evidence_exported`, `auto_export_downloaded` — akce + actor).
+- Změněné: `app.py` (nový `_set_session_token` — ContextVar session token pro WS scope; http middleware websocket scope nekryje) + 10 routerů (~51× `_require(..., case_id=...)`: v multi-user režimu nestačí globální role, rozhoduje členství v případu / admin fallback); `cases.py` (WS handler: token z headeru `x-stopa-token` / cookie `stopa_token` → `_set_session_token` před `_current_user()`; docstring kontraktu 4001/4003).
+- Opravené reálné bugy při review: ContextVar na WS cestě (multi-user režim — i validní token byl 4001), chybějící výtaž `_audit_actor` z ctx v `cases.py`.
+- Záměrné změny kontraktů: STP-067 `test_read_only_no_audit_entry` → `test_read_only_egress_audit` + STP-068 bundle re-download — re-download last-export od B3b píše přesně 1 egress záznam za stažený formát (data opouštějí systém = forenzní stopa; původní kontrakt „bez auditu“ nahrazen), read-only sémantika stavu případu zachována.
+- Ověřeno: ruff clean; B3 15/15; cílená regrese `test_f42_ws.py` + `test_f44_multitenant.py` + `test_web.py` + `test_p14_web_surface.py` = **100/100**; stp067 11/11, stp068 12/12; **full suite 5331 passed, 1 skipped, EXIT=0 (38:23)**.
