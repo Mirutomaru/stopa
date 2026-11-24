@@ -1,4 +1,6 @@
 # 📋 STOPA Digital Forensics — Master Roadmap & Execution Plan (V2)
+
+> ⚠️ **SUPERSEDED** (2026-11-24): exekuční plán éry v0.1.0→produkce, hnál vývoj 2026-11-10…17; aktuální stav a plán = `.stopa-dev/ROADMAP.md` + `STOPA_CHANGELOG.md`. Soubor zachován jako rozhodovací log (checkboxy = historický průběh).
 **Verze plánu:** 1.0.0 · **Datum sestavení:** 2026-11-10
 **Cíl:** Převést STOPA z v0.1.0 na produkční enterprise-grade forenzní platformu konkurenceschopnou s Magnet AXIOM, Cellebrite UFED, X-Ways a FTK.
 **Vlastník plánu:** AI Agent (executor) · **Lidský schvalovatel:** Senior Forensic Developer

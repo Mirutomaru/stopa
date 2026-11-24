@@ -1,5 +1,7 @@
 # STOPA — Implementation Roadmap (ETAPA C)
 
+> ⚠️ **SUPERSEDED** (2026-11-24): plán ETAPY C je dokončený od STP-041 (2026-11-04) — db.py 2090→476 řádků; vývoj pokračoval v `.stopa-dev/ROADMAP.md` (ETAPY D/E, P-vlny). Soubor = historický plán.
+
 **Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` §21 + gap analysis
 **Pravidlo:** každý úkol = samostatný commit; po každém: testy + ruff + full regresní sada + DB kompatibilita + docs.
 

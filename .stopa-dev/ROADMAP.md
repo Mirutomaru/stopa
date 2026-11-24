@@ -138,6 +138,7 @@ backward compat zachován, full suite **1792 passed, 1 skipped**. Další = volb
 
 **Co reálně zbývá (pořadí podle priority):** P1 P QA CI benchmark job →
 P2 M sandbox / H AI grounding / I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.
+_(Historický stav k 2026-11-04 — mezitím hotové: M sandbox = ETAPA E (STP-046/047/048), H = STP-049, I+O = STP-050/052, G = STP-051, J/K/Q = STP-053…070; jediná otevřená položka z tohoto seznamu = CI běh benchmarku → viz sekce N.)_
 
 ## ETAPA D — ROZHODNUTÍ O SMĚRU (STP-042, 2026-11-04)
 
@@ -182,6 +183,7 @@ Další = volba ETAPY E (kandidát M Security sandbox P2).
 
 **Co reálně zbývá po ETAPĚ D (pořadí podle priority):** P2 M sandbox / H AI grounding /
 I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.
+_(Historický stav k 2026-11-05 — mezitím vše hotové: M = ETAPA E, H = STP-049, I+O = STP-050/052, G = STP-051, J/K/Q = STP-053…070.)_
 
 ## ETAPA E — ROZHODNUTÍ O SMĚRU (STP-045, 2026-11-05)
 
@@ -220,3 +222,4 @@ poškozený soubor → `parser_error` artifact, ne crash; deterministické testy
 full suite zelená po každé vlně; ruff clean.
 
 **Co reálně zbývá po ETAPĚ E (pořadí podle priority):** P2 H AI grounding / I+O Validation+Audit Center → P3 G file preview / J Case Mgmt 2.0 / K Plaso / Q UCO.
+_(Historický stav k 2026-11-05 — mezitím vše hotové: H = STP-049, I+O = STP-050/052, G = STP-051, J/K/Q = STP-053…070.)_
