@@ -40,6 +40,10 @@ class AiSettings:
     chat_timeout_s: float = 120.0  # lokální inference může být pomalá
     health_timeout_s: float = 3.0
     max_tokens: int = 600
+    # B8 — fixní sampling parametry (forenzní kontext → reprodukovatelnost);
+    # role s jinou teplotou je přepíše přes chat(temperature=).
+    temperature: float = 0.2
+    top_p: float = 1.0
     _cache: dict[str, str] = field(default_factory=dict, compare=False)
 
     def resolved_model(self) -> str | None:
@@ -57,6 +61,8 @@ class LmStudioClient:
 
     def __init__(self, settings: AiSettings | None = None) -> None:
         self.settings = settings or settings_from_env()
+        # B8 — auditní identita: model, který poslední chat() skutečně použil.
+        self.last_model: str | None = None
 
     # ── health / model discovery ────────────────────────────────────────
     def health(self) -> dict[str, object]:
@@ -96,12 +102,23 @@ class LmStudioClient:
             model_id = str(data[0].get("id", ""))
             if model_id:
                 self.settings._cache["model"] = model_id  # type: ignore[misc]
+                self.last_model = model_id
                 return model_id
         raise LmStudioUnavailable("LM Studio nemá načtený žádný model")
 
     # ── chat completion ─────────────────────────────────────────────────
-    def chat(self, messages: list[dict[str, str]], max_tokens: int | None = None) -> str:
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        *,
+        temperature: float | None = None,
+    ) -> str:
         """Jedna chat completion → text odpovědi.
+
+        B8 — fixní sampling: ``top_p`` ze settings (default 1.0), teplota z
+        ``temperature=`` (role) nebo defaultu settings; použity model + parametry
+        jsou auditovatelné přes ``last_model`` a odchozí payload.
 
         Hází ``LmStudioUnavailable`` (server/model nedostupný) a
         ``LmStudioError`` (jiná HTTP/JSON chyba).
@@ -116,7 +133,9 @@ class LmStudioClient:
                         "model": model,
                         "messages": messages,
                         "max_tokens": max_tokens or s.max_tokens,
-                        "temperature": 0.2,  # forenzní kontext → deterministické
+                        # forenzní kontext → deterministické (B8: explicitní pin)
+                        "temperature": s.temperature if temperature is None else temperature,
+                        "top_p": s.top_p,
                     },
                 )
         except httpx.HTTPError as exc:

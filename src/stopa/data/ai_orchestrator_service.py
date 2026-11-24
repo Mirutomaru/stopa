@@ -21,19 +21,32 @@ from typing import Any, Protocol
 
 from stopa.data.lmstudio_client import LmStudioClient, LmStudioError, settings_from_env
 from stopa.domain.ai_orchestrator import (
+    ROLE_REQUIRES_CITATION,
     RetryPolicy,
     TokenBudget,
     backoff_delay,
     build_role_messages,
     build_role_registry,
+    extract_citation_ids,
+    fingerprint_messages,
+    validate_citation_ids,
     validate_role_output,
 )
 
 
 class ChatClient(Protocol):
-    """Duck-typing kontrakt AI klienta (LmStudioClient ho splňuje; testy fake)."""
+    """Duck-typing kontrakt AI klienta (LmStudioClient ho splňuje; testy fake).
 
-    def chat(self, messages: list[dict[str, str]], max_tokens: int | None = None) -> str: ...
+    B8 — ``temperature`` = fixní sampling parametr role (None → default klienta).
+    """
+
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        *,
+        temperature: float | None = None,
+    ) -> str: ...
 
 
 class AiOrchestrationError(Exception):
@@ -42,13 +55,23 @@ class AiOrchestrationError(Exception):
 
 @dataclass(frozen=True)
 class OrchestratedCall:
-    """Výsledek jednoho volání role (auditovatelná entita)."""
+    """Výsledek jednoho volání role (auditovatelná entita).
+
+    B8 — nová auditní pole: ``citations``/``unknown_citations`` (grounding
+    vůči ID z DB případu), ``grounded`` (None = neověřeno, False = role
+    vyžadovala citaci a žádná validní nepřišla → payload=None) a ``model``
+    (identita modelu, který volání skutečně obsloužil).
+    """
 
     role_id: str
     text: str
     payload: dict[str, Any] | None  # None = JSON nebylo / validace selhala
     tokens_out: int  # odhad (char//4) — bez tokenizeru v hard dependency
     attempts: int
+    citations: tuple[str, ...] = ()  # B8 — citované ID (validní vůči DB, resp. veškeré nalezené)
+    unknown_citations: tuple[str, ...] = ()  # B8 — „divoké“ citace neexistující v DB
+    grounded: bool | None = None  # B8 — None = grounding neověřen (bez validních ID z DB)
+    model: str | None = None  # B8 — model, který odpověď vygeneroval
 
 
 def estimate_tokens(text: str) -> int:
@@ -121,7 +144,8 @@ def run_role_on_case(
         )
 
     call = call_role(
-        role_id, question, evidence, client=client, budget=budget, audit_sink=audit_sink
+        role_id, question, evidence, client=client, budget=budget, audit_sink=audit_sink,
+        valid_artifact_ids=used_ids,
     )
     return call, used_ids
 
@@ -149,10 +173,18 @@ def call_role(
     rng: random.Random | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
     audit_sink: Callable[[str, dict[str, Any]], None] | None = None,
+    valid_artifact_ids: Sequence[str] | None = None,
 ) -> OrchestratedCall:
     """Vyvolá AI roli s retry+backoff+jitter, token budgetem a validací výstupu.
 
     Vše stochastické je injektovatelné (``rng``, ``sleep_fn``) → offline testy.
+
+    B8 — determinismus kolem AI agenta:
+      * sampling fixní per role (``role.temperature`` explicitně v payloadu),
+      * citace z textu i pole ``citations`` se ověřují proti
+        ``valid_artifact_ids`` (grounding; role z ``ROLE_REQUIRES_CITATION``
+        bez validní citace → ``payload=None``, ``grounded=False``),
+      * audit nese reprodukovatelnou identitu: model, teplotu a SHA-256 promptu.
     """
     roles = build_role_registry()
     if role_id not in roles:  # doménová ValueError, ne orchestrátorová
@@ -164,6 +196,7 @@ def call_role(
     if client is None:
         client = LmStudioClient(settings_from_env())
     messages = build_role_messages(role_id, question, evidence)
+    prompt_sha256 = fingerprint_messages(messages)  # B8 — auditní identita promptu
 
     last_error: Exception | None = None
     text: str | None = None
@@ -171,7 +204,7 @@ def call_role(
     for attempt in range(1, policy.max_attempts + 1):
         attempts = attempt
         try:
-            text = client.chat(messages, max_tokens=role.max_tokens)
+            text = client.chat(messages, max_tokens=role.max_tokens, temperature=role.temperature)
             last_error = None
             break
         except LmStudioError as exc:
@@ -182,7 +215,10 @@ def call_role(
     if text is None or last_error is not None:
         if audit_sink:
             audit_sink("ai_role_call", {"role": role_id, "ok": False, "attempts": attempts,
-                                        "error": str(last_error)})
+                                        "error": str(last_error),
+                                        "model": getattr(client, "last_model", None),
+                                        "temperature": role.temperature,
+                                        "prompt_sha256": prompt_sha256})
         raise AiOrchestrationError(f"role {role_id!r} selhala po {attempts} pokusech: {last_error}")
 
     tokens_out = estimate_tokens(text)
@@ -197,8 +233,40 @@ def call_role(
     else:
         payload = None
 
+    # B8 — grounding citací vůči ID artefaktů DB případu
+    cited = extract_citation_ids(text)
+    if isinstance(payload, dict):
+        pcites = payload.get("citations")
+        if isinstance(pcites, list):
+            for c in pcites:
+                if isinstance(c, str) and c not in cited:
+                    cited.append(c)
+    model_name: str | None = getattr(client, "last_model", None)
+    grounded: bool | None = None
+    valid_citations: list[str] = []
+    unknown_citations: list[str] = []
+    if valid_artifact_ids is not None:
+        valid_citations, unknown_citations = validate_citation_ids(
+            cited, set(valid_artifact_ids)
+        )
+        grounded = True
+        if role_id in ROLE_REQUIRES_CITATION and not valid_citations:
+            payload = None  # povinná citace chybí → QA signál jako u nesplněného schématu
+            grounded = False
+    else:
+        valid_citations = cited  # bez DB kontextu se neověřuje, jen zaznamenává
+
     if audit_sink:
         audit_sink("ai_role_call", {"role": role_id, "ok": True, "attempts": attempts,
-                                    "tokens_out": tokens_out})
+                                    "tokens_out": tokens_out,
+                                    "model": model_name,
+                                    "temperature": role.temperature,
+                                    "prompt_sha256": prompt_sha256,
+                                    "citations": valid_citations,
+                                    "unknown_citations": unknown_citations,
+                                    "grounded": grounded})
     return OrchestratedCall(role_id=role_id, text=text, payload=payload,
-                            tokens_out=tokens_out, attempts=attempts)
+                            tokens_out=tokens_out, attempts=attempts,
+                            citations=tuple(valid_citations),
+                            unknown_citations=tuple(unknown_citations),
+                            grounded=grounded, model=model_name)

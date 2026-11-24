@@ -114,7 +114,9 @@ class GoldenClient:
     def __init__(self, override: dict[str, str] | None = None) -> None:
         self._override = dict(override or {})
 
-    def chat(self, messages: list[dict[str, str]], max_tokens: int | None = None) -> str:
+    def chat(
+        self, messages: list[dict[str, str]], max_tokens: int | None = None, *, temperature: float | None = None
+    ) -> str:
         role_id = _role_from_messages(messages)
         if role_id in self._override:
             return self._override[role_id]

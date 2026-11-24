@@ -10,6 +10,7 @@ Sémantika chyb: typový nesoulad → ``TypeError``, semantická chyba → ``Val
 
 from __future__ import annotations
 
+import hashlib
 import random
 import re
 from collections.abc import Sequence
@@ -82,6 +83,77 @@ ROLE_OUTPUT_SCHEMA: dict[str, tuple[str, ...]] = {
     "report": ("title", "sections"),
     "qa": ("verdict", "issues"),
 }
+
+#: B8 — přísná typová omezení povinných polí (isinstance; numerika bez bool).
+ROLE_OUTPUT_TYPES: dict[str, tuple[tuple[str, object], ...]] = {
+    "evidence": (("findings", list),),
+    "timeline": (("events", list),),
+    "network": (("entities", list), ("edges", list)),
+    "memory": (("matches", list),),
+    "intelligence": (("enrichments", list),),
+    "hypothesis": (
+        ("statement", str),
+        ("confidence", (int, float)),
+        ("citations", list),
+    ),
+    "report": (("title", str), ("sections", list)),
+    "qa": (("verdict", str), ("issues", list)),
+}
+
+#: B8 — role, jejichž výstup MUSÍ obsahovat alespoň jednu validní citaci na
+#: artefakt případu. Povinná jen u rolí, které v system promptu slibují
+#: citace: timeline („každý bod musí mít citaci“), hypothesis („statement +
+#: confidence + citace“), report („bez spekulací mimo citace“). Evidence role
+#: odkazuje strukturěně (findings[].artifact_id), memory/intelligence jsou
+#: explicitně „indície, ne fakta“ — tvrdý požadavek by falešně káral.
+ROLE_REQUIRES_CITATION: frozenset[str] = frozenset({"timeline", "hypothesis", "report"})
+
+#: B8 — citace [art:<id>] / [file:<id>] v textu odpovědi LLM.
+_CITATION_ID_RE = re.compile(r"\[(?:art|file):([A-Za-z0-9_-]+)\]")
+
+
+def extract_citation_ids(text: str) -> list[str]:
+    """Unikátní citované ID z textu (pořadí výskytu; [art:] i [file:])."""
+    if not isinstance(text, str):
+        raise TypeError(f"text musí být str, got {type(text).__name__}")
+    seen: dict[str, None] = {}
+    for m in _CITATION_ID_RE.finditer(text):
+        seen.setdefault(m.group(1), None)
+    return list(seen)
+
+
+def validate_citation_ids(cited: Sequence[str], valid_ids: set[str]) -> tuple[list[str], list[str]]:
+    """B8 — rozdělí citace na ``(valid, unknown)`` vůči ID z DB případu.
+
+    Pořadí výskytu se zachovává; duplikáty jednou. Neznámá role citace =
+    „divoká“ (např. vylisovaná z textu důkazu přes prompt-injection).
+    """
+    valid: list[str] = []
+    unknown: list[str] = []
+    seen: set[str] = set()
+    for cid in cited:
+        if not isinstance(cid, str):
+            raise TypeError(f"citace musí být str, got {type(cid).__name__}")
+        if cid in seen:
+            continue
+        (valid if cid in valid_ids else unknown).append(cid)
+        seen.add(cid)
+    return valid, unknown
+
+
+def fingerprint_messages(messages: list[dict[str, str]]) -> str:
+    """B8 — deterministický SHA-256 promptu (role+content), auditovatelná identita.
+
+    Stejný prompt → stejný otisk; jakákoli změna obsahu/změna pořadí ho změní.
+    """
+    if not isinstance(messages, list):
+        raise TypeError(f"messages musí být list, got {type(messages).__name__}")
+    h = hashlib.sha256()
+    for m in messages:
+        h.update(str(m.get("role", "")).encode("utf-8"))
+        h.update(b"\x00")
+        h.update(str(m.get("content", "")).encode("utf-8"))
+    return h.hexdigest()
 
 
 @dataclass(frozen=True)
@@ -176,11 +248,22 @@ class TokenBudget:
         return remaining
 
 
+def _field_type_ok(value: Any, expected: object) -> bool:
+    """B8 — isinstance kontrola; numerická pole (int/float) odmítají ``True``/``False``."""
+    if isinstance(expected, tuple):
+        return any(_field_type_ok(value, e) for e in expected)
+    ok = isinstance(value, expected)  # type: ignore[arg-type]
+    return ok and not (isinstance(value, bool) and expected in (int, float))
+
+
 def validate_role_output(role_id: str, payload: Any) -> dict[str, Any]:
     """Validuje strukturovaný výstup role podle ``ROLE_OUTPUT_SCHEMA``.
 
-    Neznámá role → ``ValueError``, nepodpora dict/chybějící pole → ``ValueError``
-    se srozumitelnou zprávou (pro QA roli a GUI). Validní payload vrací nezměněn.
+    B8 — kromě přítomnosti povinných polí se ověřuje i jejich typ
+    (``ROLE_OUTPUT_TYPES``); numerická pole odmítají bool (True != 1).
+    Neznámá role → ``ValueError``, nepodpora dict/chybějící nebo špatně
+    typovaná pole → ``ValueError`` srozumitelnou zprávou (pro QA roli a GUI).
+    Validní payload vrací nezměněn.
     """
     if role_id not in ROLE_OUTPUT_SCHEMA:
         raise ValueError(f"neznámá AI role {role_id!r} (očekáván jeden z {ROLE_IDS})")
@@ -190,6 +273,12 @@ def validate_role_output(role_id: str, payload: Any) -> dict[str, Any]:
     if missing:
         raise ValueError(
             f"výstup role {role_id!r} chybí povinná pole: {', '.join(missing)}"
+        )
+    bad = [k for k, t in ROLE_OUTPUT_TYPES[role_id] if not _field_type_ok(payload[k], t)]
+    if bad:
+        raise ValueError(
+            f"výstup role {role_id!r} má špatně typovaná pole: "
+            + ", ".join(f"{k}(={type(payload[k]).__name__})" for k in bad)
         )
     return payload
 

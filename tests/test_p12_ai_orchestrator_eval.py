@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -55,7 +56,9 @@ class FakeClient:
         self._queue: list[str | None] = list(responses)
         self.calls: list[dict[str, Any]] = []  # messages + max_tokens per volání
 
-    def chat(self, messages: list[dict[str, str]], max_tokens: int | None = None) -> str:
+    def chat(
+        self, messages: list[dict[str, str]], max_tokens: int | None = None, *, temperature: float | None = None
+    ) -> str:
         self.calls.append({"messages": messages, "max_tokens": max_tokens})
         if not self._queue:
             raise LmStudioError("FakeClient vyčerpan")
@@ -108,11 +111,15 @@ class TestGoldenRoles:
         assert call.payload is not None
         for key in ROLE_OUTPUT_SCHEMA[role_id]:
             assert key in call.payload, f"role {role_id!r}: chybí {key}"
-        # auditní záznam s kontextem volání
-        assert audits == [
-            ("ai_role_call", {"role": role_id, "ok": True, "attempts": 1,
-                              "tokens_out": call.tokens_out})
-        ]
+        # auditní záznam s kontextem volání (+ B8 — reprodukovatelná identita)
+        assert len(audits) == 1 and audits[0][0] == "ai_role_call"
+        p = audits[0][1]
+        assert p["role"] == role_id and p["ok"] is True and p["attempts"] == 1
+        assert p["tokens_out"] == call.tokens_out
+        # B8: model (eval fake ho nemá → None), fixní teplota role, SHA-256 promptu
+        assert p["model"] is None
+        assert p["temperature"] == role.temperature
+        assert re.fullmatch(r"[0-9a-f]{64}", p["prompt_sha256"])
 
     def test_system_prompt_contains_injection_guard(self):
         msgs = build_role_messages("evidence", "", EVIDENCE)
@@ -206,8 +213,12 @@ class TestRetryBackoff:
             call_role("evidence", "", EVIDENCE, client=FakeClient(None, None, None),
                       rng=random.Random(1), sleep_fn=lambda _s: None,
                       audit_sink=lambda a, p: audits.append((a, p)))
-        assert audits == [("ai_role_call", {
-            "role": "evidence", "ok": False, "attempts": 3, "error": audits[-1][1]["error"]})]
+        assert len(audits) == 1 and audits[0][0] == "ai_role_call"
+        p = audits[0][1]
+        assert p["role"] == "evidence" and p["ok"] is False and p["attempts"] == 3
+        assert p["error"]
+        # B8 — i selhání nese identitu promptu (reprodukce: stejný prompt → stejná chyba)
+        assert re.fullmatch(r"[0-9a-f]{64}", p["prompt_sha256"])
 
 
 # ── token budget ─────────────────────────────────────────────────────────────

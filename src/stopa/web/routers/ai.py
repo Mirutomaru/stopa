@@ -82,6 +82,11 @@ def register(app, ctx) -> None:
             "tokens_out": call.tokens_out,
             "attempts": call.attempts,
             "evidence": used_ids,
+            # B8 — determinismus/grounding: citace + identita modelu
+            "citations": list(call.citations),
+            "unknown_citations": list(call.unknown_citations),
+            "grounded": call.grounded,
+            "model": call.model,
         }
 
     # ── P4-5 — AI agent stream (SSE) ─────────────────────────────────────

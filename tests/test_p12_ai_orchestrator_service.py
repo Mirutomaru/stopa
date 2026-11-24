@@ -16,14 +16,21 @@ from stopa.domain.ai_orchestrator import RetryPolicy, TokenBudget
 
 
 class FakeClient:
-    """Sekvence odpovědí/výjimek; každý chat() consumuje jeden prvek."""
+    """Sekvence odpovědí/výjimek; každý chat() consumuje jeden prvek.
+
+    B8 — přijímá sampling parametr ``temperature`` a nese ``last_model``
+    (auditní identita modelu, jako u reálného LmStudioClient).
+    """
 
     def __init__(self, responses) -> None:
         self.responses = list(responses)
         self.calls: list[tuple] = []
+        self.last_model: str | None = "fake-model"
+        self.temperatures: list[float | None] = []
 
-    def chat(self, messages, max_tokens=None):
+    def chat(self, messages, max_tokens=None, *, temperature=None):
         self.calls.append((messages, max_tokens))
+        self.temperatures.append(temperature)
         item = self.responses.pop(0)
         if isinstance(item, Exception):
             raise item
