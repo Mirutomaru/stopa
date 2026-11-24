@@ -12,10 +12,13 @@ Principy (viz docs/STOPA_VALIDATION_STRATEGY.md):
 
 from __future__ import annotations
 
+import logging
 import platform
 import sqlite3
 import sys
 from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -61,16 +64,27 @@ def detect_regressions(
 
     Returns:
         Seznam warningů seřazených podle jména; jen položky s baseline > 0.
+        Položky v `current` bez záznamu v baseline (current-only) se neporovnají,
+        ale hlásí je warning — ne tichý skip (např. nová položka `core.rust`).
     """
     warnings: list[RegressionWarning] = []
+    missing_from_baseline: list[str] = []
     for name in sorted(current):
         base = baseline.get(name)
-        if base is None or base <= 0:
+        if base is None:
+            missing_from_baseline.append(name)
+            continue
+        if base <= 0:
             continue
         cur = current[name]
         delta_pct = (cur - base) / base * 100.0
         if delta_pct > threshold * 100.0:
             warnings.append(RegressionWarning(name, base, cur, round(delta_pct, 2)))
+    if missing_from_baseline:
+        log.warning(
+            "benchmark baseline chybí %d položek (current-only → neporovnány): %s",
+            len(missing_from_baseline), ", ".join(missing_from_baseline),
+        )
     return warnings
 
 

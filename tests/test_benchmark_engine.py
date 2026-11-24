@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -55,6 +56,14 @@ class TestDetectRegressions:
     def test_zero_baseline_ignored(self):
         """Baseline 0 ms → dělení o nulu (defenzivní)."""
         assert detect_regressions({"a": 0.0}, {"a": 999.0}) == []
+
+    def test_current_only_keys_warn(self, caplog):
+        """Current-only položka (chybí v baseline) → warning místo tichého skipu."""
+        with caplog.at_level(logging.WARNING, logger="stopa.domain.benchmark"):
+            warns = detect_regressions({"a": 100.0}, {"a": 125.0, "core.rust": 40.0})
+        assert [w.name for w in warns] == ["a"]  # porovnává se jen položka s baseline
+        assert "benchmark baseline chybí" in caplog.text
+        assert "core.rust" in caplog.text
 
 
 # ── čistá logika: coverage validace ─────────────────────────────
