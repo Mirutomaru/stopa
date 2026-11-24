@@ -2,6 +2,12 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-24 (**P4 vlna** nad `v2.6.0` — sjednocení ROADMAP rodiny: mirror resync + superseded banners; STOPA_2_1_MASTER_PROMPT→docs/prompts/; FEATURE_REGISTRY verze 2.6.0; carving extra re-pin wheels v2.4.0→v2.6.0)
+
+### Changed — P4 vlna 2026-11-24
+- ROADMAP rodina: kořenový `STOPA_ROADMAP.md` znovu pravé zrcadlo `.stopa-dev/ROADMAP.md`; banners na `docs/ROADMAP_V2.md`, `docs/STOPA_IMPLEMENTATION_ROADMAP.md`, `docs/ROADMAP_2_1.md` (snapshot baseline k 4a3a867); historické markery u „zbývá“ listů v DEV OS ROADMAP.
+- `pyproject.toml`: extra `carving` re-pin wheels **v2.4.0 → v2.6.0** (assets ověřeny na GitHub Release; bez změny semantiky — čisté-Python fallback zůstává, lokální .venv se nedotkla).
+
 ## [Unreleased] — 2026-11-24 (po-release **revizní vlny P1+P3 a P2+P3 nad tagem `v2.6.0`** — P1 stale `docs/architecture.md` banner; hygiena: archive 13 dokumentů, udelej.md→docs/prompts/, .gitignore backups/, benchmark warning + test, verze 0.1.0→2.6.0, 23× debug log v tichých exceptech; P2 synchronizace PROJECT_STATE s realitou (STP-070); P3 checkpoint STP-070, TEST_REGISTRY verze, banner STOPA_TECHNICAL_AUDIT (schema v11→v28), most STP-056…070; full suite **5312p/1s** exit 0)
 
 ### Added — Revizní vlny 2026-11-24

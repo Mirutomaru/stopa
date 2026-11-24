@@ -1,3 +1,17 @@
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-24, vlna 3)
+
+## Hotovo právě teď: **P4 vlna z nezávislé Qwen revize**
+- **N7+N8** ROADMAP rodina sjednocena: kořenový `STOPA_ROADMAP.md` = znovu pravé zrcadlo `.stopa-dev/ROADMAP.md` (resync); banners SUPERSEDED na `docs/ROADMAP_V2.md`, `docs/STOPA_IMPLEMENTATION_ROADMAP.md`; banner DOKONČENO+SNAPSHOT na `docs/ROADMAP_2_1.md`; 3× historický marker u „zbývá“ listů (jediná otevřená položka z nich = CI běh benchmarku → sekce N)
+- **N9** `STOPA_2_1_MASTER_PROMPT.md` → `docs/prompts/` + reference (vnitřní poznámka o archive cestách, ROADMAP_2_1 link, EXECUTIVE_SUMMARY)
+- **N10** FEATURE_REGISTRY verze 0.1.0→2.6.0 (22×)
+- **carving re-pin:** extra `carving` v pyproject v2.4.0→v2.6.0 (wheels ověřeny HTTP 302 na GitHub Release; release.yml buildí wheels u každého tagu)
+
+## Co dělat dál (zbývá z P4)
+1. **CI běh benchmarku** (sekce N) — jediný reálně otevřený vývojový kandidát
+2. Push na origin/main — až na explicitní pokyn uživatele
+
+---
+
 # NĚJBLIŽŠÍ AKCE — STOPA (2026-11-24, vlna 2)
 
 ## Hotovo právě teď: **P2+P3 vlna z nezávislé Qwen revize**
