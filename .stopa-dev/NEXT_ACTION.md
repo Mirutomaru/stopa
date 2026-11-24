@@ -1,3 +1,25 @@
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 10)
+
+## Hotovo právě teď: **B8 [M] Determinismus kolem AI agentů**
+Commit `7fac9ac`. Forenzní kritérium: stejný prompt + model + parametry → srovnatelná odpověď. Čtyři aditivní pilíře (žádné BC přerušení):
+1) **Fixní sampling** — `AiSettings.temperature=0.2`, `top_p=1.0` explicitně v odchozím payloadu; `chat()` keyword-only `temperature` (role teplota přepíše); `LmStudioClient.last_model` = auditní identita skutečně použitého modelu.
+2) **Přísné typy výstupů** (doména) — `ROLE_OUTPUT_TYPES`: isinstance per povinné pole, numerická odmítají bool (`True != 1`); nové čisté `extract_citation_ids()` + `validate_citation_ids()` (dedup, split valid/unknown).
+3) **Grounding citací** (služba) — `call_role(valid_artifact_ids=...)` ověřuje tokeny `[art:<id>]/[file:<id>]` i pole `citations` proti ID artefaktů DB; role slibující citace v promptu (**timeline/hypothesis/report**) bez validní → `payload=None`, `grounded=False`; evidence odkazuje strukturálně (`findings[].artifact_id`) — netrestováno; `valid_ids=None` → jen záznam (BC).
+4) **Auditní identita** — každý `ai_role_call` nese `model` + `temperature` + SHA-256 promptu (`fingerprint_messages`); web `/ai/run` vrací `citations/unknown_citations/grounded/model`.
+Ověřeno: ruff clean; nová sada `tests/test_b8_ai_determinism.py` **25/25**; AI baterie (b8+p12) **99 passed**; regresní batch p45/e11/pii/stp049/web/p14-surface **113 passed**; eval golden gate přes produkční `call_role` **8/8**.
+Předtím ve vlně: **B7 [M]** CLI konzolidace — commit `ad72b7b` (viz níže).
+
+## Co dělat dál (backlog)
+Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
+1. ~~**B4 [S]**~~ ✅ DONE `b49a7e5` — CI build/test s aktivním Rust wheelem (`[carving]`, běh s aktivním core, kontrola verze pinu)
+2. ~~**B5 [S]**~~ ✅ DONE `72ddd8c` — Minimální CI build/check Web SPA (tsc --noEmit + vitest + řízený build s freshness kontrolou static/spa)
+3. ~~**B6 [S]**~~ ✅ DONE `f7903e7` — Percentilová brána benchmark engine (medián + P95, dual-axis gate, baseline v2)
+4. ~~**B7 [M]**~~ ✅ DONE `ad72b7b` — Konzolidace CLI subpříkazů do 5 skupin + skryté BC aliasy s DeprecationWarning
+5. ~~**B8 [M]**~~ ✅ DONE `7fac9ac` — Determinismus kolem AI agentů (fixní sampling, přísné typy, grounding citací, auditní identita)
+6. **B9 [M]** Kompenzační/diagnostické mechanismy integrity: u řetězců/seal-chain/rotace klíčů přesná lokalizace místa a příčiny selhání, auditní záznam, řízená diagnostika/izolace úseku bez zatajení stavu — START
+
+---
+
 # NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 9)
 
 ## Hotovo právě teď: **B7 [M] Konzolidace CLI subpříkazů do doménových skupin**
