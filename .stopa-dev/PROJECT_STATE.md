@@ -10,10 +10,10 @@
 
 ## Aktuální architektura
 Clean Architecture — 4 vrstvy:
-- `src/stopa/domain/` — čistá doménová logika bez I/O (**35 modulů**, +timeline_intel)
-- `src/stopa/artifacts/` — extraktory artifactů, I/O jen v entrypointech (**87 souborů**)
+- `src/stopa/domain/` — čistá doménová logika bez I/O (**81 top-level modulů**, +timeline_intel)
+- `src/stopa/artifacts/` — extraktory artifactů, I/O jen v entrypointech (**90 .py souborů bez __init__**)
 - `src/stopa/data/` — I/O vrstva: db.py (SQLite), TSK, libewf, image_pipeline, ingest
-- `src/stopa/web/` + `cli.py` — prezentace (FastAPI 30 endpointů + CLI)
+- `src/stopa/web/` + `cli.py` — prezentace (FastAPI 113 API routes + CLI)
 Pipeline = jediný `analyze()` s dispatchem magic signatur + name-based fallback,
 ThreadPoolExecutor paralelizace, E3 resume/checkpointing.
 
@@ -43,13 +43,14 @@ Stabilní — plná test suite zelená, ruff clean, deterministická coverage ma
 
 | Metrika | Hodnota |
 |---|---|
-| Dokončené úkoly (TASKS.md) | **49** |
+| Dokončené úkoly (TASKS.md) | **70** |
 | Rozpracované (IN_PROGRESS) | 0 |
-| Čekající (BACKLOG/READY) | **0** (všechny STP-001..049 DONE; ETAPA H dokončena ★★ — další oblast = I+O Validation Center UI) |
+| Čekající (BACKLOG/READY) | **0** (STP-001…070 DONE; plánovaná řada I+O→G→J→K→Q hotová — dále P4 kandidáti z revize 2026-11-24) |
 | Blokované | 0 |
 
 ## Poslední dokončený úkol
-**STP-049 — ETAPA H vlna 1–3: AI Copilot grounding = ETAPA H DOKONČENA ★★** (oblast H, P2)
+**STP-070 — Periodický plánovač auto-bundle** (oblast O+Q ★★★★; commit `e37b328`, 2026-11-09): rozšíření STP-069 o časový interval per case — čistá doména `domain/export_schedule.py` (`parse_interval_minutes()`, `is_due()`), schema v14, web scheduler daemon tick 60 s (fail-safe), API/CLI/UI wiring; 19 testů, full suite na té době **2153 passed, 1 skipped**. Detail výše v sekci Aktuální fáze vývoje.
+Předtím: **STP-049 — ETAPA H vlna 1–3: AI Copilot grounding = ETAPA H DOKONČENA ★★** (oblast H, P2)
 První konkrétní realizace úrovně I5 pro existující E11 režimy. **(A)** `src/stopa/domain/ai_grounding.py` (nový, čistá logika bez IO): `extract_claims()` extrahuje tvrdění z odpovědi LLM (ISO + česká data, slovník 62 typů artifactů), `ground_answer(text, citations, artifacts_by_id)` → deterministický `GroundingReport` s třemi kategoriemi rozporu (`mismatch_date`, `mismatch_type`, `unverified_claim`) + `.verified_citations`; atribuce tvrdění k nejbližší citaci (vzdálenost znaků). **(B)** Zapojení do web endpointu: `_ground_answer_safe()` v `web/app.py` — všechny tři režimy (`nl_search`/`summary`/`explain`) vracejí pole `grounding`; GUI ⚠ štítky citací s rozporu + findings panel. **(C)** 41 nových testů (33 domain offline + 8 web E2E přes TestClient) + dokumentace `docs/STOPA_AI_ARCHITECTURE.md` §1.1. Full suite **1891 passed, 1 skipped** (+41), ruff clean.
 Předtím: STP-048 (ETAPA E vlna 3 — sandbox E2E testy + corrupt-file regression EVTX/LNK + dokumentace `docs/STOPA_SANDBOX.md`; ETAPA E DOKONČENA ★★, `5965cb4`),
 STP-047 (ETAPA E vlna 2 — zapojení sandboxu do pipeline + fix reálného hang bugu `sqlite_carver`; ETAPA E vlna 2 hotová ★, `3fc2dac`),
@@ -80,12 +81,14 @@ STP-018 (Timeline Intel 2.0, `cd5aa25`), STP-017 (vlna 3), STP-016 (vlna 2), STP
 STP-012b, STP-012 (`e227929`), STP-013..015 (vlna 1, `afc49a0`).
 
 ## Aktuální úkol
-Žádný aktivní — **ETAPA H dokončena ★★** (STP-049); čeká na start další oblasti.
+Žádné aktivní — STP-070 hotový; čeká na volbu další oblasti (P4 kandidáti, viz NEXT_ACTION.md).
 
 ## Nejbližší následující úkol
-**Oblast I+O — Validation Center UI** (P2). C3 Parser Validation Registry existuje; chybí UI modul pro zobrazení validačních reportů per-artifact + audit center. Další po I+O: G File Intelligence → J Case Management 2.0 → K Export Engine (Plaso) → Q Interoperability (UCO/STIX).
+**Planovaná řada I+O→G→J→K→Q je hotová** (STP-050…070: Validation Center UI, File preview, RBAC role switch, Plaso import / UCO / Timesketch interop, auto-bundle + plánovač). Další = P4 kandidáti z revize 2026-11-24 (viz NEXT_ACTION.md): re-pin carving wheel v2.4.0, rozšíření AI Copilotu, sjednocení ROADMAP rodiny.
 
 ## Poslední úspěšné testování
+- **2026-11-24:** `.venv/bin/python -m pytest tests/ -q` → **5312 passed, 1 skipped** (38:14) — po revizních vlnách P1+P3 a P2+P3; ruff clean
+- **2026-11-09:** full suite po STP-070 → **2153 passed, 1 skipped**
 - **2026-11-06:** `.venv/bin/python -m pytest -q` → **1891 passed, 1 skipped** (~47s) — po STP-049 ETAPA H (+41 testů: `test_stp049_grounding.py` 33 domain + `test_stp049_grounding_e2e.py` 8 web E2E; AI grounding zapojen do všech 3 AI režimů); ruff clean
 - **2026-11-06:** `.venv/bin/python -m pytest -q` → **1850 passed, 1 skipped** (~46s) — po STP-048 vlna 3 (+4 E2E testy `test_stp048_sandbox_e2e.py`; hangující parser přes celou pipeline + corrupt EVTX/LNK regression); ruff clean
 - **2026-11-06:** `.venv/bin/python -m pytest -q` → **1846 passed, 1 skipped** (~45s) — po STP-047 vlna 2 (+12 testů; sandbox zapojen do pipeline + fix hang bugu `sqlite_carver`)
@@ -97,9 +100,9 @@ STP-012b, STP-012 (`e227929`), STP-013..015 (vlna 1, `afc49a0`).
 
 ## Známé kritické problémy
 Žádné blokující. Technický dluh viz `docs/STOPA_TECHNICAL_AUDIT.md`:
-- ~~`db.py` monolit~~ — **vyřešeno v ETAPĚ C (STP-039/040/041)**: 2090 → **476 řádků** (−77 %); `CaseDB` = tenký agregátor 5 repozitářů + `schema.py` + `migrations.py`
+- ~~`db.py` monolit~~ — **vyřešeno v ETAPĚ C (STP-039/040/041)**: 2090 → **476 řádků** (−77 %; aktuálně 599 po pozdější výstavbě); `CaseDB` = tenký agregátor 5 repozitářů + `schema.py` + `migrations.py`
 - izolace parserů (sandbox) — **ETAPA E DOKONČENA ★★ (STP-046/047/048)**: kontrakt `domain/sandbox.py` + worker modul + zapojení do pipeline (`_run_extractor`) + fix hang bugu + E2E testy + dokumentace `docs/STOPA_SANDBOX.md`
 - ~~**Reálný hang bug (nalezen v auditu STP-045):**~~ `sqlite_carver.recover_rows` — poškozený SQLite soubor s garbage `db_size_pages` (1.7 mld. stránek v 920 B) → smyčka visela >15 s; **vyřešeno ve vlně 2 (STP-047)** + sandbox timeout jako druhá ochrana
 
 ## Datum poslední aktualizace
-**2026-11-06** — po dokončení STP-049 (**ETAPA H DOKONČENA ★★**; AI Copilot grounding: `domain/ai_grounding.py` + zapojení do všech 3 AI režimů web endpointu (pole `grounding`) + GUI ⚠ štítky citací a findings panel, full suite **1891 passed, 1 skipped**, ruff clean).
+**2026-11-24** — synchronizace stavu s realitou po nezávislé Qwen revizi (poslední hotový úkol = STP-070, full suite 5312p/1s); předtím **2026-11-06** — po dokončení STP-049 (**ETAPA H DOKONČENA ★★**; AI Copilot grounding: `domain/ai_grounding.py` + zapojení do všech 3 AI režimů web endpointu (pole `grounding`) + GUI ⚠ štítky citací a findings panel, full suite **1891 passed, 1 skipped**, ruff clean).
