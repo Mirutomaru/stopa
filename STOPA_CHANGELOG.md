@@ -2,6 +2,14 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-25 (**backlog vlna 4** nad `v2.6.0` — B1 lockfile s hashi + fail-closed pin stopa_core wheels (SHA-256 v2.6.0); B2 rozříznutí `data/db.py` na doménové facade mixiny)
+
+### Backlog vlna 4 — B1+B2 (2026-11-25)
+Zdroj: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (forenzní/architektonické hodnocení; metoda = vždy 1 úkol, cílené testy + ruff po každém kroku).
+- **B1 [P0·S] Lockfile + Rust wheel pin** (`392d335`): `requirements.lock` (uv 0.11.13, `--all-extras --generate-hashes` — SHA-256 u všech balíčků; oba stopa_core wheels v2.6.0), `.github/wheel_pins.json` (manifest SHA-256 + velikosti release assetů x86_64/aarch64), fail-closed `scripts/verify_rust_wheel.py` (pouze stdlib, režimy plná / `--no-download` / `--update-manifest`; ověřuje pyproject↔manifest obousobně + SHA-256 stahovaných wheelů + verzi importovaného core), CI job `lockfile-rust-pin` (deterministický compile+diff s pinovanou uv + plná SHA-256 kontrola obou platforem). Pozn.: `stopa_core` nemá atribut `__version__` — verze z dist metadata / `rust_version()`.
+- **B2 [P0·M] Rozříznutí `data/db.py`** (`d352d65`): 599 → **88 řádků**; nové doménové facade mixiny `db_facade_{cases,files,artifacts,entities,audit}.py` (metody verbatim z monolitu); BC API CaseDB beze změny (66/66 veřejných metod, `_fts_query` re-export); gate P2#5 (`test_db_no_local_datetime_imports`) rozšířen na celou db vrstvu.
+- **Verifikace:** full suite po B1+B2 **5316 passed / 1 skipped / EXIT=0** (38:14; +4 nad P4 = nové offline testy `tests/test_rust_wheel_pin.py`); ruff clean (src+tests+scripts).
+
 ## [Unreleased] — 2026-11-24 (**P4 vlna** nad `v2.6.0` — sjednocení ROADMAP rodiny: mirror resync + superseded banners; STOPA_2_1_MASTER_PROMPT→docs/prompts/; FEATURE_REGISTRY verze 2.6.0; carving extra re-pin wheels v2.4.0→v2.6.0)
 
 ### Changed — P4 vlna 2026-11-24

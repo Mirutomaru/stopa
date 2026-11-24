@@ -15,8 +15,8 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 ### Fáze 1 — P0
 | ID | Úkol | Zdroj | Stav |
 |----|------|-------|------|
-| B1 | Lockfile s hashi (uv/pip-tools) + CI kontrola verze a SHA-256 `stopa_core` pin v2.6.0 proti manifestu/release assetům | W1/Q10 · S | TODO |
-| B2 | Rozdělení `data/db.py` (599/600 řádků) na funkční domény (schéma/připojení, soubory/artefakty, graf/entitní vztahy, integrita/audit, tenancy) — zpětná kompatibilita volání | W2/Q1 · M | TODO |
+| B1 | Lockfile s hashi (uv/pip-tools) + CI kontrola verze a SHA-256 `stopa_core` pin v2.6.0 proti manifestu/release assetům | W1/Q10 · S | ✅ DONE `392d335` |
+| B2 | Rozdělení `data/db.py` (599/600 řádků) na funkční domény (schéma/připojení, soubory/artefakty, graf/entitní vztahy, integrita/audit, tenancy) — zpětná kompatibilita volání | W2/Q1 · M | ✅ DONE `d352d65` |
 | B3 | Základ produkční multi-tenancy: AuthN/AuthZ (org/team/case role a oprávnění), vynucená tenant izolace napříč dotazy, nezávislý audit citlivých přístupů/exportů | Q12 · L | TODO |
 
 ### Fáze 2 — P1
@@ -47,4 +47,13 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2: B11 → B12 · hygiena H1–H3 mezi vlnami.
 
 ## Protokol provedených úkolů
-_(po každém úkolu doplnit: změněné soubory, výsledek testů/ruff, commit SHA)_
+### B1 — Lockfile + Rust wheel pin (DONE 2026-11-25, commit `392d335`)
+- Nové: `requirements.lock` (uv 0.11.13, `--all-extras --generate-hashes`, 1617 řádků s SHA-256, oba stopa_core wheels v2.6.0), `.github/wheel_pins.json` (manifest SHA-256+velikosti release assetů x86_64/aarch64), `scripts/verify_rust_wheel.py` (fail-closed: pyproject↔manifest konzistence, SHA-256 stahovaných wheelů, verze importovaného core; režimy `--no-download`, `--update-manifest`).
+- Změněné: `.github/workflows/ci.yml` — nový job `lockfile-rust-pin` (pinovaná uv → deterministický compile+diff, plná SHA-256 kontrola obou platforem, instalace z locku v čistém venv).
+- Ověřeno: ruff clean; `tests/test_rust_wheel_pin.py` 4/4 (offline); skript PASS — SHA-256 x86_64=`3f4eb8b3…`, aarch64=`973f5f8a…` ověřeny proti reálným release assetům; verze importovaného stopa_core 0.1.0 = manifest; simulace CI lockdiff lokálně OK.
+- Pozn.: `stopa_core` nemá atribut `__version__` — skript čte dist metadata / `rust_version()`.
+### B2 — Rozříznutí `data/db.py` na doménové facade mixiny (DONE 2026-11-25, commit `d352d65`)
+- Nové: `db_facade_cases.py` (případy/zdroje/custody), `db_facade_files.py` (soubory/FTS search/stats + PROCESS_CACHE F2.5), `db_facade_artifacts.py` (artefakty/findings/hypotézy/lineage/timeline), `db_facade_entities.py` (entitní graf/korelace), `db_facade_audit.py` (audit log/integritní klíče+checkpoints/sealing).
+- Změněné: `db.py` 599 → **88 řádků** — jen schéma/připojení (`__init__`, `_emit_web_event`, `schema_version`, `commit`, `close`) + kompozice `CaseDB(*Mixin)`; BC API beze změny (66/66 veřejných metod, re-export `_fts_query`), metody přesunuty verbatim do mixínů.
+- Změněné: `tests/test_audit_fixes.py::test_db_no_local_datetime_imports` — gate P2#5 rozšířen na db vrstvu jako celek (max 1× top-level `from datetime import` per modul, žádné lokální) — původní „právě 1 v db.py“ už po splitu neplatí.
+- Ověřeno: ruff clean (6 souborů); BC kontrola metod staré vs nové CaseDB; cílené testy ETAPA C 33/33, search 61/61, audit gate 15/15; **full suite 5316 passed, 1 skipped, EXIT=0 (38:14)** (+4 = testy B1; B2 = čistý refactor).

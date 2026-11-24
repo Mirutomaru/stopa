@@ -1,13 +1,14 @@
 # NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 4)
 
-## Hotovo právě teď: **Prioritizovaný backlog vylepšení z evaluace**
-Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2).
-Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
+## Hotovo právě teď: **B2 [P0·M] Rozříznutí `data/db.py` na doménové facade mixiny**
+Commit `d352d65`. `db.py` 599 → **88 řádků**; nové `db_facade_{cases,files,artifacts,entities,audit}.py`; BC API CaseDB beze změny (66/66 veřejných metod, `_fts_query` re-export). Ověřeno: ruff clean, cílené testy (ETAPA C 33/33, search 61/61), **full suite 5316 passed, 1 skipped, EXIT=0** (38:14; +4 = testy B1).
+Předtím ve vlně: **B1 [P0·S]** Lockfile + Rust wheel pin — commit `392d335` (`requirements.lock` s hashi, `.github/wheel_pins.json`, fail-closed `scripts/verify_rust_wheel.py`, CI job `lockfile-rust-pin`).
 
 ## Co dělat dál (backlog)
-1. **B1 [P0·S]** Lockfile s hashi + CI kontrola SHA-256/verze `stopa_core` pin v2.6.0 — START
-2. B2 [P0·M] Rozdělení `data/db.py` (599/600) na funkční domény
-3. B3 [P0·L] Základ multi-tenancy (org/team/case, tenant izolace, audit citlivých přístupů)
+Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
+1. ~~**B1 [P0·S]**~~ ✅ DONE `392d335` — Lockfile s hashi + CI kontrola SHA-256/verze `stopa_core` pin v2.6.0
+2. ~~**B2 [P0·M]**~~ ✅ DONE `d352d65` — Rozdělení `data/db.py` (599→88) na funkční domény
+3. **B3 [P0·L]** Základ multi-tenancy (org/team/case role, tenant izolace napříč dotazy, audit citlivých přístupů/exportů) — START
 
 ---
 
