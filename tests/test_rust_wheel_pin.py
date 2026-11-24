@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 import tomllib
 
 REPO = Path(__file__).resolve().parent.parent
@@ -64,3 +67,36 @@ def test_lockfile_has_hashes() -> None:
     """Lock s hashi — reprodukovatelná instalace (W1)."""
     text = (REPO / "requirements.lock").read_text(encoding="utf-8")
     assert "--hash=sha256:" in text, "lock neobsahuje SHA-256 hase"
+
+
+# ── B4 — scripts/verify_rust_wheel.py --installed (fail-closed kontrola aktivního core) ────────
+
+
+def _run_installed() -> tuple[int, str]:
+    """Spusť ``verify_rust_wheel.py --installed`` jako subprocess (skutečný CLI entry point)."""
+    r = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "verify_rust_wheel.py"), "--installed"],
+        capture_output=True, text=True, timeout=120, check=False,  # returncode čtu v asercích
+    )
+    return r.returncode, r.stdout + r.stderr
+
+
+def test_installed_mode_passes_with_active_core() -> None:
+    """B4 — aktivní core nainstalován → --installed exit 0 (verze odpovídá manifestu)."""
+    from stopa.data import rust_core
+
+    if not rust_core.is_available():
+        pytest.skip("Rust wheel v prostředí chybí (čisté-Python fallback)")
+    code, out = _run_installed()
+    assert code == 0, f"--installed selhalo: {out}"
+
+
+def test_installed_mode_fails_without_core() -> None:
+    """B4 — core chybí → --installed fail-closed (exit ≠ 0)."""
+    from stopa.data import rust_core
+
+    if rust_core.is_available():
+        pytest.skip("core v prostředí přítomen — nepřítomnost nedá reprodukovat")
+    code, out = _run_installed()
+    assert code != 0, f"očekávám selhání bez core: {out}"
+    assert "stopa_core" in out, f"--installed má jmenovat stopa_core: {out}"

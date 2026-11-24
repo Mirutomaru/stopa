@@ -232,6 +232,37 @@ jobs:
       - name: Parity testy (F2.1, wheel z tohoto buildu)
         run: env -u STOPA_DB_DIR /venv-p410/bin/python -m pytest tests/test_f21_rust_core.py -q
 
+  # B4 — aktivní Rust wheel gate (vedle parity): instalace ze pinned release assetů přes extra
+  # [carving] + fail-closed verifikační pin nainstalovaného core + full suite S AKTIVNÍM COREM.
+  # rust-parity ověřuje bitovou shodu ČISTÉHO BUILDU; tento job ověřuje produkční cestu —
+  # že release wheel, který se skutečně distribuuje, funguje v celé testovací sadě
+  # (RUST-markované testy zde běží, nikoli fallback). Jen Linux x86_64 runner = platná platforma.
+  test-active-core:
+    name: "Aktivní Rust wheel ([carving] + full suite)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # [carving] stáhne pinned stopa_core wheel z release v2.6.0 (Linux x86_64 marker)
+      - name: Install dependencies (dev + web + carving/aktivní core)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,web,carving]"
+
+      # B4 — fail-closed verze pinu nainstalovaného core (importovatelné + odpovídá manifestu;
+      # SHA-256 release assetů pokrývá job lockfile-rust-pin)
+      - name: Verify installed stopa_core (version pin, aktivní core)
+        run: python scripts/verify_rust_wheel.py --installed
+
+      # Full suite s aktivním Rust core — produkční cesta (ne čisté-Python fallback)
+      - name: Test suite (aktivní core)
+        run: python -m pytest -q
+
   # ETAPA D vlna 1 (STP-043): benchmark proti baseline — fail na regresi >20 %
   # a ≥0.5 ms absolutního rozdílu (CI noise guard pro sub-ms položky).
   benchmark:

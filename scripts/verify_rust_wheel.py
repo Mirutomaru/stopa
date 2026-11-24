@@ -8,6 +8,7 @@ skutečných release assetů (fail-closed: jakákoli shoda/rozpor → exit ≠ 0
 Režimy:
     python scripts/verify_rust_wheel.py                 # plná kontrola (stahování obou platforem)
     python scripts/verify_rust_wheel.py --no-download   # offline: jen konzistence URL/pin
+    python scripts/verify_rust_wheel.py --installed     # B4: fail-closed nainstalovaný aktivní core
     python scripts/verify_rust_wheel.py --update-manifest  # přegenerovat SHA-256 manifestu
 
 Používá jen stdlib (urllib, tomllib) — běží i v minimálním CI prostředí.
@@ -149,6 +150,32 @@ def check_imported_core(manifest: dict) -> None:
     ok(f"importované stopa_core {actual} odpovídá manifestu")
 
 
+def check_installed(manifest: dict) -> None:
+    """B4 — fail-closed verifikace nainstalovaného (aktivního) stopa_core.
+
+    Na rozdíl od ``check_imported_core`` (tolerantní INFO/skip pro čisté-Python
+    fallback prostředí) zde MUSÍ být wheel importovatelné a jeho verze odpovídat
+    manifestu — jinak prostředí není „s aktivním corem“ a gate má selhat.
+    """
+    expected = manifest.get("core_version", "")
+    if not isinstance(expected, str) or not expected:
+        fail("manifest: chybí/křivé 'core_version'")
+    try:
+        import stopa_core
+    except ImportError as exc:
+        fail(f"--installed: stopa_core neimportovatelné ({exc}) — extra [carving] nezafungovala?")
+    actual = _core_actual_version(stopa_core)
+    if actual != expected:
+        fail(f"nainstalovaná verze stopa_core {actual} ≠ manifest core_version {expected}")
+    try:
+        from stopa.data import rust_core
+
+        assert rust_core.is_available(), "stopa nainstalováno, ale loader hlásí fallback (wheel existuje)"
+    except ImportError:
+        _log.debug("stopa nenainstalováno — kontrola loaderu přeskočena")
+    ok(f"nainstalované stopa_core {actual} odpovídá manifestu (aktivní core)")
+
+
 def update_manifest(platforms: list[str]) -> None:
     urls = pyproject_carving_urls()
     if len(urls) != 2:
@@ -170,6 +197,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--no-download", action="store_true", help="offline režim — jen konzistence URL/pin")
     ap.add_argument(
+        "--installed", action="store_true",
+        help="B4: fail-closed kontrola nainstalovaného aktivního stopa_core (verze vs manifest)",
+    )
+    ap.add_argument(
         "--platforms", nargs="+", default=["x86_64", "aarch64"], choices=["x86_64", "aarch64"],
         help="platformy ke kontrole SHA-256 (default: obě)",
     )
@@ -181,6 +212,11 @@ def main(argv: list[str] | None = None) -> int:
         fail("pyproject: extra 'carving' neobsahuje žádné URL wheels")
     manifest = load_manifest()
     check_consistency(manifest, urls)
+    if args.installed:
+        # B4 — aktivní-core prostředí (CI job test-active-core): fail-closed, offline, bez stahování
+        check_installed(manifest)
+        print("PASS: nainstalovaný aktivní core verifikován (--installed)")
+        return 0
     if args.update_manifest:
         update_manifest(args.platforms)
         return 0
