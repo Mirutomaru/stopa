@@ -3,6 +3,8 @@
 **Datum:** 2026-11-02 · **Commit:** `2244d95` · **Základní zadání:** `docs/prompts/udelej.md` (master prompt)
 **Metoda:** každé tvrzení ověřeno zdrojovým kódem, testem nebo živým spuštěním — ne deklarací.
 
+> ⚠️ **ZASTARALÝ SNAPSHOT** (commit `2244d95`, 2026-11-02): audit zachycuje stav se `SCHEMA_VERSION = 11`; aktuálně je schema **v28** a část technického dluhu je mezitím vyřešena (ETAPY C/E/H, vlny P — viz `.stopa-dev/PROJECT_STATE.md`). Používat jako zdroj historie, ne aktuálního stavu.
+
 ## 0. Baseline (nezávisle ověřeno)
 
 | Metrika | Hodnota | Důkaz |
