@@ -1,13 +1,14 @@
-# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 12)
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 13)
 
-## Hotovo právě teď: **B10 [L] Strategie pro velké případy**
-Commit `98c48df`. Forenzní kritérium: definovat „velký případ“ programmaticky a dát mu údržbový postup bez ztráty dat; vše aditivní BC (SCHEMA_VERSION 28→29).
-1) **F-1 prahy + statistika** — čistá doména `domain/case_scale.py`: LARGE_FILES_ROWS=500k / LARGE_TOTAL_BYTES=100 GiB / LARGE_ARTIFACTS_ROWS=200k, `_MEDIUM_RATIO=0.1` → tier small|medium|large s deterministickým pořadím doporučených postupů; `FilesFacadeMixin.case_scale()` = read-only cross-table statistika (files/bytes/artifacts/audit_log).
-2) **F-2 FTS REBUILD cesta** — `rebuild_fts()` rekonstruuje `files_fts`/`artifacts_fts` ze zdrojových tabulek + invalidace procesního cache; CLI `stopa case scale <case_id> --rebuild-fts` s auditním záznamem `case_scale_fts_rebuilt`.
-3) **F-3 provenience ingest profilu** — aditivní migrace v29 `sources.ingest_profile TEXT DEFAULT 'forensic'` (legacy BC bez ztráty dat); pipeline zapisuje skutečný profil na začátku zpracování; `add --profile` už existoval, teď je to trvanlivé v DB.
-4) **F-4 portabilita pin** — test fixuje, že instance-only tabulky (`cross_case_queries/xcorr_grants/case_registry/events`) nesmí uniknout do přenosného case kontejneru; tenancy stuby dokumentovány jako BC realita.
-Ověřeno: ruff clean; nová sada `tests/test_b10_case_scale.py` **16/16**; BC baterie b10+p14+p48+p11+pipeline+stp041+p02+p04+p24+p33+p25 = **238 passed**; goldeny p14/p48 přegenerovány jako čistý superset (jen `case/scale` + `case scale`).
-Předtím ve vlně: **B9 [M]** diagnostika integrity — commit `4634058` (viz níže).
+## Hotovo právě teď: **B11 [S] i18n testy na schéma/proměnné/pokrytí**
+Commit `152b090`. Forenzní kritérium: katalogové invariance chráněné testy místo runtime překvapení (tiché `{x}` ve výstupu, mrtvé položky); test-only sada bez změny kódu.
+1) **A schéma** — flat dict[str,str], neprázdné klíče/hodnoty, formát `^cli\.[A-Za-z0-9_.]+$` (349 klíčů v obou jazycích).
+2) **B placeholdery** — shoda množiny `{...}` cs↔en pro každý společný klíč; dnes jediný klíč s placeholderem je `cli.h.330` (`{defaults}`), referencovaný na 1 místě právě se správným kwargem.
+3) **C+D pokrytí** — forward: každý staticky referencovaný klíč existuje v obou katalozích; reverse: žádný mrtvý klíč (49 klíčů žije jen ve string literálech `_SUBCOMMAND_EXAMPLES` — scan je počítá).
+4) **E call-site parametry (AST)** — kwargy `t("klíč", ...)` odpovídají placeholderům; placeholdery jsou na každém call-site pokryty.
+Oprava rozsahu: „odlehčené ingest režimy" patřily k B10 — audit potvrdil, že profily quick/ediscovery fungují end-to-end (CLI add/img/mob `--profile` + web `body.profile`, worker spotřebuje všech 8 profilových flagů); archivace velkých payloadů zůstává u B10 odsunuta.
+Ověřeno: ruff clean; nová sada **8/8**; gate b11+p48+p11 = **58 passed**; mutace (5 porušení) → 5 čitelných failures, reálný src zelený. Rozhodnutí F-5: p48 CS byte-golden zůstává jako nejkritičtější výstup.
+Předtím ve vlně: **B10 [L]** strategie pro velké případy — commit `98c48df` (viz níže).
 
 ## Co dělat dál (backlog)
 Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
@@ -18,7 +19,8 @@ Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1�
 5. ~~**B8 [M]**~~ ✅ DONE `7fac9ac` — Determinismus kolem AI agentů (fixní sampling, přísné typy, grounding citací, auditní identita)
 6. ~~**B9 [M]**~~ ✅ DONE `4634058` — Diagnostické mechanismy integrity (typy defektů, collect_all, transakční rotace klíčů, CLI/web exponují všechny defekty)
 7. ~~**B10 [L]**~~ ✅ DONE `98c48df` — Strategie pro velké případy (klasifikace velikosti, FTS REBUILD cesta, provenience ingest profilu v29, portabilita pin)
-8. **B11 [L]** Odlehčené režimy + archivace velkých payloadů: quick/ediscovery profily do pipeline end-to-end (dnes jen CLI add --profile), explicitní offload velkých details_json — START
+8. ~~**B11 [S]**~~ ✅ DONE `152b090` — i18n testy na schéma/proměnné/pokrytí katalogu (test-only sada, mutace ověřeny)
+9. **B12 [L]** Práh přechodu FTS5 → dedikovaný search engine: výkonnostní prahy + navrh rozšiřující cesty nad FTS5 — START
 
 ---
 

@@ -33,7 +33,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 ### Fáze 3 — P2
 | ID | Úkol | Zdroj | Stav |
 |----|------|-------|------|
-| B11 | i18n testy na schéma/proměnné/pokrytí (shoda klíčů cs↔en, placeholdery, pokrytí 341 klíčů) místo křehkých byte-goldens; byte-goldeny jen u nejkritičtějších výstupů | D7/Q6 · S | TODO |
+| B11 | i18n testy na schéma/proměnné/pokrytí (shoda klíčů cs↔en, placeholdery, pokrytí 349 klíčů) místo křehkých byte-goldens; byte-goldeny jen u nejkritičtějších výstupů | D7/Q6 · S | ✅ DONE `152b090` |
 | B12 | Práh přechodu FTS5 → dedikovaný search engine: jasné výkonnostní prahy (objem, složité dotazy, faceting/agregace) + navrh volitelné rozšiřující cesty nad FTS5 | Q5 · L | TODO |
 
 ### Průběžná forenzní hygiena (napříč fázemi)
@@ -135,4 +135,24 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - Záměrné odsunuty: disk-based offload velkých `artifacts.details_json` payloadů — extraktory produkují strukturované details omezené vstupem; bez důkazu reálného růstu by payload store byl over-engineering (ukáže to právě `case scale`).
 - Implementace (commit `98c48df`, 18 souborů +556/−27): čistá doména `domain/case_scale.py` (prahy LARGE_FILES_ROWS=500k / LARGE_TOTAL_BYTES=100 GiB / LARGE_ARTIFACTS_ROWS=200k, `_MEDIUM_RATIO=0.1`, tier small|medium|large + doporučené postupy jako data); `FilesFacadeMixin.case_scale()` (read-only cross-table statistika) + `rebuild_fts()` (FTS5 REBUILD obou indexů + invalidace cache); aditivní migrace **v29** `sources.ingest_profile TEXT DEFAULT 'forensic'` (legacy BC bez ztráty dat, idempotentní přes PRAGMA table_info), pipeline zapisuje skutečný profil na začátku zpracování; CLI `stopa case scale <case_id> [--rebuild-fts] [--json]` pod skupinou `case` (i18n cli.h.342–344, příklad v epilogu R0.4) s auditním záznamem `case_scale_fts_rebuilt`.
 - Ověřeno: nová sada `tests/test_b10_case_scale.py` **16/16** (F-1 až F-4 — hranice tierů, typové chyby, přesné statistiky, REBUILD po ručním poškození indexu, migrace BC legacy→default 'forensic', pipeline profilový zápis `quick`, portabilita pin central-only tabulek, CLI E2E JSON+human); BC baterie b10+p14+p48+p11+pipeline+stp041+p02+p04+p24+p33+p25 = **238 passed**; ruff clean; goldeny p14/p48 přegenerovány jako čistý superset (jen `case/scale` + `case scale`).
-- Zbývá na B11: odlehčené ingest režimy (quick/ediscovery profil už existuje v CLI add --profile) a explicitní archivace velkých payloadů.
+- Oprava rozsahu vlny 13: „odlehčené ingest režimy" byly součástí B10 (ne B11) — audit potvrdil, že profily quick/ediscovery fungují end-to-end (CLI add/img/mob `--profile` + web `body.profile`, worker spotřebuje všech 8 profilových flagů). Archivace velkých payloadů zůstává odsunuta (viz výše). Tabulkový B11 = i18n testy na schéma/proměnné/pokrytí.
+
+### B11 — i18n testy na schéma/proměnné/pokrytí (DONE 2026-11-25, commit `152b090`)
+**Nález audit-first (stát před implementací):**
+- F-1: Katalog má **349 klíčů** v cs i en, parita je testována p48 (`test_key_parity_cs_en`) — ale **žádný test nechrání placeholder konzistenci**: hodnota `cli.h.330` obsahuje `{defaults}` a kdyby cs/en divergovaly, selhalo by to teprve v runtime (defenzivní try/except v `t()` → tiché `{x}` ve výstupu).
+- F-2: **Žádný test nechrání pokrytí**: referencované klíče musí existovat v obou katalozích (forward) a žádný katalogový klíč nesmí být mrtvý (reverse — 49 klíčů je referencováno jen přes string literály `_SUBCOMMAND_EXAMPLES`, ne přes `t()`).
+- F-3: Dva i18n systémy: `stopa.i18n` (katalogy cs.json/en.json, CLI povrch) a `stopa.domain.i18n` (report labels, vlastní tabulky) — B11 cílí na katalogový systém; domain/i18n má jiný kontrakt (`t(key, lang)`).
+- F-4: Přesně **jeden klíč s placeholderem** (`cli.h.330`, `{defaults}`), referencovaný na jediném místě (cli/__init__.py) právě se správným kwargem — invariant je dnes pravdivý, ale nechráněný.
+- F-5: „Křehké byte-goldeny": p48 CS byte-golden = CLI help (nejkritičtější uživatelský výstup → **zůstává**); p14 surface jsou strukturované JSON srovnání (ne bytes) → žádné nové goldeny.
+
+**Design (test-only, aditivní — `tests/test_b11_i18n_schema.py`):**
+- A. Schéma katalogu: flat dict[str,str], neprázdné klíče/hodnoty, formát klíčů `^cli\.[A-Za-z0-9_.]+$`.
+- B. Placeholders: pro každý společný klíč shoda množiny `{...}` placeholderů cs↔en (regex `\{(\w+)\}`).
+- C. Pokrytí forward: každý staticky referencovaný katalogový klíč (`t("…")` + string literály v `src/stopa`) existuje v obou katalozích.
+- D. Pokrytí reverse: každý katalogový klíč je použit (t() literál nebo string literál) — žádné mrtvé položky.
+- E. Call-site parametry (AST): pro moduly s `from stopa.i18n import t` — každý call s kwargy: kwarg ⊆ placeholderů klíče; klíč s placeholdery musí mít na každém call-site předány všechny placeholdery.
+
+**Implementace + ověření (commit `152b090`, 1 soubor +170):**
+- `tests/test_b11_i18n_schema.py` — 8 testů (A×2 parametrizované jazyky, B, C, D, E); deterministická statická analýza katalogů + zdrojů `src/stopa`, offline.
+- Mutace ověřeny: placeholder divergence / chybějící referencovaný klíč / mrtvý klíč / špatný formát / prázdná hodnota → 5 čitelných failures; reálný src (1 call-site s kwargem `cli.h.330, defaults=`) zelený.
+- Gate: b11+p48+p11 = **58 passed**, ruff clean. Rozhodnutí F-5: p48 CS byte-golden zůstává jako nejkritičtější výstup; žádné nové goldeny.
