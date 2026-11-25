@@ -1,3 +1,22 @@
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 15)
+
+## Hotovo právě teď: **H1 [hygiena] Tiché `except+pass` → explicitní logování/validační status**
+Commit `b5383f8`. Forenzní kritérium: žádná tichá degradace dat bez traceable stavu; chování beze změny (aditivní BC).
+Audit-first nálezy F-1..F-5: bucket A = **přesně 20 pass-only handlerů** (shoda se zadáním „~20“); sedm z nich tichě degraduje data → explicitní log; cryptography graceful degradation ×6 → status už explicitní v artefaktu (signatura None = „nepodepsáno“) — KEPT + behavior pin; fallbacky ×4 odůvodněny komentářem na místě.
+1) **Logování ×7 lokací** — `case_repository.list_cases` → `logger.warning` (poškozené trvalé timestampy last_auto_export_at/created_at); evidence_storage.verify/mobile_forensics Location/plaso_import l2tcsv/sqlite_carver → `logger.debug` (bulk extrakce, stav explicitní i ve výstupu). Nové module loggers: case_repository, evidence_storage_repository, plaso_import, sqlite_carver.
+2) **Komentáře ×4** — odůvodněné no-op fallbacky na místě (forensics ISO ts→origin „derived“, exchanges ne-ISO→unix epoch, ingest+temp_images stat OSError→0 B/size=0).
+3) **AST guard `tests/test_h1_silent_except.py`** (nový, 8 testů) — každý pass-only handler v `src/stopa` musí mít „#“ na řádku except/těla (+mutace check: syntetický tichý pass chycen); behavior pin opravených lokací (poškozené ts→None+warning, sign_report bez klíče→nepodepsáno, nečíselné souřadnice→detail bez pole+debug log, invalid extra JSON→řádek zůstává+debug log).
+4) **Latentní bug stp057** — CSV řádek měl 16 polí místo 17 (`extra=None`) → invalid-extra branch se nikdy nespouštěla; doplněno na kanonických 17 polí (layout `to_l2tcsv`).
+Ověřeno: ruff clean (UP012 v testu opraven); BC baterie h1+stp057+p34×2+f15+stp069/070/stp039+p27_exchange_domain+k2_exchange_csv+pipeline+f24 = **340 passed**.
+Předtím ve vlně: **B12 [L]** Práh přechodu FTS5 → dedikovaný search engine — commit `5a7a138` (viz níže).
+
+## Co dělat dál (backlog)
+Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 hotové + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
+Hygiena: ~~**H1**~~ ✅ DONE `b5383f8` — Audit zbývajících tichých `except+pass` (~20) → explicitní logování/validační status (7× log, 4× komentář, AST guard, stp057 fix)
+Hygiena: **H2** Čistota domain vrstvy: odstranit/izolovat 3 zbývající lazy `domain→data` vazby — START
+
+---
+
 # NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 14)
 
 ## Hotovo právě teď: **B12 [L] Práh přechodu FTS5 → dedikovaný search engine**

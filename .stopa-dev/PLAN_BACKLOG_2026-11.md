@@ -39,7 +39,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 ### Průběžná forenzní hygiena (napříč fázemi)
 | ID | Úkol | Stav |
 |----|------|------|
-| H1 | Audit zbývajících tichých `except+pass` (~20) → explicitní logování/validační status (mimo odůvodněné C-bindingy) | TODO |
+| H1 | Audit zbývajících tichých `except+pass` (~20) → explicitní logování/validační status (mimo odůvodněné C-bindingy) | ✅ DONE `b5383f8` |
 | H2 | Čistota domain vrstvy: odstranit/izolovat 3 zbývající lazy `domain→data` vazby | TODO |
 | H3 | Verzování výstupních schémat CLI/reportů (explicitní output schema version v exportech) | TODO |
 
@@ -177,3 +177,24 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - CLI `case scale` — aditivní sekce `search` v JSON i lidském výstupu (tier, počty, postupy); B10 pole nezměněna.
 - `tests/test_b12_search_scale.py` — 23 testů: A prahy/hranice/typová semantika, B read-only + eskalace stěny graph_edges, C CLI E2E (JSON+lidský). Mutace ověřeny: 5 porušení invariantů (práh ≥1.0, watch ratio, pořadí postupů, bool přijat, fts_ok s postupy) → 5 čitelných failures.
 - Gate: b12+b10+p14+p48+p11+pipeline = **107 passed**, ruff clean. Rozšiřující cesta (SearchBackend/sidecar engine) zůstává navrh bez implementace — až tier engine_candidate se v praxi objeví.
+
+### H1 — Tiché `except+pass`: explicitní logování/validační status (DONE 2026-11-25, commit `b5383f8`)
+**Nález audit-first (AST scan celého `src/stopa`, 4 bodech):**
+- **F-1 bucket A = přesně 20 pass-only handlerů** (shoda se zadáním „~20“). Sedm z nich tichě degraduje data bez viditelného stavu v logu: `case_repository.list_cases` ×2 (poškozené timestampy → None), `evidence_storage_repository.verify` ×2 (nečitelný soubor = chybí), `mobile_forensics` Location (nečíselné Latitude/Longitude/Accuracy → detail bez pole), `plaso_import.parse_l2tcsv` (nevalidní extra JSON → řádek bez detailů), `sqlite_carver` (poškozená aktivní buňka → přeskočena).
+- **F-2 cryptography graceful degradation ×6** (`cli/commands/case.py:24`, `intelligence/legal_docs.py:423`, `presentation/compliance_report.py:213`, `presentation/crypto_report.py` sign_report, `presentation/daubert.py:85`, `web/routers/cases.py:110`) — všichni mají komentář; **status je explicitní v artefaktu** (signatura None → „nepodepsáno“ ve výstupu). Rozhodnutí: KEPT + behavior pin testem.
+- **F-3 fallbacky s explicitním výsledným stavem ×4**: `forensics.py:909` (ts_origin zůstává „derived"), `crypto/exchanges.py:86` (→ epoch, final None = nečas), `data/ingest.py:94` (odhad kapacity, 0 B), `temp_images.py:263` (unlink missing_ok níže) — chybí odůvodňující komentář → doplnit.
+- **F-4 defenzivní I/O/protocol no-op ×3** s existujícím komentářem: `export.py:226` (ET.indent, pragma), `web/app.py:512` (shutdown close), `cases.py:346` (WebSocketDisconnect) — KEPT.
+- **F-5 bucket B = 18 continue-only handlerů** — fallback smyčky (formáty/kódování/partice), stav explicitní po smyčce (`return None`/raise). Mimo dosah „except+pass“; záznam v auditní tabulce, pin až H2+.
+
+**Rozhodnutí implementace (aditivní BC — žádná změna chování):**
+1. **Logování ×7 lokací**: case_repository → `logger.warning` (poškozená trvalá data = forenzní význam); evidence_storage/mobile_forensics/plaso_import/sqlite_carver → `logger.debug` (bulk extrakce, stav je explicitní i ve výstupu — log pro traceability). Nové module loggers: case_repository, evidence_storage_repository, plaso_import, sqlite_carver (`mobile_forensics` má už).
+2. **Komentáře ×4** (F-3) — odůvodnění tichého no-op na místě.
+3. **AST guard test** `tests/test_h1_silent_except.py`: každý pass-only handler v `src/stopa` musí mít „#“ na řádku `except`/těla (handler s voláním logu už pass-only není) — pin auditního stavu + brzda proti novým tichým regrese.
+4. **Behavior testy**: list_cases poškozené ts → None (+warning), sign_report bez klíče (RuntimeError) → (digest, None, pub), Location nečíselné souřadnice → detail bez lat/lon, plaso invalid extra → debug log (behavior už pinuje stp057).
+
+**Záznam o implementaci (2026-11-25):**
+- **Commit `b5383f8`** — 11 souborů (+251/−8): 9 src + 2 testy. Aditivní BC, žádná změna chování.
+- Log ×7 lokací (case_repository warning; evidence_storage/mobile_forensics/plaso_import/sqlite_carver debug) + komentáře ×4 odůvodněné no-op (forensics/exchanges/ingest/temp_images). Nové module loggers: case_repository, evidence_storage_repository, plaso_import, sqlite_carver.
+- **Nový `tests/test_h1_silent_except.py`** (8 testů): AST guard pass-only handler → „#“ na except/těle (+mutace check) + behavior pin 4 opravených lokací.
+- **Latentní bug v stp057**: CSV řádek měl 16 polí místo 17 (`extra=None`) → invalid-extra branch se nikdy nespouštěla; doplněno na kanonických 17 polí (layout `to_l2tcsv`).
+- **Gate**: h1+stp057+p34×2+f15+stp069/070/stp039+p27_exchange_domain+k2_exchange_csv+pipeline+f24 = **340 passed**; ruff check src tests clean (UP012 v testu opraven).
