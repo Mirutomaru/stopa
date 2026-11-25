@@ -1,3 +1,26 @@
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 11)
+
+## Hotovo právě teď: **B9 [M] Diagnostické mechanismy integrity**
+Commit `4634058`. Forenzní kritérium: přesná lokalizace místa a příčiny selhání (řádek + typ) bez zatajení stavu; vše aditivní — BC pole `ok/broken_at_id/reason` beze změny.
+1) **F-1 audit chain** — `ChainDefect(row_id, kind, message)` + 4 strojově čitelné typy (hash_mismatch/link_broken/row_missing/genesis); `verify_chain(collect_all=True)` proskenuje celý řetězec: mezera v ID = vlastní ROW_MISSING, mrtvá genesis větev opravena; po hash mismatch se linka čeká od uloženého hashu → každý tamperovaný řádek lokalizován zvlášť.
+2) **F-2 seal v2** — čistá doménová `collect_chain_defects()` (seq_gap/link_broken/chain_hash_mismatch); report aditivně nese kompletní `"defects"` (BC fail-closed `error` zůstává).
+3) **F-3 rotace klíčů** — explicitní transakce: audit entry `integrity_key_rotated` + výměna páry + rotační checkpoint all-or-nothing; chybějící checkpoint = `ValueError` místo tichého None.
+4) **F-4 povrch** — CLI `integrity check` (human+JSON) i web `/api/cases/{id}/audit` exponují typ + všechny defekty (`kind/defects`).
+Ověřeno: ruff clean; nová sada `tests/test_b9_integrity_diagnostics.py` **20/20**; BC baterie p02/p46/integrity **72 passed**.
+Předtím ve vlně: **B8 [M]** AI determinismus — commit `7fac9ac` (viz níže).
+
+## Co dělat dál (backlog)
+Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
+1. ~~**B4 [S]**~~ ✅ DONE `b49a7e5` — CI build/test s aktivním Rust wheelem (`[carving]`, běh s aktivním core, kontrola verze pinu)
+2. ~~**B5 [S]**~~ ✅ DONE `72ddd8c` — Minimální CI build/check Web SPA (tsc --noEmit + vitest + řízený build s freshness kontrolou static/spa)
+3. ~~**B6 [S]**~~ ✅ DONE `f7903e7` — Percentilová brána benchmark engine (medián + P95, dual-axis gate, baseline v2)
+4. ~~**B7 [M]**~~ ✅ DONE `ad72b7b` — Konzolidace CLI subpříkazů do 5 skupin + skryté BC aliasy s DeprecationWarning
+5. ~~**B8 [M]**~~ ✅ DONE `7fac9ac` — Determinismus kolem AI agentů (fixní sampling, přísné typy, grounding citací, auditní identita)
+6. ~~**B9 [M]**~~ ✅ DONE `4634058` — Diagnostické mechanismy integrity (typy defektů, collect_all, transakční rotace klíčů, CLI/web exponují všechny defekty)
+7. **B10 [L]** Strategie pro velké případy (stovky GB): prahy a postupy, archivace velkých payloadů, odlehčené režimy, oddělení centrálních serverových metadat/tenancy od přenosného SQLite kontejneru případu — START
+
+---
+
 # NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 10)
 
 ## Hotovo právě teď: **B8 [M] Determinismus kolem AI agentů**

@@ -27,7 +27,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 | B6 | Statistická brána benchmark engine: percentily (≥P95) vedle mediánu + prahy tolerance (% drift + minimální absolutní práh) — šum se nehlásí, ocas latence se neskrývá | W4/Q11 · S | ✅ DONE `f7903e7` |
 | B7 | Zúžení/konsolidace 60 CLI subpříkazů: příbuzné pod jednotné kořeny s podakcemi + dočasné aliasy s DeprecationWarning (backward compat) | W5/Q4 · M | ✅ DONE `ad72b7b` |
 | B8 | Determinismus kolem AI agentů: fixní parametry, přísná schémata výstupů, povinné citace ID důkazů z DB, ověření tvrzení proti případu, audit (prompt + verze modelu + hash vstupu) | D8/Q8 · M | ✅ DONE `7fac9ac` |
-| B9 | Kompenzační/diagnostické mechanismy integrity: u řetězců/seal-chain/rotace klíčů přesná lokalizace místa a příčiny selhání, auditní záznam, řízená diagnostika/izolace úseku bez zatajení stavu | D4/Q9 · M | TODO |
+| B9 | Kompenzační/diagnostické mechanismy integrity: u řetězců/seal-chain/rotace klíčů přesná lokalizace místa a příčiny selhání, auditní záznam, řízená diagnostika/izolace úseku bez zatajení stavu | D4/Q9 · M | ✅ DONE `4634058` |
 | B10 | Strategie pro velké případy (stovky GB): prahy a postupy, archivace velkých payloadů, odlehčené režimy, oddělení centrálních serverových metadat/tenancy od přenosného SQLite kontejneru případu | D2/W8/Q2 · L | TODO |
 
 ### Fáze 3 — P2
@@ -47,6 +47,23 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2: B11 → B12 · hygiena H1–H3 mezi vlnami.
 
 ## Protokol provedených úkolů
+
+### B9 [M] — Diagnostické mechanismy integrity (DESIGN 2026-11-25)
+**Nález audit-first:**
+- **F-1** `domain/integrity.verify_chain` vrací na prvním defektu; `ChainReport.reason` = jen string, bez strojově čitelného kindu; mezery (chybějící řádek id N) se nečtou jako „řádek chybí“, ale jako obecné rozbití linky; genesis check po smyčce = mrtvá větev s matoucí zprávou („předchozí řádek“ u prvního řádku).
+- **F-2** `domain/seal_chain.verify_chain` fail-closed na prvním hash defektu; report z repo nese jen jeden `error`, zatímco F5.1 vazby už hlásí kompletně (seal_ok/note per pečeť) — asymetrie.
+- **F-3** `audit_repository.rotate_integrity_key`: implicitní transakce bez explicitního rollbacku při výjimce uprostřed (nový priv + starý pub = rozbitá pára); rotace nenechává žádný záznam v audit logu případu; tiché `checkpoint_id=None` hlášeno jako úspěch.
+- **F-4** CLI `integrity check` (cmd_integrity) a web payload exponují jen první přerušení.
+
+**Design (aditivní, BC):**
+1. `domain/integrity.py`: `ChainDefect(row_id, kind, message)`; konstanty `CHAIN_HASH_MISMATCH / CHAIN_LINK_BROKEN / CHAIN_ROW_MISSING / CHAIN_GENESIS_MISMATCH`; `ChainReport` dostává `kind: str | None = None` + `defects: tuple[ChainDefect, ...] = ()` (BC defaulty); `verify_chain(..., collect_all=False)` — default = BC (první defekt + kind), `collect_all=True` proskenuje celý řetězec včetně detekce mezer (id N+1 po id M → ROW_MISSING) a genesis dostává jasnou vlastní zprávu. Po hash mismatch se očekávání linky pokračuje od *uloženého* hashu → lokalizuje každý tamperovaný řádek zvlášť.
+2. `domain/seal_chain.py`: `SealChainDefect(seq, kind, message)` + čistá funkce `collect_chain_defects(case_id, records) -> list[SealChainDefect]`; `verify_chain` zůstává BC fail-closed (zpráva z prvního defektu).
+3. `data/audit_repository.rotate_integrity_key`: explicitní `BEGIN IMMEDIATE … COMMIT` + rollback při výjimce; audit entry `integrity_key_rotated` {old_fp, new_fp, reason} přes `log_operation`; tiché checkpoint None → `ValueError` (fail-closed).
+4. `data/seal_repository.verify_chain`: report aditivně dostává `"defects": [{seq, kind, message}]` (prázdný při verified); `db_facade_audit.verify_audit_chain(collect_all=False)` pass-through.
+5. CLI `integrity check`: tiskne **všechny** defekty (kind + zpráva), JSON aditivně `"defects"`; `broken_at_id`/`reason` = první (BC). Web reports payload analogicky aditivní.
+
+**Testy:** nový `tests/test_b9_integrity_diagnostics.py` — čistá doména (audit chain: BC single defekt + kind, collect_all najde všechny, mezera → ROW_MISSING, genesis → GENESIS_MISMATCH, OK chain = prázdné defects; seal domain collect_chain_defects) + DB integrace (rotace: atomicita při výjimce checkpointu, audit entry s otisky, fail-closed silent None) + CLI E2E (`integrity check --json` se 2 tamperovanými řádky = oba v defects, exit 1).
+
 ### B1 — Lockfile + Rust wheel pin (DONE 2026-11-25, commit `392d335`)
 - Nové: `requirements.lock` (uv 0.11.13, `--all-extras --generate-hashes`, 1617 řádků s SHA-256, oba stopa_core wheels v2.6.0), `.github/wheel_pins.json` (manifest SHA-256+velikosti release assetů x86_64/aarch64), `scripts/verify_rust_wheel.py` (fail-closed: pyproject↔manifest konzistence, SHA-256 stahovaných wheelů, verze importovaného core; režimy `--no-download`, `--update-manifest`).
 - Změněné: `.github/workflows/ci.yml` — nový job `lockfile-rust-pin` (pinovaná uv → deterministický compile+diff, plná SHA-256 kontrola obou platforem, instalace z locku v čistém venv).
@@ -94,3 +111,12 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - Fakes: eval fakes (`test_p12_ai_orchestrator_service.FakeClient`, `test_p12_ai_orchestrator_eval.FakeClient`) i `GoldenClient` (intelligence/ai_eval) přijímají keyword-only parametr; p45 SSE cesta nejdou přes `call_role` → beze změny.
 - Nové testy: `tests/test_b8_ai_determinism.py` (**25 testů**) — sampling pin přes HTTP fake (payload temperature/top_p/model + last_model + role override), typová schémata (string/bool confidence, findings list, pokrytí types↔schema), otisk promptu (determinismus/senzitivita/typová chyba), citace (pořadí/dedup/split), grounding (valid→True, unknown hypothesis→payload=None, bez valid_ids→None záznam, mix, evidence netrestována), auditní pole (model/temperature/prompt_sha256==fingerprint(messages)/grounded), wiring `run_role_on_case` (used IDs + DB audit s B8 poli).
 - Ověřeno: ruff clean (`src tests`); B8 **25/25**; AI baterie (b8+p12 service/eval/cli_web/domain) = **99 passed**; regresní batch (p45 production/e11/pii_redaction/stp049 grounding E2E/web/p14 web surface) = **113 passed**; eval golden gate přes produkční cestu `call_role` = **8/8** (zlaté odpovědi prošly přísnými typy).
+### B9 — Diagnostické mechanismy integrity (DONE 2026-11-25, commit `4634058`)
+- Design: forenzní kritérium = **přesná lokalizace místa a příčiny selhání** u hash řetězců/seal-chain/rotace klíčů bez zatajení stavu; vše aditivní (BC pole `ok/broken_at_id/reason` beze změny, nová pole `kind/defects`).
+- F-1 audit chain (`domain/integrity.py`): `ChainDefect(row_id, kind, message)` + konstanty `CHAIN_HASH_MISMATCH/LINK_BROKEN/ROW_MISSING/GENESIS_MISMATCH`; `verify_chain(collect_all=False)` — výchozí režim = BC (první defekt + kind), `collect_all=True` proskenuje celý řetězec: mezera v ID = vlastní ROW_MISSING, mrtvá genesis větev dostala jasnou vlastní zprávu; po hash mismatch se linka čeká od **uloženého** hashu → každý tamperovaný řádek lokalizován zvlášť (bez kaskádového maskování).
+- F-2 seal v2 (`domain/seal_chain.py`): čistá doménová `collect_chain_defects(case_id, records)` (seq_gap/link_broken/chain_hash_mismatch); report z `seal_repository` aditivně nese `"defects": [{seq, kind, message}]`; BC fail-closed `verify_chain` + `error` pole zůstávají.
+- F-3 rotace klíčů (`data/audit_repository.py`): explicitní transakce — audit entry `integrity_key_rotated` (otisky starého/nového pub + reason) přes no-commit `_append_audit_row`, výměna páry v meta a rotační checkpoint přes `_insert_checkpoint_row`; all-or-nothing s rollbackem; chybějící checkpoint → `ValueError` místo tichého `checkpoint_id=None`.
+- F-4 povrch: CLI `integrity check` (human: první defekt + `+ defekt [kind] řádek N` na stderr; JSON aditivně `kind/defects`) a web `/api/cases/{id}/audit` (`chain.kind` + `chain.defects`) — oba přes `collect_all=True`.
+- Nové testy: `tests/test_b9_integrity_diagnostics.py` (**20 testů**) — doménová sémantika (kind per druh, collect_all vs BC single, mezera→ROW_MISSING, genesis self-binding), DB rotace (atomicita při chybějícím checkpointu, audit entry, fail-closed ValueError) + CLI E2E (JSON i human: typ + všechny defekty, exit 1) + web endpoint (čistý last-row tamper → jediný link_broken).
+- BC pasti zjištěné při testování: forenzní imutabilita `audit_log` (trigger `audit_no_update` = RAISE(IGNORE)) vyžaduje `DROP TRIGGER IF EXISTS audit_no_update` před tamperem (stejná konvence jako f51/integrity); `list_audit_log` vrací parzovaný dict pod klíčem `details`, ne raw `details_json`.
+- Ověřeno: ruff clean (`src tests`); B9 **20/20**; BC baterie p02/p46/integrity = **72 passed** (přesně po doménové opravě collect_all ok-semantiky).
