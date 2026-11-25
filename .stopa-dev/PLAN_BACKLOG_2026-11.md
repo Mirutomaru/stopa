@@ -28,7 +28,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 | B7 | Zúžení/konsolidace 60 CLI subpříkazů: příbuzné pod jednotné kořeny s podakcemi + dočasné aliasy s DeprecationWarning (backward compat) | W5/Q4 · M | ✅ DONE `ad72b7b` |
 | B8 | Determinismus kolem AI agentů: fixní parametry, přísná schémata výstupů, povinné citace ID důkazů z DB, ověření tvrzení proti případu, audit (prompt + verze modelu + hash vstupu) | D8/Q8 · M | ✅ DONE `7fac9ac` |
 | B9 | Kompenzační/diagnostické mechanismy integrity: u řetězců/seal-chain/rotace klíčů přesná lokalizace místa a příčiny selhání, auditní záznam, řízená diagnostika/izolace úseku bez zatajení stavu | D4/Q9 · M | ✅ DONE `4634058` |
-| B10 | Strategie pro velké případy (stovky GB): prahy a postupy, archivace velkých payloadů, odlehčené režimy, oddělení centrálních serverových metadat/tenancy od přenosného SQLite kontejneru případu | D2/W8/Q2 · L | TODO |
+| B10 | Strategie pro velké případy (stovky GB): prahy a postupy, archivace velkých payloadů, odlehčené režimy, oddělení centrálních serverových metadat/tenancy od přenosného SQLite kontejneru případu | D2/W8/Q2 · L | ✅ DONE `98c48df` |
 
 ### Fáze 3 — P2
 | ID | Úkol | Zdroj | Stav |
@@ -120,3 +120,19 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - Nové testy: `tests/test_b9_integrity_diagnostics.py` (**20 testů**) — doménová sémantika (kind per druh, collect_all vs BC single, mezera→ROW_MISSING, genesis self-binding), DB rotace (atomicita při chybějícím checkpointu, audit entry, fail-closed ValueError) + CLI E2E (JSON i human: typ + všechny defekty, exit 1) + web endpoint (čistý last-row tamper → jediný link_broken).
 - BC pasti zjištěné při testování: forenzní imutabilita `audit_log` (trigger `audit_no_update` = RAISE(IGNORE)) vyžaduje `DROP TRIGGER IF EXISTS audit_no_update` před tamperem (stejná konvence jako f51/integrity); `list_audit_log` vrací parzovaný dict pod klíčem `details`, ne raw `details_json`.
 - Ověřeno: ruff clean (`src tests`); B9 **20/20**; BC baterie p02/p46/integrity = **72 passed** (přesně po doménové opravě collect_all ok-semantiky).
+### B10 — Strategie pro velké případy (stovky GB) (DONE 2026-11-25, commit `98c48df`)
+- Nálezy auditu:
+  - F-1: **Žádné programatické prahy/postup** — chybí cross-table statistika případu i definice „velkého případu“; case DB běží na výchozím journal mode (DELETE), WAL má jen instance DB; údržbový postup neexistuje.
+  - F-2: **FTS5 index bez rebuild cesty** — `files_fts`/`artifacts_fts` (external content + sync trigger) nemají REBUILD/VACUUM cestu z CLI → u velkých případů naroste index a není ho jak opravit.
+  - F-3: **Provenience gap ingest profilu** — profil (`forensic`/`ediscovery`/`quick`) je jen v jednom auditním entry `details`, ne v tabulce `sources` → bez parsování hash chainu neví, jakým profilem byl zdroj ingestován (SHA-512/dedup/extrakce ano/ne).
+  - F-4: **Portabilita case kontejneru vs. centrální metadata neověřena** — tenancy separace existuje (F4.4 instance DB), ale žádný test nefixuje, které tabulky patří do přenosného case kontejneru a které jen do centrální instance (regresní riziko).
+- Design (vše aditivní BC):
+  1. `domain/case_scale.py` — čistá doména: prahy + `classify_case_size(files_rows, total_bytes, artifacts_rows)` → `CaseScaleProfile(tier=small|medium|large, procedures)`.
+  2. Data vrstva (`db_facade_files.py`): read-only cross-table statistika `case_scale()`; `rebuild_fts()` = FTS5 REBUILD obou indexů + cache invalidace (F-1/F-2).
+  3. Migrace v29: `sources.ingest_profile TEXT DEFAULT 'forensic'` (legacy řádky = forensic, bez ztráty dat); pipeline zapisuje skutečný profil na začátku zpracování (F-3).
+  4. CLI `case scale <case_id> [--json] [--rebuild-fts]` pod existující skupinou `case`; i18n klíče od 342; goldeny p14/p48 přegenerovány jako superset.
+  5. Test `tests/test_b10_case_scale.py`: čistá doména (hranice tierů, determinismus), DB statistika + rebuild_fts (search funguje po REBUILD), migrace BC (legacy DB → sloupec s defaultem), pipeline profilový zápis, CLI E2E, portabilita pin (case kontejner nemá central-only tabulky).
+- Záměrné odsunuty: disk-based offload velkých `artifacts.details_json` payloadů — extraktory produkují strukturované details omezené vstupem; bez důkazu reálného růstu by payload store byl over-engineering (ukáže to právě `case scale`).
+- Implementace (commit `98c48df`, 18 souborů +556/−27): čistá doména `domain/case_scale.py` (prahy LARGE_FILES_ROWS=500k / LARGE_TOTAL_BYTES=100 GiB / LARGE_ARTIFACTS_ROWS=200k, `_MEDIUM_RATIO=0.1`, tier small|medium|large + doporučené postupy jako data); `FilesFacadeMixin.case_scale()` (read-only cross-table statistika) + `rebuild_fts()` (FTS5 REBUILD obou indexů + invalidace cache); aditivní migrace **v29** `sources.ingest_profile TEXT DEFAULT 'forensic'` (legacy BC bez ztráty dat, idempotentní přes PRAGMA table_info), pipeline zapisuje skutečný profil na začátku zpracování; CLI `stopa case scale <case_id> [--rebuild-fts] [--json]` pod skupinou `case` (i18n cli.h.342–344, příklad v epilogu R0.4) s auditním záznamem `case_scale_fts_rebuilt`.
+- Ověřeno: nová sada `tests/test_b10_case_scale.py` **16/16** (F-1 až F-4 — hranice tierů, typové chyby, přesné statistiky, REBUILD po ručním poškození indexu, migrace BC legacy→default 'forensic', pipeline profilový zápis `quick`, portabilita pin central-only tabulek, CLI E2E JSON+human); BC baterie b10+p14+p48+p11+pipeline+stp041+p02+p04+p24+p33+p25 = **238 passed**; ruff clean; goldeny p14/p48 přegenerovány jako čistý superset (jen `case/scale` + `case scale`).
+- Zbývá na B11: odlehčené ingest režimy (quick/ediscovery profil už existuje v CLI add --profile) a explicitní archivace velkých payloadů.

@@ -1,3 +1,27 @@
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 12)
+
+## Hotovo právě teď: **B10 [L] Strategie pro velké případy**
+Commit `98c48df`. Forenzní kritérium: definovat „velký případ“ programmaticky a dát mu údržbový postup bez ztráty dat; vše aditivní BC (SCHEMA_VERSION 28→29).
+1) **F-1 prahy + statistika** — čistá doména `domain/case_scale.py`: LARGE_FILES_ROWS=500k / LARGE_TOTAL_BYTES=100 GiB / LARGE_ARTIFACTS_ROWS=200k, `_MEDIUM_RATIO=0.1` → tier small|medium|large s deterministickým pořadím doporučených postupů; `FilesFacadeMixin.case_scale()` = read-only cross-table statistika (files/bytes/artifacts/audit_log).
+2) **F-2 FTS REBUILD cesta** — `rebuild_fts()` rekonstruuje `files_fts`/`artifacts_fts` ze zdrojových tabulek + invalidace procesního cache; CLI `stopa case scale <case_id> --rebuild-fts` s auditním záznamem `case_scale_fts_rebuilt`.
+3) **F-3 provenience ingest profilu** — aditivní migrace v29 `sources.ingest_profile TEXT DEFAULT 'forensic'` (legacy BC bez ztráty dat); pipeline zapisuje skutečný profil na začátku zpracování; `add --profile` už existoval, teď je to trvanlivé v DB.
+4) **F-4 portabilita pin** — test fixuje, že instance-only tabulky (`cross_case_queries/xcorr_grants/case_registry/events`) nesmí uniknout do přenosného case kontejneru; tenancy stuby dokumentovány jako BC realita.
+Ověřeno: ruff clean; nová sada `tests/test_b10_case_scale.py` **16/16**; BC baterie b10+p14+p48+p11+pipeline+stp041+p02+p04+p24+p33+p25 = **238 passed**; goldeny p14/p48 přegenerovány jako čistý superset (jen `case/scale` + `case scale`).
+Předtím ve vlně: **B9 [M]** diagnostika integrity — commit `4634058` (viz níže).
+
+## Co dělat dál (backlog)
+Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
+1. ~~**B4 [S]**~~ ✅ DONE `b49a7e5` — CI build/test s aktivním Rust wheelem (`[carving]`, běh s aktivním core, kontrola verze pinu)
+2. ~~**B5 [S]**~~ ✅ DONE `72ddd8c` — Minimální CI build/check Web SPA (tsc --noEmit + vitest + řízený build s freshness kontrolou static/spa)
+3. ~~**B6 [S]**~~ ✅ DONE `f7903e7` — Percentilová brána benchmark engine (medián + P95, dual-axis gate, baseline v2)
+4. ~~**B7 [M]**~~ ✅ DONE `ad72b7b` — Konzolidace CLI subpříkazů do 5 skupin + skryté BC aliasy s DeprecationWarning
+5. ~~**B8 [M]**~~ ✅ DONE `7fac9ac` — Determinismus kolem AI agentů (fixní sampling, přísné typy, grounding citací, auditní identita)
+6. ~~**B9 [M]**~~ ✅ DONE `4634058` — Diagnostické mechanismy integrity (typy defektů, collect_all, transakční rotace klíčů, CLI/web exponují všechny defekty)
+7. ~~**B10 [L]**~~ ✅ DONE `98c48df` — Strategie pro velké případy (klasifikace velikosti, FTS REBUILD cesta, provenience ingest profilu v29, portabilita pin)
+8. **B11 [L]** Odlehčené režimy + archivace velkých payloadů: quick/ediscovery profily do pipeline end-to-end (dnes jen CLI add --profile), explicitní offload velkých details_json — START
+
+---
+
 # NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 11)
 
 ## Hotovo právě teď: **B9 [M] Diagnostické mechanismy integrity**
