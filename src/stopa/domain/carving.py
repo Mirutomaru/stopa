@@ -435,7 +435,7 @@ def carve(data: bytes, min_size: int = 64) -> list[CarvedFile]:
     # F2.1: Rust Aho-Corasick scan — všechny signatury v jednom průchodu.
     # Parity s find smyčkami níže: per-pattern nenakládající shody, při stejném
     # offsetu vyhrává menší index (Python zpracovává header signatury jako první).
-    from stopa.data import rust_core  # lazy — bez wheelu reference fallback cesta
+    from stopa.core import rust_core  # lazy — H2: most v core/, bez závislosti na data při importu
 
     patterns = [m for m, _, _ in hdrs] + [magic for _, magic, _, _ in offsigs]
     offsets = rust_core.find_offsets(data, patterns)

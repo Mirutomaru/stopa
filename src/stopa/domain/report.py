@@ -655,7 +655,7 @@ def build_html(data: ReportData, lang: str | None = None, _clock=None) -> str:
     def _components_status() -> dict[str, bool]:
         """Sekce 11 — dostupnost volitelných komponent (E12 diagnostics)."""
         try:
-            from stopa.data.diagnostics import collect_diagnostics
+            from stopa.core.diagnostics import collect_diagnostics  # H2 — most v core/
 
             comps = collect_diagnostics().get("components", {})
             return {str(k): bool(v) for k, v in comps.items()}

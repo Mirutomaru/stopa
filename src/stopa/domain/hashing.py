@@ -40,7 +40,8 @@ def hash_file(
 
     abs_path = str(Path(path))
     if progress is None and set(algs) <= _RUST_ALGS:
-        from stopa.data import rust_core  # lazy — domain nezávisí na data při importu
+        # lazy — H2: most v core/, bez závislosti na data při importu
+        from stopa.core import rust_core
 
         result = rust_core.hash_file(abs_path, algs)
         if result is not None:
