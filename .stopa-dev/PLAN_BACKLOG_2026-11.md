@@ -40,7 +40,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 | ID | Úkol | Stav |
 |----|------|------|
 | H1 | Audit zbývajících tichých `except+pass` (~20) → explicitní logování/validační status (mimo odůvodněné C-bindingy) | ✅ DONE `b5383f8` |
-| H2 | Čistota domain vrstvy: odstranit/izolovat 3 zbývající lazy `domain→data` vazby | TODO |
+| H2 | Čistota domain vrstvy: odstranit/izolovat 3 zbývající lazy `domain→data` vazby | ✅ DONE `6657d5a` |
 | H3 | Verzování výstupních schémat CLI/reportů (explicitní output schema version v exportech) | TODO |
 
 ## Pořadí realizace
@@ -198,3 +198,21 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - **Nový `tests/test_h1_silent_except.py`** (8 testů): AST guard pass-only handler → „#“ na except/těle (+mutace check) + behavior pin 4 opravených lokací.
 - **Latentní bug v stp057**: CSV řádek měl 16 polí místo 17 (`extra=None`) → invalid-extra branch se nikdy nespouštěla; doplněno na kanonických 17 polí (layout `to_l2tcsv`).
 - **Gate**: h1+stp057+p34×2+f15+stp069/070/stp039+p27_exchange_domain+k2_exchange_csv+pipeline+f24 = **340 passed**; ruff check src tests clean (UP012 v testu opraven).
+
+### H2 — Čistota domain vrstvy: izolace 3 lazy `domain→data` vazeb (DONE 2026-11-25, commit `6657d5a`)
+**Nález audit-first (grep + AST, celé `src/stopa/domain/**`, včetně subbalíků):**
+- **F-1**: přesně **3 lazy vazby domain→data** (žádné import-time, žádné dynamické `import_module`, žádné relativní): `domain/carving.py:438` a `domain/hashing.py:43` → `stopa.data.rust_core` (Rust Aho-Corasick / one-pass hash akcelerátor F2.1 s Python fallbackem); `domain/report.py:658` → `stopa.data.diagnostics.collect_diagnostics` (E12 snapshot prostředí).
+- **F-2**: `data/rust_core.py` je semanticky **most nad volitelným PyO3 wheel** (`stopa_core`), ne persistence — jeho vlastní docstring: „čisté propojení mezi domain logikou a Rust corem“. Žije v `data/` jen historicky.
+- **F-3**: `data/diagnostics.py` je **introspekce prostředí** (verze knihoven + dostupnost tsk/ewf/cryptsetup), ne case DB; sám závisí na `data.ewf_container`, `data.tsk_py` i `domain.fde_luks` → patří vrstvou nad oběma.
+- Importéry mimo domain (BC povrch): `data/analytics.py`, `data/benchmark_engine.py` (rust_core), `web/routers/system.py` + `tests/test_e12.py` (diagnostics), `tests/test_f21_rust_core.py` + `test_f23_block_dedupe.py` + `test_rust_wheel_pin.py` (rust_core).
+
+**Rozhodnutí implementace:**
+1. **Nový balíček `src/stopa/core/`** — neutrální runtime capability vrstva (nad domain i data): `core/rust_core.py` (přesun z data/, obsah beze změny) + `core/diagnostics.py` (přesun z data/, obsah beze změny).
+2. **BC shimy v `data/`**: `data/rust_core.py` a `data/diagnostics.py` = **alias stejného modulového objektu** jako core (`sys.modules[__name__] = core_modul`), ne jen re-export atributů — silnější než plánovaný re-export, protože F21 patchuje privátní global `_mod` a identity modulu je podmínkou funkčnosti monkeypatche přes obě cesty. Data-layer konzumenti (`analytics`, `benchmark_engine`) + web/tests **bez změny** — modulární izolace, ne globální přepis.
+3. **Domain** mění jen 3 import řádky na `stopa.core` (carving/hash: `from stopa.core import rust_core`; report: `from stopa.core.diagnostics import collect_diagnostics`) — chování bitově identické, fallback cesty beze změny.
+4. **Guard test** `tests/test_h2_domain_purity.py`: A) AST scan `src/stopa/domain/**` — žádný Import/ImportFrom do `stopa.data.*` (absolutní i relativní); B) shim identity pin (`data.rust_core.X is core.rust_core.X`, diagnostics likewise); C) behavior pin fallback cest přes core (find_offsets→None → Python reference carve; hash_file→None → hashlib digest).
+
+**Záznam o implementaci (2026-11-25):**
+- **Commit `6657d5a`** — 9 souborů (+470/−225): nový `core/__init__.py`, 2 přejmenování data→core **bez změny obsahu** (git rename detection 100 %), 2 BC shimy alias identity, 3 domain import řádky, nová test suite. Chování bitově identické; konzumenti data/web/testy bez změny.
+- **Nový `tests/test_h2_domain_purity.py`** (8 testů): A = AST guard domain→data (+mutace check absolutní/relativní/jméno), B = shim identity pin + public jmen dostupnost, C = behavior pin fallback cest přes core (carve PNG reference, hashlib digest, report sekce 11 degradace + čtení přes core).
+- **Gate**: ruff check src tests clean; BC baterie h2+f21_rust_core+f23_block_dedupe+e12+report+rust_wheel_pin = **104 passed, 1 skipped**; f25_query_cache (web `/api/diagnostics` přes shim) = **19 passed**.

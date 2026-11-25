@@ -1,6 +1,14 @@
-# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 15)
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 16)
 
-## Hotovo právě teď: **H1 [hygiena] Tiché `except+pass` → explicitní logování/validační status**
+## Hotovo právě teď: **H2 [čistota vrstev] Izolace 3 lazy `domain→data` vazeb**
+Commit `6657d5a`. Forenzní kritérium: čistá domain logika bez I/O/externích mostů při importu; chování bitově identické (aditivní BC, žádné změny konzumentů).
+Audit-first nálezy F-1..F-3: přesně **3 lazy vazby** `domain→data` (carving/hash → rust_core, report → diagnostics); oba moduly jsou semanticky **runtime capability** (Rust bridge + environment introspekce), ne persistence → patří nad obě vrstvy.
+1) **Nový balíček `src/stopa/core/`** — neutrální runtime capability vrstva: `core/rust_core.py` + `core/diagnostics.py` přesunuty z data/ **bez změny obsahu** (git rename detection 100 %).
+2) **BC shimy v `data/`** = alias **stejného modulového objektu** jako core (`sys.modules[__name__] = core_modul`) — silnější než re-export, protože F21 patchuje privátní global `_mod` a identity modulu je podmínkou monkeypatche přes obě cesty. Konzumenti data/web/testy bez změny.
+3) **Domain** mění jen 3 import řádky na `stopa.core`; fallback cesty beze změny.
+4) **Guard test `tests/test_h2_domain_purity.py`** (nový, 8 testů): A = AST guard domain→data (+mutace check), B = shim identity pin + public jmen dostupnost, C = behavior pin fallback cest přes core.
+
+## Předchozí vlna — H1 [hygiena] Tiché `except+pass` → explicitní logování/validační status
 Commit `b5383f8`. Forenzní kritérium: žádná tichá degradace dat bez traceable stavu; chování beze změny (aditivní BC).
 Audit-first nálezy F-1..F-5: bucket A = **přesně 20 pass-only handlerů** (shoda se zadáním „~20“); sedm z nich tichě degraduje data → explicitní log; cryptography graceful degradation ×6 → status už explicitní v artefaktu (signatura None = „nepodepsáno“) — KEPT + behavior pin; fallbacky ×4 odůvodněny komentářem na místě.
 1) **Logování ×7 lokací** — `case_repository.list_cases` → `logger.warning` (poškozené trvalé timestampy last_auto_export_at/created_at); evidence_storage.verify/mobile_forensics Location/plaso_import l2tcsv/sqlite_carver → `logger.debug` (bulk extrakce, stav explicitní i ve výstupu). Nové module loggers: case_repository, evidence_storage_repository, plaso_import, sqlite_carver.
