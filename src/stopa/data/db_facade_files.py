@@ -99,3 +99,47 @@ class FilesFacadeMixin:
 
     def stats(self, source_id: str | None = None) -> dict[str, int]:
         return self.file_repo.stats(source_id)
+
+    # ── B10 — strategie pro velké případy (stovky GB) ────────────────────────
+
+    def case_scale(self) -> dict:
+        """B10 — cross-table statistika případu + klasifikace velikosti.
+
+        Read-only (žádný commit). Statistiky: řádky `files` + datový objem,
+        řádky `artifacts`, řádky `audit_log`; klasifikace z čistého doménového
+        ``classify_case_size`` (tier small|medium|large + doporučené postupy).
+
+        F-1 backlogu: programatická definice „velkého případu“ a údržbový postup.
+        """
+        from stopa.domain.case_scale import classify_case_size
+
+        fs = self.file_repo.stats()  # files/bytes/bad_ext/dups/signed (read-only)
+        artifacts_rows = int(
+            self.conn.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
+        )
+        audit_log_rows = int(
+            self.conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
+        )
+        profile = classify_case_size(fs["files"], fs["bytes"], artifacts_rows)
+        return {
+            "files_rows": fs["files"],
+            "total_bytes": fs["bytes"],
+            "artifacts_rows": artifacts_rows,
+            "audit_log_rows": audit_log_rows,
+            "tier": profile.tier,
+            "procedures": list(profile.procedures),
+        }
+
+    def rebuild_fts(self) -> dict:
+        """B10 — FTS5 REBUILD obou fulltext indexů (idempotentní).
+
+        ``files_fts``/``artifacts_fts`` jsou external-content tabulky se sync
+        triggerem; u velkých případů narostou a REBUILD je deterministicky
+        rekonstruuje z zdrojových tabulek (F-2 backlogu). Po rebuildu se
+        invaliduje procesní FTS cache — starý výsledek dotazu nesmí přežít.
+        """
+        self.conn.execute("INSERT INTO files_fts(files_fts) VALUES ('rebuild')")
+        self.conn.execute("INSERT INTO artifacts_fts(artifacts_fts) VALUES ('rebuild')")
+        self.conn.commit()
+        PROCESS_CACHE.invalidate(self._cache_scope)
+        return {"rebuilt": ["files_fts", "artifacts_fts"]}

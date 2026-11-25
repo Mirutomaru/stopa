@@ -10,7 +10,7 @@ import sqlite3
 
 # E1: verze schématu — migrace běží idempotentně (IF NOT EXISTS / ALTER),
 # ale verzi umožňuje detekci starých case DB a zálohu před destruktivní změnou.
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 
 def _schema_version(conn: sqlite3.Connection) -> int:

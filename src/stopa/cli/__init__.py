@@ -69,7 +69,12 @@ from .commands.analysis import (
 from .commands.artifact_compare import cmd_compare_artifacts
 
 # P1-4 — rodina `case` přesunuta do cli/commands/case.py (re-export pro kompatibilitu)
-from .commands.case import cmd_case_auto_export, cmd_case_auto_interval, cmd_case_new
+from .commands.case import (
+    cmd_case_auto_export,
+    cmd_case_auto_interval,
+    cmd_case_new,
+    cmd_case_scale,  # B10 — strategie pro velké případy
+)
 
 # P3-3 — Automated Classification (pravidlový klasifikátor souborů + override)
 from .commands.classification import cmd_classify
@@ -188,6 +193,7 @@ _SUBCOMMAND_EXAMPLES = {
     "new": "cli.h.001",
     "auto-export": "cli.h.002",
     "auto-interval": "cli.h.003",
+    "scale": "cli.h.344",  # B10 — strategie pro velké případy
     "add": "cli.h.004",
     "files": "cli.h.005",
     "search": "cli.h.006",
@@ -325,6 +331,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_json_flag(autoint_p)
     autoint_p.set_defaults(func=cmd_case_auto_interval)
+
+    # B10 — strategie pro velké případy: klasifikace velikosti + FTS REBUILD.
+    scale_p = _ex_sub(case_sub, "scale", help=t("cli.h.342"))
+    scale_p.add_argument("case_id", help=t("cli.h.065"))
+    scale_p.add_argument(
+        "--rebuild-fts",
+        action="store_true",
+        help=t("cli.h.343"),
+    )
+    _add_json_flag(scale_p)
+    scale_p.set_defaults(func=cmd_case_scale)
 
     add_p = _ex_sub(sub, "add", help=t("cli.h.070"))
     add_p.add_argument("case_id", help=t("cli.h.071"))

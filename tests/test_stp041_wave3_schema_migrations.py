@@ -85,13 +85,14 @@ def _trigger_names(conn: sqlite3.Connection) -> set[str]:
 
 
 class TestSchemaModule:
-    def test_schema_version_is_28(self):
+    def test_schema_version_is_29(self):
         """F5.1 v19; P0-2 v20 public_key_b64; P0-1 v21 provenance; P1-3 v22 graph_edges;
         P2-4 v23 investigation workspace; P2-5 v24 threat intelligence;
         P3-5 v25 rule matching (CHECKy feed/matches); P3-3 v26 klasifikace souborů;
         P4-6 v27 sealing v2 chain (aditivní tabulka seal_chain);
-        P0.4 v28 source manifest (aditivní sloupce sources)."""
-        assert SCHEMA_VERSION == 28
+        P0.4 v28 source manifest (aditivní sloupce sources);
+        B10 v29 ingest profile provenience (aditivní sloupec sources.ingest_profile)."""
+        assert SCHEMA_VERSION == 29
 
     def test_schema_version_fallback_on_empty_db(self, tmp_path: Path):
         """Bez meta řádku vrací 1 (staré DB bez verze)."""

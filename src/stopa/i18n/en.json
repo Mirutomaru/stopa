@@ -339,11 +339,13 @@
   "cli.h.328": "case ID (required for --cap ai_tool)",
   "cli.h.330": "plugin to run (repeatable; when omitted the defaults are used: {defaults})",
   "cli.h.329": "JSON parameters of the AI tool",
-  "cli.h.331": "P4-7 — node lease heartbeat: beat the registry under NODE_ID and print generation"
-,
+  "cli.h.331": "P4-7 — node lease heartbeat: beat the registry under NODE_ID and print generation",
   "cli.h.337": "Case integrity & seals (check, seal chain, keys)",
   "cli.h.338": "Import external data into a case (mobile extraction, Plaso)",
   "cli.h.339": "Forensic analysis of evidence types (disk, mobile, memory, network, decryption…)",
   "cli.h.340": "Crypto assets & advanced crypto analysis",
-  "cli.h.341": "Court readiness (SWGDE, Daubert)"
+  "cli.h.341": "Court readiness (SWGDE, Daubert)",
+  "cli.h.342": "B10 — case scale classification (large cases) + optional FTS rebuild",
+  "cli.h.343": "rebuild the FTS5 indexes files_fts + artifacts_fts from source tables (idempotent)",
+  "cli.h.344": "stopa case scale case-01 --json"
 }

@@ -253,8 +253,9 @@ class TestMigration:
         # v23 = P2-4 investigation workspace; v24 = P2-5 threat intelligence;
         # v25 = P3-5 rule matching (CHECKy ioc_feed_items/intel_matches);
         # v26 = P3-3 klasifikace souborů (tabulka classifications)
-        # v27 = P4-6 sealing v2 chain (tabulka seal_chain); v28 = P0.4 source manifest
-        assert SCHEMA_VERSION == 28
+        # v27 = P4-6 sealing v2 chain (tabulka seal_chain); v28 = P0.4 source manifest;
+        # B10 v29 ingest profile provenience (aditivní sloupec sources.ingest_profile)
+        assert SCHEMA_VERSION == 29
         d = CaseDB(tmp_path / "case-m.db")
         cols = {r["name"] for r in d.conn.execute("PRAGMA table_info(integrity_checkpoints)")}
         assert "public_key_b64" in cols

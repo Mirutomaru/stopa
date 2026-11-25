@@ -98,6 +98,39 @@ def cmd_case_auto_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_case_scale(args: argparse.Namespace) -> int:
+    """B10 — klasifikace velikosti případu (+ volitelný FTS REBUILD)."""
+    db = _open_db(args.case_id)
+    try:
+        report = db.case_scale()
+        if args.rebuild_fts:
+            rebuilt = db.rebuild_fts()
+            report["fts_rebuilt"] = list(rebuilt["rebuilt"])
+            case = db.get_case(args.case_id)
+            db.log_operation(
+                "case_scale_fts_rebuilt",
+                actor=case.examiner if case else None,
+                details={"case_id": args.case_id},
+            )
+    finally:
+        db.close()
+    if getattr(args, "json", False):
+        _print_json({"case_id": args.case_id, **report})
+        return 0
+    print(f"Velikost případu {args.case_id}: tier={report['tier']}")
+    print(f"  soubory (řádky):   {report['files_rows']:,}")
+    print(f"  datový objem:      {report['total_bytes'] / 2**30:.1f} GiB")
+    print(f"  artefakty (řádky): {report['artifacts_rows']:,}")
+    print(f"  audit log (řádky): {report['audit_log_rows']:,}")
+    if "fts_rebuilt" in report:
+        print(f"  FTS REBUILD:       {', '.join(report['fts_rebuilt'])}")
+    if report["procedures"]:
+        print("Doporučené údržbové postupy:")
+        for proc in report["procedures"]:
+            print(f"  - {proc}")
+    return 0
+
+
 def cmd_case_auto_interval(args: argparse.Namespace) -> int:
     """STP-070 — nastavit/vymazat interval periodického auto-bundle."""
     db = _open_db(args.case_id)

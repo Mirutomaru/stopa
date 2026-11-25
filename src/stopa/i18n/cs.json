@@ -339,11 +339,13 @@
   "cli.h.328": "case ID (vyžadováno pro --cap ai_tool)",
   "cli.h.330": "vol plugin (lze opakovat; bez = výchozí {defaults})",
   "cli.h.329": "JSON parametry AI toolu",
-  "cli.h.331": "P4-7 — lease heartbeat uzlu: beat registru pod NODE_ID a tisk generace"
-,
+  "cli.h.331": "P4-7 — lease heartbeat uzlu: beat registru pod NODE_ID a tisk generace",
   "cli.h.337": "Integrita a pečetě případu (kontrola, řetěz pečetí, klíče)",
   "cli.h.338": "Import externích dat do případu (mobilní extrakce, Plaso)",
   "cli.h.339": "Forenzní analýza typů důkazů (disk, mobil, paměť, síť, dešifrování…)",
   "cli.h.340": "Krypto-assety a pokročilá kryptoanalýza",
-  "cli.h.341": "Připravenost na soud (SWGDE, Daubert)"
+  "cli.h.341": "Připravenost na soud (SWGDE, Daubert)",
+  "cli.h.342": "B10 — klasifikace velikosti případu (velké případy) + volitelný FTS REBUILD",
+  "cli.h.343": "přestavět FTS5 indexy files_fts + artifacts_fts ze zdrojových tabulek (idempotentní)",
+  "cli.h.344": "stopa case scale case-01 --json"
 }

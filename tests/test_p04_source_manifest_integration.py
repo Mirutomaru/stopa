@@ -50,8 +50,9 @@ def _manifest_audit(db: CaseDB, action: str) -> list[dict]:
 # ── schéma a migrace ────────────────────────────────────────────────────────
 
 
-def test_fresh_db_schema_v28_has_manifest_columns(tmp_path: Path):
-    assert SCHEMA_VERSION == 28
+def test_fresh_db_has_manifest_columns(tmp_path: Path):
+    """Manifest sloupce (v28) persistují i v aktuálním schématu (B10 v29)."""
+    assert SCHEMA_VERSION == 29
     db, _ = _make_case_db(tmp_path)
     cols = {r["name"] for r in db.conn.execute("PRAGMA table_info(sources)").fetchall()}
     missing = [c for c in MANIFEST_COLUMNS if c not in cols]

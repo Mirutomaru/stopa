@@ -383,7 +383,7 @@ class TestSchemaV24:
     def test_version_bumped_and_intel_tables_in_schema(self):
         from stopa.data.schema import SCHEMA, SCHEMA_VERSION
 
-        assert SCHEMA_VERSION == 28  # ...v27 = P4-6 sealing chain; v28 = P0.4 source manifest (aditivní sloupce sources)
+        assert SCHEMA_VERSION == 29  # ...v27 = P4-6 sealing chain; v28 = P0.4 source manifest; B10 v29 ingest profile (aditivní sloupec sources)
         assert "CREATE TABLE IF NOT EXISTS ioc_feed_items" in SCHEMA
         assert "CREATE TABLE IF NOT EXISTS intel_matches" in SCHEMA
         assert "CHECK (kind IN ('ip', 'domain', 'hash', 'url'," in SCHEMA  # v25 += yara_rule/sigma_tpl

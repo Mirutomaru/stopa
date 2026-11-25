@@ -128,10 +128,11 @@ def db(dbdir: Path) -> CaseDB:
 
 
 class TestSchemaV26:
-    def test_new_db_is_v28_with_classifications_table(self, dbdir):
+    def test_new_db_has_classifications_table(self, dbdir):
+        """Classifications tabulka (v26) persistuje i v aktuálním schématu (B10 v29)."""
         from stopa.data.schema import SCHEMA_VERSION
 
-        assert SCHEMA_VERSION == 28
+        assert SCHEMA_VERSION == 29
         d = CaseDB(dbdir / f"{CASE_ID}.db")
         try:
             assert d.schema_version() == SCHEMA_VERSION
@@ -154,7 +155,7 @@ class TestSchemaV26:
             d.close()
 
     def test_legacy_v25_migrates_to_latest(self, dbdir):
-        """Staré v25 DB (bez tabulky) se po open dostanou na aktuální verzi (v28)."""
+        """Staré v25 DB (bez tabulky) se po open dostanou na aktuální verzi (B10 v29)."""
         path = dbdir / f"{CASE_ID}.db"
         d = CaseDB(path)
         d.conn.execute("DROP TABLE classifications")
@@ -164,9 +165,9 @@ class TestSchemaV26:
         d.conn.commit()
         d.close()
 
-        d2 = CaseDB(path)  # reopen → apply_legacy_migrations (v26 + v27 + v28 aditivní)
+        d2 = CaseDB(path)  # reopen → apply_legacy_migrations (v26..v29 aditivní)
         try:
-            assert d2.schema_version() == 28
+            assert d2.schema_version() == 29
             tables = {
                 r[0] for r in d2.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
             }

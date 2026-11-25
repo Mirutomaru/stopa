@@ -138,6 +138,7 @@ def apply_legacy_migrations(conn: sqlite3.Connection) -> None:
     apply_classification_migration(conn)  # P3-3 (v26): tabulka classifications (aditivní)
     apply_seal_chain_migration(conn)  # P4-6 (v27): tabulka seal_chain — sealing v2 chain (aditivní)
     apply_source_manifest_migration(conn)  # P0.4/P1 (v28): sources manifest sloupce (aditivní)
+    apply_ingest_profile_migration(conn)  # B10 (v29): sources.ingest_profile — provenience profilu (aditivní)
     # E1: verze schématu — stará DB se migrují idempotentně nahoře;
     # po migraci zaznamenáme aktuální verzi pro diagnostiku (stopa audit / Diagnostics).
     if _schema_version(conn) < SCHEMA_VERSION:
@@ -511,4 +512,23 @@ def apply_source_manifest_migration(conn: sqlite3.Connection) -> None:
         if col not in src_cols:
             conn.execute(f"ALTER TABLE sources ADD COLUMN {col} {decl}")
             conn.commit()
+
+
+def apply_ingest_profile_migration(conn: sqlite3.Connection) -> None:
+    """B10 (v29): ``sources.ingest_profile`` — provenience ingest profilu zdroje.
+
+    Do B10 byl profil (forensic/ediscovery/quick) evidován jen v jediném auditním
+    entry (``details={"profile": ...}``) — bez parsování hash chainu nešlo zjistit,
+    jakým profilem byl zdroj zpracován (SHA-512/dedup/extrakce ano/ne). Čistě
+    aditivní: legacy řádky dostanou default ``'forensic'`` = chování před B10
+    (výchozí profil CLI ``add --profile`` je právě forensic; bez ztráty dat —
+    skutečná historie starých zdrojů zůstává v audit chainu). Idempotentní —
+    kontrola přes PRAGMA table_info, ALTER TABLE ADD COLUMN.
+    """
+    src_cols = {r["name"] for r in conn.execute("PRAGMA table_info(sources)").fetchall()}
+    if "ingest_profile" not in src_cols:
+        conn.execute(
+            "ALTER TABLE sources ADD COLUMN ingest_profile TEXT DEFAULT 'forensic'"
+        )
+        conn.commit()
 

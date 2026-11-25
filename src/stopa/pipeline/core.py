@@ -184,6 +184,14 @@ def process_source(
         details={"source_id": source_id, "profile": profile_name},
     )
 
+    # B10 — provenience ingest profilu v DB (legacy default 'forensic' drží BC).
+    # Explicitní commit: profilová zpráva musí být stejně trvanlivá jako audit entry.
+    db.conn.execute(
+        "UPDATE sources SET ingest_profile = ? WHERE id = ?",
+        (profile.name, source_id),
+    )
+    db.conn.commit()
+
     walked = walk_source(root)
     total = len(walked)
 
