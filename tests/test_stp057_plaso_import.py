@@ -93,7 +93,7 @@ class TestParseL2tcsv:
             "date,time,timezone,MACB,source,sourcetype,type,user,host,"
             "short,desc,version,filename,inode,notes,format,extra\n"
             '10/30/2026,12:00:00,Z,,STOPA,email,Event Time,,,mail,"",2,m.e,,'
-            ',stopa.timeline,{nevalidni json}\n'
+            ',,stopa.timeline,{nevalidni json}\n'
         )
         events = parse_l2tcsv(text)
         assert len(events) == 1  # řádek se neztrácí kvůli extra JSON

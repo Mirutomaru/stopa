@@ -92,5 +92,6 @@ def source_size(root: Path) -> int | None:
                 if not p.is_symlink():
                     total += p.stat().st_size
             except OSError:
+                # poškozený odkaz / soubor zmizel → 0 B v odhadu kapacity — H1
                 pass
     return total

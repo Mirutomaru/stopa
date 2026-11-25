@@ -907,6 +907,7 @@ def cmd_antiforensics(args: argparse.Namespace) -> int:
                             parsed = parsed.replace(tzinfo=timezone.utc)
                         ts_dt, ts_origin = parsed, "source"
                     except ValueError:
+                        # nevalidní ISO timestamp → origin zůstává "derived" — H1
                         pass
                 arts.append(Artifact(
                     source_id=scan_source.id, file_id=scan_file_id,

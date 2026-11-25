@@ -84,6 +84,7 @@ def _parse_ts(value: str | None) -> datetime | None:
         dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
         return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except ValueError:
+        # ne ISO-8601 → zkoušíme unix epoch níže (final None = nečas) — H1
         pass
     # unix epoch (s i ms — Kraken float epoch, Binance/Coinbase někdy numeric)
     try:

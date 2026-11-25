@@ -19,11 +19,14 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 from stopa.domain.json_bounded import bounded_json_loads
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -105,7 +108,11 @@ def parse_l2tcsv(text: str) -> list[PlasoEvent]:
                 if isinstance(parsed, dict):
                     details = parsed
             except (json.JSONDecodeError, ValueError):
-                pass  # nevalidní extra → detail bez něj, řádek zůstává
+                # nevalidní extra → detail bez něj, řádek zůstává — H1: stav do logu
+                logger.debug(
+                    "l2tcsv %s: nevalidní extra JSON → detail bez něj",
+                    raw.get("filename") or "?",
+                )
 
         desc = raw.get("desc", "")
         if desc and "desc" not in details:

@@ -20,6 +20,7 @@ IO wrapper (čtení .db + .wal souborů) žije v ``artifacts/sqlite_recover.py``
 
 from __future__ import annotations
 
+import logging
 import struct
 from typing import Any
 
@@ -35,6 +36,8 @@ from stopa.domain.sqlite_parser import (
     parse_header,
     wal_frames,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _detect_text_field(buf: bytes, pos: int) -> tuple[int, str] | None:
@@ -123,7 +126,11 @@ def rows_from_page(
             try:
                 add(rowid, tuple(decode_record(record)), record)
             except ValueError:
-                pass  # poškozená aktivní buňka → přeskočit
+                # poškozená aktivní buňka → přeskočit — H1: stav do logu
+                logger.debug(
+                    "%s p.%d rowid=%s @%d: poškozená aktivní buňka (decode)",
+                    source, page_no, rowid, cell_off,
+                )
 
     def in_covered(pos: int) -> bool:
         return any(s <= pos < e for s, e in covered)

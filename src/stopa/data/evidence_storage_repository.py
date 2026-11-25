@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,8 @@ from stopa.domain.evidence_storage import (
 from stopa.domain.evidence_storage import (
     export_manifest as domain_export_manifest,
 )
+
+logger = logging.getLogger(__name__)
 
 _CHUNK_SIZE = 1024 * 1024  # 1 MiB — streamovací rehash bez držení souboru v RAM
 
@@ -104,7 +107,10 @@ class EvidenceStorageRepository:
                     try:
                         actual_sha, actual_size = _hash_file(Path(root) / rp)
                     except OSError:
-                        pass  # nečitelný soubor = chybí (konzervativně)
+                        # nečitelný soubor = chybí (konzervativně) — H1: stav do logu
+                        logger.debug(
+                            "evidence %s/%s: nečitelný referenční soubor → chybí", sid, rp
+                        )
                 entries.append(
                     EvidenceEntry(
                         source_id=sid,
@@ -123,7 +129,10 @@ class EvidenceStorageRepository:
             try:
                 actual_sha, actual_size = _hash_file(Path(spath) / rp)
             except OSError:
-                pass  # nečitelný soubor = chybí (konzervativně)
+                # nečitelný soubor = chybí (konzervativně) — H1: stav do logu
+                logger.debug(
+                    "evidence %s/%s: nečitelný uložený soubor → chybí", sid, rp
+                )
             entries.append(
                 EvidenceEntry(
                     source_id=sid,

@@ -341,7 +341,8 @@ def _map_one(model: ModelSpec, chat_ctx: str | None = None) -> list[ArtifactSpec
                 try:
                     details["lat" if k == "Latitude" else "lon" if k == "Longitude" else "accuracy"] = float(f[k])
                 except ValueError:
-                    pass
+                    # nečíselné souřadnice → detail bez pole — H1: stav do logu
+                    logger.debug("poloha %s: nečíselné %s=%r", f.get("RecordID"), k, f.get(k))
         return [ArtifactSpec("location", _title(f, "Name", "PositionAddress") or "(poloha)", ts, details)]
 
     if model.model_type == "CalendarEntry":

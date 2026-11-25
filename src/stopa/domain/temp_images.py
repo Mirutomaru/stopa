@@ -261,6 +261,7 @@ class EncryptedTempImage:
             try:
                 size = self._path.stat().st_size
             except OSError:
+                # soubor mohl mezi close a stat zmizet → size=0, unlink níže missing_ok — H1
                 pass
             _zero_fill(self._path)
             try:

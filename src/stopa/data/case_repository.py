@@ -7,11 +7,14 @@ Vyčleněno z monolitu ``db.py``: tabulky ``cases``, ``sources``,
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from datetime import datetime, timezone
 
 from stopa.domain import source_manifest as sm  # P0.4/P1 — zdrojový manifest (čistá logika)
 from stopa.models import Case, EvidenceSource
+
+logger = logging.getLogger(__name__)
 
 
 class CaseRepository:
@@ -64,12 +67,20 @@ class CaseRepository:
                         r["last_auto_export_at"]
                     )
                 except ValueError:
-                    pass  # poškozený timestamp → None (scheduler spustí znovu)
+                    # poškozený timestamp → None (scheduler spustí znovu) — H1
+                    logger.warning(
+                        "case %s: poškozený last_auto_export_at=%r → None",
+                        c.id, r["last_auto_export_at"],
+                    )
             if r["created_at"]:
                 try:
                     c.created_at = datetime.fromisoformat(r["created_at"])
                 except ValueError:
-                    pass
+                    # poškozený created_at → default modelu — H1 (trvalá data)
+                    logger.warning(
+                        "case %s: poškozený created_at=%r → default",
+                        c.id, r["created_at"],
+                    )
             out.append(c)
         return out
 
