@@ -34,7 +34,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 | ID | Úkol | Zdroj | Stav |
 |----|------|-------|------|
 | B11 | i18n testy na schéma/proměnné/pokrytí (shoda klíčů cs↔en, placeholdery, pokrytí 349 klíčů) místo křehkých byte-goldens; byte-goldeny jen u nejkritičtějších výstupů | D7/Q6 · S | ✅ DONE `152b090` |
-| B12 | Práh přechodu FTS5 → dedikovaný search engine: jasné výkonnostní prahy (objem, složité dotazy, faceting/agregace) + navrh volitelné rozšiřující cesty nad FTS5 | Q5 · L | TODO |
+| B12 | Práh přechodu FTS5 → dedikovaný search engine: jasné výkonnostní prahy (objem, složité dotazy, faceting/agregace) + navrh volitelné rozšiřující cesty nad FTS5 | Q5 · L | ✅ DONE `5a7a138` |
 
 ### Průběžná forenzní hygiena (napříč fázemi)
 | ID | Úkol | Stav |
@@ -156,3 +156,24 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - `tests/test_b11_i18n_schema.py` — 8 testů (A×2 parametrizované jazyky, B, C, D, E); deterministická statická analýza katalogů + zdrojů `src/stopa`, offline.
 - Mutace ověřeny: placeholder divergence / chybějící referencovaný klíč / mrtvý klíč / špatný formát / prázdná hodnota → 5 čitelných failures; reálný src (1 call-site s kwargem `cli.h.330, defaults=`) zelený.
 - Gate: b11+p48+p11 = **58 passed**, ruff clean. Rozhodnutí F-5: p48 CS byte-golden zůstává jako nejkritičtější výstup; žádné nové goldeny.
+
+### B12 — Práh přechodu FTS5 → dedikovaný search engine (DONE 2026-11-25, commit `5a7a138`)
+**Nález audit-first (stát před implementací):**
+- F-1 objem: žádný programatický práh search workloadu. `case_scale()` klasifikuje celý případ, ale kritérium „kdy zvážit dedikovaný engine“ neexistuje; bm25/REBUILD náklady rostou lineárně s řádky `files`/`artifacts`.
+- F-2 složité dotazy (měřená stěna): `SearchRepository._expand_relations` načte **celé** `graph_edges` do Pythonu per dotaz a běží BFS **per hit artifact** → O(A·E) v čistém Pythonu; metadata-only cesta `_base_records` načte všechny řádky `files` + Pydantic `model_dump` per záznam (O(N)); index jen na `case_id`.
+- F-3 faceting/agregace: žádná agregace v search povrchu; FTS5 nemá GROUP BY nad zásahy → facets by vyžadovaly Python full-scan = stejná stěna. Funkční trigger pro engine.
+- F-4 tokenizer: defaultní unicode61, bez diakritiky/stemmingu → CZ „é/e“ nesedí; funkční mezera = součást kritéria „složité dotazy“.
+- F-5 portabilita invariant: case kontejner = přenosný SQLite soubor + offline; externí search service tento invariant porušuje → rozšiřující cesta musí být koloceovaná/vložená a rekonstruovatelná ze zdrojových tabulek, nebo explicitní opt-in s dokumentovaným degradováním.
+
+**Rozhodnutí návrhu:**
+1. Čistá doména `domain/search_scale.py`: prahy SEARCH_FILES_ROWS=500_000 / SEARCH_ARTIFACTS_ROWS=200_000 (konzistentní s B10) + GRAPH_EDGES_ROWS=50_000 (F-2 stěna); tier `fts_ok|fts_watch|engine_candidate` (ratio 0.1 jako B10); `classify_search_workload(files_rows, artifacts_rows, graph_edges_rows)` → profil s postupy; TypeError/ValueError konvence jako case_scale.
+2. Data facade `search_workload()` — read-only statistika (files/artifacts/graph_edges řádky) + klasifikace; aditivní na FilesFacadeMixin.
+3. CLI: `stopa case scale` rozšíří report o sekci `search` (JSON + lidský výstup, aditivní BC).
+4. Rozšiřující cesta (navrh): invariant = zdrojové tabule jsou autoritativní, každý index je odvozený a rekonstruovatelný; stupeň 0 FTS5 vložený (default); stupeň 1 koloceovaný sidecar engine v case diru (portabilita drží, opt-in, `SearchBackend` protokol capabilities/search/rebuild); stupeň 2 síťový engine explicitní opt-in (workbench multi-user), portabilita degraduje na snapshot+reindex. Migrace = shadow index + ekvivalenční zlatá sada dotazů + přepínač s FTS5 fallbackem.
+
+**Implementace + ověření (commit `5a7a138`, 4 soubory +402):**
+- `src/stopa/domain/search_scale.py` — čistá doména: prahy SEARCH_FILES_ROWS=500_000 / SEARCH_ARTIFACTS_ROWS=200_000 (konzistentní s B10) + GRAPH_EDGES_ROWS=50_000; tier fts_ok|fts_watch|engine_candidate (max ratio napříč metrikami, watch 0.1); postupový tuple roste s tierem v stabilním pořadí; TypeError (bool explicitně odmítnut)/ValueError (záporné).
+- `FilesFacadeMixin.search_workload()` — read-only statistika řádků files/artifacts/graph_edges + klasifikace; žádný commit.
+- CLI `case scale` — aditivní sekce `search` v JSON i lidském výstupu (tier, počty, postupy); B10 pole nezměněna.
+- `tests/test_b12_search_scale.py` — 23 testů: A prahy/hranice/typová semantika, B read-only + eskalace stěny graph_edges, C CLI E2E (JSON+lidský). Mutace ověřeny: 5 porušení invariantů (práh ≥1.0, watch ratio, pořadí postupů, bool přijat, fts_ok s postupy) → 5 čitelných failures.
+- Gate: b12+b10+p14+p48+p11+pipeline = **107 passed**, ruff clean. Rozšiřující cesta (SearchBackend/sidecar engine) zůstává navrh bez implementace — až tier engine_candidate se v praxi objeví.

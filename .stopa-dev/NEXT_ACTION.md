@@ -1,17 +1,17 @@
-# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 13)
+# NĚJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 14)
 
-## Hotovo právě teď: **B11 [S] i18n testy na schéma/proměnné/pokrytí**
-Commit `152b090`. Forenzní kritérium: katalogové invariance chráněné testy místo runtime překvapení (tiché `{x}` ve výstupu, mrtvé položky); test-only sada bez změny kódu.
-1) **A schéma** — flat dict[str,str], neprázdné klíče/hodnoty, formát `^cli\.[A-Za-z0-9_.]+$` (349 klíčů v obou jazycích).
-2) **B placeholdery** — shoda množiny `{...}` cs↔en pro každý společný klíč; dnes jediný klíč s placeholderem je `cli.h.330` (`{defaults}`), referencovaný na 1 místě právě se správným kwargem.
-3) **C+D pokrytí** — forward: každý staticky referencovaný klíč existuje v obou katalozích; reverse: žádný mrtvý klíč (49 klíčů žije jen ve string literálech `_SUBCOMMAND_EXAMPLES` — scan je počítá).
-4) **E call-site parametry (AST)** — kwargy `t("klíč", ...)` odpovídají placeholderům; placeholdery jsou na každém call-site pokryty.
-Oprava rozsahu: „odlehčené ingest režimy" patřily k B10 — audit potvrdil, že profily quick/ediscovery fungují end-to-end (CLI add/img/mob `--profile` + web `body.profile`, worker spotřebuje všech 8 profilových flagů); archivace velkých payloadů zůstává u B10 odsunuta.
-Ověřeno: ruff clean; nová sada **8/8**; gate b11+p48+p11 = **58 passed**; mutace (5 porušení) → 5 čitelných failures, reálný src zelený. Rozhodnutí F-5: p48 CS byte-golden zůstává jako nejkritičtější výstup.
-Předtím ve vlně: **B10 [L]** strategie pro velké případy — commit `98c48df` (viz níže).
+## Hotovo právě teď: **B12 [L] Práh přechodu FTS5 → dedikovaný search engine**
+Commit `5a7a138`. Forenzní kritérium: rozhodnutí „kdy zvážit dedikovaný engine“ je programatické (prahy + tier), a rozšiřující cesta je navržena kolem invariantu portability (přenosný SQLite, offline).
+Audit-first nálezy F-1..F-5: žádný objemový práh search workloadu; relační expanze `_expand_relations` = O(A·E) stěna (celé `graph_edges` per dotaz + BFS per hit artifact); faceting/agregace a diakritika/stemming = funkční triggery pro engine.
+1) **Doména `domain/search_scale.py`** — čistá: prahy SEARCH_FILES_ROWS=500_000 / SEARCH_ARTIFACTS_ROWS=200_000 (konzistentní s B10) + GRAPH_EDGES_ROWS=50_000; tier fts_ok|fts_watch|engine_candidate (max ratio napříč metrikami, watch 0.1); postupový tuple roste s tierem v stabilním pořadí; konvence TypeError (bool odmítnut)/ValueError.
+2) **Data** — `search_workload()` read-only statistika řádků files/artifacts/graph_edges + klasifikace; žádný commit.
+3) **CLI** — `stopa case scale` rozšířeno o sekci `search` (JSON i lidský výstup); B10 pole beze změny (BC).
+4) **Rozšiřující cesta (navrh, bez implementace)** — invariant: zdrojové tabule autoritativní, každý index rekonstruovatelný; stupeň 0 FTS5 vložený (default), stupeň 1 koloceovaný sidecar engine v case diru (opt-in, `SearchBackend` protokol), stupeň 2 síťový engine explicitní opt-in s degradací na snapshot+reindex.
+Ověřeno: ruff clean; nová sada **23/23**; gate b12+b10+p14+p48+p11+pipeline = **107 passed**; mutace (5 porušení) → 5 čitelných failures, reálný src zelený.
+Předtím ve vlně: **B11 [S]** i18n testy na schéma/proměnné/pokrytí — commit `152b090` (viz níže).
 
 ## Co dělat dál (backlog)
-Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
+Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 hotové + hygiena H1–H3; P0→P1→P2). Metoda: vždy 1 úkol → popis změny → minimální implementace → cílené testy + ruff → záznam do plánu.
 1. ~~**B4 [S]**~~ ✅ DONE `b49a7e5` — CI build/test s aktivním Rust wheelem (`[carving]`, běh s aktivním core, kontrola verze pinu)
 2. ~~**B5 [S]**~~ ✅ DONE `72ddd8c` — Minimální CI build/check Web SPA (tsc --noEmit + vitest + řízený build s freshness kontrolou static/spa)
 3. ~~**B6 [S]**~~ ✅ DONE `f7903e7` — Percentilová brána benchmark engine (medián + P95, dual-axis gate, baseline v2)
@@ -20,7 +20,8 @@ Plan: `.stopa-dev/PLAN_BACKLOG_2026-11.md` (B1–B12 + hygiena H1–H3; P0→P1�
 6. ~~**B9 [M]**~~ ✅ DONE `4634058` — Diagnostické mechanismy integrity (typy defektů, collect_all, transakční rotace klíčů, CLI/web exponují všechny defekty)
 7. ~~**B10 [L]**~~ ✅ DONE `98c48df` — Strategie pro velké případy (klasifikace velikosti, FTS REBUILD cesta, provenience ingest profilu v29, portabilita pin)
 8. ~~**B11 [S]**~~ ✅ DONE `152b090` — i18n testy na schéma/proměnné/pokrytí katalogu (test-only sada, mutace ověřeny)
-9. **B12 [L]** Práh přechodu FTS5 → dedikovaný search engine: výkonnostní prahy + navrh rozšiřující cesty nad FTS5 — START
+9. ~~**B12 [L]**~~ ✅ DONE `5a7a138` — Práh přechodu FTS5 → dedikovaný search engine (prahy/tier fts_ok|fts_watch|engine_candidate, sekce search v case scale, rozšiřující cesta navržena)
+Hygiena: **H1** Audit zbývajících tichých `except+pass` (~20) → explicitní logování/validační status (mimo odůvodněné C-bindingy) — START
 
 ---
 
