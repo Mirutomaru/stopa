@@ -103,6 +103,7 @@ def cmd_case_scale(args: argparse.Namespace) -> int:
     db = _open_db(args.case_id)
     try:
         report = db.case_scale()
+        report["search"] = db.search_workload()  # B12 — search workload (aditivní)
         if args.rebuild_fts:
             rebuilt = db.rebuild_fts()
             report["fts_rebuilt"] = list(rebuilt["rebuilt"])
@@ -124,9 +125,20 @@ def cmd_case_scale(args: argparse.Namespace) -> int:
     print(f"  audit log (řádky): {report['audit_log_rows']:,}")
     if "fts_rebuilt" in report:
         print(f"  FTS REBUILD:       {', '.join(report['fts_rebuilt'])}")
+    sw = report.get("search")
+    if sw is not None:  # B12 — search workload (aditivní sekce)
+        print(
+            f"  search workload:   tier={sw['tier']} "
+            f"(files {sw['files_rows']:,}, artifacts {sw['artifacts_rows']:,}, "
+            f"graph_edges {sw['graph_edges_rows']:,})"
+        )
     if report["procedures"]:
         print("Doporučené údržbové postupy:")
         for proc in report["procedures"]:
+            print(f"  - {proc}")
+    if sw is not None and sw["procedures"]:
+        print("Search workload — doporučené postupy:")
+        for proc in sw["procedures"]:
             print(f"  - {proc}")
     return 0
 

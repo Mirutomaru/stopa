@@ -143,3 +143,31 @@ class FilesFacadeMixin:
         self.conn.commit()
         PROCESS_CACHE.invalidate(self._cache_scope)
         return {"rebuilt": ["files_fts", "artifacts_fts"]}
+
+    # ── B12 — práh přechodu FTS5 → dedikovaný search engine ─────────────────
+
+    def search_workload(self) -> dict:
+        """B12 — read-only statistika search workloadu + klasifikace.
+
+        Statistiky: řádky ``files``/``artifacts``/``graph_edges`` (zdrojové
+        tabule = autoritativní; FTS indexy jsou odvozené). Klasifikace z čistého
+        doménového ``classify_search_workload`` (tier fts_ok|fts_watch|
+        engine_candidate + doporučené postupy). Read-only — žádný commit.
+
+        F-1..F-3 backlogu: programatický práh, kdy zvážit dedikovaný engine.
+        """
+        from stopa.domain.search_scale import classify_search_workload
+
+        fs = self.file_repo.stats()  # files/bytes/bad_ext/dups/signed (read-only)
+        artifacts_rows = int(
+            self.conn.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
+        )
+        edges_rows = int(self.conn.execute("SELECT COUNT(*) FROM graph_edges").fetchone()[0])
+        profile = classify_search_workload(fs["files"], artifacts_rows, edges_rows)
+        return {
+            "files_rows": fs["files"],
+            "artifacts_rows": artifacts_rows,
+            "graph_edges_rows": edges_rows,
+            "tier": profile.tier,
+            "procedures": list(profile.procedures),
+        }
