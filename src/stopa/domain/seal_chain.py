@@ -121,38 +121,73 @@ def build_record(
     )
 
 
+# B9 — strojově čitelné typy defektů seal v2 řetězce (diagnostika/kompenzace).
+SEAL_CHAIN_SEQ_GAP = "seq_gap"                  # nepretržitá sekvence 1..N
+SEAL_CHAIN_LINK_BROKEN = "link_broken"          # prev root != root předchozího záznamu
+SEAL_CHAIN_HASH_MISMATCH = "chain_hash_mismatch"  # chain_hash != přepočet
+
+
+@dataclass(frozen=True)
+class SealChainDefect:
+    """B9 — jeden defekt seal v2 řetězce s přesnou lokalizací (seq + typ)."""
+
+    seq: int | None  # None = viz message; jinak seq postiženého záznamu
+    kind: str        # SEAL_CHAIN_* konstanta
+    message: str
+
+
+def collect_chain_defects(case_id: str, records: list[SealChainRecord]) -> list[SealChainDefect]:
+    """B9 — čistá doménová skenerka celého řetězce; vrací **všechny** defekty.
+
+    Stejná pravidla i pořadí kontrol jako :func:`verify_chain` (sekvence 1..N,
+    genesis self-binding, prev root = root předchozího záznamu, přepočet
+    ``chain_hash``), ale bez fail-closed přerušení — po defektu sken pokračuje od
+    *uložených* hodnot → každý tamperovaný záznam se lokalizuje zvlášť. Prázdný
+    seznam = řetězec OK; používá report pro přesnou lokalizaci a kompenzační
+    logiku (BC: fail-closed chování viz :func:`verify_chain`).
+
+    Typová chyba ``case_id`` → :class:`TypeError` (konvence projektu).
+    """
+    if not isinstance(case_id, str):
+        raise TypeError("seal_chain: case_id musí být string")
+    defects: list[SealChainDefect] = []
+    for i, rec in enumerate(records, start=1):
+        expected_prev = (
+            records[i - 2].merkle_root_hex if i > 1 else rec.merkle_root_hex
+        )
+        # Pořadí kontrol odpovídá verify_chain (BC): sekvence → linka → hash.
+        if rec.seq != i:
+            defects.append(SealChainDefect(rec.seq, SEAL_CHAIN_SEQ_GAP,
+                                           f"seal_chain: sekvence není nepretržitá (pozice {i} ≠ seq={rec.seq})"))
+        if rec.prev_merkle_root_hex != expected_prev:
+            defects.append(SealChainDefect(rec.seq, SEAL_CHAIN_LINK_BROKEN,
+                                           f"seal_chain: záznam seq={rec.seq} — prev root "
+                                           f"{rec.prev_merkle_root_hex!r} neodpovídá kořeni předchozí pečetě "
+                                           f"(očekáváno {expected_prev!r})"))
+        # Přepočet z **uloženého** prev rootu: hash validuje vazbu na pole;
+        # samostatná kontrola nahoře validuje, že prev = kořen předchozí pečetě.
+        recomputed = compute_chain_hash(case_id, rec.ts_iso, rec.merkle_root_hex, rec.prev_merkle_root_hex)
+        if recomputed != rec.chain_hash_hex:
+            defects.append(SealChainDefect(rec.seq, SEAL_CHAIN_HASH_MISMATCH,
+                                           f"seal_chain: záznam seq={rec.seq} — chain_hash se liší od přepočtu "
+                                           "(upraven case_id/ts/root/prev)"))
+    return defects
+
+
 def verify_chain(case_id: str, records: list[SealChainRecord]) -> int:
     """Ověří integritu celého řetězce; vrací počet záznamů (fail-closed).
 
     Kontrola: neprázdnost identifikátorů, nepretržitá sekvence 1..N,
     každý ``prev`` = root předchozího záznamu (genesis = vlastní root) a
     přepočet ``chain_hash``. Jakákoli odchylka → :class:`ValueError`.
+
+    B9 — pravidla sdílí se :func:`collect_chain_defects` (jediný zdroj); první
+    defekt končí ValueError s identickou zprávou jako dříve (BC). Pro všechny
+    defekty najednou použijte ``collect_chain_defects``.
     """
-    if not isinstance(case_id, str):
-        raise TypeError("seal_chain: case_id musí být string")
-    for i, rec in enumerate(records, start=1):
-        if rec.seq != i:  # nepretržitá sekvence 1..N (řádky jsou načtené v pořadí)
-            raise ValueError(f"seal_chain: sekvence není nepretržitá (pozice {i} ≠ seq={rec.seq})")
-        expected_prev = (
-            records[i - 2].merkle_root_hex
-            if i > 1
-            else rec.merkle_root_hex  # genesis pravidlo — self-binding
-        )
-        if rec.prev_merkle_root_hex != expected_prev:
-            raise ValueError(
-                f"seal_chain: záznam seq={rec.seq} — prev root {rec.prev_merkle_root_hex!r} "
-                f"neodpovídá kořeni předchozí pečetě (očekáváno {expected_prev!r})"
-            )
-        # Přepočet z **uloženého** prev rootu: hash validuje vazbu na pole;
-        # samostatná kontrola nahoře validuje, že prev = kořen předchozí pečetě.
-        recomputed = compute_chain_hash(
-            case_id, rec.ts_iso, rec.merkle_root_hex, rec.prev_merkle_root_hex
-        )
-        if recomputed != rec.chain_hash_hex:
-            raise ValueError(
-                f"seal_chain: záznam seq={rec.seq} — chain_hash se liší od přepočtu "
-                "(upraven case_id/ts/root/prev)"
-            )
+    first = collect_chain_defects(case_id, records)
+    if first:
+        raise ValueError(first[0].message)  # BC: fail-closed na prvním defektu
     return len(records)
 
 

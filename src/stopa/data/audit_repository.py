@@ -50,6 +50,26 @@ class AuditRepository:
         return row["examiner"] if row is not None else None
 
     # ── audit log (append-only + hash chaining) ─────────────────────
+    def _append_audit_row(
+        self, action: str, actor: str | None, details: dict | None
+    ) -> int:
+        """B9 — audit řádek **bez commitu** (transakci řídí volající).
+
+        Vyčleněno z :meth:`log_operation` pro atomické operace (rotace klíčů);
+        logika identická s původní implementací.
+        """
+        resolved = resolve_actor(actor, self._case_examiner())
+        _, prev = self._last_audit_row()
+        ts = datetime.now(timezone.utc).isoformat()
+        details_json = json.dumps(details or {}, ensure_ascii=False)
+        h = compute_audit_hash(prev, ts, action, resolved, details_json)
+        cur = self.conn.execute(
+            "INSERT INTO audit_log (ts, action, actor, details_json, prev_hash, hash)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (ts, action, resolved, details_json, prev, h),
+        )
+        return int(cur.lastrowid)
+
     def log_operation(
         self,
         action: str,
@@ -70,23 +90,18 @@ class AuditRepository:
         atribuci na examinera). ``strict=True`` vyžaduje vyřešeného actora,
         jinak :class:`ActorError` (default False = původní chování).
         """
-        resolved = resolve_actor(actor, self._case_examiner())
-        if strict and resolved is None:
+        if strict and resolve_actor(actor, self._case_examiner()) is None:
             raise ActorError(f"Actor je povinný při '{action}' — explicitní actor nebo case examiner")
-        _, prev = self._last_audit_row()
-        ts = datetime.now(timezone.utc).isoformat()
-        details_json = json.dumps(details or {}, ensure_ascii=False)
-        h = compute_audit_hash(prev, ts, action, resolved, details_json)
-        cur = self.conn.execute(
-            "INSERT INTO audit_log (ts, action, actor, details_json, prev_hash, hash)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (ts, action, resolved, details_json, prev, h),
-        )
-        self.conn.commit()
-        return int(cur.lastrowid)
+        row_id = self._append_audit_row(action, actor, details)
+        self.conn.commit()  # BC — log_operation zůstává samostatně atomická
+        return row_id
 
-    def verify_audit_chain(self):
-        """Ověří celý hash řetězec audit logu. Vrací :class:`ChainReport`."""
+    def verify_audit_chain(self, *, collect_all: bool = False):
+        """Ověří celý hash řetězec audit logu. Vrací :class:`ChainReport`.
+
+        B9 — ``collect_all=True`` nashromáždí **všechny** defekty (nejen první)
+        do ``report.defects``; výchozí ``False`` zachovává BC chování.
+        """
         rows = [
             ChainRow(
                 id=int(r["id"]),
@@ -102,7 +117,7 @@ class AuditRepository:
                 " FROM audit_log ORDER BY id ASC"
             ).fetchall()
         ]
-        return verify_chain(rows)
+        return verify_chain(rows, collect_all=collect_all)
 
     def list_audit_log(
         self, limit: int | None = 100, offset: int | None = None, actor: str | None = None
@@ -256,6 +271,12 @@ class AuditRepository:
         last_hash. Vrací ``{"old_public_key", "public_key_b64", "checkpoint_id"}``;
         ``None`` pokud ještě žádná pára neexistuje (volat ensure nejdřív).
         Bez cryptography → RuntimeError z generate_keypair.
+
+        B9 — explicitní transakce: auditní záznam + výměna páry v meta + rotační
+        kontrolní bod jsou all-or-nothing (dříve samostatné commity; crash uprostřed
+        mohl nechat novou pub se starým priv). Rotace je součástí hash řetězce
+        (``integrity_key_rotated``); chybějící kontrolní bod = ValueError místo
+        tichého ``checkpoint_id=None``.
         """
         old_pub = self.integrity_public_key()
         if old_pub is None:
@@ -263,15 +284,29 @@ class AuditRepository:
         priv_b64, pub_b64 = generate_keypair()  # RuntimeError bez cryptography
         secret = self._integrity_master_secret()
         stored_priv = wrap_private_key(priv_b64, secret) if secret else priv_b64
-        self.conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_priv', ?)",
-            (stored_priv,),
-        )
-        self.conn.execute(
-            "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_pub', ?)",
-            (pub_b64,),
-        )
-        cp_id = self.add_integrity_checkpoint(reason or "key_rotation")
+        with self.conn:  # B9 — jeden atomický blok; výjimka → rollback celého
+            self._append_audit_row(
+                "integrity_key_rotated",
+                None,  # atribuce na case examinera (priorita resolve_actor)
+                {
+                    "old_public_key": old_pub,
+                    "public_key_b64": pub_b64,
+                    "reason": reason or "key_rotation",
+                },
+            )
+            self.conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_priv', ?)",
+                (stored_priv,),
+            )
+            self.conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('integrity_pub', ?)",
+                (pub_b64,),
+            )
+            # Rotační bod podepsaný NOVÝM klíčem: ve stejné transakci vidíme
+            # vyměněnou páru → checkpoint vznikne vždy (fail-closed kontrola níže).
+            cp_id = self._insert_checkpoint_row(reason or "key_rotation")
+            if cp_id is None:  # B9 — prakticky nedosažitelné; fail-closed přesto
+                raise ValueError("rotace integrity klíče: nevznikl rotační kontrolní bod")
         return {
             "old_public_key": old_pub,
             "public_key_b64": pub_b64,
@@ -285,12 +320,11 @@ class AuditRepository:
         ).fetchone()
         return row["value"] if row else None
 
-    def add_integrity_checkpoint(self, reason: str) -> int | None:
-        """Podpisne hash posledního audit řádku a uloží kontrolní bod.
+    def _insert_checkpoint_row(self, reason: str) -> int | None:
+        """B9 — kontrolní bod **bez commitu** (transakci řídí volající).
 
-        Vrací ID kontrolního bodu; ``None`` pokud klíč nebyl vygenerován
-        (graceful degradation — bez balíku ``cryptography``). P0-2: bod si
-        ukládá i public key, kterým byl podepsán (rotace-safe ověření).
+        Vyčleněno z :meth:`add_integrity_checkpoint` pro atomické operace;
+        ``None`` pokud klíč nebyl vygenerován (graceful degradation).
         """
         pub = self.integrity_public_key()
         if pub is None:
@@ -313,8 +347,19 @@ class AuditRepository:
                 pub,
             ),
         )
-        self.conn.commit()
         return int(cur.lastrowid)
+
+    def add_integrity_checkpoint(self, reason: str) -> int | None:
+        """Podpisne hash posledního audit řádku a uloží kontrolní bod.
+
+        Vrací ID kontrolního bodu; ``None`` pokud klíč nebyl vygenerován
+        (graceful degradation — bez balíku ``cryptography``). P0-2: bod si
+        ukládá i public key, kterým byl podepsán (rotace-safe ověření).
+        """
+        cp_id = self._insert_checkpoint_row(reason)
+        if cp_id is not None:
+            self.conn.commit()  # BC — commit jen při skutečně vloženém bodu
+        return cp_id
 
     def list_integrity_checkpoints(self) -> list[dict]:
         """Kontrolní body (chronologicky) — pro report / nezávislou kontrolu.

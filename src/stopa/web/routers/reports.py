@@ -594,7 +594,7 @@ def register(app, ctx) -> None:
         _require("case.read", "audit_log_view", case_id=case_id)
         db = open_db(case_id)
         try:
-            report = db.verify_audit_chain()
+            report = db.verify_audit_chain(collect_all=True)  # B9 — všechny defekty
             entries = db.list_audit_log(limit=max(1, min(int(limit), 1000)), actor=actor)
             checkpoints = db.list_integrity_checkpoints()
             checkpoint_checks = db.verify_integrity_checkpoints()
@@ -606,6 +606,12 @@ def register(app, ctx) -> None:
                     "rows_checked": report.rows_checked,
                     "broken_at_id": report.broken_at_id,
                     "reason": report.reason,
+                    # B9 — strojově čitelný typ + všechny defekty (aditivní)
+                    "kind": report.kind,
+                    "defects": [
+                        {"row_id": d.row_id, "kind": d.kind, "message": d.message}
+                        for d in report.defects
+                    ],
                 },
                 "total_entries": len(entries),
                 "entries": entries,

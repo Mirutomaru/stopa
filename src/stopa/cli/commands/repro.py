@@ -18,7 +18,7 @@ def cmd_integrity(args: argparse.Namespace) -> int:
     db = _open_db(args.case_id)
 
     # 1) Hash chaining audit logu (ověřitelné bez klíče).
-    report = db.verify_audit_chain()
+    report = db.verify_audit_chain(collect_all=True)  # B9 — všechny defekty
     if not json_mode:
         if report.ok:
             print(f"Hash řetězec audit logu: OK ({report.rows_checked} řádků)")
@@ -28,6 +28,10 @@ def cmd_integrity(args: argparse.Namespace) -> int:
                 f" — {report.reason}",
                 file=sys.stderr,
             )
+            # B9 — další defekty (přesná lokalizace; první je výše).
+            for d in report.defects[1:]:
+                loc = f"řádek {d.row_id}" if d.row_id is not None else "mezera v ID"
+                print(f"  + defekt [{d.kind}] {loc}: {d.message}", file=sys.stderr)
 
     # 2) Ed25519 klíč + kontrolní body.
     pub = db.integrity_public_key()
@@ -78,6 +82,12 @@ def cmd_integrity(args: argparse.Namespace) -> int:
             "rows_checked": report.rows_checked,
             "broken_at_id": report.broken_at_id,
             "reason": None if report.ok else report.reason,
+            # B9 — strojově čitelný typ + všechny defekty (aditivní pole)
+            "kind": report.kind,
+            "defects": [
+                {"row_id": d.row_id, "kind": d.kind, "message": d.message}
+                for d in report.defects
+            ],
             "public_key": pub,
             "checkpoints_total": len(cps),
             "checkpoints_valid": sum(1 for r in results if r.get("ok")),

@@ -35,6 +35,9 @@ from stopa.domain.seal_chain import (
     build_record as _build_chain_record,
 )
 from stopa.domain.seal_chain import (
+    collect_chain_defects as _collect_chain_defects_domain,  # B9 — všechny defekty
+)
+from stopa.domain.seal_chain import (
     verify_chain as _verify_chain_domain,
 )
 
@@ -357,6 +360,13 @@ class SealRepository:
         except ValueError as exc:  # fail-closed — popisná chyba pro report
             error = f"řetěz: {exc}"
 
+        # B9 — všechny defekty najednou (přesná lokalizace + kompenzační logika);
+        # prázdné = doménová linka hashů v pořádku. Aditivní pole, BC report.
+        defects = [
+            {"seq": d.seq, "kind": d.kind, "message": d.message}
+            for d in _collect_chain_defects_domain(case_id, records)
+        ]
+
         detail: list[dict] = []
         for r in rows:
             seal_ok = True
@@ -381,6 +391,7 @@ class SealRepository:
             "count": len(rows),
             "verified": error is None and all(d["seal_ok"] for d in detail),
             "error": error,
+            "defects": defects,  # B9 — všechny defekty doménové linky (aditivní)
             "records": detail,
         }
 

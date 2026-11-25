@@ -23,9 +23,13 @@ class AuditIntegrityFacadeMixin:
             self._emit_web_event("ai.action", {"action": action, "actor": actor})
         return row_id
 
-    def verify_audit_chain(self):
-        """Ověří celý hash řetězec audit logu. Vrací :class:`ChainReport`."""
-        return self.audit_repo.verify_audit_chain()
+    def verify_audit_chain(self, *, collect_all: bool = False):
+        """Ověří celý hash řetězec audit logu. Vrací :class:`ChainReport`.
+
+        B9 — ``collect_all=True`` shrne všechny defekty (přesná lokalizace);
+        výchozí zachovává BC chování na prvním defektu.
+        """
+        return self.audit_repo.verify_audit_chain(collect_all=collect_all)
 
     # ── Ed25519 kontrolní body (P0 Core C4) ───────────────────
 

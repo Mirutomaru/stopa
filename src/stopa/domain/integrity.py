@@ -77,9 +77,29 @@ class ChainReport:
     rows_checked: int
     broken_at_id: int | None = None  # ID prvního rozbitého řádku (None = v pořádku)
     reason: str | None = None
+    kind: str | None = None          # B9 — typ prvního defektu (CHAIN_*)
+    defects: tuple[ChainDefect, ...] = ()  # B9 — všechny defekty (collect_all)
 
 
-def verify_chain(rows: list[ChainRow], *, algo: str = "sha256") -> ChainReport:
+# B9 — strojově čitelné typy defektů (diagnostika/kompenzace bez parsingu textu).
+CHAIN_HASH_MISMATCH = "hash_mismatch"        # uložený hash != přepočet z obsahu
+CHAIN_LINK_BROKEN = "link_broken"            # prev_hash != hash předchozího řádku
+CHAIN_ROW_MISSING = "row_missing"            # mezera v ID (řádek byl smazán)
+CHAIN_GENESIS_MISMATCH = "genesis_mismatch"  # první řádek neodkazuje na GENESIS
+
+
+@dataclass(frozen=True)
+class ChainDefect:
+    """B9 — jeden defekt řetězce s přesnou lokalizací (řádek + typ + zpráva)."""
+
+    row_id: int | None  # None = mezera viz message; jinak ID postiženého řádku
+    kind: str           # CHAIN_* konstanta
+    message: str
+
+
+def verify_chain(
+    rows: list[ChainRow], *, algo: str = "sha256", collect_all: bool = False
+) -> ChainReport:
     """Přepočítá celý hash řetězec a ověří propojení.
 
     Řádky musí být seřazené vzestupně podle ``id`` (chronologicky). Ověření:
@@ -89,38 +109,64 @@ def verify_chain(rows: list[ChainRow], *, algo: str = "sha256") -> ChainReport:
 
     STP-022: ``algo`` — "sha256" (výchozí, backward compat) nebo "sha512".
     Vrací :class:`ChainReport` s ID prvního rozbitého řádku (pro report).
+
+    B9 — ``collect_all=False`` (BC): vrací na prvním defektu, ``defects`` nese
+    jen tento jeden záznam a ``kind`` jeho typ. ``collect_all=True``: proskenuje
+    celý řetězec a shrne **všechny** defekty do ``report.defects`` — po hash
+    mismatch se očekávání linky pokračuje od *uloženého* hashu (každý tamperovaný
+    řádek se lokalizuje zvlášť, bez kaskády) a navíc detekuje mezery v ID
+    (``CHAIN_ROW_MISSING`` — smazaný řádek ≠ tampering). U prvního řádku dostává
+    genesis rozbití vlastní kind ``CHAIN_GENESIS_MISMATCH`` s jasnou zprávou.
     """
     genesis = _genesis(algo)  # fail fast na neznámý algoritmus
     if not rows:
         return ChainReport(ok=True, rows_checked=0)
 
+    defects: list[ChainDefect] = []
+    prev_id: int | None = None
     prev = genesis
+
     for row in rows:
-        expected = compute_audit_hash(row.prev_hash, row.ts, row.action, row.actor, row.details_json, algo=algo)
+        expected = compute_audit_hash(
+            row.prev_hash, row.ts, row.action, row.actor, row.details_json, algo=algo
+        )
         if row.hash != expected:
-            return ChainReport(
-                ok=False,
-                rows_checked=row.id,
-                broken_at_id=row.id,
-                reason=f"hash řádku {row.id} neodpovídá přepočtu",
-            )
+            d = ChainDefect(row_id=row.id, kind=CHAIN_HASH_MISMATCH,
+                            message=f"hash řádku {row.id} neodpovídá přepočtu")
+            defects.append(d)
+            if not collect_all:
+                return ChainReport(ok=False, rows_checked=row.id, broken_at_id=row.id,
+                                   reason=d.message, kind=d.kind, defects=tuple(defects))
         if row.prev_hash != prev:
-            return ChainReport(
-                ok=False,
-                rows_checked=row.id,
-                broken_at_id=row.id,
-                reason=f"prev_hash řádku {row.id} nesejde s hash předchozího řádku",
-            )
+            if prev_id is None:  # první řádek — genesis, ne „předchozí řádek“
+                d = ChainDefect(row_id=row.id, kind=CHAIN_GENESIS_MISMATCH,
+                                message=f"první řádek {row.id} neodkazuje na GENESIS")
+            else:
+                d = ChainDefect(row_id=row.id, kind=CHAIN_LINK_BROKEN,
+                                message=f"prev_hash řádku {row.id} nesejde s hash předchozího řádku")
+            defects.append(d)
+            if not collect_all:
+                return ChainReport(ok=False, rows_checked=row.id, broken_at_id=row.id,
+                                   reason=d.message, kind=d.kind, defects=tuple(defects))
+        # B9 — mezera v ID (smazaný řádek): linka je přerušena i přes prev_hash,
+        # ale příčina = chybějící záznam. V BC režimu ji maskuje LINK_BROKEN výše;
+        # collect_all hlásí obě skutečnosti.
+        if prev_id is not None and row.id != prev_id + 1:
+            d = ChainDefect(row_id=row.id, kind=CHAIN_ROW_MISSING,
+                            message=f"po řádku {prev_id} chybí řádek(y) do id {row.id - 1}")
+            defects.append(d)
+            if not collect_all:
+                return ChainReport(ok=False, rows_checked=row.id, broken_at_id=row.id,
+                                   reason=d.message, kind=d.kind, defects=tuple(defects))
+        prev_id = row.id
+        # Očekávání pro další iteraci = uložený hash (ne přepočet) → jeden
+        # tamperovaný řádek nevyvolává kaskádové link defekty v collect_all.
         prev = row.hash
 
-    first = rows[0]
-    if first.prev_hash != genesis:
-        return ChainReport(
-            ok=False,
-            rows_checked=first.id,
-            broken_at_id=first.id,
-            reason="první řádek neodkazuje na GENESIS",
-        )
+    if defects:  # B9 — collect_all proscenul celý řetězec; první defekt určuje BC pole
+        first = defects[0]
+        return ChainReport(ok=False, rows_checked=len(rows), broken_at_id=first.row_id,
+                           reason=first.message, kind=first.kind, defects=tuple(defects))
     return ChainReport(ok=True, rows_checked=len(rows))
 
 
