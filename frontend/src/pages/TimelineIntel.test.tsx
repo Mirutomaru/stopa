@@ -60,7 +60,11 @@ describe("TimelineIntel (P3-6 SPA view, smoke)", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("Případ TI");
     });
-    expect(timelineIntel).toHaveBeenCalledTimes(1);
+    // druhý fetch (timelineIntel) spouští effect PO commitu s headingem — na pomalejší CI
+    // může poll detekovat heading dříve než effect vyvolá volání → spy race, proto waitFor.
+    await waitFor(() => {
+      expect(timelineIntel).toHaveBeenCalledTimes(1);
+    });
     // summary řádek s počty — druhý fetch (timelineIntel) může na pomalejší CI dorazit
     // až po headingu (první fetch) → race, proto waitFor; zbytek body je z téhož
     // render pass a následuje synchronně.

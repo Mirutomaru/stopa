@@ -69,9 +69,17 @@ describe("AttackMap (P4-4 W2 SPA view, parita F6.3)", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("Případ ATK");
     });
-    expect(attackMap).toHaveBeenCalledTimes(1);
-    // summary řádek (parita s legacy F6.3)
-    expect(screen.getByText(/Artefakty: 5/)).toBeInTheDocument();
+    // druhý fetch (attackMap) spouští effect PO commitu s headingem — na pomalejší CI
+    // může poll detekovat heading dříve než effect vyvolá volání → spy race, proto waitFor.
+    await waitFor(() => {
+      expect(attackMap).toHaveBeenCalledTimes(1);
+    });
+    // summary řádek (parita s legacy F6.3) — data z druhého fetchu mohou dorazit až po
+    // headingu (první fetch) → race, proto waitFor; zbytek sekce je ze stejného render
+    // pass a následuje synchronně.
+    await waitFor(() => {
+      expect(screen.getByText(/Artefakty: 5/)).toBeInTheDocument();
+    });
     expect(screen.getByText(/mapováno: 4/)).toBeInTheDocument();
     expect(screen.getByText(/bez techniky: 1/)).toBeInTheDocument();
     expect(screen.getByText(/techniky s hity: 3/)).toBeInTheDocument();
