@@ -249,6 +249,13 @@ _SUBCOMMAND_EXAMPLES = {
     "crypto-report": "cli.h.056",
     "serve": "cli.h.057",
     "install": "cli.h.058",
+    # B7 — top-level skupiny: reprezentativní příklady subakcí v nové syntaxi;
+    # _ex_sub je bere automaticky podle jména (integrity má explicitní example=
+    # při registraci, protože její starý klíč cli.h.027 = flat syntaxe)
+    "import": "cli.h.346",
+    "forensic": "cli.h.347",
+    "crypto": "cli.h.348",
+    "court": "cli.h.349",
 }
 
 
@@ -283,9 +290,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # B7 — konzolidační skupiny (příbuzné příkazy pod jednotný kořen; stará jména
     # zůstávají skrytými BC aliasy s DeprecationWarning, viz _util.register_alias).
-    # "integrity" je raw add_parser, protože tabulka příkladů nese klíč "integrity"
-    # pro podakci check (skupina sama žádný příklad nemá).
-    integ_p = sub.add_parser("integrity", help=t("cli.h.337"))
+    # "integrity" — B7: skupina se subakcemi; explicitní example= (H3 gate r0.4), protože
+    # starý klíč tabulky "integrity" → cli.h.027 nese flat syntaxi (zůstává pro check)
+    integ_p = _ex_sub(sub, "integrity", help=t("cli.h.337"), example=t("cli.h.345"))
     integ_sub = integ_p.add_subparsers(dest="integrity_cmd", required=True)
     import_grp_p = _ex_sub(sub, "import", help=t("cli.h.338"))
     import_grp_sub = import_grp_p.add_subparsers(dest="import_cmd", required=True)

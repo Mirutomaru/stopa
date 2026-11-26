@@ -347,5 +347,10 @@
   "cli.h.341": "Court readiness (SWGDE, Daubert)",
   "cli.h.342": "B10 — case scale classification (large cases) + optional FTS rebuild",
   "cli.h.343": "rebuild the FTS5 indexes files_fts + artifacts_fts from source tables (idempotent)",
-  "cli.h.344": "stopa case scale case-01 --json"
+  "cli.h.344": "stopa case scale case-01 --json",
+  "cli.h.345": "stopa integrity check case-abc --init-key --checkpoint \"before export\"",
+  "cli.h.346": "stopa import plaso case-abc /path/l2tcsv.txt",
+  "cli.h.347": "stopa forensic pcap case-abc /evidence/capture.pcapng",
+  "cli.h.348": "stopa crypto report case-abc --format html",
+  "cli.h.349": "stopa court swgde case-abc --out ./reports"
 }

@@ -24,6 +24,8 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "meta_notes": ("Poznámky", "Notes"),
     "meta_generated": ("Report vygenerován", "Report generated"),
     "meta_tool": ("Nástroj", "Tool"),
+    # H3 — verze výstupního schématu (cover, strojově čitelná i v <head>)
+    "meta_schema_version": ("Verze výstupního schématu", "Output schema version"),
     # ── sekce 1 — chain of custody ─────────────────────────────
     "sec_coc": (
         "Chain of custody — evidence sources",

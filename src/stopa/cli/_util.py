@@ -120,7 +120,20 @@ def _add_json_flag(p: argparse.ArgumentParser) -> None:
 
 
 def _print_json(payload: object) -> None:
-    """Vypíše validní JSON na stdout (ensure_ascii=False; datetime/Path → str)."""
+    """Vypíše validní JSON na stdout (ensure_ascii=False; datetime/Path → str).
+
+    H3 — explicitní verze výstupního schématu ve všech ``--json`` výstupech:
+    dict payload dostane klíč ``stopa_output_schema`` (aditivně; verze je
+    autoritativní, proto za rozšířením payloadu), list se zabalí do
+    ``{"stopa_output_schema": N, "items": [...]}`` (jediný takový output =
+    audit trail — konzumenti čtou ``items``). Ostatní typy procházejí beze změny.
+    """
+    from stopa.domain.output_schema import OUTPUT_SCHEMA_VERSION, SCHEMA_KEY  # lazy — bez cyklu
+
+    if isinstance(payload, dict):
+        payload = {**payload, SCHEMA_KEY: OUTPUT_SCHEMA_VERSION}
+    elif isinstance(payload, list):
+        payload = {SCHEMA_KEY: OUTPUT_SCHEMA_VERSION, "items": payload}
     print(json.dumps(payload, ensure_ascii=False, default=str))
 
 

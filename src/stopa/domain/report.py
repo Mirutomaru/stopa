@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from stopa.domain.i18n import normalize_lang, t, t_fmt
+from stopa.domain.output_schema import OUTPUT_SCHEMA_VERSION  # H3 — verze výstupního schématu
 
 
 @dataclass(frozen=True)
@@ -295,6 +296,8 @@ def build_html(data: ReportData, lang: str | None = None, _clock=None) -> str:
     parts: list[str] = []
     parts.append(
         f"<!DOCTYPE html>\n<html lang='{L}'><head><meta charset='utf-8'>"
+        # H3 — strojově čitelná verze výstupního schématu (konzumenti/EDA)
+        f"<meta name='stopa-output-schema' content='{OUTPUT_SCHEMA_VERSION}'>"
         f"<title>{t('report_title', L)} — {_esc(data.case_name)}</title>"
         "<style>"
         "body{font-family:'DejaVu Serif',Georgia,serif;font-size:10pt;color:#1a1a1a;"
@@ -333,6 +336,8 @@ def build_html(data: ReportData, lang: str | None = None, _clock=None) -> str:
         (t("meta_notes", L), data.notes or "—"),
         (t("meta_generated", L), generated.isoformat()),  # P0.5 — ISO 8601 s explicitní TZ
         (t("meta_tool", L), f"STOPA v{__version__} (unifikovaná forenzní workbench)"),
+        # H3 — verze výstupního schématu (court-ready + konzumenti)
+        (t("meta_schema_version", L), f"v{OUTPUT_SCHEMA_VERSION}"),
     ]
     if gen_note or data.generated_at_note:
         note = " ".join(x for x in (gen_note, data.generated_at_note) if x)

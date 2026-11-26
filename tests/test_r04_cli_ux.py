@@ -62,7 +62,9 @@ def _subcommand_names():
     """Top-level subpříkazy z ``_SUBCOMMAND_EXAMPLES`` (bez case subpříkazů)."""
     from stopa.cli import _SUBCOMMAND_EXAMPLES
 
-    return [n for n in _SUBCOMMAND_EXAMPLES if not n.startswith(("new", "auto-"))]
+    # Case subpříkazy jsou v _SUBCOMMAND_EXAMPLES kvůli viditelnosti příkladů,
+    # ale nejsou top-level volby: new/auto-* filteruje prefix, scale (B10) explicitně.
+    return [n for n in _SUBCOMMAND_EXAMPLES if not n.startswith(("new", "auto-")) and n != "scale"]
 
 
 def _run_help(argv):
@@ -140,7 +142,11 @@ def test_audit_integrity_json_are_valid(capsys, tmp_path, monkeypatch):
     cid = _make_case(tmp_path, monkeypatch)
     rc = main(["audit", cid, "--json"])
     data = json.loads(capsys.readouterr().out)
-    assert rc == 0 and isinstance(data, list), "audit: očekávám JSON list"
+    # H3 — audit trail je jediný list payload: zabalí se do schématového objektu
+    assert rc == 0 and isinstance(data, dict), "audit: očekávám JSON object (H3 envelope)"
+    assert data.get("stopa_output_schema") is not None, "audit: chybí verze výstupního schématu"
+    # _make_case tvoří případ přímo přes DB → audit log může být prázdný (tvar pinujeme, ne délku)
+    assert isinstance(data["items"], list)
     for args in (["integrity", cid, "--json"],):
         rc = main(args)
         data = json.loads(capsys.readouterr().out)
