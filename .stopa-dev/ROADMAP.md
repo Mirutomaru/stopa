@@ -101,6 +101,7 @@ Dlouhodobá vývojová mapa. Stav vychází ze zdrojového kódu a testů (2026-
 ## P. Quality Assurance
 - **Stav:** ✅ hotovo (ETAPA D dokončena ★★ — CI benchmark job + E2E testy + dokumentace) | **Priorita:** P1
 - **Dokončeno:** 1813 testů plně offline (syntetické fixtures), ruff clean, deterministická coverage matice, DEV OS projektová paměť. STP-022: CI pipeline `.github/workflows/ci.yml` (lint + pytest + JS DOM + pip-audit). Benchmark engine (`domain/benchmark.py` + `data/benchmark_engine.py`, CLI `stopa benchmark`) s detekcí regresí >20 %. **STP-043: CI job `benchmark`** — běh engine suite=all (77 položek) proti versionované baseline `benchmarks/baseline.json`, fail na regresi >20 % a ≥0.5 ms (CI noise guard), upload výsledků jako artifact. **STP-044: E2E subprocess testy** (`tests/test_stp044_ci_benchmark_e2e.py`, 6) + dokumentace `docs/STOPA_BENCHMARKS.md` (workflow, prahy, baseline update, report/artifact).
+- **Nedokončeno:** **Release 2.8 — diferenciální testování parserů** (scope rozhodnutí vlny 26; design `docs/DIFFERENTIAL_TESTING.md` schválen): pilot vlna 1 = sqlite + textový formát (normalizační vrstva §3, komparační engine se sémantikou verdiktů §4–5, CLI `stopa differential`, `[diffref]` extras s graceful degradation); nový aditivní stav parseru `differentially_validated`; reference dataset gap 0/78.
 
 ## Q. Interoperability
 - **Stav:** ✅ hotovo + rozšířeno ★★ (STP-059 Timesketch push) | **Priorita:** P3

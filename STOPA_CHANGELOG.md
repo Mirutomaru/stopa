@@ -2,6 +2,12 @@
 
 Formát: Conventional Commits + fáze. Nejnovější nahoře.
 
+## [Unreleased] — 2026-11-26 (**STOPA 2.8 (plánovací vlna)**: post-release údržba nad tagem `v2.7.1` + scope rozhodnutí release 2.8)
+
+Post-release údržba nad tagem `v2.7.1`:
+- **Web SPA race fix (`5d88f63`)** — testy TimelineIntel+AttackMap: druhý fetch (effect se spustí až po commitu s headingem) i summary řádek z dat druhého fetchu → `waitFor()`; CI run na `8295426` = 10/11 (flake na pomalém runneru, lokálně pre-fix green ×10), po fixu CI **11/11**; gate tsc strict exit 0 + vitest 20/20.
+- **Vlna 26 — plánovací vlna release 2.8 (docs-only)**: post-release audit ploch (verzní re-stamp PROJECT_STATE/TEST_REGISTRY/ROADMAP 2.7.0→2.7.1, fáze entry RELEASE 2.7.1 VYDANÝ), ROADMAP oblast P doplněno „Nedokončeno“ = scope release 2.8; **scope rozhodnutí: flagship release 2.8 = diferenciální testování parserů** (design `docs/DIFFERENTIAL_TESTING.md` schválen; pilot vlna 1 dle §7: sqlite + textový formát; normalizační vrstva + komparační engine se sémantikou verdiktů + CLI `stopa differential`; `[diffref]` extras s graceful degradation; nový aditivní stav parseru `differentially_validated`; reference dataset gap 0/78).
+
 ## [Unreleased] — 2026-11-26 (**STOPA 2.7.1**: maintenance vlny F + F6 nad tagem `v2.7.0` (post-release údržba po release 2.7) — F-4 benchmark current-only warning (explicitní logging + caplog testy); F1 verze 2.7 v ROADMAP/PROJECT_STATE/TEST_REGISTRY; F2 FEATURE_REGISTRY re-stamp (21 řádků → 2.7.0, F-096 STP-070, sekce release 2.7 = F-097..F-109, 8 oprav Omezení); F3 stopa_core wheels re-pin v2.6.0→v2.7.0 (forenzní srovnání: `.so` payload byte-identický); F5 post-push audit (B9 consumer uzavřen na řádkové úrovni, hygiena repa OK); full suite fresh **5486p/2s** EXIT=0; CI na `10e1fc7` = **11/11 success**; F6 docs hygiena — 8 stale dokumentů → archive, 4 superseded bannery (ETAPA C design + threat-model snapshot), changelog mirror resync (docs/ zrcadlo desynkronizované od 2026-11-17) + sync guard testy)
 
 ### Post-release vlny F — 2026-11-26 (nad tagem `v2.7.0`, pushnuto `a1a37ba..10e1fc7`)

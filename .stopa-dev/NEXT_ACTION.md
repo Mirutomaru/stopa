@@ -1,3 +1,11 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 26)
+
+## Hotovo právě teď: **Release 2.8 plánovací vlna — post-release audit + scope rozhodnutí** (docs-only)
+Audit ploch na main `4b543c0` (read-first): verzní plochy stale na 2.7.0 (PROJECT_STATE/TEST_REGISTRY/ROADMAP hlavička) → re-stamp; PROJECT_STATE bez fáze entry RELEASE 2.7.1 → doplněno (vlny F+F6, tag `87a1cd3`, Release WF 6/6); ROADMAP oblast P bez „Nedokončeno“ řádku → doplněno scope release 2.8; changelog root+mirror nová sekce **STOPA 2.8 (plánovací)** s post-release prací nad tagem v2.7.1 (SPA fix `5d88f63`, CI 11/11). Jediné PENDING v backlogu = DIFFERENTIAL_TESTING → **SCHVÁLENO jako flagship release 2.8** (pilot vlna 1 dle designu §7: sqlite + textový formát; normalizační vrstva+engine+CLI `stopa differential`; `[diffref]` extras s graceful degradation; stav `differentially_validated`).
+→ **Zbývá / START:** implementace diferenciálního testování — vlna 27 = **normalizační vrstva** (čistá doménová funkce dle §3: epoch normalizace, deterministické řazení, NFKC + None≠“”, join keys, canonical record) + offline testy; poté komparační engine (§4–5) + CLI `stopa differential`.
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 25)
 
 ## Hotovo právě teď: **Release 2.7.1 closed + Web SPA race fix** (`846356d`+`87a1cd3`+tag `v2.7.1`, kód `5d88f63`)
