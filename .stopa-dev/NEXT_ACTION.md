@@ -1,3 +1,11 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 19)
+
+## Hotovo právě teď: **Release 2.7 vydaný** (`v2.7.0` = `1307a23`, main+tag pushnuto přes SSH)
+Release workflow run `45787304042` green (GitHub Release s wheels x86_64/aarch64 stopa_core). CI main: první běh po pushi `45787300283` = 10/11, red jen **Web SPA** — vitest `TimelineIntel.test.tsx`: heading pochází z prvního fetche (`listCases`/`useCurrentCase`), body včetně summary až ze druhého (`timelineIntel`) → na pomalejší CI synchronní getByText stihlo prázdný stav (lokálně 3/3, závislosti bez driftu vůči lockfile). Fix `5a3491a` (test-only): summary řádek do `waitFor()` — zbytek body je z téhož render pass. Lokálně po fixu **25× vitest = 20/20** + tsc --noEmit strict OK; CI rerun `45790289140` = **11/11 success**.
+→ Release kompletní, main plně zelený. START = cílená údržba / další backlog (nové auditní vlny F*).
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 18)
 
 ## Hotovo právě teď: **Release 2.7 připraven** (post-release backlog B1–B12 + H1–H3 nad `v2.6.0`)
