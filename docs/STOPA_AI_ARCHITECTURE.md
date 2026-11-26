@@ -1,5 +1,7 @@
 # STOPA — AI Architecture (ETAPA C)
 
+> 📜 **NAVRHOVÁ DOKUMENTACE ETAPY C (2026-11-02)** — historický návrh; část implementována (STP-049). Aktuální AI stav viz `FEATURE_REGISTRY` / `STOPA_CHANGELOG.md`. Referencován README + PROJECT_STATE, proto banner místo archivace.
+
 **Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` §5 + gap analysis §4
 
 ## 1. Současný stav (E11)

@@ -274,3 +274,18 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - **Changelog test pins:** `grep STOPA_CHANGELOG tests/ src/ scripts/` = prázdné → edit bez rizika pro suite.
 **Jediná oprava (akční nález):** `STOPA_CHANGELOG.md` — post-release vlny F chyběly pod `[Unreleased]`; nová sekce nahoře dokumentuje F-4/F1/F2/F3 + F5 audit s commity a evidence (konvence: nejnovější sekce nahoře, staré drží marker `[Unreleased]`).
 **Verifikace:** ruff clean; working tree clean po commitu; doku-only změna → bez nového testovacího běhu (changelog nese jen záznam o již ověřených vlnách).
+
+### F-6 — Docs sprawl cleanup + changelog mirror resync (DONE 2026-11-26, tento commit)
+**Kontext:** pre-release auditní vlna — cíl = readiness pro další release + reziduální nálezy z review v2.6 („docs sprawl ~40 souborů“ P3; „.gitignore nekryje backups/“).
+**Nálezy audit-first (read-only):**
+- **`.gitignore` + `backups/`:** už kryto (opraveno revizní vlnou 2026-11-24) — lokální složka `backups/` ignorovaná, working tree clean → nález uzavřen.
+- **Docs sprawl:** 38 souborů v docs/; superseded banner neslo jen 5 (ROADMAP rodina + architecture.md). Reference sweep (README, AGENTS, STOPA_AI_GOVERNANCE, FORENSIC_HARDENING_REPORT, .stopa-dev/*, live doku) → **12 kandidátů bez banneru**: 8 s nulovými živými referencemi + 4 referencovaných.
+- **Changelog mirror drift:** `docs/STOPA_CHANGELOG.md` (zrcadlo kořene) se od **2026-11-17** desynkronizoval — chyběly přesně **12 nejnovějších sekcí** = všechny releases 2.1→2.7 + P/F vlny (40 vs 52 sekcí); žádný skript/test zrcadlo nechránil (`grep docs/STOPA_CHANGELOG scripts tests .github` = prázdné).
+- **DIFFERENTIAL_TESTING.md** (2026-11-18, „návrh ke schválení“, P0-4 parser-status): referován jen 2.1-dokumenty; v žádném backlogu nebyl zaregistrován = osamělý návrh s reálným gapem (`reference_dataset` nastaveno u **0/78** parserů).
+**Změny:**
+1. **git mv → `docs/archive/` (8 souborů):** TESTING_STRATEGY, FORENSIC_VALIDATION, SECURITY_HARDENING, SECURITY_AND_EVIDENCE_INTEGRITY, SYSTEM_BLUEPRINT.md+.html, ARCHITECTURE_PROPOSAL, STOPA_VALIDATION_STRATEGY — pravidlo ROADMAP_2_1: živý reference = banner, jinak archiv. Před move: **0 markdown linků** na tyto soubory z ostatních dokumentů (sweep celého repa); po move plná md-link kontrola docs/**+kořen = 0 broken.
+2. **4 bannery na retenovaných doku:** STOPA_TARGET_ARCHITECTURE/STOPA_AI_ARCHITECTURE/STOPA_SECURITY_MODEL (ETAPA C návrhová dokumentace, referencována README) + SECURITY_THREAT_MODEL (SNAPSHOT k c314435; aktuální stav ochrany = `FORENSIC_HARDENING_REPORT.md` v kořeni).
+3. **Changelog mirror resync:** `docs/STOPA_CHANGELOG.md` přesynchronizováno z kořene s zachováním Poznámka řádku (52 sekcí) + nový guard `tests/test_docs_changelog_mirror_sync.py` (mirror ≡ root modulo poznámka; poznámka přesně 1×).
+4. **DIFFERENTIAL_TESTING → PENDING** (viz níže).
+**PENDING (nové):** DIFFERENTIAL_TESTING — schválení referenčních nástrojů + build reference datasetů (0/78 parserů); návrh `docs/DIFFERENTIAL_TESTING.md` platný, závislost P0-4 (`stopa parser-status`) hotová.
+**Verifikace:** guard testy **2 passed in 0.02s**; ruff clean (src+tests+scripts); plná md-link kontrola = 0 broken; doku-only změny + 2 nové offline testy → bez full suite.

@@ -1,5 +1,7 @@
 # STOPA — Target Architecture (ETAPA C)
 
+> 📜 **NAVRHOVÁ DOKUMENTACE ETAPY C (2026-11-02)** — historický záznam cílového návrhu, ne aktuální stav kódu. Aktuální stav viz `.stopa-dev/PROJECT_STATE.md`. Referencován README, proto banner místo archivace.
+
 **Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` + `STOPA_TECHNICAL_AUDIT.md` + `STOPA_GAP_ANALYSIS.md`
 
 ## 1. Cílová architektura — principy

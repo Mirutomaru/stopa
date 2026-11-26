@@ -1,5 +1,7 @@
 # STOPA — Security Model (ETAPA C)
 
+> 📜 **NAVRHOVÁ DOKUMENTACE ETAPY C (2026-11-02)** — historický záznam návrhu, ne aktuální stav. Aktuální stav ochrany viz `FORENSIC_HARDENING_REPORT.md` (kořen repa). Referencován README, proto banner místo archivace.
+
 **Datum:** 2026-11-02 · **Základ:** `docs/prompts/udelej.md` §14, §23 + E-audit (`docs/archive/AUDIT-2026-11.md`)
 
 ## 1. Hrozby a předpoklady

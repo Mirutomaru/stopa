@@ -1,5 +1,7 @@
 # STOPA 2.1 — Bezpečnostní threat model (P0-5)
 
+> ⚠️ **SNAPSHOT (vlna 2.1, commit c314435)** — nálezy T-1..T-10 s důkazy v kódu; postupně opraveny vlnami 2.1→2.7. Aktuální stav ochrany viz `FORENSIC_HARDENING_REPORT.md` (kořen repa).
+
 Zdroj: `ROADMAP_2_1.md` §C P0-5; stav kódu commit `c314435`. Každý nálezen má
 stav ověření (VERIFIED = v kódu/testu, PARTIALLY VERIFIED = částečně) a konkrétní
 soubor/řádek. Metodika: STRIDE-lite po hranicích důvěry (§2), ne „checklist bez kontextu“.

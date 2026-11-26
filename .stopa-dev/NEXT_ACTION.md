@@ -1,10 +1,8 @@
-# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 23)
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 24)
 
-## Právě dokončeno: **F5 post-push údržbový audit + changelog [Unreleased]** (tento commit)
-Kontext: push `a1a37ba..10e1fc7` přes SSH (5 commitů vlny F) + CI na head `10e1fc7` = **11/11 success** (včetně jobů `Lockfile + Rust wheel pin (SHA-256)` a `Aktivní Rust wheel ([carving] + full suite)` — produkční cesta s aktivním core z v2.7.0 wheels).
-Audit-first nálezy (read-only): **0 reálných TODO/FIXME/HACK** v src/+scripts/; **B9 open item uzavřen na řádkové úrovni** — programový konzument `verify_audit_chain()`/`ChainReport` = `cli/commands/repro.py::cmd_integrity` (`collect_all=True`, konzumace `.ok/.rows_checked/.broken_at_id/.reason`; `legal_docs.py:303` jen textová zmínka); hygiena repa OK (0 committed .pyc, web/ bez hardcoded verzí, frontend 1.0.0 = nezávislý SPA lifecycle, workflows = jen ci.yml+release.yml); v2.6* referencí v live doku historicky správné; changelog bez test pinů.
-**Jediná oprava:** `STOPA_CHANGELOG.md` — nová `[Unreleased]` sekce nahoře dokumentuje post-release vlny F-4/F1/F2/F3 + F5 audit (commity + evidence) pro release notes 2.8.
-→ **Zbývá / START:** push tohoto commitu na explicitní pokyn (docs-only; lokal = origin/main `10e1fc7` + tento); volitelně dále = nová auditní vlna F* / příprava release 2.8.
+## Právě dokončeno: **F6 docs sprawl cleanup + changelog mirror resync** (tento commit)
+Pre-release audit: `.gitignore backups/` už OK (nález review v2.6 uzavřen); **8 stale dokumentů → `docs/archive/`** (nulové živé reference; pravidlo banner-vs-archiv z ROADMAP_2_1, před move 0 md-linků, po move link kontrola = 0 broken); **4 superseded bannery** (3× ETAPA C design referencované README + SECURITY_THREAT_MODEL snapshot c314435 → ukazatel na FORENSIC_HARDENING_REPORT.md); **changelog mirror `docs/STOPA_CHANGELOG.md` resyncnuto z kořene** — od 2026-11-17 chyběly všechny sekce releases 2.1→2.7 (40 vs 52 sekcí) + nový guard test `tests/test_docs_changelog_mirror_sync.py` (**2 passed**, ruff clean); DIFFERENTIAL_TESTING zaregistrován jako PENDING (gap reference_dataset 0/78 parserů).
+→ **Zbývá / START:** push tohoto commitu; dále = příprava release **2.7.1** (patch: vlny F + F6 = maintenance nad `v2.7.0`, žádný nový CLI flag/schéma → semver patch) — RELEASE_NOTES_2_7_1.md + přejmenování changelog sekce [Unreleased]→[2.7.1] + bump pyproject/__init__ na 2.7.1 + editable reinstall + tag `v2.7.1` (SSH push main+tag, monitor Release workflow).
 
 ---
 
