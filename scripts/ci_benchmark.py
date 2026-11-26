@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -219,6 +220,9 @@ def build_report(
 
 
 def main(argv: list[str] | None = None) -> int:
+    # F-4 — explicitní log konfigurace: domain warningy (current-only položky,
+    # např. core.rust při aktivním Rust core) nesmí záviset na lastResort handleru.
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     parser = argparse.ArgumentParser(description="CI benchmark job (ETAPA D + B6)")
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
     parser.add_argument("--threshold", type=float, default=0.20)

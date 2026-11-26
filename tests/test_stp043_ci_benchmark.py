@@ -9,6 +9,7 @@ monkeypatchováno.
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -108,6 +109,26 @@ def test_compare_axis_ignores_improvements_and_new_items():
     baseline = {"a": 1.0}
     current = {"a": 0.5, "novy.b": 9.0}  # zrychlení + nová položka bez baseline
     assert cb.compare_axis("median", baseline, current) == []
+
+
+def test_compare_axis_current_only_warns_not_silently_skipped(caplog):
+    """F-4 auditní nález: nová položka bez baseline (např. ``core.rust`` při aktivním
+    Rust core — měří se 80 položek, baseline má 79) nesmí být tichý skip:
+    domain API ji hlásí warningem, ale z ní nevznikne regrese (není s čím porovnat)."""
+    baseline = {"a": 1.0}
+    current = {"a": 1.2, "core.rust": 5.0}  # a: +20 % == práh (ne >) → také bez regresí
+    with caplog.at_level(logging.WARNING, logger="stopa.domain.benchmark"):
+        warnings = cb.compare_axis("median", baseline, current, threshold=0.20)
+    assert warnings == []  # core.rust nemá baseline → neporovnatelná jako regrese
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("core.rust" in m and "chybí" in m for m in msgs)
+
+
+def test_compare_axis_baseline_only_item_no_regression(caplog):
+    """Položka jen v baseline (scénář odebraný z suite) nedává regresi — bez warningu."""
+    with caplog.at_level(logging.WARNING, logger="stopa.domain.benchmark"):
+        warnings = cb.compare_axis("median", {"gone": 1.0, "a": 1.0}, {"a": 1.0})
+    assert warnings == []
 
 
 def test_filter_noise_drops_sub_ms_false_positive():
