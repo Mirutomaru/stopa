@@ -1,3 +1,11 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 25)
+
+## Hotovo právě teď: **Release 2.7.1 closed + Web SPA race fix** (`846356d`+`87a1cd3`+tag `v2.7.1`, kód `5d88f63`)
+Release 2.7.1 (maintenance patch nad `v2.7.0`): release notes + changelog v house formátu (marker `[Unreleased]` se drží, release = tučný titulek v závorce) + bump pyproject/dev fallback → 2.7.1 + annotated tag; push SSH `8295426..87a1cd3`+tag; **Release WF 6/6 SUCCESS** (AppImage/deb/rpm/sdist/wheel + Rust wheels x86_64+aarch64 + Docker). Web SPA race fix `5d88f63`: CI na `8295426` = 10/11 (job Web SPA: TimelineIntel spy 0× + AttackMap „Artefakty: 5“ — mechanismus: effect s druhým fetchem se spustí až po commitu s headingem; lokální pre-fix repro green ×10 → CI timing) → `waitFor()` na spy+summary z druhého fetchu (minimální patch); gate tsc exit 0 + vitest **20/20**, post-fix loop **FAILS=0/10**; push HTTPS `87a1cd3..5d88f63` (commit nedotýká `.github/workflows/`).
+→ **Zbývá / START:** devos closeout (tento commit: NEXT_ACTION vlna 25 + backlog F-7); dále = **Release 2.8** (plánovací vlna: post-release audit + scope; PENDING kandidát = DIFFERENTIAL_TESTING reference dataset, gap 0/78 parserů).
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 24)
 
 ## Právě dokončeno: **F6 docs sprawl cleanup + changelog mirror resync** (tento commit)

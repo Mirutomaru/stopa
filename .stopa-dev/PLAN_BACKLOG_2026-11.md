@@ -289,3 +289,11 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 4. **DIFFERENTIAL_TESTING → PENDING** (viz níže).
 **PENDING (nové):** DIFFERENTIAL_TESTING — schválení referenčních nástrojů + build reference datasetů (0/78 parserů); návrh `docs/DIFFERENTIAL_TESTING.md` platný, závislost P0-4 (`stopa parser-status`) hotová.
 **Verifikace:** guard testy **2 passed in 0.02s**; ruff clean (src+tests+scripts); plná md-link kontrola = 0 broken; doku-only změny + 2 nové offline testy → bez full suite.
+
+### F-7 — Release 2.7.1 closeout + Web SPA race fix (DONE 2026-11-26, commits `846356d`+`87a1cd3`+tag `v2.7.1`, kód `5d88f63`)
+**Kontext:** maintenance patch release nad `v2.7.0` (žádný nový CLI flag/schéma) + oprava CI flaky z pushu vlny 24 (`8295426`).
+**Změny:**
+1. **Release 2.7.1:** `docs/RELEASE_NOTES_2_7_1.md` (patch rationale, F3 re-pin = byte-identický `.so`, žádné nové CLI/API); changelog — house konvence potvrzena: marker `## [Unreleased]` se drží na všech sekcích, release je identifikován tučným titulkem v závorce `(**STOPA 2.7.1**: …)`; bump pyproject + dev fallback → **2.7.1**; annotated tag `v2.7.1`; push SSH `8295426..87a1cd3`+tag; editable reinstall verifikován (`__version__ = "2.7.1"`).
+2. **SPA race fix `5d88f63`:** CI run na `8295426` = **10/11** — job Web SPA (vitest): `TimelineIntel.test.tsx` spy 0× + `AttackMap.test.tsx` „Artefakty: 5“; mechanismus = effect s druhým fetchem (`timelineIntel()`/`attackMap()`) se spustí až po commitu s headingem → na pomalejší CI poll detekuje heading dříve než effect; lokální pre-fix repro **8/8 green ×10** → CI timing, ne regrese; fix = `waitFor()` na spy volání + summary z druhého fetchu (obě testy, minimální patch); ostatní spy assertions ověřeny safe (`listCases` = initial fetch, `openSpy` = synchronní click).
+3. **Push cesta:** SSH opakovaně failoval („Permission denied (publickey)“ i s intact klíčem + stabilním DNS — pravděpodobně GitHub-side key state); commit nedotýká `.github/workflows/` → push HTTPS přes PAT (`87a1cd3..5d88f63 main -> main`) — bez workflow-scope problému.
+**Verifikace:** post-fix gate tsc exit 0 + vitest **20/20**; post-fix loop **FAILS=0/10**; Release WF v2.7.1 = **6/6 SUCCESS** (assety: AppImage, .deb/.rpm/sdist/wheel, Rust wheels x86_64+aarch64, Docker <1.5 GB); CI na `5d88f63` = **11/11 success**.
