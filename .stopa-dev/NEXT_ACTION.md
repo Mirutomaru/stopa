@@ -1,6 +1,17 @@
-# NEJBLIŽŠÍ AKCE — STOPA (2026-11-25, vlna 16)
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 17)
 
-## Hotovo právě teď: **H2 [čistota vrstev] Izolace 3 lazy `domain→data` vazeb**
+## Hotovo právě teď: **H3 [verzování schémat] Explicitní verze výstupních schémat CLI --json + HTML report**
+Commit `82135d5`. Forenzní kritérium: každý strojově čitelný výstup nese explicitní, pinovatelnou verzi smlouvy; konzument pozná, jak data parsovat. Jediný zdroj pravdy = čistě domain konstanta `stopa.domain.output_schema` (`OUTPUT_SCHEMA_VERSION=1`, `SCHEMA_KEY="stopa_output_schema"`).
+Audit-first nálezy F-1..F-4: **89 volání `_print_json()`** prochází jedním chokepointem bez verze; HTML report nesl jen verzi nástroje; souborové exporty (`to_json`/L2T/Timesketch/Uco) = ustálené BC formáty → zůstávají beze změny (rozsah H3 = živé povrchy).
+1) **CLI**: `_print_json()` injectuje `stopa_output_schema: 1` — dict aditivně, list (jediný = audit trail) zabalí do `{stopa_output_schema, items}`; ostatní typy bez změny.
+2) **Report**: `<meta name='stopa-output-schema'>` v `<head>` + cover řádek „Verze výstupního schématu: v1" (nový domain i18n klíč `meta_schema_version`).
+3) **Testy** `tests/test_h3_output_schema.py` (sekce A–D, 10 testů): pin konstant, inject/wrap/passthrough + mutace check, report meta+cover cs/en, E2E přes reálný CLI. BC pin audit `--json` aktualizován na H3 envelope.
+4) **Gate r0.4 odhalil B7/B10 mezery** (pre-existing, potvrzeno stash-testem): 5 nových i18n klíčů `cli.h.345–349` = reprezentativní příklady subakcí v nové group syntaxi pro top-level skupiny integrity/import/forensic/crypto/court; `_subcommand_names()` vylučuje case subpříkaz scale.
+Gate: ruff clean; BC baterie 8 souborů **141 passed**; b7_cli_groups 19; b11_i18n+r04 20. Živý E2E ověřen.
+
+→ **Backlog B1–B12 + H1–H3 je kompletní lokálně** (main 50 ahead of origin/main, push až na pokyn). START = příprava release 2.7 (release notes + bump + tag) nebo cílená údržba; žádný open item v PLAN_BACKLOG.
+
+## Předchozí vlna — H2 [čistota vrstev] Izolace 3 lazy `domain→data` vazeb
 Commit `6657d5a`. Forenzní kritérium: čistá domain logika bez I/O/externích mostů při importu; chování bitově identické (aditivní BC, žádné změny konzumentů).
 Audit-first nálezy F-1..F-3: přesně **3 lazy vazby** `domain→data` (carving/hash → rust_core, report → diagnostics); oba moduly jsou semanticky **runtime capability** (Rust bridge + environment introspekce), ne persistence → patří nad obě vrstvy.
 1) **Nový balíček `src/stopa/core/`** — neutrální runtime capability vrstva: `core/rust_core.py` + `core/diagnostics.py` přesunuty z data/ **bez změny obsahu** (git rename detection 100 %).

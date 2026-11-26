@@ -41,7 +41,7 @@ před kódem popis změny → minimální implementace → cílené testy + ruff
 |----|------|------|
 | H1 | Audit zbývajících tichých `except+pass` (~20) → explicitní logování/validační status (mimo odůvodněné C-bindingy) | ✅ DONE `b5383f8` |
 | H2 | Čistota domain vrstvy: odstranit/izolovat 3 zbývající lazy `domain→data` vazby | ✅ DONE `6657d5a` |
-| H3 | Verzování výstupních schémat CLI/reportů (explicitní output schema version v exportech) | TODO |
+| H3 | Verzování výstupních schémat CLI/reportů (explicitní output schema version v exportech) | ✅ DONE `82135d5` |
 
 ## Pořadí realizace
 P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2: B11 → B12 · hygiena H1–H3 mezi vlnami.
@@ -216,3 +216,21 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 - **Commit `6657d5a`** — 9 souborů (+470/−225): nový `core/__init__.py`, 2 přejmenování data→core **bez změny obsahu** (git rename detection 100 %), 2 BC shimy alias identity, 3 domain import řádky, nová test suite. Chování bitově identické; konzumenti data/web/testy bez změny.
 - **Nový `tests/test_h2_domain_purity.py`** (8 testů): A = AST guard domain→data (+mutace check absolutní/relativní/jméno), B = shim identity pin + public jmen dostupnost, C = behavior pin fallback cest přes core (carve PNG reference, hashlib digest, report sekce 11 degradace + čtení přes core).
 - **Gate**: ruff check src tests clean; BC baterie h2+f21_rust_core+f23_block_dedupe+e12+report+rust_wheel_pin = **104 passed, 1 skipped**; f25_query_cache (web `/api/diagnostics` přes shim) = **19 passed**.
+
+### H3 — Verzování výstupních schémat CLI/reportů (DONE 2026-11-26, commit `82135d5`)
+**Nález audit-first (grep + čtení, `src/stopa/cli/**`, `domain/report.py`, `domain/export.py`):**
+- **F-1**: všech **89 volání `_print_json()`** (CLI `--json`) prochází jediným chokepointem `cli/_util.py::_print_json`; žádný výstup nenesl explicitní verzi schématu. Jediný list payload = `cmd_audit` (audit trail, `lifecycle.py:176`); ostatních 88 je dict.
+- **F-2**: HTML report nesl **verzi nástroje** (titulní strana + sekce 11), ale ne verzi výstupního schématu; `<head>` obsahoval jen `<meta charset>`.
+- **F-3**: souborové exporty (`to_json` = JSON array, `to_jsonl`/L2T/Timesketch/Uco řádkové) = ustálené formáty, na které existující případy konzumují → envelope by porušilo BC. Rozhodnutí: H3 pokrývá **živé strojově čitelné povrchy** (CLI `--json` stdout + HTML report); souborové formáty zůstávají beze změny a jsou zde dokumentovány (neoverengineering).
+- **F-4**: dvě i18n soustavy — `stopa.domain.i18n` (report, tuple cs/en, fail-open na klíč) a CLI katalog JSON. Nový cover klíč patří do **domain i18n** (`meta_schema_version`).
+
+**Rozhodnutí implementace:**
+1. **Nový `src/stopa/domain/output_schema.py`** — jediný zdroj pravdy: `OUTPUT_SCHEMA_VERSION = 1` + `SCHEMA_KEY = "stopa_output_schema"` (namespaced, bez kolize s payload klíči). Čistá domain konstanta importovatelná bez I/O → oba povrchy sdílejí identický zdroj, drift vyloučen.
+2. **CLI**: `_print_json()` injectuje verzi — dict: `{**payload, SCHEMA_KEY: N}` (aditivní; verze autoritativní = za rozšířením payloadu); list: `{SCHEMA_KEY: N, "items": [...]}` (jediný dotčený output = audit trail; migrační strategie pro konzumenty: číst `items`); ostatní typy bez změny.
+3. **Report**: `<meta name='stopa-output-schema' content='{N}'>` v `<head>` (strojově čitelné) + viditelný cover řádek „Verze výstupního schématu: v{N}" vedle verze nástroje (court-ready); nový i18n klíč `meta_schema_version` (cs/en).
+4. **Testy** `tests/test_h3_output_schema.py`: A) pin konstant + `schema_meta()`; B) `_print_json` dict inject / list wrap / scalar passthrough + mutace check (monkeypatch verze → výstup se změní); C) report HTML meta tag + cover řádek (build_html, cs i en); D) E2E přes `main(["profiles", "--json"])` bez DB.
+5. **BC aktualizace**: `tests/test_r04_cli_ux.py::test_audit_integrity_json_are_valid` — audit `--json` vrací object s `items`, ne list (jediný pin starého tvaru).
+
+**Implementační záznam (commit `82135d5`, 9 souborů +221/−8):**
+- Realizace bodů 1–5 přesně dle DESIGN; navíc **gate r0.4 odhalil B7/B10 mezery** (pre-existing, potvrzeno stash-testem na čistém HEAD): `_subcommand_names()` v r04 testu chytal `case scale` (B10 — klíč v tabulce příkladů kvůli viditelnosti, ale není top-level volba) a B7 top-level skupiny (`integrity/import/forensic/crypto/court`) neměly epilog „Příklad:" (B7 je registrovali raw `_ex_sub` bez příkladu / raw `add_parser`). Oprava v kódu: 5 nových i18n klíčů `cli.h.345–349` = reprezentativní příklady subakcí **v nové group syntaxi** (každý živě ověřen přes argparse), tabulka `_SUBCOMMAND_EXAMPLES` + auto-pickup v `_ex_sub`; `integrity` dostal explicitní `example=` (starý klíč `cli.h.027` = flat syntaxe zůstává pro subakci check).
+- **Gate**: ruff clean; BC baterie h3+r04+b9+report+e10+p05_report_timestamps+stp022+h2 = **141 passed**; b7_cli_groups **19 passed**; b11_i18n_schema+r04 **20 passed** (forward coverage nových klíčů). Živý E2E: `profiles --json` nese `stopa_output_schema=1`, `audit --json` vrací `{stopa_output_schema, items}`.
