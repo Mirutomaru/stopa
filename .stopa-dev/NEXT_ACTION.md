@@ -1,3 +1,17 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 18)
+
+## Hotovo právě teď: **Release 2.7 připraven** (post-release backlog B1–B12 + H1–H3 nad `v2.6.0`)
+Full suite #1 po vlně H3/B: **5478 passed / 6 failed** → regresní opravy `a6bceee` (test-only, chování beze změny):
+- **H3 ×2** — strict JSON piny: všechny `--json` výstupy nesou `stopa_output_schema` (dict aditivně; audit trail zabaleno do `{stopa_output_schema, items}`) → p47 heartbeat payload + p22 registry envelope.
+- **B6 ×2** — stp044 e2e: baseline formát v1→v2 (`{median_ms,p95_ms}`), stderr `REGRESIE[axis] name`; self-comparace na hlučném dev stroji s `--threshold 0.5` (citlivost prokazují umělá regrese +100 % a deterministický stp043).
+- **p48 golden** — B7/H3: help 5 grupových příkazů dostal „Příklad:“; přesně těch 5 klíčů přegenerováno, sada klíčů bez změny.
+- **FDE latentní flake (~0,4 %)** — poškození jen C[-1] dává uniformně náhodný poslední blok (PKCS7 padding může zůstat validní); nyní poslední bajt C_prev → deterministicky pad=243 → FdeError.
+Full suite #2 (release evidence): **5484 passed, 2 skipped in 2382.67s**, exit 0; ruff clean napříč vlnami.
+Release: `docs/RELEASE_NOTES_2_7.md` + changelog sekce `[Unreleased]` STOPA 2.7 → bump verze na **2.7.0** (pyproject + fallback v `__init__.py`) → annotated tag **v2.7.0** → push main+tag (Release workflow = wheels x86_64/aarch64 + AppImage/Docker/`.deb`/`.rpm`).
+→ START = monitorovat CI Release run; po green = **vydané**; pak cílená údržba / další backlog.
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 17)
 
 ## Hotovo právě teď: **H3 [verzování schémat] Explicitní verze výstupních schémat CLI --json + HTML report**
