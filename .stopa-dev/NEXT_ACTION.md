@@ -1,3 +1,11 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 22)
+
+## Právě dokončeno: **F3 re-pin stopa_core wheels na release v2.7.0** (`ed54536`)
+Audit-first repo-wide grep `2\.6\.0` → **4 živé pin povrchy** (pyproject [carving], requirements.lock, wheel_pins.json, komentář ci.yml) zaostávaly za konvencí B1 „pin na nejnovější release“ — v2.7.0 rovněž obsahuje wheels. Forenzní srovnání: `.so` payload **byte-identický** na obou architekturách (liší se jen SBOM serialNumber+timestamp + řetězová RECORD) → nulové behavior risk. URL+komentář pyproject; lock regenerován uv 0.11.13 (= pin CI, minimální diff + determinismus ověřen); manifest přes oficiální `--update-manifest` (nové SHAs x86_64=`6295b709…`, aarch64=`4c0f4522…`). Ověřeno: verify_rust_wheel.py PASS obě platformy + wheel nainstalován z pinned URL (`--installed` PASS, `is_available()=True`) + f21/wheel_pin **22p/1s** + ruff clean. Vedle auditováno ROADMAP mirror (tělo = byte-identické s kořenem ✓) a architecture.md (ZASTARALÝ SNAPSHOT banner ✓).
+→ **Zbývá / START:** push lokálních commitů (`ee2a817`, `12ff23f`, `66a9931`, `ed54536` + tento) až na explicitní pokyn — pozor: range obsahuje změněný `.github/workflows/ci.yml` (komentář) → PAT nemá workflow scope, **push přes SSH**; dále volitelně auditní vlny F*.
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 21)
 
 ## Hotovo právě teď: **F2 re-stamp FEATURE_REGISTRY** (`.stopa-dev/FEATURE_REGISTRY.md`)
