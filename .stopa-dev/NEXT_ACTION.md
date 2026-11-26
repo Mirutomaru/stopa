@@ -1,3 +1,13 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 20)
+
+## Hotovo právě teď: **F1 post-release údržba po release 2.7** (read-only audit → 4 nálezy F-1..F-4)
+Audit-first průzkum repa odhalil 4 problémy po vydání `v2.7.0`; opraveno v 2 commitu:
+- **Kód `ee2a817` (fix(bench), F-4):** current-only položky benchmark baseline (`core.rust` — měří se při aktivním Rust core, baseline má jen 79/80) procházely porovnáním bez stopu. Domain API už warning hlásilo, ale chování nebylo nikde pinováno + CI gate `scripts/ci_benchmark.py` závisel na Python lastResort handleru (bez vlastní log konfigurace). Oprava: explicitní `logging.basicConfig(level=WARNING)` v `main()` + 2 deterministické caplog testy v stp043 (current-only → warning, bez regresí; baseline-only → bez regresí). Gate: ruff clean; **51 passed** (stp043+benchmark_engine).
+- **Docs (tento commit, F-1/F-2/F-3):** zastaralá verze 2.6.0→**2.7.0** v hlavičkách `STOPA_ROADMAP.md` + `.stopa-dev/PROJECT_STATE.md` + `.stopa-dev/TEST_REGISTRY.md`; fáze log PROJECT_STATE dostal entry „RELEASE 2.7 VYDANÝ“ (B1–B12 + H1–H3, full suite 5484p/2s, CI 11/11); TEST Registry aktuální počty **5486 collected = 5484 passed + 2 skipped**; FEATURE_REGISTRY hlavička doplněna o poznámku snapshot (řádky nedotknuty).
+→ **Zbývá / START:** vlna F2 = re-stamp `.stopa-dev/FEATURE_REGISTRY.md` (končí na STP-069; chybí STP-070 + funkce release 2.7 — B8/B9/B10/H3 apod.; sloupec Verze = 2.6.0 snapshot) s vlastním auditem; případně další auditní vlny F*.
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 19)
 
 ## Hotovo právě teď: **Release 2.7 vydaný** (`v2.7.0` = `1307a23`, main+tag pushnuto přes SSH)

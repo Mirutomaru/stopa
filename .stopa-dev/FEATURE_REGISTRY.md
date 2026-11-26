@@ -3,7 +3,7 @@
 Rozlišení stavů: IMPLEMENTED ≠ TESTED ≠ VERIFIED.
 - **impl:** implementováno | **test:** testováno (unit/integration) | **verif:** nezávisle ověřeno (plná sada + ruff + commit)
 Stavy: plně funkční / částečně funkční / experimentální / nefunkční
-Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parserů, jinak verze aplikace 2.6.0.
+Verze = verze parseru v C3 registry (`PARSER_VALIDATIONS`) u verzovaných parserů, jinak verze aplikace 2.6.0 (snapshot při registraci; re-stamp řádků + doplnění STP-070 a funkcí release 2.7 odložen do vlny F2).
 
 ## Evidence & Integrity (P0 Core C1–C4)
 

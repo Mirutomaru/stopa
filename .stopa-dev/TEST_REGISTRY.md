@@ -1,12 +1,12 @@
 # STOPA — TEST REGISTRY (centrální evidence testování)
 
 Výsledky: PASS | FAIL | PARTIAL | NOT_RUN | BLOCKED. Počty doloženy `pytest --collect-only`
-dne 2026-11-03 (commit `afc49a0`); **aktuálně (2026-11-24, v2.6.0): 5313 collected = 5312 passed + 1 skipped** (full suite EXIT=0). Původní stav: **Celkem: 896 testů = 895 passed + 1 skipped** (plná sada,
+dne 2026-11-03 (commit `afc49a0`); **aktuálně (2026-11-26, v2.7.0): 5486 collected = 5484 passed + 2 skipped** (full suite EXIT=0). Původní stav: **Celkem: 896 testů = 895 passed + 1 skipped** (plná sada,
 `.venv/bin/python -m pytest -q`, plně offline — syntetické fixtures, žádné externí API).
 
 Povinná pole dle DEV OS promptu §3.7:
 - **Datum:** 2026-11-03 pro všechny záznamy (poslední plný běh; starší běhy viz docs/archive/CHANGELOG.md)
-- **Verze aplikace:** 2.6.0 (aktuální; záznamy registry pořízeny v éře 0.1.0 — commit `afc49a0`/`e227929`)
+- **Verze aplikace:** 2.7.0 (aktuální; záznamy registry pořízeny v éře 0.1.0 — commit `afc49a0`/`e227929`)
 - **Případná chyba:** sloupec Poznámka (aktuálně žádný FAIL — jediný skipped = volitelný backend bez nainstalované závislosti)
 - **Odkaz na testovací protokol:** testovací soubor v `tests/` je protokolem; plný běh reprodukovatelný `.venv/bin/python -m pytest -q` (deterministická offline sada)
 

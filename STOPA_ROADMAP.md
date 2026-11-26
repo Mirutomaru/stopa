@@ -1,6 +1,6 @@
 # STOPA — ROADMAP (kořenový výstup MASTER PROMPT)
 
-**Datum pořízení:** 2026-11-03 · **Commit:** `e227929` · **Verze aplikace:** 2.6.0 (aktuální; při pořízení snapshotu 0.1.0)
+**Datum pořízení:** 2026-11-03 · **Commit:** `e227929` · **Verze aplikace:** 2.7.0 (aktuální; při pořízení snapshotu 0.1.0)
 Dlouhodobá vývojová mapa, oblasti A–Q. Stav vychází ze zdrojového kódu a testů — žádný smyšlený stav, každá položka je doložitelná v kódu/testech/auditu. **Kořenová zrcadlová verze `.stopa-dev/ROADMAP.md`** (poslední synchronizace 2026-11-24; při úpravě ROADMAPU aktualizovat oba soubory).
 
 ---
