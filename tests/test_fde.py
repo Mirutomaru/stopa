@@ -112,8 +112,11 @@ def test_wrong_password_raises():
 
 def test_corrupt_ciphertext_raises():
     image = bytearray(encrypt_image(b"x" * 100, "heslo"))
-    # poškodí poslední blok → neplatný padding / AES chyba
-    image[-1] ^= 0xFF
+    # poškodí poslední bajt bloku PŘED posledním (C_prev): v CBC to deterministicky
+    # XORne každý bajt posledního plaintextového bloku s 0xFF → PKCS7 padding pad=243
+    # (mimo rozsah) → FdeError. (Pouze C[-1] by dal uniformně náhodný poslední blok —
+    # ~0,4 % šance na validní padding = latentní flake.)
+    image[-17] ^= 0xFF
     with pytest.raises(FdeError):
         decrypt_image(bytes(image), "heslo")
 

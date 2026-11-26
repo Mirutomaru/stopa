@@ -438,7 +438,12 @@ def test_cli_heartbeat_json(tmp_path: Path, monkeypatch, capsys) -> None:
 
     assert cmd_registry(_cli_ns("n1", json_mode=True)) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload == {"node_id": "n1", "generation": 1}
+    # H3 — všechny --json výstupy nesou verzi výstupního schématu (aditivní klíč)
+    assert payload == {
+        "node_id": "n1",
+        "generation": 1,
+        "stopa_output_schema": 1,
+    }
 
 
 def test_cli_heartbeat_conflicts_with_sync(tmp_path: Path, monkeypatch) -> None:

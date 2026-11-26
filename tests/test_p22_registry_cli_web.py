@@ -257,7 +257,10 @@ class TestCli:
         rc, out = _run(json=True)
         assert rc == 0
         data = json.loads(out)
-        ids = [e["case_id"] for e in data]
+        # H3 — list payload je zabalěn do obalu {stopa_output_schema, items}
+        assert set(data) == {"stopa_output_schema", "items"}
+        entries = data["items"]
+        ids = [e["case_id"] for e in entries]
         assert ids.count("case-a") == 1 and "case-b" not in ids
 
     def test_multi_user_without_user_exit_2(self, db_dir):
