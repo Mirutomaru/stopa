@@ -248,7 +248,7 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      # [carving] stáhne pinned stopa_core wheel z release v2.6.0 (Linux x86_64 marker)
+      # [carving] stáhne pinned stopa_core wheel z release v2.7.0 (Linux x86_64 marker)
       - name: Install dependencies (dev + web + carving/aktivní core)
         run: |
           python -m pip install --upgrade pip
