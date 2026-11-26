@@ -1,8 +1,10 @@
-# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 22)
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 23)
 
-## Právě dokončeno: **F3 re-pin stopa_core wheels na release v2.7.0** (`ed54536`)
-Audit-first repo-wide grep `2\.6\.0` → **4 živé pin povrchy** (pyproject [carving], requirements.lock, wheel_pins.json, komentář ci.yml) zaostávaly za konvencí B1 „pin na nejnovější release“ — v2.7.0 rovněž obsahuje wheels. Forenzní srovnání: `.so` payload **byte-identický** na obou architekturách (liší se jen SBOM serialNumber+timestamp + řetězová RECORD) → nulové behavior risk. URL+komentář pyproject; lock regenerován uv 0.11.13 (= pin CI, minimální diff + determinismus ověřen); manifest přes oficiální `--update-manifest` (nové SHAs x86_64=`6295b709…`, aarch64=`4c0f4522…`). Ověřeno: verify_rust_wheel.py PASS obě platformy + wheel nainstalován z pinned URL (`--installed` PASS, `is_available()=True`) + f21/wheel_pin **22p/1s** + ruff clean. Vedle auditováno ROADMAP mirror (tělo = byte-identické s kořenem ✓) a architecture.md (ZASTARALÝ SNAPSHOT banner ✓).
-→ **Zbývá / START:** push lokálních commitů (`ee2a817`, `12ff23f`, `66a9931`, `ed54536` + tento) až na explicitní pokyn — pozor: range obsahuje změněný `.github/workflows/ci.yml` (komentář) → PAT nemá workflow scope, **push přes SSH**; dále volitelně auditní vlny F*.
+## Právě dokončeno: **F5 post-push údržbový audit + changelog [Unreleased]** (tento commit)
+Kontext: push `a1a37ba..10e1fc7` přes SSH (5 commitů vlny F) + CI na head `10e1fc7` = **11/11 success** (včetně jobů `Lockfile + Rust wheel pin (SHA-256)` a `Aktivní Rust wheel ([carving] + full suite)` — produkční cesta s aktivním core z v2.7.0 wheels).
+Audit-first nálezy (read-only): **0 reálných TODO/FIXME/HACK** v src/+scripts/; **B9 open item uzavřen na řádkové úrovni** — programový konzument `verify_audit_chain()`/`ChainReport` = `cli/commands/repro.py::cmd_integrity` (`collect_all=True`, konzumace `.ok/.rows_checked/.broken_at_id/.reason`; `legal_docs.py:303` jen textová zmínka); hygiena repa OK (0 committed .pyc, web/ bez hardcoded verzí, frontend 1.0.0 = nezávislý SPA lifecycle, workflows = jen ci.yml+release.yml); v2.6* referencí v live doku historicky správné; changelog bez test pinů.
+**Jediná oprava:** `STOPA_CHANGELOG.md` — nová `[Unreleased]` sekce nahoře dokumentuje post-release vlny F-4/F1/F2/F3 + F5 audit (commity + evidence) pro release notes 2.8.
+→ **Zbývá / START:** push tohoto commitu na explicitní pokyn (docs-only; lokal = origin/main `10e1fc7` + tento); volitelně dále = nová auditní vlna F* / příprava release 2.8.
 
 ---
 

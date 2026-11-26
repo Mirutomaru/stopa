@@ -263,3 +263,14 @@ P0: B1 → B2 → B3 · P1: B4 → B5 → B6 → B7 → B8 → B9 → B10 · P2:
 **Změny:** URL+komentář v pyproject; requirements.lock regenerováno uv 0.11.13 (minimální diff = 4 řádky stopa-core); wheel_pins.json synchronizováno oficiálním `--update-manifest` (nové SHAs: x86_64=`6295b709…`/360752 B, aarch64=`4c0f4522…`/307993 B); komentář ci.yml.
 **Ověřeno:** `verify_rust_wheel.py --platforms x86_64 aarch64` PASS (SHA-256+velikost); wheel nainstalován z pinned URL do .venv, `--installed` PASS + `rust_core.is_available()=True`; f21+wheel_pin = **22 passed, 1 skipped** (skip = test nepřítomného core — v aktivním prostředí správně); lock determinismus OK (recompile → diff prázdný; CI job lockfile-rust-pin reprodukovatelný stejným uv 0.11.13); ruff clean; `grep "v2.6.0" requirements.lock` = 0.
 **Audit doku vedle:** `.stopa-dev/ROADMAP.md` mirror — tělo byte-identické s kořenem (diff = jen 6 řádků kořenového headeru), konvence N7+N8 („při úpravě ROADMAPU aktualizovat oba“) drží, verze je jen v kořenovém headeru → změna nepotřebná; `docs/architecture.md` nese explicitní ZASTARALÝ SNAPSHOT banner (2026-11-24) → změna nepotřebná.
+
+### F-5 — Post-push údržbový audit + changelog [Unreleased] (DONE 2026-11-26, tento commit)
+**Kontext:** push `a1a37ba..10e1fc7` (5 commitů vlny F) přes SSH + CI **11/11 success** na head `10e1fc7` (včetně jobů `Lockfile + Rust wheel pin` a `Aktivní Rust wheel ([carving] + full suite)` = produkční cesta s aktivním core z v2.7.0 wheels).
+**Nálezy audit-first (read-only):**
+- **TODO/FIXME/HACK:** 0 reálných markerů v `src/`+`scripts/` — jediný hit = placeholder `case-XXX.db` v docstringu `data/analytics.py:44`.
+- **B9 open item uzavřen na řádkové úrovni:** programový konzument `verify_audit_chain()`/`ChainReport` = `cli/commands/repro.py::cmd_integrity` (volání s `collect_all=True`; konzumace `.ok/.rows_checked/.broken_at_id/.reason`); `intelligence/legal_docs.py:303` = jen textová zmínka v právním dokumentu, ne programový přístup.
+- **Hygiena repa:** 0 committed `.pyc`/`__pycache__`; `web/` bez hardcoded verzí; frontend `package.json` version **1.0.0 = nezávislý SPA lifecycle** (ne verze STOPA app — nic ji s pyproject nekříží); workflows = jen ci.yml + release.yml (release.yml bez starých referencí).
+- **Stale `v2.6*` v live doku:** všechny historicky správné (záznamy o tom, co se tehdy dělalo; F3 re-pin zaevidován ve svém oddílu s důkazem `grep "v2.6.0" requirements.lock = 0`).
+- **Changelog test pins:** `grep STOPA_CHANGELOG tests/ src/ scripts/` = prázdné → edit bez rizika pro suite.
+**Jediná oprava (akční nález):** `STOPA_CHANGELOG.md` — post-release vlny F chyběly pod `[Unreleased]`; nová sekce nahoře dokumentuje F-4/F1/F2/F3 + F5 audit s commity a evidence (konvence: nejnovější sekce nahoře, staré drží marker `[Unreleased]`).
+**Verifikace:** ruff clean; working tree clean po commitu; doku-only změna → bez nového testovacího běhu (changelog nese jen záznam o již ověřených vlnách).
