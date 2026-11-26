@@ -1,3 +1,11 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 28)
+
+## Hotovo právě teď: **Release 2.8 vlna 28 — STP-072 Komparační engine + CLI `stopa differential`** (kód + offline testy)
+Druhý implementační celek schváleného designu `docs/DIFFERENTIAL_TESTING.md` §4–§6 (vlna 27 = normalizační vrstva): rozšíření modulu `stopa/domain/differential.py` — field-level komparace přes join klíče (`compare_records`; deterministické ID rozdílů `kind:type:joinkey[:field]`), druhy rozdílů `missing_in_ref` / `extra_in_stopa` / `field_differs` (včetně ts_epoch), jednostranné duplikáty agregované s počtem ×N, immutable report `DifferentialReport` + `build_report()` (SHA-256 vstupních souborů — determinismus §4), adjudikace (`adjudicate`, fail-fast na neznámé ID → ValueError; UNADJUDICATED/STOPA_WRONG/REF_WRONG/SEMANTIC_DIFF/AMBIGUOUS) a exit kódy dle §6 (0 = shoda, 3 = jen SEMANTIC_DIFF, 1 = neadjudikovaný/ostatní verdikt). Nový CLI subpříkaz `stopa differential` (`cli/commands/differential.py`; JSON vstupy obou stran + volitelná mapa adjudikací; `--join-key TYPE=POLE` fail-fast dle §3.4 → exit 2 u nedeklarovaného typu / špatného formátu / duplicitní deklarace; text+JSON report s ×N agregací a epilogem „Příklad:“ R0.4; i18n cli.h.350–358 cs+en; goldeny p14/p48 regenerovány — 112 cest). **43 nových offline testů** (`tests/test_stp072.py` 27 + `tests/test_stp072_cli.py` 16) + ruff clean; full suite **5596 passed / 2 skipped (EXIT=0, 0:39:03)**.
+→ **Zbývá / START:** pilot vlna 1 dle designu §7 = sqlite + textový formát (`[diffref]` extras s graceful degradation, aditivní stav parseru `differentially_validated`, reference dataset gap 0/78).
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 27)
 
 ## Hotovo právě teď: **Release 2.8 vlna 27 — STP-071 Normalizační vrstva diferenciálního testování** (kód + offline testy)
