@@ -285,6 +285,19 @@
       "-h"
     ]
   },
+  "differential": {
+    "opts": [
+      "--adjudications",
+      "--format",
+      "--help",
+      "--input",
+      "--join-key",
+      "--ref",
+      "--run-id",
+      "--tool",
+      "-h"
+    ]
+  },
   "evidence-storage": {
     "opts": [
       "--help",

@@ -92,6 +92,9 @@ from .commands.core import (
     cmd_timeline,
 )
 
+# STP-072 — diferenciální testování parserů (vlna 28 / release 2.8, design §6)
+from .commands.differential import cmd_differential
+
 # P3-4 — Evidence Storage Manager (kvarenténa originálů: inventář/rehash/rozpočet/manifest)
 from .commands.evidence_storage import cmd_evidence_storage
 
@@ -204,6 +207,7 @@ _SUBCOMMAND_EXAMPLES = {
     "integrity-keys": "cli.h.011",
     "rotate-key": "cli.h.012",
     "parser-status": "cli.h.013",
+    "differential": "cli.h.350",  # STP-072 — diferenciální testování parserů (vlna 28)
     "parser-quality": "cli.h.014",
     "ai-run": "cli.h.015",
     "ai-eval": "cli.h.016",
@@ -501,6 +505,20 @@ def build_parser() -> argparse.ArgumentParser:
     ps_p.add_argument("--fail-on-unvalidated", action="store_true",
                       help=t("cli.h.115"))
     ps_p.set_defaults(func=cmd_parser_status)
+
+    # STP-072 — diferenciální testování parserů (vlna 28 / release 2.8; design §6)
+    df_p = _ex_sub(sub, "differential", help=t("cli.h.351"))
+    df_p.add_argument("parser", help=t("cli.h.352"))
+    df_p.add_argument("--input", required=True, metavar="FILE", help=t("cli.h.353"))
+    df_p.add_argument("--ref", required=True, metavar="FILE", help=t("cli.h.354"))
+    df_p.add_argument("--tool", default=None, metavar="NAME", help=t("cli.h.355"))
+    df_p.add_argument("--join-key", action="append", default=[], metavar="TYPE=P1,P2",
+                      help=t("cli.h.356"))
+    df_p.add_argument("--adjudications", default=None, metavar="FILE", help=t("cli.h.357"))
+    df_p.add_argument("--run-id", default=None, metavar="ID", help=t("cli.h.358"))
+    df_p.add_argument("--format", choices=["text", "json"], default="text",
+                      help=t("cli.h.106"))
+    df_p.set_defaults(func=cmd_differential)
 
     prov_p = _ex_sub(sub, "provenance",
                      help=t("cli.h.116"))

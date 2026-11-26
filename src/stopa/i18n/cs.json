@@ -352,5 +352,14 @@
   "cli.h.346": "stopa import plaso case-abc /path/l2tcsv.txt",
   "cli.h.347": "stopa forensic pcap case-abc /evidence/capture.pcapng",
   "cli.h.348": "stopa crypto report case-abc --format html",
-  "cli.h.349": "stopa court swgde case-abc --out ./reports"
+  "cli.h.349": "stopa court swgde case-abc --out ./reports",
+  "cli.h.350": "stopa differential sqlite --input stopa_records.json --ref ref_records.json --tool sqlite3-dump --join-key visit=url",
+  "cli.h.351": "Diferenciální komparace výstupu parseru STOPA s nezávislým referenčním nástrojem (design DIFFERENTIAL_TESTING.md)",
+  "cli.h.352": "identifikátor parseru pro metadata reportu",
+  "cli.h.353": "JSON list záznamů parseru STOPA ({type, ts?, epoch?, fields})",
+  "cli.h.354": "Referenční JSON se stejným tvarem jako --input (nezávislý nástroj)",
+  "cli.h.355": "identifikátor referenčního nástroje (metadata reportu, design §10.2)",
+  "cli.h.356": "deklarace join key TYPE=field1,field2 (opakovatelné; 'ts' = čas); bez ní se komparace nespustí (§3.4)",
+  "cli.h.357": "JSON mapa ID rozdílu → status/reason (verdikty §5)",
+  "cli.h.358": "deklarovaný run_id pro report (§4 determinismus)"
 }
