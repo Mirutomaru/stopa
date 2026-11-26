@@ -1,3 +1,16 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 21)
+
+## Hotovo právě teď: **F2 re-stamp FEATURE_REGISTRY** (`.stopa-dev/FEATURE_REGISTRY.md`)
+Audit-first full read registry + ověření všech claimů proti kódu/testům před editací:
+- **Re-stamp**: `| 2.6.0 |` → `| 2.7.0 |` na přesně **21 app-verzových řádcích** (parserové řádky nesou verzi parseru z C3 registry — konvence v hlavičce aktualizována na „verze aplikace při posledním re-stampu“).
+- **F-096 = STP-070** (chybějící řádek, doplněn za F-095): periodický plánovač auto-bundle (`domain/export_schedule.py` 5–43200 min deterministické `is_due()`, schema v14, web scheduler 60 s tick fail-safe, CLI `case auto-interval`) — 19 testů, commit `e37b328`; zjednodušený formát řádků (shoda se sousedními O+Q).
+- **Nová sekce „Release 2.7 — post-release backlog“** = 13 řádků F-097..F-109 (full 11-sloupcový formát): B1/B4/B5 CI & packaging (`392d335`/`b49a7e5`/`72ddd8c`+SPA fix `5a3491a`), B2 db facade mixiny (`d352d65`), B3 multi-tenancy web (`8a36e21`), B6 dual-axis benchmark baseline v2 (`f7903e7`), B7 CLI skupiny + BC aliasy (`ad72b7b`), B8 AI determinismus (`7fac9ac`), B9 integrity diagnostika (`4634058`), B10 case scale + migrace v29 (`98c48df`), B11 i18n schéma testy (`152b090`), B12 search scale (`5a7a138`), H1 tiché excepty (`b5383f8`), H2 vrstva `core/` + shimy BC (`6657d5a`), H3 output schéma v1 CLI+report (`82135d5`). Testové počty = reálné `pytest --collect-only` (B3=15, B6=51, B7=19, B8=25, B9=20, B10=16, B11=8, B12=23, H1/H2=8/8, H3=10, STP-070=19).
+- **Opraveno 8 zastaralých Omezení** (funkčnost hotová, poznámka neaktualizovaná): F-002 SHA-512 → STP-022/F-053; F-005 export formáty → F-054 + l2tcsv F-080 + UCO F-081; F-007+F-052 benchmark v CI → STP-043/F-070 (+dual-axis B6/F-100); F-050 Center → F-052/F-076/F-078; F-051 stream parsing → STP-021/F-052; F-053 sandbox → ETAPA E (F-072–F-074); F-054 UCO/Plaso/Timesketch → F-080..F-085.
+Ověřeno strukturně: žádný `| 2.6.0 |` nezbyl; všechny nové sekce řádky = přesně 11 buněk (konvence souboru); F-096 mezi F-095 a Analytika & AI; nová sekce před Coverage AXIOM; registry je dev-dok bez test pinů (grep tests/src/scripts prázdné).
+→ **Zbývá / START:** push lokálních commitů (`ee2a817` + docs vlna 20 `12ff23f` + tento) až na explicitní pokyn; fresh full suite hotová: **5486 passed + 2 skipped, EXIT=0** (po F-4 o +2 testy); dále volitelně auditní vlny F*.
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 20)
 
 ## Hotovo právě teď: **F1 post-release údržba po release 2.7** (read-only audit → 4 nálezy F-1..F-4)

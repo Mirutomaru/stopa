@@ -1,7 +1,7 @@
 # STOPA — TEST REGISTRY (centrální evidence testování)
 
 Výsledky: PASS | FAIL | PARTIAL | NOT_RUN | BLOCKED. Počty doloženy `pytest --collect-only`
-dne 2026-11-03 (commit `afc49a0`); **aktuálně (2026-11-26, v2.7.0): 5486 collected = 5484 passed + 2 skipped** (full suite EXIT=0). Původní stav: **Celkem: 896 testů = 895 passed + 1 skipped** (plná sada,
+dne 2026-11-03 (commit `afc49a0`); **aktuálně (2026-11-26, v2.7.0): 5488 collected = 5486 passed + 2 skipped** (full suite po vlně F1/F2 EXIT=0). Původní stav: **Celkem: 896 testů = 895 passed + 1 skipped** (plná sada,
 `.venv/bin/python -m pytest -q`, plně offline — syntetické fixtures, žádné externí API).
 
 Povinná pole dle DEV OS promptu §3.7:
