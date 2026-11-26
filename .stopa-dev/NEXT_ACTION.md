@@ -1,3 +1,11 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 27)
+
+## Hotovo právě teď: **Release 2.8 vlna 27 — STP-071 Normalizační vrstva diferenciálního testování** (kód + offline testy)
+První implementační celek schváleného designu `docs/DIFFERENTIAL_TESTING.md` §3 (vlna 26): nový čistý doménový modul `stopa/domain/differential.py` bez I/O — epoch normalizace (`normalize_ts`: unix / CFAbsoluteTime / Windows FILETIME; int FILETIME = přesná celočíselná aritmetika proti float64 off-by-one na celosekundových hranicích, floor sémantika), NFKC + explicitní None≠"" v plochých fieldech (`normalize_field_value`; nekonečné float → ValueError), immutable canonical record `CanonicalRecord {type, ts_epoch, fields}` (`canonicalize`), deklarované join klíče s tokenem TS_KEY (`make_join_key`; chybějící pole → ValueError — explicitní selhání než srovnání řádků po sobě), deterministické řazení typ→ts→stabilní klíč (`sort_records` + batch API `normalize_dataset` — pořadí surového výstupu se nepočítá jako rozdíl). **65 nových offline testů** `tests/test_stp071.py` (epoch konverze včetně float64 hranic, NFKC ligatury/fullwidth, neměnnost + nezávislost na vstupním mappingu, join klíče, řazení permutující surové pořadí) + ruff clean; full suite **5553 passed / 2 skipped (EXIT=0, 0:39:03)**.
+→ **Zbývá / START:** vlna 28 = komparační engine (§4–5: field-level diff přes join keys, sémantika verdiktů UNADJUDICATED/STOPA_WRONG/REF_WRONG/SEMANTIC_DIFF/AMBIGUOUS) + CLI `stopa differential` (exit 0/1/3); poté pilot vlna 1 dle §7 = sqlite + textový formát (`[diffref]` extras s graceful degradation, aditivní stav parseru `differentially_validated`, reference dataset gap 0/78).
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 26)
 
 ## Hotovo právě teď: **Release 2.8 plánovací vlna — post-release audit + scope rozhodnutí** (docs-only)
