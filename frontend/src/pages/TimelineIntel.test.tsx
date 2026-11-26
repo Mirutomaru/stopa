@@ -61,8 +61,12 @@ describe("TimelineIntel (P3-6 SPA view, smoke)", () => {
       expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("Případ TI");
     });
     expect(timelineIntel).toHaveBeenCalledTimes(1);
-    // summary řádek s počty
-    expect(screen.getByText(/12 analyzováno událostí/)).toBeInTheDocument();
+    // summary řádek s počty — druhý fetch (timelineIntel) může na pomalejší CI dorazit
+    // až po headingu (první fetch) → race, proto waitFor; zbytek body je z téhož
+    // render pass a následuje synchronně.
+    await waitFor(() => {
+      expect(screen.getByText(/12 analyzováno událostí/)).toBeInTheDocument();
+    });
     // gapy: lidě čitelné trvání 95400 s = 26 h 30 min + eventy mezer
     expect(screen.getByText("26 h 30 min")).toBeInTheDocument();
     expect(screen.getByText("ev-1 / ev-7")).toBeInTheDocument();
