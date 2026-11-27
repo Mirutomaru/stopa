@@ -1,0 +1,58 @@
+[
+  {
+    "type": "sms_message",
+    "ts_epoch": 1735689600,
+    "fields": {
+      "body": "Dobrý den, schůzka v 15:30 — potvrdte prosím.",
+      "address": "+420777123456"
+    }
+  },
+  {
+    "type": "sms_message",
+    "ts_epoch": 1735689900,
+    "fields": {
+      "body": "Potvrzuji, uvidíme se!",
+      "address": "+420777123456"
+    }
+  },
+  {
+    "type": "sms_message",
+    "ts_epoch": 1735690200,
+    "fields": {
+      "body": "SMS s podsekundovou frakcí.",
+      "address": "12345"
+    }
+  },
+  {
+    "type": "sms_message",
+    "ts_epoch": 1735691000,
+    "fields": {
+      "body": "Dlouhá SMS pod limitem: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "address": "+14155550132"
+    }
+  },
+  {
+    "type": "sms_message",
+    "ts_epoch": 1735692000,
+    "fields": {
+      "body": "Přijedeme v pátek.\nVezměte prosím rezervaci a doklady.",
+      "address": "+420601112233"
+    }
+  },
+  {
+    "type": "sms_message",
+    "ts_epoch": 1735693000,
+    "fields": {
+      "body": "Meeting re: Q3 finance report",
+      "address": "+442079460018"
+    }
+  },
+  {
+    "type": "sms_message",
+    "ts_epoch": 1735694000,
+    "fields": {
+      "body": "Ďalší zpráva: ěščřžýáíéůú",
+      "address": "+420777123456"
+    }
+  }
+]

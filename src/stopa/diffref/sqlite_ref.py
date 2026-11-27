@@ -13,9 +13,11 @@ Dvě záměrně oddělené kódové cesty nad stejným souborem (design §2/§6)
 Pilotní scope (STP-073): schéma Chrome/Edge History (``urls``+``visits``);
 vlna 3 (STP-076): Firefox places.sqlite (``moz_places``, unix ms) — stejná
 kanonická smlouva ``browser_history`` + pole ``url`` / ``page_title``,
-samostatný referenční dataset ``sqlite/firefox_places/``. Provenienční
-metadata (např. ``engine``) se do komparované plochy nedostávají —
-srovnává se obsah, ne STOPA anotace.
+samostatný referenční dataset ``sqlite/firefox_places/``; vlna 4 (STP-077):
+Android mmssms.db (tabulka ``sms``, unix ms) — kanonický typ ``sms_message``
++ pole ``body`` / ``address``, samostatný referenční dataset
+``sqlite/android_sms/``. Provenienční metadata (např. ``engine``) se do
+komparované plochy nedostávají — srovnává se obsah, ne STOPA anotace.
 
 Graceful degradation: pilot běží čistě na stdlib; extras ``[diffref]`` jsou
 zatím prázdné a slouží jako kotva pro verzování referenčních nástrojů v
@@ -33,8 +35,9 @@ from typing import Any
 #: Vlastní konstanta reference — 1970−1601 v sekundách (nezávislá na STOPA).
 CHROME_UNIX_OFFSET_S = 11_644_473_600
 
-#: Pilot scope: jediný kanonický typ pro SQLite rodinu.
+#: Pilot scope: kanonické typy pro SQLite rodinu.
 _BROWSER_HISTORY = "browser_history"
+_SMS_MESSAGE = "sms_message"  # STP-077 — Android mmssms.db (vlna 4, §7)
 
 
 def chrome_micros_to_unix_s(value: int) -> int:
@@ -179,19 +182,29 @@ def read_reference_entries(db_path: Path, manifest: Mapping[str, Any]) -> list[d
 def run_stopa_sqlite(path: Path) -> list[dict[str, Any]]:
     """STOPA strana: běžný extraktor → surové entry pro normalizaci (§3).
 
-    Pilot scope: artifacty ``browser_history``; kanonická pole = obsah
-    (``url``, ``page_title``), provenienční ``engine`` se nesrovnává.
+    Scope vlny 4 (STP-077): artifacty ``browser_history`` (Chrome/Edge/Firefox;
+    kanonická pole = obsah — ``url``, ``page_title``) a ``sms_message``
+    (Android ``mmssms.db``; body z titleu, address z details); provenienční
+    metadata (např. ``engine``) se nesrovnávají. Ostatní sqlite typy zatím
+    mimo diferenciální scope (§7).
     """
     from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts  # I/O vrstva
 
     entries: list[dict[str, Any]] = []
     for artifact in extract_sqlite_artifacts(path):
-        if artifact.artifact_type != _BROWSER_HISTORY:
-            continue
-        fields: dict[str, Any] = {
-            "url": artifact.title,  # extraktor: title = url[:500]
-            "page_title": (artifact.details or {}).get("page_title"),
-        }
+        if artifact.artifact_type == _BROWSER_HISTORY:
+            fields: dict[str, Any] = {
+                "url": artifact.title,  # extraktor: title = url[:500]
+                "page_title": (artifact.details or {}).get("page_title"),
+            }
+        elif artifact.artifact_type == _SMS_MESSAGE:
+            # STP-077 — body z titleu (STOPA strip + [:300]; fixture drží pod limitem)
+            fields = {
+                "body": artifact.title,
+                "address": (artifact.details or {}).get("address"),
+            }
+        else:
+            continue  # ostatní sqlite typy zatím mimo diferenciální scope (§7)
         entry: dict[str, Any] = {"type": artifact.artifact_type, "fields": fields}
         if artifact.timestamp is not None:
             entry["ts"] = artifact.timestamp.timestamp()

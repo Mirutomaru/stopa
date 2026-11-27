@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "parser_id": "sqlite",
+  "schema_variant": "android_mmssms",
+  "fixture_file": "mmssms.db",
+  "fixture_sha256": "294c09d888ea8af3e30a5012d1d2a3fa79ec21e60531be26b557cb24793c5a02",
+  "reference_tool": "diffref-sqlite-stdlib/1.0 (nezávislý čtecí: stdlib sqlite3 + ručně psané dotazy)",
+  "epoch_note": "date = unix ms od epochy 1970; reference konvertuje celočíselně value//1_000 (vlastní konverze, ne stopa.domain.times). STOPA extraktor používá float ms/1000.0 a normalizace flooruje na celé sekundy — řádek s frakcí .500 s testuje shodu obou cest.",
+  "contract_note": "STOPA title = body.strip()[:300] nebo '(prázdná SMS)' → fixture drží body < 300 znaků bez okrajové bílé spaces (nejdelší přesně 299, pod limitem bez truncace) a bez prázdných těl; NULL address se v join klíči objevit nemůže (fail-fast §3.4), fixture má všechny address nenulové. Join key sms_message = [address, ts] — řádky 1/2/9 sdílejí address s odlišnými sekundami.",
+  "join_keys": {
+    "sms_message": ["address", "ts"]
+  },
+  "queries": [
+    {
+      "type": "sms_message",
+      "sql": "SELECT address, body, date FROM sms WHERE body IS NOT NULL AND date > 0 ORDER BY address ASC, date ASC",
+      "ts_column": "date",
+      "converter": "unix_ms_to_unix_s",
+      "fields": {
+        "body": "body",
+        "address": "address"
+      }
+    }
+  ]
+}
