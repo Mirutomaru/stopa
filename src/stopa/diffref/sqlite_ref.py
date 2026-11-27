@@ -16,7 +16,10 @@ kanonická smlouva ``browser_history`` + pole ``url`` / ``page_title``,
 samostatný referenční dataset ``sqlite/firefox_places/``; vlna 4 (STP-077):
 Android mmssms.db (tabulka ``sms``, unix ms) — kanonický typ ``sms_message``
 + pole ``body`` / ``address``, samostatný referenční dataset
-``sqlite/android_sms/``. Provenienční metadata (např. ``engine``) se do
+``sqlite/android_sms/``; vlna 5 (STP-078): Apple iMessage chat.db
+(``message`` + ``handle``, CFAbsoluteTime = REAL s od roku 2001) — kanonický
+typ ``imessage`` + pole ``body`` / ``handle``, samostatný referenční dataset
+``sqlite/imessage_chat/``. Provenienční metadata (např. ``engine``) se do
 komparované plochy nedostávají — srovnává se obsah, ne STOPA anotace.
 
 Graceful degradation: pilot běží čistě na stdlib; extras ``[diffref]`` jsou
@@ -27,6 +30,7 @@ dalších vlnách (design §10).
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from collections.abc import Mapping
 from pathlib import Path
@@ -35,9 +39,15 @@ from typing import Any
 #: Vlastní konstanta reference — 1970−1601 v sekundách (nezávislá na STOPA).
 CHROME_UNIX_OFFSET_S = 11_644_473_600
 
+#: STP-078 — Apple CFAbsoluteTime offset: počet sekund z 1970-01-01T00:00Z do
+#: 2001-01-01T00:00Z (chat.db ``message.date``). Vlastní konstanta (§2) —
+#: nezávislá na ``stopa.domain.times``.
+CFABSOLUTE_UNIX_OFFSET_S = 978_307_200
+
 #: Pilot scope: kanonické typy pro SQLite rodinu.
 _BROWSER_HISTORY = "browser_history"
 _SMS_MESSAGE = "sms_message"  # STP-077 — Android mmssms.db (vlna 4, §7)
+_IMESSAGE = "imessage"  # STP-078 — Apple iMessage chat.db (vlna 5, §7)
 
 
 def chrome_micros_to_unix_s(value: int) -> int:
@@ -78,10 +88,37 @@ def unix_ms_to_unix_s(value: int) -> int:
     return value // 1_000
 
 
+def cfabsolute_to_unix_s(value: float) -> int:
+    """Apple CFAbsoluteTime (REAL s od roku 2001; chat.db ``message.date``) → unix s.
+
+    Přesná aritmetika — floor celé části + vlastní konstanta
+    (:data:`CFABSOLUTE_UNIX_OFFSET_S`), nezávisle na ``stopa.domain.times`` (§2).
+    STOPA extraktor používá ``from_apple_absolute`` (APPLE_EPOCH +
+    timedelta(seconds=float)) a normalizace flooruje na celé sekundy — obě cesty
+    se shodují i pro hodnoty s frakční částí v sekundách (fixtura pinuje řádek
+    .5 s: surové se liší, kanonické sekundy identické). Int i float vstup
+    (SQLite dynamické typování REAL sloupce; PEP 484 numeric tower); hodnoty
+    ~7.7e8 ≪ 2^53 jsou v float64 přesné.
+
+    Raises:
+        TypeError: vstup není číslo (bool = typová chyba, ne hodnota).
+        ValueError: ``value < 0`` nebo nekonečné NaN/±inf.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"očekáváno int/float (CFAbsoluteTime), dostalo {type(value).__name__}")
+    v = float(value)
+    if not math.isfinite(v):
+        raise ValueError(f"CFAbsoluteTime musí být konečné, dostalo {value!r}")
+    if v < 0:
+        raise ValueError(f"CFAbsoluteTime musí být ≥ 0, dostalo {value!r}")
+    return math.floor(v) + CFABSOLUTE_UNIX_OFFSET_S
+
+
 #: Registrované konvertéry epoch (jmena deklarované v manifestu).
 CONVERTERS: Mapping[str, Any] = {
     "chrome_micros_to_unix_s": chrome_micros_to_unix_s,
     "unix_ms_to_unix_s": unix_ms_to_unix_s,  # STP-076 — Firefox places.sqlite (vlna 3)
+    "cfabsolute_to_unix_s": cfabsolute_to_unix_s,  # STP-078 — Apple iMessage chat.db (vlna 5)
 }
 
 _REQUIRED_MANIFEST_KEYS = ("parser_id", "schema_variant", "fixture_file", "reference_tool", "join_keys", "queries")
@@ -182,11 +219,13 @@ def read_reference_entries(db_path: Path, manifest: Mapping[str, Any]) -> list[d
 def run_stopa_sqlite(path: Path) -> list[dict[str, Any]]:
     """STOPA strana: běžný extraktor → surové entry pro normalizaci (§3).
 
-    Scope vlny 4 (STP-077): artifacty ``browser_history`` (Chrome/Edge/Firefox;
-    kanonická pole = obsah — ``url``, ``page_title``) a ``sms_message``
-    (Android ``mmssms.db``; body z titleu, address z details); provenienční
-    metadata (např. ``engine``) se nesrovnávají. Ostatní sqlite typy zatím
-    mimo diferenciální scope (§7).
+    Scope vlny 5 (STP-078): artifacty ``browser_history`` (Chrome/Edge/Firefox;
+    kanonická pole = obsah — ``url``, ``page_title``), ``sms_message``
+    (Android ``mmssms.db``; body z titleu, address z details) a ``imessage``
+    (Apple ``chat.db``; body z titleu včetně truncace [:300] a fallbacku
+    „(prázdná zpráva)“, handle z details); provenienční metadata (např.
+    ``engine``) se nesrovnávají. Ostatní sqlite typy zatím mimo diferenciální
+    scope (§7).
     """
     from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts  # I/O vrstva
 
@@ -202,6 +241,13 @@ def run_stopa_sqlite(path: Path) -> list[dict[str, Any]]:
             fields = {
                 "body": artifact.title,
                 "address": (artifact.details or {}).get("address"),
+            }
+        elif artifact.artifact_type == _IMESSAGE:
+            # STP-078 — body z titleu (STOPA strip → [:300] → fallback "(prázdná zpráva)";
+            # fixture pinuje hranici truncace 350→300 znaků), handle z details
+            fields = {
+                "body": artifact.title,
+                "handle": (artifact.details or {}).get("handle"),
             }
         else:
             continue  # ostatní sqlite typy zatím mimo diferenciální scope (§7)

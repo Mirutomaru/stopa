@@ -1,0 +1,58 @@
+[
+  {
+    "type": "imessage",
+    "ts_epoch": 1750000000,
+    "fields": {
+      "body": "Ahoj, jak se máš?",
+      "handle": "+420777123456"
+    }
+  },
+  {
+    "type": "imessage",
+    "ts_epoch": 1750000000,
+    "fields": {
+      "body": "Dobře, budu tam o 19:30.",
+      "handle": "+420777123456"
+    }
+  },
+  {
+    "type": "imessage",
+    "ts_epoch": 1750000000,
+    "fields": {
+      "body": "Přijď dnes večer na večeři.",
+      "handle": "jano.novak@example.cz"
+    }
+  },
+  {
+    "type": "imessage",
+    "ts_epoch": 1750000200,
+    "fields": {
+      "body": "Meeting re: Q3 finance report",
+      "handle": "jano.novak@example.cz"
+    }
+  },
+  {
+    "type": "imessage",
+    "ts_epoch": 1750000400,
+    "fields": {
+      "body": "(prázdná zpráva)",
+      "handle": "+420777123456"
+    }
+  },
+  {
+    "type": "imessage",
+    "ts_epoch": 1750000600,
+    "fields": {
+      "body": "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over",
+      "handle": "jano.novak@example.cz"
+    }
+  },
+  {
+    "type": "imessage",
+    "ts_epoch": 1750000800,
+    "fields": {
+      "body": "Poslední zpráva dne.",
+      "handle": "+420777123456"
+    }
+  }
+]

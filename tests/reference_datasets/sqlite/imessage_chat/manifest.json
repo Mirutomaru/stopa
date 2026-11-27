@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "parser_id": "sqlite",
+  "schema_variant": "apple_imessage_chatdb",
+  "fixture_file": "chat.db",
+  "fixture_sha256": "c11c3eeb18afd6261ce0f236f5f133a909f514506b69e13b23883210c8f85b09",
+  "reference_tool": "diffref-sqlite-stdlib/1.0 (nezávislý čtecí: stdlib sqlite3 + ručně psané dotazy, vlastní konstanta CFAbsoluteTime offset)",
+  "epoch_note": "message.date = Apple CFAbsoluteTime v sekundách od epochy 2001-01-01T00:00Z (REAL s frakcí); reference konvertuje přesnou aritmetikou floor(value) + vlastní konstanta 978_307_200 s (nezávisle na stopa.domain.times). STOPA extraktor používá from_apple_absolute (APPLE_EPOCH + timedelta(seconds=float)) a normalizace flooruje na celé sekundy — řádek s frakcí .5 s testuje shodu obou cest (surové se liší, kanonické sekundy identické).",
+  "contract_note": "WHERE parita obou stran = text IS NOT NULL AND date > 0 (STOPA extraktor vyloučí řádek s NULL textem — fixtura pokrytí řádkem m9; whitespace-only text → '(prázdná zpráva)' přes strip→[:300] or fallback, reference to samé sémantiky COALESCE/NULLIF/SUBSTR/TRIM). STOPA title = strip → [:300] → fallback: fixture drží 1 řádek whitespace-only a 1 řádek 350 znaků čistého ASCII (parita truncace [:300] vs. SUBSTR(TRIM(text),1,300); bez normalizovatelných znaků u hranice řezu). Okrajová bílá místa v fixtuře = ASCII spaces (SQLite TRIM ≠ Python strip pro tab/newline — kontrakt). Join key imessage = [handle, ts]: NULL handle by porušil fail-fast make_join_key (§3.4), fixture má všechny handle_id řešitelné; řádky m1+m3 sdílejí [handle, ts] po floor normalizaci (.5 s frakce) — duplicitní key testuje deterministické pořadové párování.",
+  "join_keys": {
+    "imessage": ["handle", "ts"]
+  },
+  "queries": [
+    {
+      "type": "imessage",
+      "sql": "SELECT COALESCE(NULLIF(SUBSTR(TRIM(m.text), 1, 300), ''), '(prázdná zpráva)') AS body, m.date, h.address AS handle FROM message m LEFT JOIN handle h ON h._id = m.handle_id WHERE m.text IS NOT NULL AND m.date > 0 ORDER BY m.date ASC, m._id ASC",
+      "ts_column": "date",
+      "converter": "cfabsolute_to_unix_s",
+      "fields": {
+        "body": "body",
+        "handle": "handle"
+      }
+    }
+  ]
+}
