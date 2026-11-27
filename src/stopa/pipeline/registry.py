@@ -41,6 +41,8 @@ from stopa.artifacts.email_mbox import PARSER_VERSION as EMAIL_MBOX_VERSION
 from stopa.artifacts.email_mbox import extract_email_artifacts
 from stopa.artifacts.facebook_wr import PARSER_VERSION as FACEBOOK_WR_VERSION
 from stopa.artifacts.facebook_wr import extract_facebook_artifacts
+from stopa.artifacts.file_meta import PARSER_VERSION as FILE_META_VERSION
+from stopa.artifacts.file_meta import extract_file_meta_artifacts
 from stopa.artifacts.gmail_messages import PARSER_VERSION as GMAIL_MESSAGES_VERSION
 from stopa.artifacts.gmail_messages import extract_gmail_artifacts
 from stopa.artifacts.google_2025_wr import PARSER_VERSION as GOOGLE_2025_WR_VERSION
@@ -217,6 +219,8 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "win_jumplist": (extract_jump_list_artifacts, JUMPLIST_VERSION),
     # E7 NTFS USN Journal ($UsnJrnl) — metadata file bez spolehlivé magiky
     "win_usn": (extract_usn_artifacts, USN_VERSION),
+    # STP-075 / vlna 31 — dokumentová metadata PDF + OOXML docProps (§7 pilot vlna 2)
+    "file_meta": (extract_file_meta_artifacts, FILE_META_VERSION),
     # ETAPA B vlna 1 — AXIOM port: email / WiFi / Scheduled Tasks / netstat
     "email_mbox": (extract_email_artifacts, EMAIL_MBOX_VERSION),
     "wifi_wlan": (extract_wifi_artifacts, WLAN_VERSION),

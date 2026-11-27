@@ -119,4 +119,29 @@ _PART = {
         ),
         test_files=("tests/test_e7.py", "tests/test_p11_quality_windows.py"),
     ),
+    # STP-075 / vlna 31 — E8 file metadata pipeline wrapper (pilot vlna 2, design §7)
+    "file_meta": ParserValidation(
+        parser_id="file_meta",
+        version="",  # doplní build_registry z pipeline
+        reference_dataset=(
+            "filemeta/"  # STP-075 (pilot vlna 2, design §7) — PDF /Info + OOXML docProps varianta; ID3v2/MP4/EXIF = další vlny §7
+        ),
+        formats=(
+            "PDF /Info slovník (Title/Author/Creator/Producer/CreationDate/ModDate)",
+            "OOXML docProps — docx/xlsx/pptx (core.xml Dublin Core + app.xml statistiky)",
+            "ID3v2 textové frameworky (TIT2/TPE1/TALB/TRCK/TDRC|TYER/TCON/TBPM) [doménová utilita]",
+            "MP4/iTunes atomy (©nam/©ART/aart/©alb/©day/©gen/trkn) [doménová utilita]",
+            "EXIF přes PIL (Make/Model/DateTimeOriginal/Artist/Copyright) [meta]",
+        ),
+        limitations=(
+            "PDF /Info = heuristický byte sken — první platný string token za klíčem vyhrává",
+            "OOXML docProps členy omezeny 256 KiB + bounded XML parse (hloubka/počet prvků)",
+            "ID3v2: TDRC má prioritu před TYER; MP4: jen textové atomy, trkn binární; EXIF vyžaduje Pillow [meta]",
+            "vlna 31 reference dataset pokrývá PDF /Info + OOXML docProps; ID3v2/MP4/EXIF = další vlny §7",
+        ),
+        test_files=(
+            "tests/test_e8.py",
+            "tests/test_p11_quality_file_meta.py",  # P1-1 vlna 31 — quality sada file_meta
+        ),
+    ),
 }

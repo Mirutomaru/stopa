@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "parser_id": "file_meta",
+  "reference_tool": "diffref-meta-stdlib/1.0 (hand-written parsers: PDF /Info byte scan + OOXML docProps via stdlib zipfile+ElementTree)",
+  "time_note": "document metadata has no event time \u2014 both sides emit ts=None; created/modified are compared as string fields per format",
+  "field_contract": "name = evidence file name (join key); field set is format-defined: PDF /Info -> title/author/creator/producer/created/modified (D:... normalized to ISO 8601, same contract as domain), OOXML core.xml -> title/author(=dc:creator)/modified_by/created/modified, OOXML app.xml -> application/company/pages/words/characters/slides/lines/paragraphs; missing field == None on both sides (union compare)",
+  "join_keys": {
+    "document_metadata": [
+      "name"
+    ]
+  },
+  "fixtures": [
+    {
+      "file": "sample.pdf",
+      "sha256": "5746aaac2c638fbd2e4eb6c9b236d3be7d638072b147eb111e2774b9f536ce06",
+      "variant": "pdf"
+    },
+    {
+      "file": "sample.docx",
+      "sha256": "c17ec56937cad993f0379c2000ce52c1553da2dc5dc58eec92a92f434809e7d6",
+      "variant": "ooxml"
+    },
+    {
+      "file": "sample.xlsx",
+      "sha256": "f03be84c765fa029a0d36e0d92634777a920f411cc4ddd62cb8e73b828a59641",
+      "variant": "ooxml"
+    },
+    {
+      "file": "sample.pptx",
+      "sha256": "4f01323d18f366f9087ce271e95bd1d473685c47ccf687a348a5e28922959ce0",
+      "variant": "ooxml"
+    }
+  ]
+}

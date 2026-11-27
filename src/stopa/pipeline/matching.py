@@ -24,6 +24,7 @@ from stopa.artifacts.drive_activity import is_drive_activity_file
 from stopa.artifacts.dropbox_mega import is_dropbox_file, is_mega_file
 from stopa.artifacts.email_mbox import is_email_file
 from stopa.artifacts.facebook_wr import is_facebook_file
+from stopa.artifacts.file_meta import is_file_meta_file
 from stopa.artifacts.gmail_messages import is_gmail_file
 from stopa.artifacts.google_2025_wr import is_google_2025_file
 from stopa.artifacts.google_account_info import is_account_info_file
@@ -178,6 +179,10 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["win_jumplist"]
     if is_usn_journal_file(name):
         return NAME_BASED_EXTRACTORS["win_usn"]
+    # STP-075 / vlna 31 — dokumentová metadata (PDF + OOXML docProps) podle
+    # přípony; PŘED klíčovými slovy níže, icloud/jumplist/usn si drží prioritu.
+    if is_file_meta_file(name):
+        return NAME_BASED_EXTRACTORS["file_meta"]
     if is_email_file(name):
         return NAME_BASED_EXTRACTORS["email_mbox"]
     if is_wlan_profile_file(name):

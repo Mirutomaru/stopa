@@ -1,0 +1,19 @@
+[
+  {
+    "type": "document_metadata",
+    "ts_epoch": null,
+    "fields": {
+      "name": "sample.docx",
+      "title": "Quarterly Planning Document",
+      "author": "Miroslav Mat\u00fa\u0161",
+      "modified_by": "Jana Nov\u00e1kov\u00e1",
+      "created": "2026-05-10T08:00:00Z",
+      "modified": "2026-06-01T17:45:30Z",
+      "application": "Microsoft Office Word",
+      "company": "Komunik\u00e1tor s.r.o.",
+      "pages": "12",
+      "words": "3456",
+      "characters": "21034"
+    }
+  }
+]

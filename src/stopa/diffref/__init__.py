@@ -5,9 +5,10 @@ Vlastní vrstva mezi ``artifacts`` (extrakce) a ``domain/differential``
 dvěma nezávislými cestami nad stejným vstupem — STOPA extraktor vs. referenční
 čtení z manifestu. I/O zde patří (čte soubory); čistá logika zůstává v doméně.
 
-Pilotní pokrytí (vlny 29–30): ``sqlite`` (Chrome/Edge History, STP-073) a
-``netstat`` (Windows netstat -ano / Unix ss text, STP-074). Další formáty =
-další vlny (§7) — registr je extenzivní, bez rewrites.
+Pilotní pokrytí (vlny 29–31): ``sqlite`` (Chrome/Edge History, STP-073),
+``netstat`` (Windows netstat -ano / Unix ss text, STP-074) a ``file_meta``
+(PDF /Info + OOXML docProps, STP-075). Další formáty = další vlny (§7) —
+registr je extenzivní, bez rewrites.
 """
 
 from __future__ import annotations
@@ -78,6 +79,24 @@ def _netstat_load_manifest(path: Path) -> Mapping[str, object]:
     return load_text_manifest(path)
 
 
+def _meta_stopa(path: Path) -> list[dict]:
+    from stopa.diffref.meta_ref import run_stopa_filemeta  # líně — I/O vrstva
+
+    return run_stopa_filemeta(path)
+
+
+def _meta_reference(path: Path, manifest: Mapping[str, object]) -> list[dict]:
+    from stopa.diffref.meta_ref import read_reference_entries
+
+    return read_reference_entries(path, manifest)
+
+
+def _meta_load_manifest(path: Path) -> Mapping[str, object]:
+    from stopa.diffref.meta_ref import load_meta_manifest  # líně — I/O vrstva
+
+    return load_meta_manifest(path)
+
+
 #: Registr adaptérů — extenzivní (nový formát = nový řádek + modul).
 DIFFREF_ADAPTERS: dict[str, DiffrefAdapter] = {
     "sqlite": DiffrefAdapter(
@@ -92,6 +111,13 @@ DIFFREF_ADAPTERS: dict[str, DiffrefAdapter] = {
         run_stopa=_netstat_stopa,
         read_reference=_netstat_reference,
         load_manifest=_netstat_load_manifest,
+    ),
+    # STP-075 — pilot vlna 2: dokumentová metadata (PDF /Info + OOXML docProps).
+    "file_meta": DiffrefAdapter(
+        parser_id="file_meta",
+        run_stopa=_meta_stopa,
+        read_reference=_meta_reference,
+        load_manifest=_meta_load_manifest,
     ),
 }
 

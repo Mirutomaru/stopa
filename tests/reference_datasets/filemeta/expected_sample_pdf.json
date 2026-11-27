@@ -1,0 +1,15 @@
+[
+  {
+    "type": "document_metadata",
+    "ts_epoch": null,
+    "fields": {
+      "name": "sample.pdf",
+      "title": "Annual Report (Q4) - final version 2",
+      "author": "Jane A. Doe",
+      "creator": "STOPA Pilot Generator",
+      "producer": "diffref-wave2/1.0",
+      "created": "2026-03-15T14:30:00+02:00",
+      "modified": "2026-04-01T09:00:00+00:00"
+    }
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "type": "document_metadata",
+    "ts_epoch": null,
+    "fields": {
+      "name": "sample.xlsx",
+      "title": "Budget Overview FY26",
+      "author": "Petr Sv\u00ed\u0159ek",
+      "created": "2026-01-20T11:30:00Z",
+      "application": "Microsoft Excel",
+      "company": "Komunik\u00e1tor s.r.o.",
+      "characters": "89204",
+      "lines": "1204",
+      "paragraphs": "632"
+    }
+  }
+]

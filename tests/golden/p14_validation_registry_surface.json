@@ -29,6 +29,7 @@
   "icloud_messages",
   "win_jumplist",
   "win_usn",
+  "file_meta",
   "email_mbox",
   "wifi_wlan",
   "win_schedtask",
@@ -238,6 +239,28 @@
    "test_files": [
     "tests/test_e7.py",
     "tests/test_p11_quality_windows.py"
+   ],
+   "expected_results": {}
+  },
+  "file_meta": {
+   "version": "",
+   "formats": [
+    "PDF /Info slovn\u00edk (Title/Author/Creator/Producer/CreationDate/ModDate)",
+    "OOXML docProps \u2014 docx/xlsx/pptx (core.xml Dublin Core + app.xml statistiky)",
+    "ID3v2 textov\u00e9 frameworky (TIT2/TPE1/TALB/TRCK/TDRC|TYER/TCON/TBPM) [dom\u00e9nov\u00e1 utilita]",
+    "MP4/iTunes atomy (\u00a9nam/\u00a9ART/aart/\u00a9alb/\u00a9day/\u00a9gen/trkn) [dom\u00e9nov\u00e1 utilita]",
+    "EXIF p\u0159es PIL (Make/Model/DateTimeOriginal/Artist/Copyright) [meta]"
+   ],
+   "limitations": [
+    "PDF /Info = heuristick\u00fd byte sken \u2014 prvn\u00ed platn\u00fd string token za kl\u00ed\u010dem vyhr\u00e1v\u00e1",
+    "OOXML docProps \u010dleny omezeny 256 KiB + bounded XML parse (hloubka/po\u010det prvk\u016f)",
+    "ID3v2: TDRC m\u00e1 prioritu p\u0159ed TYER; MP4: jen textov\u00e9 atomy, trkn bin\u00e1rn\u00ed; EXIF vy\u017eaduje Pillow [meta]",
+    "vlna 31 reference dataset pokr\u00fdv\u00e1 PDF /Info + OOXML docProps; ID3v2/MP4/EXIF = dal\u0161\u00ed vlny \u00a77"
+   ],
+   "reference_dataset": "filemeta/",
+   "test_files": [
+    "tests/test_e8.py",
+    "tests/test_p11_quality_file_meta.py"
    ],
    "expected_results": {}
   },

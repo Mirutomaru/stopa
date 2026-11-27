@@ -1,0 +1,17 @@
+[
+  {
+    "type": "document_metadata",
+    "ts_epoch": null,
+    "fields": {
+      "name": "sample.pptx",
+      "title": "Product Roadmap Q3",
+      "author": "T\u00e1\u0148a Dvo\u0159\u00e1kov\u00e1",
+      "modified_by": "Miroslav Mat\u00fa\u0161",
+      "created": "2026-07-04T09:00:00+02:00",
+      "modified": "2026-08-15T16:20:10+02:00",
+      "application": "Microsoft PowerPoint",
+      "company": "Komunik\u00e1tor s.r.o.",
+      "slides": "24"
+    }
+  }
+]
