@@ -65,9 +65,9 @@ class TestFixtureGuard:
         assert _sha256(FIXTURE) == str(_manifest()["fixture_sha256"])
 
     def test_build_fixture_rebuilds_identical_bytes(self, tmp_path: Path) -> None:
-        # Rebuild na stejném SQLite = byte-identická DB (SHA-pin v manifestu drží).
-        # Při upgrade verze SQLite se hash obnoví + manifest aktualizuje (postup
-        # je dokumentován v docstringu build_fixture.py).
+        # Rebuild = byte-identická DB (SHA-pin v manifestu drží). Headerové pole
+        # „SQLite Library Version Number“ normalizuje build_fixture.py na nulu →
+        # stabilní i při rebuildu jinou verzí SQLite (CI má odlišné libsqlite3).
         out_db = tmp_path / "rebuilt.db"
         proc = subprocess.run(
             [sys.executable, str(DS / "build_fixture.py"), str(out_db)],

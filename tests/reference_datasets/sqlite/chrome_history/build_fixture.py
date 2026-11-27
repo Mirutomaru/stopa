@@ -7,8 +7,10 @@ se musí čistě vyhodnotit na nula artifactů).
 Determinismus: pevné ID, pevné celosekundové timestampy (Chrome µs =
  ``(unix_s + 11_644_473_600) * 1_000_000`` — přesné celé číslo), žádné
 podsekundové frakce. Byte-for-byte stability souboru se fixuje SHA-256 pinem v
-``manifest.json`` (guard test ``tests/test_stp073.py``); při rebuildu na jiné
-verzi SQLite se hash obnoví a manifest aktualizuje (dokumentovaný postup).
+``manifest.json`` (guard test ``tests/test_stp073.py``). Headerové pole
+"SQLite Library Version Number" (offset 96–99) se po buildu normalizuje na
+nulu → hash je stabilní i při rebuildu jinou verzí SQLite, která toto
+informační pole zapíše jinak (čteči od něj nezávisí).
 
 Použití::
 
@@ -41,6 +43,22 @@ VISIT_UNIX_SECONDS: list[int] = [
     1_700_010_800,
     1_700_014_400,
 ]
+
+#: Offset pole „SQLite Library Version Number“ v DB headeru (big-endian, 4 B).
+_SQLITE_VERSION_FIELD_OFFSET = 96
+
+
+def _normalize_writer_version(db_path: Path) -> None:
+    """Znuluje verzi píšící knihovny v headeru → byte-stabilita napříč verzemi.
+
+    Pole je informační (verze SQLite, která soubor naposledy psala); čteči od
+    něj nezávisí. Bez normalizace rebuild jinou verzí SQLite změní 2–4 bajty a
+    poruší SHA pin v ``manifest.json`` (guard test ``tests/test_stp073.py``).
+    """
+    data = bytearray(db_path.read_bytes())
+    field_end = _SQLITE_VERSION_FIELD_OFFSET + 4
+    data[_SQLITE_VERSION_FIELD_OFFSET:field_end] = b"\x00" * 4
+    db_path.write_bytes(bytes(data))
 
 
 def build(path: Path) -> None:
@@ -90,6 +108,9 @@ def build(path: Path) -> None:
         conn.commit()
     finally:
         conn.close()
+    # Header normalizace PO close (SQLite už soubor nedotkne) → SHA stabilní i
+    # při rebuildu jinou verzí SQLite (CI ubuntu-latest má odlišné libsqlite3).
+    _normalize_writer_version(path)
 
 
 if __name__ == "__main__":
