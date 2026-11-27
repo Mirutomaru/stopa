@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "parser_id": "sqlite",
+  "schema_variant": "android_calllog",
+  "fixture_file": "calllog.db",
+  "fixture_sha256": "6f3032060207ddae2188b4b309d1f1842ba5f769dab5d2526a4a947808e1cdcc",
+  "reference_tool": "diffref-sqlite-stdlib/1.0 (nezávislý čtecí: stdlib sqlite3 + ručně psané dotazy)",
+  "epoch_note": "date = unix ms od epochy 1970; reference konvertuje celočíselně value//1_000 (vlastní konverze, ne stopa.domain.times). STOPA extraktor používá float ms/1000.0 a normalizace flooruje na celé sekundy — řádek s frakcí .500 s testuje shodu obou cest.",
+  "contract_note": "STOPA title = f'Hovor — {number}' (diffref extrahuje number removeprefixem; fixture drží všechny number nenulové, protože NULL by STOPA vykreslil jako text 'None' a referenční SQL vrátil None → parity porušená; navíc make_join_key fail-fast §3.4). NULL duration/type se v kanonických polích snášejí jako explicitní None == None (§3.3). Join key call_log = [number, ts] — řádky 1+2 sdílejí number I sekundu po flooru (duplicitní join key; pořadí dává stabilní klíč §3.2), řádky 1/2/8 sdílejí number s odlišnými sekundami.",
+  "join_keys": {
+    "call_log": ["number", "ts"]
+  },
+  "queries": [
+    {
+      "type": "call_log",
+      "sql": "SELECT number, date, duration, type FROM calls WHERE date > 0 ORDER BY date ASC, _id ASC",
+      "ts_column": "date",
+      "converter": "unix_ms_to_unix_s",
+      "fields": {
+        "number": "number",
+        "duration_s": "duration",
+        "direction": "type"
+      }
+    }
+  ]
+}

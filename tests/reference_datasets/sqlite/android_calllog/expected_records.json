@@ -1,0 +1,65 @@
+[
+  {
+    "type": "call_log",
+    "ts_epoch": 1750000000,
+    "fields": {
+      "number": "+420777123456",
+      "duration_s": 123,
+      "direction": 1
+    }
+  },
+  {
+    "type": "call_log",
+    "ts_epoch": 1750000000,
+    "fields": {
+      "number": "+420777123456",
+      "duration_s": 456,
+      "direction": 2
+    }
+  },
+  {
+    "type": "call_log",
+    "ts_epoch": 1750000123,
+    "fields": {
+      "number": "+420 777 123 456",
+      "duration_s": null,
+      "direction": null
+    }
+  },
+  {
+    "type": "call_log",
+    "ts_epoch": 1750000200,
+    "fields": {
+      "number": "420777123456",
+      "duration_s": 0,
+      "direction": 3
+    }
+  },
+  {
+    "type": "call_log",
+    "ts_epoch": 1750000201,
+    "fields": {
+      "number": "420777123456",
+      "duration_s": 89,
+      "direction": 2
+    }
+  },
+  {
+    "type": "call_log",
+    "ts_epoch": 1750000300,
+    "fields": {
+      "number": "00420223456789",
+      "duration_s": 2468,
+      "direction": 1
+    }
+  },
+  {
+    "type": "call_log",
+    "ts_epoch": 1750000400,
+    "fields": {
+      "number": "+420777123456",
+      "duration_s": 55,
+      "direction": 2
+    }
+  }
+]

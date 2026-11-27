@@ -19,7 +19,10 @@ Android mmssms.db (tabulka ``sms``, unix ms) — kanonický typ ``sms_message``
 ``sqlite/android_sms/``; vlna 5 (STP-078): Apple iMessage chat.db
 (``message`` + ``handle``, CFAbsoluteTime = REAL s od roku 2001) — kanonický
 typ ``imessage`` + pole ``body`` / ``handle``, samostatný referenční dataset
-``sqlite/imessage_chat/``. Provenienční metadata (např. ``engine``) se do
+``sqlite/imessage_chat/``; vlna 6 (STP-079): Android calllog.db (tabulka
+``calls``, unix ms) — kanonický typ ``call_log`` + pole ``number`` /
+``duration_s`` / ``direction``, samostatný referenční dataset
+``sqlite/android_calllog/``. Provenienční metadata (např. ``engine``) se do
 komparované plochy nedostávají — srovnává se obsah, ne STOPA anotace.
 
 Graceful degradation: pilot běží čistě na stdlib; extras ``[diffref]`` jsou
@@ -48,6 +51,7 @@ CFABSOLUTE_UNIX_OFFSET_S = 978_307_200
 _BROWSER_HISTORY = "browser_history"
 _SMS_MESSAGE = "sms_message"  # STP-077 — Android mmssms.db (vlna 4, §7)
 _IMESSAGE = "imessage"  # STP-078 — Apple iMessage chat.db (vlna 5, §7)
+_CALL_LOG = "call_log"  # STP-079 — Android calllog.db (vlna 6, §7)
 
 
 def chrome_micros_to_unix_s(value: int) -> int:
@@ -219,13 +223,15 @@ def read_reference_entries(db_path: Path, manifest: Mapping[str, Any]) -> list[d
 def run_stopa_sqlite(path: Path) -> list[dict[str, Any]]:
     """STOPA strana: běžný extraktor → surové entry pro normalizaci (§3).
 
-    Scope vlny 5 (STP-078): artifacty ``browser_history`` (Chrome/Edge/Firefox;
+    Scope vlny 6 (STP-079): artifacty ``browser_history`` (Chrome/Edge/Firefox;
     kanonická pole = obsah — ``url``, ``page_title``), ``sms_message``
-    (Android ``mmssms.db``; body z titleu, address z details) a ``imessage``
+    (Android ``mmssms.db``; body z titleu, address z details), ``imessage``
     (Apple ``chat.db``; body z titleu včetně truncace [:300] a fallbacku
-    „(prázdná zpráva)“, handle z details); provenienční metadata (např.
-    ``engine``) se nesrovnávají. Ostatní sqlite typy zatím mimo diferenciální
-    scope (§7).
+    „(prázdná zpráva)“, handle z details) a ``call_log`` (Android
+    ``calllog.db``; number z titleu formátu f„Hovor — {number}“ přes
+    removeprefix, duration_s/direction z details); provenienční metadata
+    (např. ``engine``) se nesrovnávají. Ostatní sqlite typy zatím mimo
+    diferenciální scope (§7).
     """
     from stopa.artifacts.sqlite_extract import extract_sqlite_artifacts  # I/O vrstva
 
@@ -248,6 +254,15 @@ def run_stopa_sqlite(path: Path) -> list[dict[str, Any]]:
             fields = {
                 "body": artifact.title,
                 "handle": (artifact.details or {}).get("handle"),
+            }
+        elif artifact.artifact_type == _CALL_LOG:
+            # STP-079 — number z titleu formátu f"Hovor — {number}" (removeprefix;
+            # fixture drží všechny number nenulové, viz manifest contract_note),
+            # duration_s/direction z details (NULL sloupce → explicitní None)
+            fields = {
+                "number": (artifact.title or "").removeprefix("Hovor — "),
+                "duration_s": (artifact.details or {}).get("duration_s"),
+                "direction": (artifact.details or {}).get("direction"),
             }
         else:
             continue  # ostatní sqlite typy zatím mimo diferenciální scope (§7)
