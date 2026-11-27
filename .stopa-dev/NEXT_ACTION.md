@@ -2,7 +2,7 @@
 
 ## Hotovo právě teď: **CI fix reference fixture (STP-073) — byte-stabilita napříč verzemi SQLite**
 GitHub Actions run `45925581797` pro commit `78f62df` = **failure 7/11** (3 ubuntu full-suite joby: Tests pytest+JS DOM, test-full, Rust wheel; portability core zelený — selhající test v tom subsetu neběhá). Kořenová příčina: guard test `test_build_fixture_rebuilds_identical_bytes` rebuilduje fixture a assertí byte-identity — SQLite zapisuje do DB headeru pole „SQLite Library Version Number“ (offset 96–99) = verzi píšící knihovny; lokální build proběhl pod libsqlite3 **3.50.4**, CI ubuntu-latest má jinou verzi → rebuild zapísal jiný version code a porušil SHA pin v manifestu (rozdíl = přesně ty bajty; prokázeno křížovým rebuildem pod sqlite 3.46.1). Oprava: `build_fixture.py` po close() normalizuje toto **informační** headerové pole na nulu (`_normalize_writer_version`; čteči od něj nezávisí) → byte-stabilita napříč verzemi SQLite (křížová kontrola: rebuild pod python3.13/sqlite 3.46.1 = **byte-identický soubor** ✓); fixture re-pin v manifest.json → `2b939092…`. Cílená brána **26 passed + ruff clean**; plná suite na stabilním stromě **5622 passed / 2 skipped, EXIT=0** (39:44).
-→ **Zbývá / START:** push + CI monitor (green = vlna 29 uzavřená end-to-end); dále pilot vlna 1 část B = **STP-074** (netstat/text formát + aditivní stav parseru `differentially_validated`).
+→ **Uzavřeno end-to-end:** push `14baf84` → CI run na `14baf84` = **success 11/11** (05:12; včetně 3 dříve selhajících ubuntu full-suite jobů Tests/test-full/Rust wheel — fix prokázán i na CI). START = pilot vlna 1 část B = **STP-074** (netstat/text formát + aditivní stav parseru `differentially_validated`).
 
 ---
 
