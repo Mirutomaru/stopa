@@ -2,7 +2,7 @@
 
 ## Základní údaje
 - **Název projektu:** STOPA Digital Forensics (Unified Forensic Workbench)
-- **Verze aplikace:** 2.7.1 (`pyproject.toml`)
+- **Verze aplikace:** 2.8.0 (`pyproject.toml`)
 - **Popis:** Python forenzní platforma pro analýzu diskových obrazů (E01/AFF4/RAW),
   extrakci artifactů, timeline, korelací entit a generování soudně použitelných reportů.
   Cíl: konkurence Magnet AXIOM / EnCase / Autopsy / X-Ways / Belkasoft.

@@ -1,3 +1,8 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-27, RELEASE 2.8 VYDÁN ★)
+
+## Hotovo právě teď: **RELEASE 2.8 VYDÁN ★ = vlny 26–32 nad tagem `v2.7.1` (diferenciální validace parserů flagship dle §7 designu; STP-071..076, pilot hotov ★)**
+Release notes `docs/RELEASE_NOTES_2_8.md`; changelog sekce v release formátu (root + mirror); FEATURE_REGISTRY doplněno F-114/F-115 + re-stamp 2.8 (plánováno)→**2.8.0**; verzní plochy PROJECT_STATE/ROADMAP/TEST_REGISTRY → **2.8.0**.
+→ Zbývá / START: bump commit + annotated tag `v2.8.0` na vrchol main → push main+tag → CI (11 jobů) + Release WF (packages/rust-wheels/publish-release/appimage/docker) → Commit D: SHA push/tagu + run ID + WF výsledek do tohoto bloku a fáze entry **RELEASE 2.8 VYDANÝ** do PROJECT_STATE. Dále dle §7 další reference formáty/varianty (syslog, access_log, ostatní sqlite varianty) a rozšíření `[diffref]` extras. Předtím:
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-27, RELEASE 2.8)
 
 ## Hotovo právě teď: **RELEASE 2.8 — vlna 32 / STP-076 DOKONČENA ★ = Firefox places.sqlite reference varianta (§7)**
