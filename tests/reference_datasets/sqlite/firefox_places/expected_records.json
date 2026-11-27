@@ -1,0 +1,42 @@
+[
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700000000,
+    "fields": {
+      "url": "https://example.com/",
+      "page_title": "Example Domain"
+    }
+  },
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700036000,
+    "fields": {
+      "url": "http://intranet.local/podpora/hlášení?rok=2026",
+      "page_title": "Interní hlášení"
+    }
+  },
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700072000,
+    "fields": {
+      "url": "https://github.com/Mirutomaru/stopa",
+      "page_title": null
+    }
+  },
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700108000,
+    "fields": {
+      "url": "https://example.org/subsecond-precision",
+      "page_title": "Subsekundová přesnost"
+    }
+  },
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700144000,
+    "fields": {
+      "url": "https://example.org/dlouha-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "page_title": "Dlouhá URL pod limitem"
+    }
+  }
+]

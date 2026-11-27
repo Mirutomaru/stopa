@@ -10,9 +10,11 @@ Dvě záměrně oddělené kódové cesty nad stejným souborem (design §2/§6)
   :data:`CHROME_UNIX_OFFSET_S`, ne ``stopa.domain.times``); stdlib ``sqlite3``
   v read-only režimu (``file::…?mode=ro`` — nedotýká se důkazů).
 
-Pilotní scope (STP-073): schéma Chrome/Edge History (``urls``+``visits``),
-typ záznamu ``browser_history``, kanonická pole ``url`` + ``page_title``.
-Provenienční metadata (např. ``engine``) se do komparované plochy nedostávají —
+Pilotní scope (STP-073): schéma Chrome/Edge History (``urls``+``visits``);
+vlna 3 (STP-076): Firefox places.sqlite (``moz_places``, unix ms) — stejná
+kanonická smlouva ``browser_history`` + pole ``url`` / ``page_title``,
+samostatný referenční dataset ``sqlite/firefox_places/``. Provenienční
+metadata (např. ``engine``) se do komparované plochy nedostávají —
 srovnává se obsah, ne STOPA anotace.
 
 Graceful degradation: pilot běží čistě na stdlib; extras ``[diffref]`` jsou
@@ -44,7 +46,7 @@ def chrome_micros_to_unix_s(value: int) -> int:
 
     Raises:
         TypeError: vstup není ``int`` (bool = typová chyba, ne hodnota).
-        ValueError: ``value <= 0`` (Chrome používá 0 jako „žádný čas").
+        ValueError: ``value <= 0`` (Chrome používá 0 jako „žádný čas“).
     """
     if not isinstance(value, int) or isinstance(value, bool):
         raise TypeError(f"očekáváno int (chrome µs), dostalo {type(value).__name__}")
@@ -53,8 +55,31 @@ def chrome_micros_to_unix_s(value: int) -> int:
     return value // 1_000_000 - CHROME_UNIX_OFFSET_S
 
 
+def unix_ms_to_unix_s(value: int) -> int:
+    """Firefox ``moz_places.last_visit_date`` (ms od Unix epochy 1970) → unix s.
+
+    Přesná celočíselná aritmetika (``// 1_000``). STOPA extraktor používá float
+    cestu ``ms / 1000.0`` a normalizace flooruje na celé sekundy — pro hodnoty
+    pod 2^53 ms se obě cesty shodují; reference zůstává celočíselná (nezávislá
+    cesta, design §2). Pozor: ms, **ne** µs (``// 1_000_000``) ani FILETIME.
+
+    Raises:
+        TypeError: vstup není ``int`` (bool = typová chyba, ne hodnota).
+        ValueError: ``value < 0`` (STOPA filtruje ``last_visit_date > 0``;
+            0 = platná epocha 1970-01-01, konzistentně s ``from_unix``).
+    """
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"očekáváno int (unix ms), dostalo {type(value).__name__}")
+    if value < 0:
+        raise ValueError(f"unix ms musí být ≥ 0, dostalo {value}")
+    return value // 1_000
+
+
 #: Registrované konvertéry epoch (jmena deklarované v manifestu).
-CONVERTERS: Mapping[str, Any] = {"chrome_micros_to_unix_s": chrome_micros_to_unix_s}
+CONVERTERS: Mapping[str, Any] = {
+    "chrome_micros_to_unix_s": chrome_micros_to_unix_s,
+    "unix_ms_to_unix_s": unix_ms_to_unix_s,  # STP-076 — Firefox places.sqlite (vlna 3)
+}
 
 _REQUIRED_MANIFEST_KEYS = ("parser_id", "schema_variant", "fixture_file", "reference_tool", "join_keys", "queries")
 

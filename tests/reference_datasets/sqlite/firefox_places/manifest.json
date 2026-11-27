@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "parser_id": "sqlite",
+  "schema_variant": "firefox_places",
+  "fixture_file": "places.sqlite",
+  "fixture_sha256": "220aa4e0b3522394cabb20b1723c56b2e610330f6762d56ea36394f229f0d755",
+  "reference_tool": "diffref-sqlite-stdlib/1.0 (nezávislý čtecí: stdlib sqlite3 + ručně psané dotazy)",
+  "epoch_note": "last_visit_date = unix ms od epochy 1970; reference konvertuje celočíselně value//1_000 (vlastní konverze, ne stopa.domain.times). STOPA extraktor používá float ms/1000.0 a normalizace flooruje na celé sekundy — řádek s frakcí .123 s (subsecond-precision) testuje shodu obou cest.",
+  "contract_note": "url je v moz_places unikátní → join key 'url' jednoznačný; fixture URL < 500 znaků (řádek dlouha-… = přesně 499, pod STOPA limitem url[:500] bez truncace); NULL title → page_title=None explicitní na obou stranách.",
+  "join_keys": {
+    "browser_history": [
+      "url"
+    ]
+  },
+  "queries": [
+    {
+      "type": "browser_history",
+      "sql": "SELECT url, title, last_visit_date FROM moz_places WHERE last_visit_date > 0 AND url IS NOT NULL ORDER BY url ASC",
+      "ts_column": "last_visit_date",
+      "converter": "unix_ms_to_unix_s",
+      "fields": {
+        "url": "url",
+        "page_title": "title"
+      }
+    }
+  ]
+}
