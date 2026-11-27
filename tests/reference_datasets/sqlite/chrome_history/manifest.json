@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "parser_id": "sqlite",
+  "schema_variant": "chrome_history",
+  "fixture_file": "chrome_history.db",
+  "fixture_sha256": "8fb5f6c1c61a959a0fec073fcdfbabc50ea5fd05c085d9e4503e8ca4dd6c0acd",
+  "reference_tool": "diffref-sqlite-stdlib/1.0 (nezávislý čtecí: stdlib sqlite3 + ručně psané dotazy)",
+  "epoch_note": "visit_time = Chrome µs od Windows epochy 1601; reference konvertuje celočíselně value//1_000_000 − 11_644_473_600 (vlastní konstanta, ne stopa.domain.times)",
+  "join_keys": {
+    "browser_history": ["url"]
+  },
+  "queries": [
+    {
+      "type": "browser_history",
+      "sql": "SELECT u.url, u.title, v.visit_time FROM visits v JOIN urls u ON u.id = v.url WHERE v.visit_time > 0 AND u.url IS NOT NULL ORDER BY u.url ASC, v.visit_time ASC",
+      "ts_column": "visit_time",
+      "converter": "chrome_micros_to_unix_s",
+      "fields": {
+        "url": "url",
+        "page_title": "title"
+      }
+    }
+  ]
+}

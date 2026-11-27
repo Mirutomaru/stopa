@@ -1,0 +1,42 @@
+[
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700000000,
+    "fields": {
+      "url": "https://example.com/",
+      "page_title": "Example Domain"
+    }
+  },
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700003600,
+    "fields": {
+      "url": "file:///home/user/report.pdf",
+      "page_title": "report.pdf"
+    }
+  },
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700007200,
+    "fields": {
+      "url": "https://github.com/Mirutomaru/stopa",
+      "page_title": "STOPA — forenzní workbench"
+    }
+  },
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700010800,
+    "fields": {
+      "url": "http://intranet.local/wiki?strana=1&reze=2",
+      "page_title": "Interní wiki"
+    }
+  },
+  {
+    "type": "browser_history",
+    "ts_epoch": 1700014400,
+    "fields": {
+      "url": "https://example.org/empty-title",
+      "page_title": null
+    }
+  }
+]

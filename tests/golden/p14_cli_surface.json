@@ -292,6 +292,8 @@
       "--help",
       "--input",
       "--join-key",
+      "--manifest",
+      "--raw",
       "--ref",
       "--run-id",
       "--tool",

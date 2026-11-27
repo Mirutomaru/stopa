@@ -171,11 +171,13 @@ def test_non_list_json_rc2(capsys, tmp_path):
     assert "očekáváno JSON list" in capsys.readouterr().err
 
 
-def test_missing_required_ref_is_argparse_exit2(tmp_path):
+def test_missing_ref_is_mode_validation_exit2(capsys, tmp_path):
+    # STP-073: --ref už není argparse-required (režimy jsou mutually exclusive);
+    # chybějící --ref v JSON režimu → vstupní chyba exit 2 z validace režimů
     inp = _write(tmp_path, "stopa.json", _IDENTICAL)
-    with pytest.raises(SystemExit) as excinfo:
-        main(["differential", "sqlite", "--input", inp])
-    assert excinfo.value.code == 2
+    rc = main(["differential", "sqlite", "--input", inp])
+    assert rc == 2
+    assert "--input i --ref" in capsys.readouterr().err
 
 
 def test_join_key_not_declared_rc2(capsys, tmp_path):

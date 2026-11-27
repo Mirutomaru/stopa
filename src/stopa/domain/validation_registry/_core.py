@@ -11,6 +11,9 @@ _PART = {
     "sqlite": ParserValidation(
         parser_id="sqlite",
         version="",  # doplní build_registry z pipeline
+        reference_dataset=(
+            "sqlite/chrome_history/"  # STP-073 (pilot vlna 1, design §6.1) — Chrome/Edge History varianta; ostatní varianty = další vlny §7
+        ),
         formats=(
             "Chrome/Edge/Opera (urls+visits, µs od Win epochy)",
             "Firefox (moz_places, ms od Unix epochy)",

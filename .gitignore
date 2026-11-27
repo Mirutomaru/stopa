@@ -8,6 +8,8 @@ dist/
 build/
 cases/
 *.db
+# STP-073 (pilot vlna 1) — deterministické referenční fixture se commítují (SHA-piny v manifestech)
+!tests/reference_datasets/**/*.db
 # lokální artefakt CI benchmark jobu (upload, ne commit)
 benchmark-result.json
 .DS_Store

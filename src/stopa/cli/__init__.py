@@ -506,11 +506,13 @@ def build_parser() -> argparse.ArgumentParser:
                       help=t("cli.h.115"))
     ps_p.set_defaults(func=cmd_parser_status)
 
-    # STP-072 — diferenciální testování parserů (vlna 28 / release 2.8; design §6)
+    # STP-072/STP-073 — diferenciální testování parserů (vlna 28 + pilot §7; design §6)
     df_p = _ex_sub(sub, "differential", help=t("cli.h.351"))
     df_p.add_argument("parser", help=t("cli.h.352"))
-    df_p.add_argument("--input", required=True, metavar="FILE", help=t("cli.h.353"))
-    df_p.add_argument("--ref", required=True, metavar="FILE", help=t("cli.h.354"))
+    df_p.add_argument("--input", default=None, metavar="FILE", help=t("cli.h.353"))
+    df_p.add_argument("--ref", default=None, metavar="FILE", help=t("cli.h.354"))
+    df_p.add_argument("--raw", default=None, metavar="FILE", help=t("cli.h.359"))
+    df_p.add_argument("--manifest", default=None, metavar="FILE", help=t("cli.h.360"))
     df_p.add_argument("--tool", default=None, metavar="NAME", help=t("cli.h.355"))
     df_p.add_argument("--join-key", action="append", default=[], metavar="TYPE=P1,P2",
                       help=t("cli.h.356"))

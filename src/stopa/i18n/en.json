@@ -353,7 +353,7 @@
   "cli.h.347": "stopa forensic pcap case-abc /evidence/capture.pcapng",
   "cli.h.348": "stopa crypto report case-abc --format html",
   "cli.h.349": "stopa court swgde case-abc --out ./reports",
-  "cli.h.350": "stopa differential sqlite --input stopa_records.json --ref ref_records.json --tool sqlite3-dump --join-key visit=url",
+  "cli.h.350": "stopa differential sqlite --input stopa_records.json --ref ref_records.json --tool sqlite3-dump --join-key visit=url\n  stopa differential sqlite --raw fixture.db --manifest manifest.json   (pilot auto-mode, design §7)",
   "cli.h.351": "Differential comparison of a STOPA parser output against an independent reference tool",
   "cli.h.352": "parser identifier recorded in the report metadata",
   "cli.h.353": "JSON list of records from the STOPA parser ({type, ts?, epoch?, fields})",
@@ -361,5 +361,7 @@
   "cli.h.355": "identifier of the reference tool (report metadata, design section 10.2)",
   "cli.h.356": "join key declaration TYPE=field1,field2 (repeatable; 'ts' = time); required for every type present in data (section 3.4)",
   "cli.h.357": "JSON map difference id to status/reason (section 5 verdicts)",
-  "cli.h.358": "declared run id recorded in the report (section 4 determinism)"
+  "cli.h.358": "declared run id recorded in the report (section 4 determinism)",
+  "cli.h.359": "raw input file (pilot auto-mode §7): runs the STOPA extractor and reference reader from the manifest; requires --manifest",
+  "cli.h.360": "reference JSON manifest for auto-mode: queries, join keys, reference tool ID and (optionally) SHA-256 input pin"
 }

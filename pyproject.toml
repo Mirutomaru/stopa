@@ -15,6 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.4"]
+diffref = []  # STP-073 (pilot vlna 1) — kotva pro verzování referenčních nástrojů; pilot běží na stdlib (design §2/§6.1, graceful degradation §10)
 pdf = ["weasyprint>=62"]  # FÁZE 7 — PDF reporty (volitelné; HTML vždy funguje)
 web = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "httpx>=0.27", "python-multipart>=0.0.9"]  # web GUI — FastAPI nad analyze() + E11 LM Studio klient (+ multipart pro Plaso import upload)
 fde = ["cryptography>=42"]  # FÁZE 6b — AES-256-CBC dešifrování mobilních FDE obrazů

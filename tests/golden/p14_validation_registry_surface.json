@@ -117,7 +117,7 @@
     "\u010dasov\u00e9 epochy se li\u0161\u00ed dle datab\u00e1ze \u2014 detekce podle sch\u00e9matu",
     "smazan\u00e9 \u0159\u00e1dky vy\u017eaduj\u00ed sqlite_recover (samostatn\u00fd parser)"
    ],
-   "reference_dataset": null,
+   "reference_dataset": "sqlite/chrome_history/",
    "test_files": [
     "tests/test_sqlite_extract.py",
     "tests/test_p11_quality_sqlite.py"
