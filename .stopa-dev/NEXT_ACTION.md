@@ -1,3 +1,11 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-27, pilot vlna 1 / STP-073)
+
+## Hotovo právě teď: **Release 2.8 pilot vlna 1 dle §7 — část A: sqlite end-to-end** (kód + offline testy)
+První celek pilota schváleného designu `docs/DIFFERENTIAL_TESTING.md` §7: nová vrstva `stopa/diffref/` mezi artifacts a doménou (I/O zde, čistá logika v doméně) se **SQLite reference adaptérem** — dvě záměrně oddělené cesty nad stejným souborem (STOPA extraktor `run_stopa_sqlite` vs. nezávislé referenční čtení `read_reference_entries`: ručně psané SQL dotazy z manifestu, stdlib sqlite3 read-only `file:...?mode=ro` = nedotýká se důkazů; `load_manifest` validace verze/klíčů/join_keys), vlastní celočíselná konverze Chrome µs s nezávislou konstantou (při prvním běhu **odhalila skutečný bug**: FILETIME dělení //1e7 místo µs //1e6 = faktor 10); deterministická reference dataset `tests/reference_datasets/sqlite/chrome_history/` (build_fixture + DB se SHA-256 pinem v manifestu + guard test, expected_records golden) s E2E shodou **DIFFS=0 / identical 100 %**; CLI auto-režim `stopa differential --raw F --manifest M` (mutually exclusive s JSON režimem; SHA-pin vstupu → fail-fast exit 2 proti driftu důkazu); validation registry sqlite `reference_dataset="sqlite/chrome_history/"`; `[diffref] = []` extras kotva pro verzování referenčních nástrojů; `.gitignore` výjimka reference fixture DB; i18n cli.h.359–360 + goldeny p14/p48 regenerovány (112 cest). **26 nových offline testů** (`tests/test_stp073.py`) + ruff clean; brána CLI/i18n/registry + STP-072 regres **119 passed**; full suite **5622 passed / 2 skipped (EXIT=0, 0:39:11)**.
+→ **Zbývá / START:** pilot vlna 1 část B = **STP-074** (netstat/text formát + aditivní stav parseru `differentially_validated`); poté zbývající scope release 2.8 (`[diffref]`, reference dataset gap).
+
+---
+
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-26, vlna 28)
 
 ## Hotovo právě teď: **Release 2.8 vlna 28 — STP-072 Komparační engine + CLI `stopa differential`** (kód + offline testy)
