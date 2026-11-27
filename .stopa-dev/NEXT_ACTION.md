@@ -1,3 +1,9 @@
+# NEJBLIŽŠÍ AKCE — STOPA (2026-11-27, RELEASE 2.8 POST-RELEASE VLNA 35 / STP-079)
+
+## Hotovo právě teď: **RELEASE 2.8 post-release — vlna 35 / STP-079 = Android calllog.db reference varianta (§7)**
+Pátá schémová varianta SQLite rodiny nad existujícím generic adaptérem; STOPA extraktor beze změny (`artifacts/sqlite_extract.py` už čte tabulku `calls`, date=unix ms, WHERE `date > 0`); rozšířena jen STOPA strana diffref vrstvy `run_stopa_sqlite` o kanonický typ `call_log` (number z titleu f"Hovor — {number}" přes removeprefix; duration_s/direction z details). Reference dataset `tests/reference_datasets/sqlite/android_calllog/` (deterministická fixtura calllog.db; SHA-256 pin + writer-version byte-stabilita): **8 řádků → 7 po WHERE paritě obou stran** (`date > 0`); subsecond .500 s řádek pinuje shodu STOPA float cesty ms/1000.0 a celočíselné reference //1_000 po floor normalizaci (surové se liší, kanonické sekundy identické) — duplicitní join key [number, ts] po flooringu (řádky 1+2) deterministicky spárováno v pořadí (§3.2); NBSP→mezera NFKC ekvivalence obou cest (§3.3); NULL duration/type → explicitní None==None parita (§3.3); všechny number nenulové — STOPA by NULL number vykreslil jako literál "None" v titleu a porušil fail-fast make_join_key §3.4. E2E STOPA vs reference **DIFFS=0 / identical 7/7 / 100 %**; CLI auto-režim exit kódy §6; cílená brána (STP-073…079 + sqlite_extract + P1.4) **231 passed + ruff clean**; **25 nových offline testů** (`tests/test_stp079.py`); plná suite **5816 passed / 2 skipped, EXIT=0 (39:25)**.
+
+→ Zbývá / START: **push + CI monitor** pro commit STP-079; poté dle §7 další reference formáty/varianty (syslog, access_log) a rozšíření `[diffref]` extras. Předtím:
 # NEJBLIŽŠÍ AKCE — STOPA (2026-11-27, RELEASE 2.8 POST-RELEASE VLNA 34 / STP-078)
 
 ## Hotovo právě teď: **RELEASE 2.8 post-release — vlna 34 / STP-078 = Apple iMessage chat.db reference varianta (§7)**
