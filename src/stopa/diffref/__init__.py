@@ -5,8 +5,9 @@ Vlastní vrstva mezi ``artifacts`` (extrakce) a ``domain/differential``
 dvěma nezávislými cestami nad stejným vstupem — STOPA extraktor vs. referenční
 čtení z manifestu. I/O zde patří (čte soubory); čistá logika zůstává v doméně.
 
-Pilotní pokrytí (vlna 29): ``sqlite`` (Chrome/Edge History, STP-073).
-Další formáty = další vlny (§7) — registr je extenzivní, bez rewrites.
+Pilotní pokrytí (vlny 29–30): ``sqlite`` (Chrome/Edge History, STP-073) a
+``netstat`` (Windows netstat -ano / Unix ss text, STP-074). Další formáty =
+další vlny (§7) — registr je extenzivní, bez rewrites.
 """
 
 from __future__ import annotations
@@ -25,6 +26,9 @@ class DiffrefAdapter:
     run_stopa: Callable[[Path], list[dict]]
     #: Referenční strana: dotazy z manifestu → stejné surové entry.
     read_reference: Callable[[Path, Mapping[str, object]], list[dict]]
+    #: STP-074 — načtení + validace manifestu per adapter (None = adaptér bez
+    #: auto-režimu; CLI fail-fast). Sémantika klíčů se liší formátem.
+    load_manifest: Callable[[Path], Mapping[str, object]] | None = None
 
 
 @dataclass(frozen=True)
@@ -50,12 +54,44 @@ def _sqlite_reference(path: Path, manifest: Mapping[str, object]) -> list[dict]:
     return read_reference_entries(path, manifest)
 
 
+def _sqlite_load_manifest(path: Path) -> Mapping[str, object]:
+    from stopa.diffref.sqlite_ref import load_manifest  # líně — I/O vrstva
+
+    return load_manifest(path)
+
+
+def _netstat_stopa(path: Path) -> list[dict]:
+    from stopa.diffref.text_ref import run_stopa_netstat  # líně — I/O vrstva
+
+    return run_stopa_netstat(path)
+
+
+def _netstat_reference(path: Path, manifest: Mapping[str, object]) -> list[dict]:
+    from stopa.diffref.text_ref import read_reference_entries
+
+    return read_reference_entries(path, manifest)
+
+
+def _netstat_load_manifest(path: Path) -> Mapping[str, object]:
+    from stopa.diffref.text_ref import load_text_manifest  # líně — I/O vrstva
+
+    return load_text_manifest(path)
+
+
 #: Registr adaptérů — extenzivní (nový formát = nový řádek + modul).
 DIFFREF_ADAPTERS: dict[str, DiffrefAdapter] = {
     "sqlite": DiffrefAdapter(
         parser_id="sqlite",
         run_stopa=_sqlite_stopa,
         read_reference=_sqlite_reference,
+        load_manifest=_sqlite_load_manifest,
+    ),
+    # STP-074 — pilot vlna 1 část B: textový formát (netstat -ano / ss).
+    "net_connections": DiffrefAdapter(
+        parser_id="net_connections",
+        run_stopa=_netstat_stopa,
+        read_reference=_netstat_reference,
+        load_manifest=_netstat_load_manifest,
     ),
 }
 

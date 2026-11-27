@@ -303,7 +303,7 @@
     "snapshot bez \u010dasov\u00e9ho raz\u00edtka \u2014 timestamp=None",
     "limit MAX_CONNECTIONS_PER_FILE=5000 spojen\u00ed"
    ],
-   "reference_dataset": null,
+   "reference_dataset": "netstat/",
    "test_files": [
     "tests/test_net_connections.py",
     "tests/test_p11_quality_chat_net.py"

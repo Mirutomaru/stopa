@@ -128,21 +128,27 @@ def cmd_differential(args: argparse.Namespace) -> int:
         reference_tool = args.tool
         if bool(args.raw):
             # Auto-režim pilotu (§7): nezávislé cesty nad stejným souborem.
-            from stopa.diffref import run_both_sides  # I/O vrstva — líný import
-            from stopa.diffref.sqlite_ref import load_manifest
+            # STP-074: manifest loader patří adaptéru (sqlite = jeden pin,
+            # text = piny per fixtures[] validované read_reference).
+            from stopa.diffref import resolve_adapter  # I/O vrstva — líný import
 
             raw_path = Path(args.raw)
             if not raw_path.is_file():
                 raise ValueError(f"{args.raw}: soubor nenalezen")
             input_sha256 = hashlib.sha256(raw_path.read_bytes()).hexdigest()
-            manifest = load_manifest(Path(args.manifest))
-            pinned = manifest.get("fixture_sha256")
+            adapter = resolve_adapter(args.parser)  # fail-fast: neznámý parser → exit 2
+            if adapter.load_manifest is None:
+                raise ValueError(
+                    f"adaptér {args.parser!r} nedeklaruje manifest loader (auto-režim)"
+                )
+            manifest = adapter.load_manifest(Path(args.manifest))
+            pinned = manifest.get("fixture_sha256")  # textová pinuje per fixture ve read_reference
             if pinned is not None and pinned != input_sha256:
                 raise ValueError(
                     f"hash vstupu se neshoduje s pinem v manifestu "
                     f"(manifest {str(pinned)[:12]}… vs vstup {input_sha256[:12]}…)"
                 )
-            stopa_entries, adapter = run_both_sides(args.parser, raw_path)
+            stopa_entries = adapter.run_stopa(raw_path)
             ref_entries = adapter.read_reference(raw_path, manifest)
             if reference_tool is None:
                 reference_tool = str(manifest["reference_tool"])

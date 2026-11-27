@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "parser_id": "net_connections",
+  "reference_tool": "diffref-text-stdlib/1.0 (hand-written line parsers: windows_netstat_ano + unix_ss)",
+  "time_note": "no timestamps in netstat/ss output; both sides emit ts=None",
+  "field_contract": "proto=uppercase; local/remote='addr:port' (port absent -> bare address, IPv6 keeps brackets); remote '*' without port stays '*', empty address -> '(broadcast)'; state/pid are explicit None when missing",
+  "join_keys": {
+    "network_connection": [
+      "proto",
+      "local",
+      "remote"
+    ]
+  },
+  "fixtures": [
+    {
+      "file": "netstat_ano.txt",
+      "sha256": "936bf9127c9c3e819da02bae1dfd968938c54dbcea598abe9abaa2dfb2e90697",
+      "variant": "windows_netstat_ano"
+    },
+    {
+      "file": "ss_an.txt",
+      "sha256": "93cc3c23a1a2cb7ebdbdec98357c18e9ab453d8470ebaf82deda25b740fe4415",
+      "variant": "unix_ss"
+    }
+  ]
+}

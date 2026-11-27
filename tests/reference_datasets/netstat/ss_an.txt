@@ -1,0 +1,5 @@
+Netid State   Recv-Q Send-Q Local Address:Port Peer Address:Port Process
+udp   UNCONN  0      0      127.0.0.53:53    0.0.0.0:*
+tcp   LISTEN  0      4096   *:22             *:*                     users:(("sshd",pid=2001,fd=3))
+tcp   ESTAB   0      0      10.0.0.5:51872   192.168.1.4:22          users:(("ssh",pid=2044,fd=5))
+udp   UNCONN  0      0      0.0.0.0:68       0.0.0.0:*

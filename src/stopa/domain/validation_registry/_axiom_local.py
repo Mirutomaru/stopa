@@ -52,6 +52,9 @@ _PART = {
     "net_connections": ParserValidation(
         parser_id="net_connections",
         version="",
+        reference_dataset=(
+            "netstat/"  # STP-074 (pilot vlna 1 část B, design §7) — netstat -ano / ss text
+        ),
         formats=(
             "Windows netstat -ano textový výstup",
             "Unix ss/netstat -an textový výstup",

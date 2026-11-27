@@ -165,9 +165,9 @@ class TestDiffrefLayer:
         assert callable(adapter.run_stopa) and callable(adapter.read_reference)
 
     def test_resolve_unknown_parser_raises(self) -> None:
-        # pilot scope = sqlite; další formáty = další vlny (§7)
-        with pytest.raises(ValueError, match="netstat"):
-            resolve_adapter("netstat")
+        # pilot scope = sqlite + net_connections (STP-074); ostatní formáty = další vlny (§7)
+        with pytest.raises(ValueError, match="evtx"):
+            resolve_adapter("evtx")
 
     def test_reference_read_unknown_converter(self) -> None:
         # konvertéry validuje referenční čtení (v momentě použití z manifestu)

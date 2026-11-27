@@ -10,6 +10,13 @@ Pravidlo statusu:
                   testovací funkci.
     unvalidated ⟺ žádné test_files, všechny chybí, nebo jen prázdné soubory.
 
+STP-074 (design §6 krok 8 / §7) — aditivní stav:
+    differentially_validated ⟺ validated + pincovaný reference dataset
+                  (§6 kroky 7–8 proběhly nezávislou cestou). Implikuje
+                  ``validated``; bez datasetu zůstává ``validated``. Report klíč
+                  ``validated`` počítá oba stavy (aditivita), nový klíč
+                  ``differentially_validated`` je explicitní seznam ID.
+
 ``direct_tests`` = počet testovacích funkcí, jejichž název TĚLO odkazuje na
 parser_id (spolehlivá přímá atribuce); ``total_tests`` = celkový počet testů v
 deklarovaných souborech (sdílené soubory se počítají pro každý parser — kontext).
@@ -24,6 +31,10 @@ from typing import TYPE_CHECKING
 
 VALIDATED = "validated"
 UNVALIDATED = "unvalidated"
+# STP-074 (design §6 krok 8, §7): validated parser s pincovaným reference datasetem
+# prošel diferenciálním testováním nezávislou cestou — aditivní stav (implikuje
+# VALIDATED), bez přepisování hodnotového sémantika existujících reportů.
+DIFFERENTIALLY_VALIDATED = "differentially_validated"
 
 if TYPE_CHECKING:  # jen pro anotace — runtime import by byl zbytečný (čistota vrstev)
     from stopa.domain.validation_registry import ParserValidation
@@ -41,7 +52,7 @@ class ParserStatusRecord:
     total_tests: int
     direct_tests: int
     reference_dataset: str | None
-    validation_status: str  # validated / unvalidated
+    validation_status: str  # validated / unvalidated / differentially_validated (STP-074)
     last_validated_ts: str | None = None  # ISO UTC; metadata z fs (viz docstring)
 
 
@@ -116,8 +127,14 @@ def build_parser_status(
                 st = stamp_loader(rel)
                 if st:
                     stamps.append(st)
-        status = VALIDATED if (files_found and total > 0) else UNVALIDATED
-        last_ts = max(stamps) if (status == VALIDATED and stamps) else None
+        base_status = VALIDATED if (files_found and total > 0) else UNVALIDATED
+        last_ts = max(stamps) if (base_status == VALIDATED and stamps) else None
+        # STP-074 (§6 krok 8): validated + pincovaný reference dataset → aditivní stav.
+        status = (
+            DIFFERENTIALLY_VALIDATED
+            if base_status == VALIDATED and p.reference_dataset is not None
+            else base_status
+        )
         out.append(
             ParserStatusRecord(
                 parser_id=pid,
@@ -136,24 +153,37 @@ def build_parser_status(
 
 
 def parser_status_report(records: list[ParserStatusRecord]) -> dict:
-    """JSON-serializovatelný report + souhrn (CLI ``parser-status`` / Web)."""
+    """JSON-serializovatelný report + souhrn (CLI ``parser-status`` / Web).
+
+    STP-074: klíč ``validated`` je aditivní — počítá i stavy s vyšší důvěryhodností
+    (``differentially_validated``); nový explicitní klíč ``differentially_validated``
+    obsahuje jejich ID. Kompatibilita starých reportů: stávající klíče nemění význam
+    směrem dolů (validovaný parser zůstává v ``validated``).
+    """
     if not records:
         return {
             "count": 0,
             "validated": 0,
             "unvalidated_count": 0,
             "unvalidated": [],
+            "differentially_validated": [],
             "dataset_coverage_pct": 0.0,
             "parsers": [],
         }
-    validated = sum(1 for r in records if r.validation_status == VALIDATED)
-    unvalidated = sorted(r.parser_id for r in records if r.validation_status != VALIDATED)
+    validated = sum(
+        1 for r in records if r.validation_status in (VALIDATED, DIFFERENTIALLY_VALIDATED)
+    )
+    unvalidated = sorted(r.parser_id for r in records if r.validation_status == UNVALIDATED)
+    diff_validated = sorted(
+        r.parser_id for r in records if r.validation_status == DIFFERENTIALLY_VALIDATED
+    )
     with_dataset = sum(1 for r in records if r.reference_dataset)
     return {
         "count": len(records),
         "validated": validated,
         "unvalidated_count": len(unvalidated),
         "unvalidated": unvalidated,
+        "differentially_validated": diff_validated,  # STP-074 — aditivní klíč
         "dataset_coverage_pct": round(100.0 * with_dataset / len(records), 1),
         "parsers": [asdict(r) for r in records],
     }

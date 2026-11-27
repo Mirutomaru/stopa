@@ -1,0 +1,46 @@
+[
+  {
+    "type": "network_connection",
+    "ts_epoch": null,
+    "fields": {
+      "proto": "TCP",
+      "local": "*:22",
+      "remote": "*",
+      "state": "LISTEN",
+      "pid": 2001
+    }
+  },
+  {
+    "type": "network_connection",
+    "ts_epoch": null,
+    "fields": {
+      "proto": "UDP",
+      "local": "0.0.0.0:68",
+      "remote": "0.0.0.0",
+      "state": "UNCONN",
+      "pid": null
+    }
+  },
+  {
+    "type": "network_connection",
+    "ts_epoch": null,
+    "fields": {
+      "proto": "TCP",
+      "local": "10.0.0.5:51872",
+      "remote": "192.168.1.4:22",
+      "state": "ESTAB",
+      "pid": 2044
+    }
+  },
+  {
+    "type": "network_connection",
+    "ts_epoch": null,
+    "fields": {
+      "proto": "UDP",
+      "local": "127.0.0.53:53",
+      "remote": "0.0.0.0",
+      "state": "UNCONN",
+      "pid": null
+    }
+  }
+]
