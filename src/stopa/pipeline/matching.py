@@ -76,6 +76,7 @@ from stopa.artifacts.sharepoint_wr import is_sharepoint_file
 from stopa.artifacts.sim_tpdu import is_sim_tpdu_file
 from stopa.artifacts.skype_warrant_return import is_skype_warrant_file
 from stopa.artifacts.snapchat_wr import is_snapchat_file
+from stopa.artifacts.syslog_extract import is_syslog_file
 from stopa.artifacts.twitter_messages import is_twitter_messages_file
 from stopa.artifacts.twitter_posts import is_twitter_posts_file
 from stopa.artifacts.twitter_users import is_twitter_users_file
@@ -203,6 +204,9 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
         return NAME_BASED_EXTRACTORS["mem_hooks"]
     if is_netstat_file(name):
         return NAME_BASED_EXTRACTORS["net_connections"]
+    # STP-080 / vlna 36 — Unix BSD syslog text (§7 pilot; name-based + content)
+    if is_syslog_file(name):
+        return NAME_BASED_EXTRACTORS["syslog"]
     # ETAPA B vlna 5 — Google Takeout rodina (specifické PŘED obecnějšími vlna-2 detekcemi)
     if is_aggregated_activities_file(name):
         return NAME_BASED_EXTRACTORS["google_aggregated_activities"]

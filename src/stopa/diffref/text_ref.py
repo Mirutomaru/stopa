@@ -1,15 +1,18 @@
-"""STP-074 — textová reference pro parser ``net_connections`` (pilot vlna 1, část B).
+"""STP-074 / STP-080 — textová reference pro parsery ``net_connections`` a
+``syslog`` (pilot vlna 1 část B + §7 pilot, design §6/§7).
 
 Druhá nezávislá cesta diferenciálního testování (§6): STOPA extraktor
-(``extract_netstat_artifacts``) vs. **ručně psaný referenční čtecí** textového
-výstupu síťových nástrojů (stdlib only, žádný import z ``stopa.artifacts``).
+(``extract_netstat_artifacts`` / ``extract_syslog_artifacts``) vs. **ručně
+psané referenční čtecí** textových formátů (stdlib only, žádný import z
+``stopa.artifacts``).
 
 Podporované varianty (deklarované v manifestu per fixture):
 
 - ``windows_netstat_ano`` — Windows ``netstat -ano`` (Proto Local Foreign State PID),
-- ``unix_ss`` — Unix ``ss`` (Netid State Recv-Q Send-Q Local Peer Process).
+- ``unix_ss`` — Unix ``ss`` (Netid State Recv-Q Send-Q Local Peer Process),
+- ``unix_syslog`` — STP-080: Unix BSD syslog / RFC 3164 řádky.
 
-Pole záznamu (smlouva manifestu, obě cesty musí produkovat identický tvar):
+Pole záznamu ``network_connection`` (smlouva manifestu, obě cesty stejný tvar):
 
 - ``proto``  — uppercase (``TCP``/``UDP``),
 - ``local``  — ``addr:port``; port chybí → jen adresa (IPv6 drží hranaté závorky),
@@ -19,8 +22,18 @@ Pole záznamu (smlouva manifestu, obě cesty musí produkovat identický tvar):
 - ``pid``    — int nebo explicitní ``None``,
 - čas        — vždy ``ts=None`` (netstat/ss = snapshot bez časového razítka).
 
-Join key (manifest): ``network_connection = proto+local+remote`` — identita
-spojení; stav a PID jsou komparované obsahové pole.
+Pole záznamu ``syslog_event`` (STP-080 smlouva manifestu, obě cesty stejný tvar):
+
+- ``host``     — hostname (varianta bez hostu je limitace parseru),
+- ``process``  — název procesu; ``pid`` = int nebo explicitní ``None``,
+- ``date``     — ``"MMM DD"``, den **nulově doplněn** (raw ``Nov  7`` → ``Nov 07``),
+- ``time``     — verbatim ``HH:MM:SS``,
+- ``message``  — zpráva verbatim za oddělovačem ``": "``;
+- čas          — vždy ``ts=None`` (syslog timestamp nemá rok ani TZ).
+
+Join key (manifest): ``network_connection = proto+local+remote``;
+``syslog_event = host+process+date+time`` — identita události; obsahová pole
+se komparují. Duplicitní join klíč se páruje po sobě deterministicky (§3.2).
 """
 
 from __future__ import annotations
@@ -29,6 +42,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 ARTIFACT_TYPE = "network_connection"
 
@@ -56,6 +70,8 @@ _SS_STATES = frozenset(
 _VARIANTS = {
     "windows_netstat_ano": "_ref_windows_netstat",
     "unix_ss": "_ref_unix_ss",
+    # STP-080 / vlna 36 — Unix BSD syslog (RFC 3164)
+    "unix_syslog": "_ref_unix_syslog",
 }
 
 
@@ -140,7 +156,108 @@ def _ref_unix_ss(text: str) -> list[dict]:
     return out
 
 
-def load_text_manifest(path: Path) -> Mapping[str, object]:
+# ---------------------------------------------------------------------------
+# STP-080 / vlna 36 — Unix BSD syslog (RFC 3164) reference, nezávislá cesta
+# ---------------------------------------------------------------------------
+
+#: Měsíce RFC 3164 — ručně psaný seznam, úmyslně ne sdílený s STOPA parserem.
+_REF_SYSLOG_MONTHS = frozenset(
+    {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    }
+)
+
+#: Pole záznamu syslog_event — smlouva manifestu (obě cesty stejný tvar).
+SYSLOG_FIELD_KEYS = ("host", "process", "pid", "date", "time", "message")
+
+
+def _ref_unix_syslog(text: str) -> list[dict[str, Any]]:
+    """Ruční referenční parsing BSD syslog řádků (tokenizace, ne regex).
+
+    Nezávislá implementace STOPA parseru: řádek se rozseká na tokeny
+    ``month day time host tail``; v ``tail`` najdeme **první** výskyt
+    ``": "`` — to je oddělovač proces/zpráva (proces nemá mezery a PID část
+    jen číslice/brackety, takže dřívější ``": "`` být nemůže).
+
+    Normalizace smlouvy: den nulově doplněn; ``pid`` int nebo explicitní
+    None; řádky bez platné hlavičky (pokračování záznamu) se přeskočí.
+    """
+    out: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        parts = line.split(None, 3)
+        if len(parts) != 4:
+            continue
+        month, day_raw, time_str, tail = parts
+
+        if month not in _REF_SYSLOG_MONTHS:
+            continue
+        # den: 1–2 číslice, rozsah 1..31 (nezávislá validace STOPA regexu)
+        if len(day_raw) > 2 or not day_raw.isdigit():
+            continue
+        day = int(day_raw)
+        if not 1 <= day <= 31:
+            continue
+        # čas: přesně HH:MM:SS — ruční kontrola, ne regex (jen forma, ne rozsah)
+        if (
+            len(time_str) != 8
+            or time_str[2] != ":"
+            or time_str[5] != ":"
+            or not time_str[:2].isdigit()
+            or not time_str[3:5].isdigit()
+            or not time_str[6:].isdigit()
+        ):
+            continue
+
+        # tail = "host proc[pid]: zpráva" — host je první token (bez mezer)
+        host, sep, rest = tail.partition(" ")
+        if not sep or not rest:
+            continue
+
+        idx = rest.find(": ")
+        if idx <= 0:
+            continue
+        proc_part = rest[:idx]
+        message = rest[idx + 2:]
+
+        # proces: bez mezer/dvojteček/hranatých závorek; volitelné [pid] na konci
+        pid: int | None = None
+        if proc_part.endswith("]"):
+            bracket = proc_part.rfind("[")
+            if bracket <= 0:
+                continue
+            pid_raw = proc_part[bracket + 1:-1]
+            if not pid_raw.isdigit():
+                continue
+            process = proc_part[:bracket]
+            pid = int(pid_raw)
+        else:
+            process = proc_part
+
+        bad_chars = (" ", ":", "[", "]")
+        if not process or any(c in process for c in bad_chars):
+            continue
+
+        out.append(
+            {
+                "type": "syslog_event",
+                # syslog timestamp nemá rok/TZ → ts=None (limitace parseru)
+                "ts": None,
+                "fields": {
+                    "host": host,
+                    "process": process,
+                    "pid": pid,
+                    "date": f"{month} {day:02d}",  # smlouva: den nulově doplněn
+                    "time": time_str,
+                    "message": message,
+                },
+            }
+        )
+
+    return out
+
+
+def load_text_manifest(path: Path) -> dict[str, Any]:
     """Načte + validuje manifest textového reference datasetu.
 
     Povinné klíče: ``version`` (== 1), ``parser_id``, ``reference_tool``,
@@ -219,6 +336,24 @@ def run_stopa_netstat(path: Path) -> list[dict]:
             }
         )
     return entries
+
+
+def run_stopa_syslog(path: Path) -> list[dict]:
+    """STOPA cesta (STP-080): ``extract_syslog_artifacts`` → záznamy pro komparaci.
+
+    Pole se berou přímo z detailů artifactu — STOPA parser je normalizuje dle
+    smlouvy manifestu (den nulově doplněn, chybějící pid = None).
+    """
+    from stopa.artifacts.syslog_extract import extract_syslog_artifacts  # I/O vrstva
+
+    return [
+        {
+            "type": "syslog_event",
+            "ts": a.timestamp,  # syslog timestamp nemá rok/TZ → None (limitace)
+            "fields": {key: (a.details or {}).get(key) for key in SYSLOG_FIELD_KEYS},
+        }
+        for a in extract_syslog_artifacts(path)
+    ]
 
 
 def _fixture_for(manifest: Mapping[str, object], name: str) -> Mapping[str, object]:

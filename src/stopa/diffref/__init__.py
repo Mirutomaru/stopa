@@ -5,10 +5,10 @@ Vlastní vrstva mezi ``artifacts`` (extrakce) a ``domain/differential``
 dvěma nezávislými cestami nad stejným vstupem — STOPA extraktor vs. referenční
 čtení z manifestu. I/O zde patří (čte soubory); čistá logika zůstává v doméně.
 
-Pilotní pokrytí (vlny 29–31): ``sqlite`` (Chrome/Edge History, STP-073),
+Pilotní pokrytí (vlny 29–35): ``sqlite`` (Chrome/Edge History, STP-073),
 ``netstat`` (Windows netstat -ano / Unix ss text, STP-074) a ``file_meta``
-(PDF /Info + OOXML docProps, STP-075). Další formáty = další vlny (§7) —
-registr je extenzivní, bez rewrites.
+(PDF /Info + OOXML docProps, STP-075). Další formáty = další vlny (§7):
+``syslog`` (Unix BSD syslog, STP-080). Registr je extenzivní, bez rewrites.
 """
 
 from __future__ import annotations
@@ -97,6 +97,25 @@ def _meta_load_manifest(path: Path) -> Mapping[str, object]:
     return load_meta_manifest(path)
 
 
+# STP-080 / vlna 36 — Unix BSD syslog (§7 pilot)
+def _syslog_stopa(path: Path) -> list[dict]:
+    from stopa.diffref.text_ref import run_stopa_syslog  # líně — I/O vrstva
+
+    return run_stopa_syslog(path)
+
+
+def _syslog_reference(path: Path, manifest: Mapping[str, object]) -> list[dict]:
+    from stopa.diffref.text_ref import read_reference_entries
+
+    return read_reference_entries(path, manifest)
+
+
+def _syslog_load_manifest(path: Path) -> Mapping[str, object]:
+    from stopa.diffref.text_ref import load_text_manifest  # líně — I/O vrstva
+
+    return load_text_manifest(path)
+
+
 #: Registr adaptérů — extenzivní (nový formát = nový řádek + modul).
 DIFFREF_ADAPTERS: dict[str, DiffrefAdapter] = {
     "sqlite": DiffrefAdapter(
@@ -118,6 +137,13 @@ DIFFREF_ADAPTERS: dict[str, DiffrefAdapter] = {
         run_stopa=_meta_stopa,
         read_reference=_meta_reference,
         load_manifest=_meta_load_manifest,
+    ),
+    # STP-080 / vlna 36 — Unix BSD syslog text (§7 pilot).
+    "syslog": DiffrefAdapter(
+        parser_id="syslog",
+        run_stopa=_syslog_stopa,
+        read_reference=_syslog_reference,
+        load_manifest=_syslog_load_manifest,
     ),
 }
 

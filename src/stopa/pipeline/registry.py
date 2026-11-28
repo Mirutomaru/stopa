@@ -166,6 +166,8 @@ from stopa.artifacts.skype_warrant_return import extract_skype_artifacts
 from stopa.artifacts.snapchat_wr import PARSER_VERSION as SNAPCHAT_WR_VERSION
 from stopa.artifacts.snapchat_wr import extract_snapchat_artifacts
 from stopa.artifacts.sqlite_extract import PARSER_VERSION as SQLITE_VERSION
+from stopa.artifacts.syslog_extract import PARSER_VERSION as SYSLOG_VERSION
+from stopa.artifacts.syslog_extract import extract_syslog_artifacts
 from stopa.artifacts.twitter_messages import PARSER_VERSION as TWITTER_MESSAGES_VERSION
 from stopa.artifacts.twitter_messages import extract_twitter_message_artifacts
 from stopa.artifacts.twitter_posts import PARSER_VERSION as TWITTER_POSTS_VERSION
@@ -226,6 +228,8 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "wifi_wlan": (extract_wifi_artifacts, WLAN_VERSION),
     "win_schedtask": (extract_scheduled_task_artifacts, SCHEDTASK_VERSION),
     "net_connections": (extract_netstat_artifacts, NETSTAT_VERSION),
+    # STP-080 / vlna 36 — Unix BSD syslog text (§7 pilot)
+    "syslog": (extract_syslog_artifacts, SYSLOG_VERSION),
     # ETAPA B vlna 2 — AXIOM port: Google lokální profily + scan outputy + CurrentTabs + MSN
     "google_search_history": (extract_google_search_artifacts, GOOGLE_SEARCH_VERSION),
     "google_location_history": (extract_location_artifacts, GOOGLE_LOC_VERSION),

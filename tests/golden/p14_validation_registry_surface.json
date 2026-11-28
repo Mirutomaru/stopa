@@ -30,6 +30,7 @@
   "win_jumplist",
   "win_usn",
   "file_meta",
+  "syslog",
   "email_mbox",
   "wifi_wlan",
   "win_schedtask",
@@ -1465,6 +1466,25 @@
     "tests/test_k2_exchange_csv.py",
     "tests/test_k2_pipeline_integration.py",
     "tests/test_p11_quality_crypto_misc.py"
+   ],
+   "expected_results": {}
+  },
+  "syslog": {
+   "version": "",
+   "formats": [
+    "Unix BSD syslog \u0159\u00e1dky RFC 3164 (MMM DD HH:MM:SS host process[pid]: zpr\u00e1va)"
+   ],
+   "limitations": [
+    "detekce name-based (syslog/messages/system.log) + content check (timestampov\u00e1 hlavi\u010dka, max 4096 B)",
+    "timestamp nese rok ani TZ \u2192 ts_epoch=None; srovnateln\u00e1 jsou pole date/time (limitace form\u00e1tu)",
+    "\u010das se validuje jen po form\u011b HH:MM:SS, ne rozsahu hodnot (99:99:99 projde \u2014 limitace parseru)",
+    "pokra\u010dovac\u00ed \u0159\u00e1dky bez timestampu se p\u0159esko\u010d\u00ed; zpr\u00e1va = verbatim za prvn\u00edm ': ' za procesem"
+   ],
+   "reference_dataset": "syslog/",
+   "test_files": [
+    "tests/test_syslog_extract.py",
+    "tests/test_p11_quality_syslog.py",
+    "tests/test_stp080.py"
    ],
    "expected_results": {}
   }

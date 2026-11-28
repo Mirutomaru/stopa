@@ -144,4 +144,26 @@ _PART = {
             "tests/test_p11_quality_file_meta.py",  # P1-1 vlna 31 — quality sada file_meta
         ),
     ),
+    # STP-080 / vlna 36 — Unix BSD syslog parser (pilot, design §7)
+    "syslog": ParserValidation(
+        parser_id="syslog",
+        version="",  # doplní build_registry z pipeline
+        reference_dataset=(
+            "syslog/"  # STP-080 (design §7) — Unix BSD syslog RFC 3164 varianta; Windows event log = evtx, další vlny §7
+        ),
+        formats=(
+            "Unix BSD syslog řádky RFC 3164 (MMM DD HH:MM:SS host process[pid]: zpráva)",
+        ),
+        limitations=(
+            "detekce name-based (syslog/messages/system.log) + content check (timestampová hlavička, max 4096 B)",
+            "timestamp nese rok ani TZ → ts_epoch=None; srovnatelná jsou pole date/time (limitace formátu)",
+            "čas se validuje jen po formě HH:MM:SS, ne rozsahu hodnot (99:99:99 projde — limitace parseru)",
+            "pokračovací řádky bez timestampu se přeskočí; zpráva = verbatim za prvním ': ' za procesem",
+        ),
+        test_files=(
+            "tests/test_syslog_extract.py",
+            "tests/test_p11_quality_syslog.py",  # P1-1 vlna 36 — quality sada syslog (8 kategorií)
+            "tests/test_stp080.py",  # STP-080 E2E diferenciální validace §7
+        ),
+    ),
 }

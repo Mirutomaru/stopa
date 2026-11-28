@@ -1,0 +1,134 @@
+[
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "db-01",
+      "process": "systemd-logind",
+      "pid": null,
+      "date": "Nov 07",
+      "time": "23:59:02",
+      "message": "New session 42 of user appuser"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "db-01",
+      "process": "kernel",
+      "pid": null,
+      "date": "Nov 07",
+      "time": "23:59:02",
+      "message": "[UFW BLOCK] IN=eth0 OUT= MAC=aa:bb:cc:dd:ee:ff PROTO=TCP DPT=8080"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "db-01",
+      "process": "postgres",
+      "pid": 1102,
+      "date": "Nov 07",
+      "time": "23:58:41",
+      "message": "checkpoint complete: wrote 1234 buffers (7.6%)"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "web-01",
+      "process": "CRON",
+      "pid": 2500,
+      "date": "Nov 17",
+      "time": "09:16:01",
+      "message": "(root) CMD (/usr/local/bin/backup.sh)"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "web-01",
+      "process": "nginx",
+      "pid": 3300,
+      "date": "Nov 17",
+      "time": "09:20:00",
+      "message": "2026/11/17 09:20:00 [error] 3301#0: *548 connect() failed (111: Connection refused)"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "web-01",
+      "process": "sshd",
+      "pid": 2481,
+      "date": "Nov 17",
+      "time": "09:15:32",
+      "message": "Accepted publickey for deploy from 10.0.0.5 port 51234 ssh2: RSA SHA256:abc123"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "web-01",
+      "process": "php-fpm",
+      "pid": 4100,
+      "date": "Nov 17",
+      "time": "09:21:15",
+      "message": "[pool www] child exited on signal 11; status=success: retry scheduled"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "web-01",
+      "process": "sudo",
+      "pid": 2482,
+      "date": "Nov 17",
+      "time": "09:15:32",
+      "message": "deploy : TTY=pts/0 ; PWD=/home/deploy ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "web-01",
+      "process": "nginx",
+      "pid": 3300,
+      "date": "Nov 17",
+      "time": "09:20:00",
+      "message": "upstream server temporarily disabled"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "db-01",
+      "process": "app-server",
+      "pid": null,
+      "date": "Nov 18",
+      "time": "08:05:33",
+      "message": "připojení k databázi navázáno (latence 42 ms)"
+    }
+  },
+  {
+    "type": "syslog_event",
+    "ts_epoch": null,
+    "fields": {
+      "host": "web-01",
+      "process": "systemd",
+      "pid": 1,
+      "date": "Nov 18",
+      "time": "08:00:01",
+      "message": "Started Daily apt upgrade and clean activities."
+    }
+  }
+]

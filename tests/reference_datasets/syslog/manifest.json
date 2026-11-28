@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "parser_id": "syslog",
+  "reference_tool": "diffref-text-stdlib/1.0 (hand-written line parsers: unix_syslog)",
+  "time_note": "BSD syslog timestamps carry no year/TZ; both sides emit ts=None and compare wall-clock date/time fields instead",
+  "field_contract": "date='MMM DD' with zero-padded day (raw 'Nov  7' / 'Nov 07' -> 'Nov 07'); time=verbatim HH:MM:SS; host required (no-host variant = documented parser limitation); process has no spaces/colons/brackets, pid is int or explicit None when absent (None != empty, §3.3); message verbatim after the first ': ' separator; continuation lines without a timestamp header are skipped",
+  "join_keys": {
+    "syslog_event": [
+      "host",
+      "process",
+      "date",
+      "time"
+    ]
+  },
+  "fixtures": [
+    {
+      "file": "syslog_sample.log",
+      "sha256": "86012382f334647725376e06040b2705dceb900d77545e74d76dbc29024979aa",
+      "variant": "unix_syslog"
+    }
+  ]
+}
