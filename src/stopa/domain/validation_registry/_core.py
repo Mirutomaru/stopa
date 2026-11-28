@@ -166,4 +166,27 @@ _PART = {
             "tests/test_stp080.py",  # STP-080 E2E diferenciální validace §7
         ),
     ),
+    # STP-081 / vlna 37 — Apache/Nginx combined access log parser (pilot, design §7)
+    "access_log": ParserValidation(
+        parser_id="access_log",
+        version="",  # doplní build_registry z pipeline
+        reference_dataset=(
+            "access_log/"  # STP-081 (design §7) — Apache/Nginx combined varianta; common/JSON access logy = další vlny §7
+        ),
+        formats=(
+            "Apache/Nginx combined log format (%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\")",
+        ),
+        limitations=(
+            "detekce name-based (access.log*/ *access_log*) + content check (combined hlavička, max 4096 B); souvislé 'accesslog' vyhrazeno Google WR pre-passu",
+            "%t nese rok + TZ → epoch spočítatelný; pred-1970 epoch s offsetem → ValueError uloženo jako ts=None (okraj)",
+            "day validuje jen rozsah 1–31 ne kalendářně (31/Feb projde — limitace parseru); čas po formě HH:MM:SS",
+            "request = minimálně 2 tokeny; protocol jen ve formě HTTP/x[.y] jinak None; query string verbatim bez unescape",
+            "'-' → explicitní None (user/referer/user_agent/bytes); ident %l se parsuje, ale do detailů neukládá",
+        ),
+        test_files=(
+            "tests/test_access_log_extract.py",
+            "tests/test_p11_quality_access_log.py",  # P1-1 vlna 37 — quality sada access_log (8 kategorií)
+            "tests/test_stp081.py",  # STP-081 E2E diferenciální validace §7
+        ),
+    ),
 }

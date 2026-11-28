@@ -8,7 +8,8 @@ dvěma nezávislými cestami nad stejným vstupem — STOPA extraktor vs. refere
 Pilotní pokrytí (vlny 29–35): ``sqlite`` (Chrome/Edge History, STP-073),
 ``netstat`` (Windows netstat -ano / Unix ss text, STP-074) a ``file_meta``
 (PDF /Info + OOXML docProps, STP-075). Další formáty = další vlny (§7):
-``syslog`` (Unix BSD syslog, STP-080). Registr je extenzivní, bez rewrites.
+``syslog`` (Unix BSD syslog, STP-080), ``access_log`` (Apache/Nginx combined,
+STP-081). Registr je extenzivní, bez rewrites.
 """
 
 from __future__ import annotations
@@ -116,6 +117,25 @@ def _syslog_load_manifest(path: Path) -> Mapping[str, object]:
     return load_text_manifest(path)
 
 
+# STP-081 / vlna 37 — Apache/Nginx combined access log (§7 pilot)
+def _access_log_stopa(path: Path) -> list[dict]:
+    from stopa.diffref.text_ref import run_stopa_access_log  # líně — I/O vrstva
+
+    return run_stopa_access_log(path)
+
+
+def _access_log_reference(path: Path, manifest: Mapping[str, object]) -> list[dict]:
+    from stopa.diffref.text_ref import read_reference_entries
+
+    return read_reference_entries(path, manifest)
+
+
+def _access_log_load_manifest(path: Path) -> Mapping[str, object]:
+    from stopa.diffref.text_ref import load_text_manifest  # líně — I/O vrstva
+
+    return load_text_manifest(path)
+
+
 #: Registr adaptérů — extenzivní (nový formát = nový řádek + modul).
 DIFFREF_ADAPTERS: dict[str, DiffrefAdapter] = {
     "sqlite": DiffrefAdapter(
@@ -144,6 +164,13 @@ DIFFREF_ADAPTERS: dict[str, DiffrefAdapter] = {
         run_stopa=_syslog_stopa,
         read_reference=_syslog_reference,
         load_manifest=_syslog_load_manifest,
+    ),
+    # STP-081 / vlna 37 — Apache/Nginx combined access log text (§7 pilot).
+    "access_log": DiffrefAdapter(
+        parser_id="access_log",
+        run_stopa=_access_log_stopa,
+        read_reference=_access_log_reference,
+        load_manifest=_access_log_load_manifest,
     ),
 }
 

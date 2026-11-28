@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import itertools
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -318,7 +319,16 @@ class TestWebApi:
 
             t = threading.Thread(target=post_review)
             t.start()
-            ev = ws.receive_json()
+            # WS kontrakt (cases.py): heartbeat každé ws_heartbeat_s=0.3 — pod zátěží
+            # může přijít dřív než review.state; skáčeme ho (viz test_f42_ws.py).
+            deadline = time.monotonic() + 5.0
+            while True:
+                ev = ws.receive_json()
+                if ev["type"] == "review.state":
+                    break
+                assert time.monotonic() < deadline, (
+                    f"žádný review.state do 5 s (poslední typ={ev['type']!r})"
+                )
             t.join(timeout=15)
 
         assert ev["type"] == "review.state"

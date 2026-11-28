@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from stopa.artifacts.access_log_extract import PARSER_VERSION as ACCESS_LOG_VERSION
+from stopa.artifacts.access_log_extract import extract_access_log_artifacts
 from stopa.artifacts.allowlisted_websites import PARSER_VERSION as ALLOWLISTED_WEBSITES_VERSION
 from stopa.artifacts.allowlisted_websites import extract_allowlisted_websites_artifacts
 from stopa.artifacts.amazon_cloudtrail import PARSER_VERSION as AMAZON_CLOUDTRAIL_VERSION
@@ -230,6 +232,8 @@ NAME_BASED_EXTRACTORS: dict[str, tuple[Callable[[Path], list], str]] = {
     "net_connections": (extract_netstat_artifacts, NETSTAT_VERSION),
     # STP-080 / vlna 36 — Unix BSD syslog text (§7 pilot)
     "syslog": (extract_syslog_artifacts, SYSLOG_VERSION),
+    # STP-081 / vlna 37 — Apache/Nginx combined access log text (§7 pilot)
+    "access_log": (extract_access_log_artifacts, ACCESS_LOG_VERSION),
     # ETAPA B vlna 2 — AXIOM port: Google lokální profily + scan outputy + CurrentTabs + MSN
     "google_search_history": (extract_google_search_artifacts, GOOGLE_SEARCH_VERSION),
     "google_location_history": (extract_location_artifacts, GOOGLE_LOC_VERSION),

@@ -1,0 +1,130 @@
+[
+  {
+    "type": "access_log_entry",
+    "ts_epoch": 1060278536,
+    "fields": {
+      "ip": "192.168.1.10",
+      "user": "alice",
+      "timestamp": "07/Aug/2003:19:48:56 +0200",
+      "method": "POST",
+      "path": "/submit.php?next=1",
+      "protocol": "HTTP/1.1",
+      "status": 302,
+      "bytes": 0,
+      "referer": null,
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+  },
+  {
+    "type": "access_log_entry",
+    "ts_epoch": 1060278536,
+    "fields": {
+      "ip": "198.51.100.99",
+      "user": null,
+      "timestamp": "07/Aug/2003:19:48:56 +0200",
+      "method": "GET",
+      "path": "/no-protocol",
+      "protocol": null,
+      "status": 200,
+      "bytes": 10,
+      "referer": null,
+      "user_agent": null
+    }
+  },
+  {
+    "type": "access_log_entry",
+    "ts_epoch": 1060278536,
+    "fields": {
+      "ip": "192.168.1.10",
+      "user": "alice",
+      "timestamp": "07/Aug/2003:19:48:56 +0200",
+      "method": "GET",
+      "path": "/index.html",
+      "protocol": "HTTP/1.1",
+      "status": 200,
+      "bytes": 1461,
+      "referer": "http://www.example.com/start.html",
+      "user_agent": "Mozilla/4.08 [en] (Win98; I ;Nav)"
+    }
+  },
+  {
+    "type": "access_log_entry",
+    "ts_epoch": 1060278536,
+    "fields": {
+      "ip": "192.168.1.10",
+      "user": "alice",
+      "timestamp": "07/Aug/2003:19:48:56 +0200",
+      "method": "GET",
+      "path": "/index.html",
+      "protocol": "HTTP/1.1",
+      "status": 200,
+      "bytes": 1461,
+      "referer": "http://www.example.com/start.html",
+      "user_agent": "Mozilla/4.08 [en] (Win98; I ;Nav)"
+    }
+  },
+  {
+    "type": "access_log_entry",
+    "ts_epoch": 1060278537,
+    "fields": {
+      "ip": "10.0.0.5",
+      "user": null,
+      "timestamp": "07/Aug/2003:19:48:57 +0200",
+      "method": "HEAD",
+      "path": "/health",
+      "protocol": "HTTP/1.0",
+      "status": 200,
+      "bytes": null,
+      "referer": null,
+      "user_agent": null
+    }
+  },
+  {
+    "type": "access_log_entry",
+    "ts_epoch": 1060279200,
+    "fields": {
+      "ip": "203.0.113.8",
+      "user": "dave",
+      "timestamp": "07/Aug/2003:20:00:00 +0200",
+      "method": "GET",
+      "path": "/leading-zero.html",
+      "protocol": "HTTP/1.1",
+      "status": 200,
+      "bytes": 461,
+      "referer": null,
+      "user_agent": "curl/8.1.2"
+    }
+  },
+  {
+    "type": "access_log_entry",
+    "ts_epoch": 1060285736,
+    "fields": {
+      "ip": "203.0.113.7",
+      "user": null,
+      "timestamp": "07/Aug/2003:19:48:56 +0000",
+      "method": "GET",
+      "path": "/tz-zero.html",
+      "protocol": "HTTP/1.1",
+      "status": 200,
+      "bytes": 461,
+      "referer": null,
+      "user_agent": "curl/8.1.2"
+    }
+  },
+  {
+    "type": "access_log_entry",
+    "ts_epoch": 1060285736,
+    "fields": {
+      "ip": "198.51.100.23",
+      "user": "carol",
+      "timestamp": "07/Aug/2003:14:18:56 -0530",
+      "method": "GET",
+      "path": "/tz-negative.html?q=a+b&x=1",
+      "protocol": "HTTP/1.1",
+      "status": 404,
+      "bytes": 512,
+      "referer": null,
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+    }
+  }
+]

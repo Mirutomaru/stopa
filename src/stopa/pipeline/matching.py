@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from stopa.artifacts.access_log_extract import is_access_log_file
 from stopa.artifacts.allowlisted_websites import is_allowlisted_websites_file
 from stopa.artifacts.amazon_cloudtrail import is_amazon_cloudtrail_file
 from stopa.artifacts.amazon_ec2_s3 import is_amazon_ec2_s3_file
@@ -207,6 +208,9 @@ def _name_based_match(name: str) -> tuple[Callable[[Path], list], str] | None:
     # STP-080 / vlna 36 — Unix BSD syslog text (§7 pilot; name-based + content)
     if is_syslog_file(name):
         return NAME_BASED_EXTRACTORS["syslog"]
+    # STP-081 / vlna 37 — Apache/Nginx combined access log text (§7 pilot)
+    if is_access_log_file(name):
+        return NAME_BASED_EXTRACTORS["access_log"]
     # ETAPA B vlna 5 — Google Takeout rodina (specifické PŘED obecnějšími vlna-2 detekcemi)
     if is_aggregated_activities_file(name):
         return NAME_BASED_EXTRACTORS["google_aggregated_activities"]

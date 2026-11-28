@@ -1,16 +1,17 @@
-"""STP-074 / STP-080 — textová reference pro parsery ``net_connections`` a
-``syslog`` (pilot vlna 1 část B + §7 pilot, design §6/§7).
+"""STP-074 / STP-080 / STP-081 — textová reference pro parsery ``net_connections``,
+``syslog`` a ``access_log`` (pilot vlna 1 část B + §7 pilot, design §6/§7).
 
 Druhá nezávislá cesta diferenciálního testování (§6): STOPA extraktor
-(``extract_netstat_artifacts`` / ``extract_syslog_artifacts``) vs. **ručně
-psané referenční čtecí** textových formátů (stdlib only, žádný import z
-``stopa.artifacts``).
+(``extract_netstat_artifacts`` / ``extract_syslog_artifacts`` /
+``extract_access_log_artifacts``) vs. **ručně psané referenční čtecí**
+textových formátů (stdlib only, žádný import z ``stopa.artifacts``).
 
 Podporované varianty (deklarované v manifestu per fixture):
 
 - ``windows_netstat_ano`` — Windows ``netstat -ano`` (Proto Local Foreign State PID),
 - ``unix_ss`` — Unix ``ss`` (Netid State Recv-Q Send-Q Local Peer Process),
-- ``unix_syslog`` — STP-080: Unix BSD syslog / RFC 3164 řádky.
+- ``unix_syslog`` — STP-080: Unix BSD syslog / RFC 3164 řádky,
+- ``apache_combined`` — STP-081: Apache/Nginx combined access log řádky.
 
 Pole záznamu ``network_connection`` (smlouva manifestu, obě cesty stejný tvar):
 
@@ -31,8 +32,19 @@ Pole záznamu ``syslog_event`` (STP-080 smlouva manifestu, obě cesty stejný tv
 - ``message``  — zpráva verbatim za oddělovačem ``": "``;
 - čas          — vždy ``ts=None`` (syslog timestamp nemá rok ani TZ).
 
+Pole záznamu ``access_log_entry`` (STP-081 smlouva manifestu, obě cesty stejný tvar):
+
+- ``ip``/``user``    — user = explicitní ``None`` pro ``"-"`` (§3.3),
+- ``timestamp``      — verbatim Apache timestamp; **ts** = Unix epoch sekundy (int) —
+                       rok + TZ nese, obě cesty spočítají nezávisle,
+- ``method``/``path``/``protocol`` — z request řádku; protocol explicitní ``None``,
+                                     pokud poslední token nemá formu ``HTTP/x[.y]``,
+- ``status``         — int (přesně 3 číslice); ``bytes`` = int, ``"-"`` → ``None``,
+- ``referer``/``user_agent`` — verbatim; ``"-"`` → explicitní ``None``.
+
 Join key (manifest): ``network_connection = proto+local+remote``;
-``syslog_event = host+process+date+time`` — identita události; obsahová pole
+``syslog_event = host+process+date+time``;
+``access_log_entry = ip+timestamp+method+path`` — identita události; obsahová pole
 se komparují. Duplicitní join klíč se páruje po sobě deterministicky (§3.2).
 """
 
@@ -72,6 +84,8 @@ _VARIANTS = {
     "unix_ss": "_ref_unix_ss",
     # STP-080 / vlna 36 — Unix BSD syslog (RFC 3164)
     "unix_syslog": "_ref_unix_syslog",
+    # STP-081 / vlna 37 — Apache/Nginx combined access log
+    "apache_combined": "_ref_apache_combined",
 }
 
 
@@ -257,6 +271,223 @@ def _ref_unix_syslog(text: str) -> list[dict[str, Any]]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# STP-081 / vlna 37 — Apache/Nginx combined access log reference, nezávislá cesta
+# ---------------------------------------------------------------------------
+
+#: Měsíce Apache %t — ručně psaný mapování, úmyslně ne sdílené s STOPA parserem.
+_REF_APACHE_MONTHS: dict[str, int] = {
+    "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+    "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+}
+
+#: Pole záznamu access_log_entry — smlouva manifestu (obě cesty stejný tvar).
+ACCESS_LOG_FIELD_KEYS = (
+    "ip", "user", "timestamp", "method", "path",
+    "protocol", "status", "bytes", "referer", "user_agent",
+)
+
+
+def _ref_is_ascii_digits(value: str) -> bool:
+    """ASCII číslice (``str.isdigit()`` by akceptoval i unicode cifry)."""
+    return bool(value) and all(c in "0123456789" for c in value)
+
+
+def _days_from_civil(year: int, month: int, day: int) -> int:
+    """Dny od Unix epochy — Hinnantův algoritmus (nezávisle na STOPA calendar.timegm)."""
+    y = year - 1 if month <= 2 else year
+    era = y // 400 if y >= 0 else -((-y) // 400)
+    yoe = y - era * 400  # [0, 399]
+    m = month + (-3 if month > 2 else 9)
+    doy = (153 * m + 2) // 5 + day - 1  # [0, 365]
+    doe = yoe * 365 + yoe // 4 - yoe // 100 + doy  # [0, 146096]
+    return era * 146097 + doe - 719468
+
+
+def _ref_parse_apache_ts(ts_raw: str) -> int | None:
+    """Apache timestamp ``dd/Mon/yyyy:HH:MM:SS ±ZZZZ`` → Unix epoch sekundy.
+
+    Ruční parsing (bez regex, bez calendar.timegm — nezávislost na STOPA).
+    Offset se validuje jen po formě, rozsahy hodnot ne (limitace §C3 — stejná
+    sémantika jako u syslogu pro časové komponenty).
+    """
+    if len(ts_raw) != 26:
+        return None
+    day_raw = ts_raw[:2]
+    month_name = ts_raw[3:6]
+    year_raw = ts_raw[7:11]
+    hhmmss = ts_raw[12:20]
+    sign = ts_raw[21]
+    off_raw = ts_raw[22:26]
+    if (
+        ts_raw[2] != "/" or ts_raw[6] != "/" or ts_raw[11] != ":"
+        or ts_raw[14] != ":" or ts_raw[17] != ":" or ts_raw[20] != " "
+        or sign not in "+-"
+    ):
+        return None
+    if not (
+        _ref_is_ascii_digits(day_raw)
+        and _ref_is_ascii_digits(year_raw)
+        and _ref_is_ascii_digits(hhmmss[:2])
+        and _ref_is_ascii_digits(hhmmss[3:5])
+        and _ref_is_ascii_digits(hhmmss[6:8])
+        and _ref_is_ascii_digits(off_raw)
+    ):
+        return None
+    month = _REF_APACHE_MONTHS.get(month_name)
+    if month is None or not 1 <= int(day_raw) <= 31:
+        return None
+    hour, minute, second = int(hhmmss[:2]), int(hhmmss[3:5]), int(hhmmss[6:8])
+    offset_s = int(off_raw[:2]) * 3600 + int(off_raw[2:]) * 60
+    if sign == "-":
+        offset_s = -offset_s
+    return (
+        _days_from_civil(int(year_raw), month, int(day_raw)) * 86400
+        + hour * 3600 + minute * 60 + second - offset_s
+    )
+
+
+def _ref_is_http_version(token: str) -> bool:
+    """``HTTP/x`` nebo ``HTTP/x.y`` — ruční forma, ne regex (smlouva obou cest)."""
+    if not token.startswith("HTTP/"):
+        return False
+    segments = token[5:].split(".")
+    if len(segments) > 2:
+        return False
+    return all(_ref_is_ascii_digits(seg) for seg in segments)
+
+
+def _ref_parse_request(request: str) -> tuple[str, str, str | None] | None:
+    """Request řádek → ``(method, target, protocol|None)`` (smlouva obou cest).
+
+    method = první token (písmena A–Z/a–z); poslední token se počítá jako
+    protocol **pouze** pokud má formu ``HTTP/x[.y]`` a request má ≥ 3 tokeny;
+    target = zbylé tokeny spojené jednou mezerou (verbatim, bez unescape).
+    """
+    tokens = request.split()
+    if len(tokens) < 2:
+        return None
+    method = tokens[0]
+    if not all(("a" <= c <= "z") or ("A" <= c <= "Z") for c in method):
+        return None
+    rest = tokens[1:]
+    protocol: str | None = None
+    if len(rest) >= 2 and _ref_is_http_version(rest[-1]):
+        protocol = rest[-1]
+        target_tokens = rest[:-1]
+    else:
+        target_tokens = rest
+    return method, " ".join(target_tokens), protocol
+
+
+def _ref_apache_combined(text: str) -> list[dict[str, Any]]:
+    """Ruční referenční parsing combined access log řádků (tokenizace + sken uvozovek).
+
+    Nezávislá implementace STOPA parseru: bez regex přes celý řádek — tokeny se
+    ručně rozsekávají a uvozené sekce najíme polohou. Vnitřní struktura za
+    ``[timestamp]`` je striktně po jedné mezeře (ekvivalent STOPA regexu).
+    Řádky nesplňující smlouvu (pokračování / poškozené) se přeskočí.
+    """
+    out: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        parts = line.split(None, 3)
+        if len(parts) != 4:
+            continue
+        ip, _ident, user_raw, rest = parts
+
+        # [timestamp] — hranatá závorka musí být na začátku rest
+        if not rest.startswith("["):
+            continue
+        close = rest.find("]")
+        if close < 1:
+            continue
+        ts_raw = rest[1:close]
+        after = rest[close + 1 :]
+        if not after.startswith(" "):
+            continue
+        after = after[1:]
+
+        # "request" — první uvozená sekce `after` (musí začínat ihned)
+        q1 = after.find('"')
+        if q1 != 0:
+            continue
+        req_end = after.find('"', 1)
+        if req_end < 0:
+            continue
+        request = after[1:req_end]
+        tail = after[req_end + 1 :]
+
+        # status size — striktně jedna mezera + přesně 3 číslice + jedna mezera + size
+        if len(tail) < 1 or tail[0] != " ":
+            continue
+        t = tail[1:]
+        sp1 = t.find(" ")
+        if sp1 <= 0:
+            continue
+        status_raw, t2 = t[:sp1], t[sp1 + 1 :]
+        if not _ref_is_ascii_digits(status_raw) or len(status_raw) != 3:
+            continue
+
+        # size — až na další mezery (``-`` nebo ASCII číslice; leading zeros OK)
+        sp2 = t2.find(" ")
+        if sp2 <= 0:
+            continue
+        size_raw, quoted_tail = t2[:sp2], t2[sp2 + 1 :]
+        if not (size_raw == "-" or _ref_is_ascii_digits(size_raw)):
+            continue
+
+        # "referer" "user-agent" — dvě uvozené sekce oddělené striktně jednou mezerou;
+        # za závěrečnou uvozovkou jen whitespace (ekvivalent STOPA \s*$)
+        if not quoted_tail.startswith('"'):
+            continue
+        ref_end = quoted_tail.find('"', 1)
+        if ref_end < 0:
+            continue
+        referer_raw = quoted_tail[1:ref_end]
+        ua_part = quoted_tail[ref_end + 1 :]
+        if not ua_part.startswith(" "):
+            continue
+        ua_part = ua_part[1:]
+        if not ua_part.startswith('"'):
+            continue
+        ua_end = ua_part.find('"', 1)
+        if ua_end < 0:
+            continue
+        ua_raw = ua_part[1:ua_end]
+        if ua_part[ua_end + 1:].strip():
+            continue
+
+        ts_epoch = _ref_parse_apache_ts(ts_raw)
+        if ts_epoch is None:
+            continue
+        parsed_request = _ref_parse_request(request)
+        if parsed_request is None:
+            continue
+        method, target, protocol = parsed_request
+
+        out.append(
+            {
+                "type": "access_log_entry",
+                # Apache %t nese rok + TZ → epoch spočítatelný (int)
+                "ts": ts_epoch,
+                "fields": {
+                    "ip": ip,
+                    "user": None if user_raw == "-" else user_raw,
+                    "timestamp": ts_raw,
+                    "method": method,
+                    "path": target,
+                    "protocol": protocol,
+                    "status": int(status_raw),
+                    "bytes": None if size_raw == "-" else int(size_raw),
+                    "referer": None if referer_raw == "-" else referer_raw,
+                    "user_agent": None if ua_raw == "-" else ua_raw,
+                },
+            }
+        )
+
+    return out
+
+
 def load_text_manifest(path: Path) -> dict[str, Any]:
     """Načte + validuje manifest textového reference datasetu.
 
@@ -353,6 +584,25 @@ def run_stopa_syslog(path: Path) -> list[dict]:
             "fields": {key: (a.details or {}).get(key) for key in SYSLOG_FIELD_KEYS},
         }
         for a in extract_syslog_artifacts(path)
+    ]
+
+
+def run_stopa_access_log(path: Path) -> list[dict]:
+    """STOPA cesta (STP-081): ``extract_access_log_artifacts`` → záznamy pro komparaci.
+
+    Pole se berou přímo z detailů artifactu — STOPA parser je normalizuje dle
+    smlouvy manifestu (``"-"`` = None, status/bytes int). Timestamp je UTC datetime
+    (Apache %t nese rok + TZ) → epoch sekundy pro ``normalize_ts`` (§3.1).
+    """
+    from stopa.artifacts.access_log_extract import extract_access_log_artifacts  # I/O vrstva
+
+    return [
+        {
+            "type": "access_log_entry",
+            "ts": int(a.timestamp.timestamp()) if a.timestamp is not None else None,
+            "fields": {key: (a.details or {}).get(key) for key in ACCESS_LOG_FIELD_KEYS},
+        }
+        for a in extract_access_log_artifacts(path)
     ]
 
 

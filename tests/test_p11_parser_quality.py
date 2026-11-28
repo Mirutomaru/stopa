@@ -115,7 +115,7 @@ class TestService:
         from stopa.data.parser_quality_service import build_parser_quality_report
 
         rep = build_parser_quality_report()
-        assert rep["count"] == 80  # C3 registry (vlna 31 file_meta + STP-080 syslog) — každý parser má deklarované testy
+        assert rep["count"] == 81  # C3 registry (vlna 31 file_meta + STP-080 syslog + STP-081 access_log) — každý parser má deklarované testy
         assert all(r["test_files"] >= 1 for r in rep["parsers"])
         by_id = {r["parser_id"]: r for r in rep["parsers"]}
         # pilotní sady P1-1: sqlite + email_mbox pokrývají všech 8 kategorií
@@ -129,7 +129,7 @@ class TestService:
 
         # prázdný anchor → deklarované soubory chybí → tolerance (OSError → ∅)
         rep = build_parser_quality_report(anchor=tmp_path)
-        assert rep["count"] == 80 and rep["quality_complete"] == 0
+        assert rep["count"] == 81 and rep["quality_complete"] == 0
 
 
 class TestCli:

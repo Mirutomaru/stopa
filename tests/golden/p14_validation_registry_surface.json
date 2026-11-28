@@ -31,6 +31,7 @@
   "win_usn",
   "file_meta",
   "syslog",
+  "access_log",
   "email_mbox",
   "wifi_wlan",
   "win_schedtask",
@@ -1485,6 +1486,26 @@
     "tests/test_syslog_extract.py",
     "tests/test_p11_quality_syslog.py",
     "tests/test_stp080.py"
+   ],
+   "expected_results": {}
+  },
+  "access_log": {
+   "version": "",
+   "formats": [
+    "Apache/Nginx combined log format (%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\")"
+   ],
+   "limitations": [
+    "detekce name-based (access.log*/ *access_log*) + content check (combined hlavi\u010dka, max 4096 B); souvisl\u00e9 'accesslog' vyhrazeno Google WR pre-passu",
+    "%t nese rok + TZ \u2192 epoch spo\u010d\u00edtateln\u00fd; pred-1970 epoch s offsetem \u2192 ValueError ulo\u017eeno jako ts=None (okraj)",
+    "day validuje jen rozsah 1\u201331 ne kalend\u00e1\u0159n\u011b (31/Feb projde \u2014 limitace parseru); \u010das po form\u011b HH:MM:SS",
+    "request = minim\u00e1ln\u011b 2 tokeny; protocol jen ve form\u011b HTTP/x[.y] jinak None; query string verbatim bez unescape",
+    "'-' \u2192 explicitn\u00ed None (user/referer/user_agent/bytes); ident %l se parsuje, ale do detail\u016f neukl\u00e1d\u00e1"
+   ],
+   "reference_dataset": "access_log/",
+   "test_files": [
+    "tests/test_access_log_extract.py",
+    "tests/test_p11_quality_access_log.py",
+    "tests/test_stp081.py"
    ],
    "expected_results": {}
   }

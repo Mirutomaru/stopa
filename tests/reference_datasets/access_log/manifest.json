@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "parser_id": "access_log",
+  "reference_tool": "diffref-text-stdlib/1.0 (hand-written line parsers: apache_combined)",
+  "time_note": "Apache %t nese rok + TZ offset; obě cesty nezávisle spočítají Unix epoch sekundy (int) — STOPA přes calendar.timegm, reference přes Hinnant days_from_civil",
+  "join_keys": {
+    "access_log_entry": ["ip", "timestamp", "method", "path"]
+  },
+  "fixtures": [
+    {
+      "file": "access_sample.log",
+      "sha256": "b9bb71ca08f7aee2c41d129632313b7ae73f6451a542833316aecdbc50366611",
+      "variant": "apache_combined"
+    }
+  ]
+}
